@@ -1,0 +1,125 @@
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import {
+  MapView,
+  ModalType,
+  SearchFilter,
+  UIState,
+} from "../../types";
+
+const initialState: UIState = {
+  activeModal: null,
+  mapView: "galaxy",
+  activeCharacterId: null,
+  activeWorldId: null,
+  activeSectorAbbr: null,
+  activeSubsector: null,
+  activeUserId: null,
+  isOwnProfile: false,
+  searchFilter: "all",
+  searchQuery: "",
+  previousModal: null,
+};
+
+const uiSlice = createSlice({
+  name: "ui",
+  initialState,
+  reducers: {
+    openModal(state, action: PayloadAction<ModalType>) {
+      state.previousModal = state.activeModal;
+      state.activeModal = action.payload;
+    },
+    closeModal(state) {
+      state.activeModal = null;
+      state.previousModal = null;
+    },
+    goBack(state) {
+      state.activeModal = state.previousModal;
+      state.previousModal = null;
+    },
+    openCharacterList(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "characterList";
+      state.activeCharacterId = null;
+    },
+    openCharacterProfile(state, action: PayloadAction<string>) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "characterProfile";
+      state.activeCharacterId = action.payload;
+    },
+    openCharacterCreate(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "characterCreate";
+      state.activeCharacterId = null;
+    },
+    openMap(state, action: PayloadAction<MapView | undefined>) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "map";
+      if (action.payload) state.mapView = action.payload;
+    },
+    setMapView(state, action: PayloadAction<MapView>) {
+      state.mapView = action.payload;
+    },
+    setActiveSector(state, action: PayloadAction<string>) {
+      state.activeSectorAbbr = action.payload;
+      state.mapView = "sector";
+    },
+    setActiveSubsector(state, action: PayloadAction<string>) {
+      state.activeSubsector = action.payload;
+      state.mapView = "subsector";
+    },
+    openSystemDetail(state, action: PayloadAction<string>) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "systemDetail";
+      state.activeWorldId = action.payload;
+    },
+    openSearch(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "search";
+      state.searchQuery = "";
+    },
+    setSearchQuery(state, action: PayloadAction<string>) {
+      state.searchQuery = action.payload;
+    },
+    setSearchFilter(state, action: PayloadAction<SearchFilter>) {
+      state.searchFilter = action.payload;
+    },
+    openNotifications(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "notifications";
+    },
+    openOwnProfile(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "userProfile";
+      state.isOwnProfile = true;
+      state.activeUserId = null;
+    },
+    openUserProfile(state, action: PayloadAction<string>) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "userProfile";
+      state.isOwnProfile = false;
+      state.activeUserId = action.payload;
+    },
+  },
+});
+
+export const {
+  openModal,
+  closeModal,
+  goBack,
+  openCharacterList,
+  openCharacterProfile,
+  openCharacterCreate,
+  openMap,
+  setMapView,
+  setActiveSector,
+  setActiveSubsector,
+  openSystemDetail,
+  openSearch,
+  setSearchQuery,
+  setSearchFilter,
+  openNotifications,
+  openOwnProfile,
+  openUserProfile,
+} = uiSlice.actions;
+
+export default uiSlice.reducer;

@@ -1,0 +1,504 @@
+TRAVELLER MAP API DOCUMENTATION
+================================
+Source: https://travellermap.com/doc/api
+Date captured: 2026-04-30
+
+================================================================================
+HTML / NAVIGATION APIs
+================================================================================
+
+--------------------------------------------------------------------------------
+GET / — Interactive Map
+--------------------------------------------------------------------------------
+The main map viewer. All parameters are optional query strings.
+
+Parameter       Type     Description
+---------       ----     -----------
+sector          string   Sector name or T5SS abbreviation
+hex             string   Hex location (XXYY)
+scale           number   Pixels per parsec (default: 64)
+style           string   poster, print, atlas, candy, draft, fasa, terminal, mongoose
+options         number   Rendering options bitmask (see below)
+q               string   Search query
+sx,sy,hx,hy    number   Sector/hex coordinates
+x,y             number   Map-space coordinates
+hideui          number   Hide UI elements (1=on)
+routes          number   Toggle routes overlay (0=off)
+rifts           number   Shade rifts (0=off)
+nogrid          number   Hide hex grid (1=on)
+po              number   Population overlay (1=on)
+im              number   Importance overlay (1=on)
+dw              number   Droyne world overlay (1=on)
+an              number   Ancient world overlay (1=on)
+mh              number   Minor race homeworld overlay (1=on)
+stellar         number   Stellar representation (1=on)
+hw              string   Highlight worlds by characteristic
+ew              string   Empress Wave overlay (date format)
+dimunofficial   number   Dim unofficial sectors (1=on)
+review          number   Tint by review status (1=on)
+sscoords        number   Subsector-style hex numbering (1=on)
+allhexes        number   Number all hexes (1=on)
+galdir          number   Toggle galactic directions overlay (0=off)
+forceui         number   Show UI in iframe (1=show)
+p               string   Compact coordinates (x!y!s format)
+marker_*        various  Custom marker placement (sector, hex, sx, sy, hx, hy, x, y, url)
+yah_*           various  "You Are Here" placement (sector, hex, sx, sy, hx, hy, x, y)
+ox,oy,ow,oh,os  various  Overlay rectangle (map-space coords + CSS color)
+or              string   Compact overlay rectangles (x!y!w!h!color~...)
+ocx,ocy,ocr,ocs various  Overlay circle (center x, center y, radius, CSS color)
+oc              string   Compact overlay circles (x!y!r!color~...)
+
+Returns: HTML interactive map page
+
+Example: https://travellermap.com/?sector=Spinward%20Marches&hex=1910&scale=64&style=poster
+
+--------------------------------------------------------------------------------
+GET /go/{sector}
+GET /go/{sector}/{hex} — Short URLs / Go Links
+--------------------------------------------------------------------------------
+Redirects to the map centered on the given location.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Required   Sector name or T5SS abbreviation
+hex         string  Optional   Hex location XXYY
+
+Returns: Redirect to main map page
+
+Example: https://travellermap.com/go/spin/1910
+
+================================================================================
+DATA APIs
+================================================================================
+
+--------------------------------------------------------------------------------
+GET /api/coordinates
+GET /data/{sector}/coordinates
+GET /data/{sector}/{hex}/coordinates — World/Sector Coordinates
+--------------------------------------------------------------------------------
+Returns map-space and sector/hex coordinates for a given location.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Cond.      Sector name or T5SS abbreviation
+hex         string  Optional   Hex XXYY format
+subsector   string  Optional   Subsector A-P or name
+sx          number  Cond.      Sector X coordinate
+sy          number  Cond.      Sector Y coordinate
+hx          number  Optional   Hex X coordinate
+hy          number  Optional   Hex Y coordinate
+x           number  Optional   World-space X coordinate
+y           number  Optional   World-space Y coordinate
+milieu      string  Optional   Milieu code (e.g. M1105)
+accept      string  Optional   Output format (text/xml for XML)
+
+Returns: JSON { sx, sy, hx, hy, x, y } or XML
+
+Example: https://travellermap.com/api/coordinates?sector=Spinward%20Marches&hex=1910
+
+--------------------------------------------------------------------------------
+GET /api/credits
+GET /data/{sector}/credits
+GET /data/{sector}/{hex}/credits — World Data / Attribution
+--------------------------------------------------------------------------------
+Returns world data and data credit/attribution info.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Cond.      Sector name or T5SS abbreviation
+hex         string  Optional   Hex XXYY (defaults to 1620)
+sx          number  Cond.      Sector X coordinate
+sy          number  Cond.      Sector Y coordinate
+hx          number  Optional   Hex X coordinate
+hy          number  Optional   Hex Y coordinate
+x           number  Cond.      World-space X coordinate
+y           number  Cond.      World-space Y coordinate
+milieu      string  Optional   Milieu code
+accept      string  Optional   Output format (text/xml for XML)
+
+Returns: JSON world and attribution data or XML
+
+Example: https://travellermap.com/api/credits?x=-110&y=-70
+
+--------------------------------------------------------------------------------
+GET /api/sec
+GET /data/{sector}
+GET /data/{sector}/sec
+GET /data/{sector}/tab
+GET /data/{sector}/{subsector}
+GET /data/{sector}/{subsector}/sec
+GET /data/{sector}/{subsector}/tab
+GET /data/{sector}/{quadrant}
+GET /data/{sector}/{quadrant}/sec
+GET /data/{sector}/{quadrant}/tab
+POST /api/sec — Sector UWP Data
+--------------------------------------------------------------------------------
+Returns raw sector world data (Universal World Profile lines).
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Cond.      Sector name or T5SS abbreviation
+subsector   string  Optional   Subsector A-P or name
+quadrant    string  Optional   Alpha, Beta, Gamma, or Delta
+sx          number  Cond.      Sector X coordinate
+sy          number  Cond.      Sector Y coordinate
+milieu      string  Optional   Milieu code
+type        string  Optional   SecondSurvey, TabDelimited, Legacy
+metadata    number  Optional   Include metadata as comments (0=no)
+header      number  Optional   Include field definitions (0=no)
+sscoords    number  Optional   Subsector-style hex numbering (1=yes)
+lint        number  Optional   Fail on warnings (1=yes)
+jsonp       string  Optional   JSONP callback name
+accept      string  Optional   Output format (text/xml for XML)
+
+POST body: Raw sector data (SEC, T5 Tab Delimited, or T5 Column Delimited format)
+
+Returns: Plain text UWP sector data
+
+Example: https://travellermap.com/api/sec?sector=Spinward%20Marches&type=SecondSurvey
+
+--------------------------------------------------------------------------------
+GET /api/metadata
+GET /data/{sector}/metadata
+POST /api/metadata — Sector Metadata
+--------------------------------------------------------------------------------
+Returns sector boundaries, subsector names, routes, labels, allegiances.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Cond.      Sector name or T5SS abbreviation
+sx          number  Cond.      Sector X coordinate
+sy          number  Cond.      Sector Y coordinate
+milieu      string  Optional   Milieu code
+lint        number  Optional   Fail on warnings (1=yes)
+accept      string  Optional   Output format (text/xml for XML)
+
+POST body: Metadata (XML or MSEC format)
+
+Returns: JSON metadata object or XML
+
+Example: https://travellermap.com/api/metadata?sector=Spinward%20Marches
+
+--------------------------------------------------------------------------------
+GET /api/msec
+GET /data/{sector}/msec — MSEC Metadata (sec2pdf format)
+--------------------------------------------------------------------------------
+Legacy metadata format used by sec2pdf tooling.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Cond.      Sector name or T5SS abbreviation
+sx          number  Cond.      Sector X coordinate
+sy          number  Cond.      Sector Y coordinate
+milieu      string  Optional   Milieu code
+jsonp       string  Optional   JSONP callback name
+
+Returns: Plain text MSEC format
+
+Example: https://travellermap.com/api/msec?sector=Spinward%20Marches
+
+--------------------------------------------------------------------------------
+GET /api/jumpworlds
+GET /data/{sector}/{hex}
+GET /data/{sector}/{hex}/jump/{jump} — Worlds Within Jump Range
+--------------------------------------------------------------------------------
+Lists all worlds reachable from a location within a given jump distance.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Cond.      Sector name or T5SS abbreviation
+hex         string  Optional   Origin hex XXYY
+sx          number  Cond.      Sector X coordinate
+sy          number  Cond.      Sector Y coordinate
+hx          number  Optional   Hex X coordinate
+hy          number  Optional   Hex Y coordinate
+x           number  Cond.      World-space X coordinate
+y           number  Cond.      World-space Y coordinate
+jump        number  Optional   Jump distance 0-12 (default: 6)
+milieu      string  Optional   Milieu code
+accept      string  Optional   Output format (text/xml for XML)
+
+Returns: JSON array of world objects with fields:
+  Name, Hex, UWP, Bases, Remarks, Zone, PBG, Allegiance,
+  Stellar, Ix, Ex, Cx, Nobility, Worlds
+
+Example: https://travellermap.com/api/jumpworlds?sector=Spinward%20Marches&hex=1910&jump=4
+
+--------------------------------------------------------------------------------
+GET /api/search — Search Worlds & Regions
+--------------------------------------------------------------------------------
+Full-text world/region search with wildcards and field-scoped operators.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+q           string  Required   Query string
+milieu      string  Optional   Milieu code
+accept      string  Optional   Output format (text/xml for XML)
+jsonp       string  Optional   JSONP callback name
+
+Query operators:
+  exact:     Exact match
+  like:      Phonetic match
+  uwp:       UWP field match
+  pbg:       PBG field match
+  zone:      Zone field match
+  alleg:     Allegiance field match
+  stellar:   Star type match
+  remark:    Remark requirement
+  in:        Scope to sector name
+
+Wildcards:
+  * or %     Zero or more characters
+  ? or _     Exactly one character
+  [a-z]      Character range
+
+Returns: JSON { Results: [...] } or XML
+
+Example: https://travellermap.com/api/search?q=Regina
+Example: https://travellermap.com/api/search?q=in:spin+uwp:A
+
+--------------------------------------------------------------------------------
+GET /api/route — Jump Route Planning
+--------------------------------------------------------------------------------
+Finds a jump route between two worlds using pathfinding.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+start       string  Required   Start location (SECTOR HEX or world name)
+end         string  Required   End location (SECTOR HEX or world name)
+jump        number  Optional   Max jump distance 0-12 (default: 2)
+wild        number  Optional   Wilderness refueling only (1=yes)
+im          number  Optional   Imperium members only (1=yes)
+nored       number  Optional   Avoid red zones (1=yes)
+aok         number  Optional   Allow anomalies (1=yes)
+x           number  Optional   Search position X (world-space)
+y           number  Optional   Search position Y (world-space)
+milieu      string  Optional   Milieu code
+accept      string  Optional   Output format (text/xml for XML)
+
+Returns: JSON route path object, or HTTP 404 if no route exists
+
+Example: https://travellermap.com/api/route?start=spin+1910&end=spin+2110&jump=2
+
+--------------------------------------------------------------------------------
+GET /api/universe
+GET /data — All Sectors
+--------------------------------------------------------------------------------
+Lists all sectors in the database.
+
+Parameter     Type    Required   Description
+---------     ----    --------   -----------
+milieu        string  Optional   Filter by milieu code
+requireData   number  Optional   Only sectors with data (1=yes)
+tag           string  Optional   Filter by tag: Official, InReview, Preserve
+                                 Use | for OR (e.g. Official|InReview)
+accept        string  Optional   Output format (text/xml for XML)
+
+Returns: JSON array of sector objects with name, coordinates, tags
+
+Example: https://travellermap.com/api/universe?milieu=M1105&requireData=1
+
+--------------------------------------------------------------------------------
+GET /api/milieux — Available Milieux
+--------------------------------------------------------------------------------
+Lists all available milieu codes.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+accept      string  Optional   Output format (text/xml for XML)
+
+Returns: JSON array of { Code, IsDefault } objects
+
+Example: https://travellermap.com/api/milieux
+
+--------------------------------------------------------------------------------
+GET /t5ss/allegiances — T5SS Allegiance Codes
+GET /t5ss/sophonts   — T5SS Sophont Codes
+--------------------------------------------------------------------------------
+Returns T5SS reference data tables.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+accept      string  Optional   Output format (text/xml for XML)
+
+Returns: JSON array of { Code, Name } objects
+
+Example: https://travellermap.com/t5ss/allegiances
+Example: https://travellermap.com/t5ss/sophonts
+
+================================================================================
+RENDERING APIs
+================================================================================
+
+--------------------------------------------------------------------------------
+GET /api/tile — Arbitrary Map Tile
+--------------------------------------------------------------------------------
+Renders a map tile at any position and scale (used by the slippy map viewer).
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+x           number  Required   Tile-space X coordinate
+y           number  Required   Tile-space Y coordinate
+scale       number  Required   Pixels per parsec
+w           number  Optional   Image width in pixels (default: 256)
+h           number  Optional   Image height in pixels (default: 256)
+options     number  Optional   Rendering options bitmask
+style       string  Optional   Visual style
+milieu      string  Optional   Milieu code
+dpr         number  Optional   Device pixel ratio
+datauri     number  Optional   Return as base64 data URI (1=yes)
+accept      string  Optional   Output format (application/pdf, image/svg+xml)
+
+Returns: PNG image (or PDF/SVG via accept parameter)
+
+Example: https://travellermap.com/api/tile?x=-24.5&y=-18&scale=64&options=887&style=poster
+
+--------------------------------------------------------------------------------
+GET /api/poster
+GET /data/{sector}/image
+GET /data/{sector}/{subsector}/image
+GET /data/{sector}/{quadrant}/image
+POST /api/poster — Sector / Subsector / Region Poster
+--------------------------------------------------------------------------------
+Renders a high-quality map of a sector, subsector, quadrant, domain, or
+custom bounding box.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Optional   Sector name
+subsector   string  Optional   Subsector A-P or name
+quadrant    string  Optional   Alpha, Beta, Gamma, Delta
+domain      string  Optional   Domain: Sylea, Vland, Gateway, Ilelish,
+                               Antares, Sol, Deneb
+x1,y1       number  Optional   Top-left corner (world-space) for custom box
+x2,y2       number  Optional   Bottom-right corner (world-space) for custom box
+scale       number  Optional   Pixels per parsec (default: 64)
+rotation    number  Optional   Rotate 0-3 (90 degree increments)
+hrotation   number  Optional   Hex rotation in degrees (60 or -60 useful)
+clampar     number  Optional   Clamp aspect ratio (1=yes)
+options     number  Optional   Rendering options bitmask
+style       string  Optional   Visual style
+milieu      string  Optional   Milieu code
+lint        number  Optional   Fail on warnings (1=yes)
+thumb       number  Optional   Render thumbnail (1=yes)
+compositing number  Optional   Transparent background (1=yes)
+accept      string  Optional   Output format (application/pdf, image/svg+xml)
+
+POST body: Raw sector data (Content-Type: application/x-www-form-urlencoded,
+           multipart/form-data, or text/plain)
+
+Returns: PNG image (or PDF/SVG via accept parameter)
+
+Example: https://travellermap.com/api/poster?sector=spin&subsector=C&style=atlas&scale=48
+
+--------------------------------------------------------------------------------
+GET /api/jumpmap
+GET /data/{sector}/{hex}/jump/{jump}/image
+POST /api/jumpmap — Jump Range Map
+--------------------------------------------------------------------------------
+Renders a hex-map image centered on a world showing its jump-range reach.
+
+Parameter   Type    Required   Description
+---------   ----    --------   -----------
+sector      string  Cond.      Sector name or T5SS abbreviation
+hex         string  Optional   Center hex XXYY
+sx          number  Cond.      Sector X coordinate
+sy          number  Cond.      Sector Y coordinate
+hx          number  Optional   Hex X coordinate
+hy          number  Optional   Hex Y coordinate
+x           number  Cond.      World-space X coordinate
+y           number  Cond.      World-space Y coordinate
+jump        number  Optional   Jump distance 0-20 (default: 6)
+scale       number  Optional   Pixels per parsec (default: 64)
+options     number  Optional   Rendering options bitmask
+style       string  Optional   Visual style
+clip        number  Optional   Clip to jump hex edges (0=no)
+border      number  Optional   Render border (0=no)
+hrotation   number  Optional   Hex rotation in degrees
+milieu      string  Optional   Milieu code
+lint        number  Optional   Fail on warnings (1=yes)
+accept      string  Optional   Output format (application/pdf, image/svg+xml)
+
+POST body: Custom sector data
+
+Returns: PNG with transparency (or PDF/SVG via accept parameter)
+
+Example: https://travellermap.com/api/jumpmap?sector=spin&hex=1910&jump=4&scale=48&style=atlas
+
+================================================================================
+RENDERING OPTIONS BITMASK
+================================================================================
+
+Option              Hex     Decimal
+------              ---     -------
+SectorGrid          0x0001  1
+SubsectorGrid       0x0002  2
+SectorsSelected     0x0004  4
+SectorsAll          0x0008  8
+BordersMajor        0x0010  16
+BordersMinor        0x0020  32
+NamesMajor          0x0040  64
+NamesMinor          0x0080  128
+WorldsCapitals      0x0100  256
+WorldsHomeworlds    0x0200  512
+ForceHexes          0x2000  8192
+WorldColors         0x4000  16384
+FilledBorders       0x8000  32768
+
+Common combination: 887 = SectorGrid + SubsectorGrid + BordersMajor +
+                          BordersMinor + NamesMajor + NamesMinor + WorldsCapitals
+
+================================================================================
+STYLE VALUES
+================================================================================
+
+poster    — Full colour, standard Traveller look
+print     — Black and white, printer-friendly
+atlas     — Simplified atlas style
+candy     — Bright colourful style
+draft     — Hand-drawn draft appearance
+fasa      — FASA-era style
+terminal  — Terminal/monochrome green
+mongoose  — Mongoose Publishing style
+
+================================================================================
+MILIEU CODES
+================================================================================
+
+Use /api/milieux to retrieve the full list. Common codes:
+
+M1105   — Classic Era (default, Imperial Year 1105)
+M1900   — 1900 milieu
+M0      — Milieu 0 (Ziru Sirka)
+
+================================================================================
+COMMON NOTES
+================================================================================
+
+Output format:
+  Default output is JSON.
+  Pass accept=text/xml or HTTP header Accept: text/xml for XML output.
+  Rendering endpoints accept application/pdf or image/svg+xml for vector output.
+
+JSONP:
+  Append &jsonp=callbackName to supported data endpoints.
+
+CORS:
+  CORS headers are present. Browser fetch() / XMLHttpRequest works directly
+  without a proxy.
+
+Location parameter groups (use one group per request):
+  - sector name:    sector=, hex=, subsector=
+  - sector coords:  sx=, sy=, hx=, hy=
+  - world-space:    x=, y=
+
+REST-style aliases:
+  Many endpoints have clean REST URL aliases under /data/... in addition to
+  the query-string form under /api/...
+
+  /api/sec?sector=X         == /data/X
+  /api/metadata?sector=X    == /data/X/metadata
+  /api/msec?sector=X        == /data/X/msec
+  /api/jumpworlds?...       == /data/{sector}/{hex}/jump/{jump}
+  /api/poster?sector=X      == /data/X/image
+  /api/jumpmap?...          == /data/{sector}/{hex}/jump/{jump}/image

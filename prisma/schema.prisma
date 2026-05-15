@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         String      @id @default(cuid())
+  clerkId    String      @unique
+  username   String?
+  characters Character[]
+  createdAt  DateTime    @default(now())
+}
+
+model Character {
+  id             String           @id @default(cuid())
+  name           String
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strength       Int
+  dexterity      Int
+  endurance      Int
+  intelligence   Int
+  education      Int
+  socialStanding Int
+  credits        Int              @default(0)
+  currentWorldId String?
+  currentWorld   World?           @relation(fields: [currentWorldId], references: [id])
+  skills         CharacterSkill[]
+  locationLog    LocationLog[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model CharacterSkill {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  name        String
+  level       Int
+}
+
+model LocationLog {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  worldId     String
+  world       World     @relation(fields: [worldId], references: [id])
+  arrivedAt   DateTime  @default(now())
+}
+
+model Sector {
+  id           String  @id @default(cuid())
+  abbreviation String  @unique
+  name         String
+  gridX        Int
+  gridY        Int
+  milieu       String  @default("M1105")
+  worlds       World[]
+}
+
+model World {
+  id             String        @id @default(cuid())
+  hex            String
+  hexX           Int
+  hexY           Int
+  name           String
+  sectorId       String
+  sector         Sector        @relation(fields: [sectorId], references: [id])
+  subsector      String
+  starport       String
+  size           String
+  atmosphere     String
+  hydrographics  String
+  population     String
+  government     String
+  lawLevel       String
+  techLevel      String
+  uwpRaw         String
+  remarks        String[]
+  travelZone     String?
+  allegiance     String?
+  stellar        String[]
+  gasGiants      Int           @default(0)
+  belts          Int           @default(0)
+  worldsInSystem Int           @default(0)
+  characters     Character[]
+  locationLogs   LocationLog[]
+
+  @@unique([sectorId, hex])
+}
