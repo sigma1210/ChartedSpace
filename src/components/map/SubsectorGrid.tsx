@@ -5,6 +5,8 @@ import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { loadSector } from "../../store/slices/galaxySlice";
 import { selectSectorData, selectSectorLoadStatus } from "../../store/selectors/galaxy.selectors";
 import { openSystemDetail } from "../../store/slices/uiSlice";
+import { setActiveWorldHex } from "../../store/slices/galaxySlice";
+import { selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
 import HexGrid from "./HexGrid";
 
 interface SubsectorGridProps {
@@ -32,6 +34,7 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
   const dispatch = useAppDispatch();
   const status = useAppSelector(selectSectorLoadStatus(sectorAbbr));
   const sector = useAppSelector(selectSectorData(sectorAbbr));
+  const activeWorldHex = useAppSelector(selectActiveWorldHex);
 
   useEffect(() => {
     dispatch(loadSector(sectorAbbr));
@@ -98,7 +101,11 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
         worlds={worlds}
         cols={8}
         rows={10}
-        onSelectWorld={(id) => dispatch(openSystemDetail(id))}
+        selectedWorldId={activeWorldHex ?? undefined}
+        onSelectWorld={(id) => {
+          dispatch(setActiveWorldHex(id));
+          dispatch(openSystemDetail(id));
+        }}
       />
     </div>
   );

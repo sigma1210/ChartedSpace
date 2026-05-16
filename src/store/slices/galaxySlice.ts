@@ -6,6 +6,9 @@ const initialState: GalaxyState = {
   sectors: sectorsIndex.Sectors,
   sectorData: {},
   loadingStatus: {},
+  activeSectorAbbr: "Spin",
+  activeSubsectorKey: "A",
+  activeWorldHex: null,
 };
 
 export const loadSector = createAsyncThunk<SectorDetail, string, { rejectValue: string }>(
@@ -31,7 +34,28 @@ export const loadSector = createAsyncThunk<SectorDetail, string, { rejectValue: 
 const galaxySlice = createSlice({
   name: "galaxy",
   initialState,
-  reducers: {},
+  reducers: {
+    setActiveSector: (state, action: { payload: string }) => {
+      state.activeSectorAbbr = action.payload;
+      state.activeSubsectorKey = "A";
+      state.activeWorldHex = null;
+    },
+    setActiveSubsector: (state, action: { payload: string }) => {
+      state.activeSubsectorKey = action.payload;
+      state.activeWorldHex = null;
+    },
+    setActiveLocation: (state, action: { payload: { sectorAbbr: string; subsectorKey: string } }) => {
+      state.activeSectorAbbr = action.payload.sectorAbbr;
+      state.activeSubsectorKey = action.payload.subsectorKey;
+      state.activeWorldHex = null;
+    },
+    setActiveWorldHex: (state, action: { payload: string }) => {
+      state.activeWorldHex = action.payload;
+    },
+    clearActiveWorldHex: (state) => {
+      state.activeWorldHex = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(loadSector.pending, (state, action) => {
@@ -47,4 +71,5 @@ const galaxySlice = createSlice({
   },
 });
 
+export const { setActiveSector, setActiveSubsector, setActiveLocation, setActiveWorldHex, clearActiveWorldHex } = galaxySlice.actions;
 export default galaxySlice.reducer;

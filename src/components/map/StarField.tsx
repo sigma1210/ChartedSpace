@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppSelector } from "../../store/hooks";
-import { selectSectorData } from "../../store/selectors/galaxy.selectors";
+import { selectSectorData, selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
 
 interface StarFieldProps {
   sectorAbbr: string;
@@ -23,6 +23,7 @@ const SVG_H = ROWS * ROW_SPACING + EVEN_COL_OFFSET + PAD * 2;
 
 const StarField = ({ sectorAbbr, activeKey, onSelectKey }: StarFieldProps) => {
   const sector = useAppSelector(selectSectorData(sectorAbbr));
+  const activeWorldHex = useAppSelector(selectActiveWorldHex);
 
   if (!sector) return null;
 
@@ -66,15 +67,18 @@ const StarField = ({ sectorAbbr, activeKey, onSelectKey }: StarFieldProps) => {
               viewBox={`0 0 ${SVG_W} ${SVG_H}`}
               style={{ width: "100%", height: "100%", display: "block" }}
             >
-              {stars.map((s) => (
-                <circle
-                  key={s.id}
-                  cx={s.cx}
-                  cy={s.cy}
-                  r={5}
-                  fill={isActive ? "var(--hud-accent)" : "white"}
-                />
-              ))}
+              {stars.map((s) => {
+                const isSelected = s.id === activeWorldHex;
+                return (
+                  <circle
+                    key={s.id}
+                    cx={s.cx}
+                    cy={s.cy}
+                    r={isSelected ? 10 : 5}
+                    fill={isSelected ? "var(--hud-error)" : isActive ? "var(--hud-accent)" : "white"}
+                  />
+                );
+              })}
             </svg>
           </div>
         );

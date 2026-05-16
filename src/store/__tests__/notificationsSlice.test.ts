@@ -29,7 +29,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       previousModal: null,
     },
     notifications,
-    galaxy: { sectors: [], sectorData: {}, loadingStatus: {} },
+    galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null },
   };
 }
 

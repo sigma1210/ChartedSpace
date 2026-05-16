@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { useAppSelector } from "../../store/hooks";
-import { selectAllSectors, selectSectorData } from "../../store/selectors/galaxy.selectors";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import {
+  selectAllSectors,
+  selectSectorData,
+  selectActiveSectorAbbr,
+  selectActiveSubsectorKey,
+} from "../../store/selectors/galaxy.selectors";
+import { setActiveSector, setActiveSubsector, setActiveLocation } from "../../store/slices/galaxySlice";
 import type { SectorMeta, SectorDetail } from "../../types";
 import SubsectorGrid from "./SubsectorGrid";
 import StarField from "./StarField";
 import GalaxyStarField from "./GalaxyStarField";
 
-interface SubsectorNavigatorProps {
-  sectorAbbr: string;
-  initialSubsectorKey?: string;
-}
 
 const KEYS = "ABCDEFGHIJKLMNOP";
 const COORD_MIN = -4;
@@ -106,12 +107,10 @@ const NavButton = ({ target, icon, onNavigate, vertical = false }: NavButtonProp
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-const SubsectorNavigator = ({
-  sectorAbbr,
-  initialSubsectorKey = "A",
-}: SubsectorNavigatorProps) => {
-  const [activeSectorAbbr, setActiveSectorAbbr] = useState(sectorAbbr);
-  const [activeKey, setActiveKey] = useState(initialSubsectorKey.toUpperCase());
+const SubsectorNavigator = () => {
+  const dispatch = useAppDispatch();
+  const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
+  const activeKey = useAppSelector(selectActiveSubsectorKey);
   const allSectors = useAppSelector(selectAllSectors);
   const sector = useAppSelector(selectSectorData(activeSectorAbbr));
 
@@ -120,13 +119,11 @@ const SubsectorNavigator = ({
   const nav = buildNavTargets(activeKey, activeSectorAbbr, allSectors, sector, sectorByCoord);
 
   const navigate = (target: NavTarget) => {
-    if (target.sectorAbbr !== activeSectorAbbr) setActiveSectorAbbr(target.sectorAbbr);
-    setActiveKey(target.subsectorKey);
+    dispatch(setActiveLocation({ sectorAbbr: target.sectorAbbr, subsectorKey: target.subsectorKey }));
   };
 
   const selectSector = (abbr: string) => {
-    setActiveSectorAbbr(abbr);
-    setActiveKey("A");
+    dispatch(setActiveSector(abbr));
   };
 
   return (
@@ -179,7 +176,7 @@ const SubsectorNavigator = ({
         <StarField
           sectorAbbr={activeSectorAbbr}
           activeKey={activeKey}
-          onSelectKey={setActiveKey}
+          onSelectKey={(key) => dispatch(setActiveSubsector(key))}
         />
         <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-accent)">
           {sector?.subsectors[activeKey] ?? activeKey}

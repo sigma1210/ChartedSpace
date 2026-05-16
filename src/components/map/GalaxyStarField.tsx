@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { loadSector } from "../../store/slices/galaxySlice";
-import { selectSectorData } from "../../store/selectors/galaxy.selectors";
+import { selectSectorData, selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
 
 const HEX_RADIUS = 20;
 const COL_SPACING = HEX_RADIUS * 1.5;
@@ -19,6 +19,7 @@ const SVG_H = ROWS * ROW_SPACING + EVEN_COL_OFFSET + PAD * 2;
 const GalaxyStarField = ({ sectorAbbr }: { sectorAbbr: string }) => {
   const dispatch = useAppDispatch();
   const sector = useAppSelector(selectSectorData(sectorAbbr));
+  const activeWorldHex = useAppSelector(selectActiveWorldHex);
 
   useEffect(() => {
     dispatch(loadSector(sectorAbbr));
@@ -34,7 +35,16 @@ const GalaxyStarField = ({ sectorAbbr }: { sectorAbbr: string }) => {
       {sector.worlds.map((w) => {
         const cx = (w.hexX - 1) * COL_SPACING + HEX_RADIUS + PAD;
         const cy = (w.hexY - 1) * ROW_SPACING + ROW_SPACING / 2 + PAD + (w.hexX % 2 === 0 ? EVEN_COL_OFFSET : 0);
-        return <circle key={w.hex} cx={cx} cy={cy} r={5} fill="white" />;
+        const isSelected = w.hex === activeWorldHex;
+        return (
+          <circle
+            key={w.hex}
+            cx={cx}
+            cy={cy}
+            r={isSelected ? 10 : 5}
+            fill={isSelected ? "var(--hud-error)" : "white"}
+          />
+        );
       })}
     </svg>
   );

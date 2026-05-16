@@ -22,6 +22,8 @@ interface HexGridProps {
   onSelectWorld: (worldId: string) => void;
   /** Uniform scale applied to the rendered SVG dimensions; viewBox unchanged so aspect ratio is preserved. Defaults to 1. */
   scale?: number;
+  /** World id that is currently selected — renders an accent selection ring. */
+  selectedWorldId?: string;
 }
 
 // Flat-top hex geometry: columns run left→right, rows top→bottom.
@@ -44,12 +46,25 @@ const travelZoneColor = (zone: string | null): string => {
   return "transparent";
 }
 
+const selectionColor = (zone: string | null): string => {
+  if (zone === "A") return "var(--hud-warning)";
+  if (zone === "R") return "var(--hud-error)";
+  return "var(--hud-accent)";
+}
+
+const selectionFill = (zone: string | null): string => {
+  if (zone === "A") return "rgba(245,158,11,0.2)";
+  if (zone === "R") return "rgba(239,68,68,0.2)";
+  return "rgba(6,182,212,0.25)";
+}
+
 const HexGrid = ({
   worlds,
   cols,
   rows,
   onSelectWorld,
   scale = 1,
+  selectedWorldId,
 }: HexGridProps) => {
   const worldMap = new Map(worlds.map((w) => [`${w.hexX},${w.hexY}`, w]));
 
@@ -64,7 +79,9 @@ const HexGrid = ({
       const cx = (col - 1) * COL_SPACING + HEX_RADIUS + PAD;
       const cy = (row - 1) * ROW_SPACING + ROW_SPACING / 2 + PAD + (col % 2 === 0 ? EVEN_COL_OFFSET : 0);
       const world = worldMap.get(`${col},${row}`);
-      const zoneColor = travelZoneColor(world?.travelZone ?? null);
+      const zone = world?.travelZone ?? null;
+      const zoneColor = travelZoneColor(zone);
+      const isSelected = !!world && world.id === selectedWorldId;
       const hexId = `${col}-${row}`;
 
       hexElements.push(
@@ -76,9 +93,9 @@ const HexGrid = ({
           {/* Hex cell */}
           <polygon
             points={hexPoints(cx, cy, HEX_RADIUS - 1)}
-            fill="#1a3a5c"
-            stroke={world ? "var(--hud-border)" : "var(--hud-border-subtle)"}
-            strokeWidth={world ? 0.8 : 0.4}
+            fill={isSelected ? selectionFill(zone) : "#1a3a5c"}
+            stroke={isSelected ? selectionColor(zone) : world ? "var(--hud-border)" : "var(--hud-border-subtle)"}
+            strokeWidth={isSelected ? 1.5 : world ? 0.8 : 0.4}
           />
           {/* Travel zone ring */}
           {zoneColor !== "transparent" && (
@@ -86,7 +103,17 @@ const HexGrid = ({
               points={hexPoints(cx, cy, HEX_RADIUS - 1)}
               fill="none"
               stroke={zoneColor}
-              strokeWidth={1.5}
+              strokeWidth={isSelected ? 2.5 : 1.5}
+            />
+          )}
+          {/* Selection ring */}
+          {isSelected && (
+            <polygon
+              points={hexPoints(cx, cy, HEX_RADIUS - 3)}
+              fill="none"
+              stroke={selectionColor(zone)}
+              strokeWidth={0.8}
+              opacity={0.5}
             />
           )}
           {world && (
@@ -108,7 +135,7 @@ const HexGrid = ({
                 y={cy + 8}
                 textAnchor="middle"
                 fontSize={5}
-                fill="var(--hud-text)"
+                fill={isSelected ? "white" : "var(--hud-text)"}
                 fontFamily="monospace"
               >
                 {world.name.length > 7 ? world.name.slice(0, 7) : world.name}
@@ -119,7 +146,7 @@ const HexGrid = ({
                 y={cy + 14}
                 textAnchor="middle"
                 fontSize={4.5}
-                fill="var(--hud-text-dim)"
+                fill={isSelected ? "var(--hud-text)" : "var(--hud-text-dim)"}
                 fontFamily="monospace"
               >
                 {world.starport}

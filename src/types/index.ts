@@ -101,4 +101,7 @@ export interface GalaxyState {
   sectors: SectorMeta[];
   sectorData: Record<string, SectorDetail>;
   loadingStatus: Record<string, SectorLoadStatus>;
+  activeSectorAbbr: string;
+  activeSubsectorKey: string;
+  activeWorldHex: string | null;
 }
