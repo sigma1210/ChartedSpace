@@ -1,4 +1,4 @@
-export default function AppLoading() {
+const AppLoading = () => {
   return (
     <div className="starfield flex h-full items-center justify-center">
       <p className="font-mono text-xs uppercase tracking-widest text-(--hud-text-dim) animate-pulse">
@@ -7,3 +7,4 @@ export default function AppLoading() {
     </div>
   );
 }
+export default AppLoading

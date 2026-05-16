@@ -32,7 +32,7 @@ const PLACEHOLDER = {
   cultureRaw: "",
 };
 
-function UwpRow({ label, value }: { label: string; value: string }) {
+const UwpRow = ({ label, value }: { label: string; value: string }) => {
   return (
     <div className="flex justify-between gap-2 text-xs">
       <span className="text-(--hud-text-dim)">{label}</span>
@@ -41,7 +41,7 @@ function UwpRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function SystemDetailModal() {
+const SystemDetailModal = () => {
   const dispatch = useAppDispatch();
   const worldId = useAppSelector(selectActiveWorldId);
   const mapView = useAppSelector(selectMapView);
@@ -168,3 +168,4 @@ export default function SystemDetailModal() {
     </HudModal>
   );
 }
+export default SystemDetailModal

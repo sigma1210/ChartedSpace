@@ -9,7 +9,7 @@ import { selectActiveCharacterId } from "../../store/selectors/ui.selectors";
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
 
-function StatBar({ label, value }: { label: string; value: number }) {
+const StatBar = ({ label, value }: { label: string; value: number }) => {
   const pct = Math.min(100, (value / STAT_MAX) * 100);
   return (
     <div className="flex items-center gap-2">
@@ -40,7 +40,7 @@ const PLACEHOLDER = {
   locationLog: [] as { arrivedAt: string; worldName: string; sectorAbbr: string; hex: string }[],
 };
 
-export default function CharacterProfileModal() {
+const CharacterProfileModal = () => {
   const dispatch = useAppDispatch();
   const characterId = useAppSelector(selectActiveCharacterId);
   const char = PLACEHOLDER;
@@ -164,3 +164,4 @@ export default function CharacterProfileModal() {
     </HudModal>
   );
 }
+export default CharacterProfileModal

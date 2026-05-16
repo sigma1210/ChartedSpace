@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { id: "userProfile",   label: "Profile",    Icon: User,  action: openOwnProfile },
 ] as const;
 
-export default function BottomNav() {
+const BottomNav = () => {
   const dispatch = useAppDispatch();
   const activeModal = useAppSelector(selectActiveModal);
   const notifCount = useAppSelector(selectNotificationCount);
@@ -60,3 +60,4 @@ export default function BottomNav() {
     </nav>
   );
 }
+export default BottomNav

@@ -1,12 +1,12 @@
 "use client";
 
-export default function AuthError({
+const AuthError = ({
   error,
   reset,
 }: {
   error: Error;
   reset: () => void;
-}) {
+}) => {
   return (
     <main className="starfield flex min-h-screen items-center justify-center px-4">
       <div className="hud-panel w-full max-w-md rounded-sm">
@@ -26,3 +26,4 @@ export default function AuthError({
     </main>
   );
 }
+export default AuthError

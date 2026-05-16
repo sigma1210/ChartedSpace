@@ -22,7 +22,7 @@ const OTHER_PLACEHOLDER = {
   characters: [] as { id: string; name: string; worldName: string | null; sectorAbbr: string | null; hex: string | null }[],
 };
 
-export default function UserProfileModal() {
+const UserProfileModal = () => {
   const dispatch = useAppDispatch();
   const isOwn = useAppSelector(selectIsOwnProfile);
   const userId = useAppSelector(selectActiveUserId);
@@ -112,3 +112,4 @@ export default function UserProfileModal() {
     </HudModal>
   );
 }
+export default UserProfileModal

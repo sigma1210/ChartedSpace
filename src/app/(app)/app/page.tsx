@@ -3,7 +3,7 @@ import CockpitView from "../../../components/cockpit/CockpitView";
 import BottomNav from "../../../components/hud/BottomNav";
 import ModalLayer from "../../../components/modals/ModalLayer";
 
-export default function AppPage() {
+const AppPage = () => {
   return (
     <StoreProvider>
       <div className="relative flex h-full flex-col overflow-hidden bg-(--hud-bg)">
@@ -16,3 +16,4 @@ export default function AppPage() {
     </StoreProvider>
   );
 }
+export default AppPage

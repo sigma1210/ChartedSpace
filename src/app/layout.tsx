@@ -15,16 +15,22 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Charted Space",
-  description: "Traveller RPG Character Tracker",
+  description:
+    "Charted Space is a Traveller RPG companion app for tracking your characters, ships, and adventures across the Third Imperium.",
 };
 
-export default function RootLayout({
+const RootLayout = ({
   children,
 }: Readonly<{
   children: React.ReactNode;
-}>) {
+}>) => {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      signInUrl="/"
+      signUpUrl="/sign-up"
+      signInFallbackRedirectUrl="/map"
+      signUpFallbackRedirectUrl="/map"
+    >
       <html
         lang="en"
         className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
@@ -34,3 +40,4 @@ export default function RootLayout({
     </ClerkProvider>
   );
 }
+export default RootLayout

@@ -1,12 +1,12 @@
 "use client";
 
-export default function AppError({
+const AppError = ({
   error,
   reset,
 }: {
   error: Error;
   reset: () => void;
-}) {
+}) => {
   return (
     <div className="starfield flex h-full items-center justify-center">
       <div className="hud-panel w-full max-w-md rounded-sm">
@@ -26,3 +26,4 @@ export default function AppError({
     </div>
   );
 }
+export default AppError

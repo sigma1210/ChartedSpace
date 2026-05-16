@@ -47,7 +47,7 @@ const initialState: UIState = {
   previousModal: null,
 };
 
-function makeRoot(ui: UIState): RootState {
+const makeRoot = (ui: UIState): RootState => {
   return { ui, notifications: { items: [] } };
 }
 

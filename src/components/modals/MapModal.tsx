@@ -34,7 +34,7 @@ const PLACEHOLDER_SECTORS: {
 // Placeholder subsector letters A–P
 const SUBSECTOR_LETTERS = "ABCDEFGHIJKLMNOP".split("");
 
-export default function MapModal() {
+const MapModal = () => {
   const dispatch = useAppDispatch();
   const mapView = useAppSelector(selectMapView);
   const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
@@ -173,3 +173,4 @@ export default function MapModal() {
     </HudModal>
   );
 }
+export default MapModal

@@ -13,7 +13,7 @@ import type { RootState } from "../index";
 
 const initialState: NotificationsState = { items: [] };
 
-function makeRoot(notifications: NotificationsState): RootState {
+const makeRoot = (notifications: NotificationsState): RootState => {
   return {
     ui: {
       activeModal: null,

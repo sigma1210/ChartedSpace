@@ -16,7 +16,7 @@ interface CharacterSummary {
   hex: string | null;
 }
 
-function CharacterCard({ character }: { character: CharacterSummary }) {
+const CharacterCard = ({ character }: { character: CharacterSummary }) => {
   const dispatch = useAppDispatch();
 
   return (
@@ -51,7 +51,7 @@ function CharacterCard({ character }: { character: CharacterSummary }) {
 // Placeholder data — will be replaced with server data fetch
 const PLACEHOLDER_CHARACTERS: CharacterSummary[] = [];
 
-export default function CharacterListModal() {
+const CharacterListModal = () => {
   const dispatch = useAppDispatch();
   const characters = PLACEHOLDER_CHARACTERS;
 
@@ -94,3 +94,4 @@ export default function CharacterListModal() {
     </HudModal>
   );
 }
+export default CharacterListModal

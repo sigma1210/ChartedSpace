@@ -12,13 +12,13 @@ interface HudModalProps {
   maxHeight?: string;
 }
 
-export default function HudModal({
+const HudModal = ({
   title,
   subtitle,
   headerRight,
   children,
   maxHeight = "max-h-[80vh]",
-}: HudModalProps) {
+}: HudModalProps) => {
   const dispatch = useAppDispatch();
 
   return (
@@ -47,3 +47,4 @@ export default function HudModal({
     </div>
   );
 }
+export default HudModal

@@ -16,7 +16,7 @@ interface GalaxyGridProps {
   activeSectorAbbr: string | null;
 }
 
-export default function GalaxyGrid({ sectors, activeSectorAbbr }: GalaxyGridProps) {
+const GalaxyGrid = ({ sectors, activeSectorAbbr }: GalaxyGridProps) => {
   const dispatch = useAppDispatch();
 
   // Build a lookup map keyed by "x,y" for quick positioning
@@ -80,3 +80,4 @@ export default function GalaxyGrid({ sectors, activeSectorAbbr }: GalaxyGridProp
     </div>
   );
 }
+export default GalaxyGrid

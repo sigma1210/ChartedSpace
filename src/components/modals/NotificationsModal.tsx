@@ -34,7 +34,7 @@ const TYPE_CONFIG: Record<
   },
 };
 
-export default function NotificationsModal() {
+const NotificationsModal = () => {
   const dispatch = useAppDispatch();
   const notifications = useAppSelector(selectNotifications);
 
@@ -88,3 +88,4 @@ export default function NotificationsModal() {
     </HudModal>
   );
 }
+export default NotificationsModal

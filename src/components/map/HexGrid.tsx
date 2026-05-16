@@ -26,20 +26,25 @@ const HEX_W = 40;
 const HEX_H = 44;
 const HEX_VERT_SPACING = HEX_H * 0.75;
 
-function hexPoints(cx: number, cy: number, r: number): string {
+const hexPoints = (cx: number, cy: number, r: number): string => {
   return Array.from({ length: 6 }, (_, i) => {
     const angle = (Math.PI / 180) * (60 * i - 30);
     return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
   }).join(" ");
 }
 
-function travelZoneColor(zone: string | null): string {
+const travelZoneColor = (zone: string | null): string => {
   if (zone === "A") return "var(--hud-warning)";
   if (zone === "R") return "var(--hud-error)";
   return "transparent";
 }
 
-export default function HexGrid({ worlds, cols, rows, onSelectWorld }: HexGridProps) {
+const HexGrid = ({
+  worlds,
+  cols,
+  rows,
+  onSelectWorld,
+}: HexGridProps) => {
   const worldMap = new Map(worlds.map((w) => [`${w.hexX},${w.hexY}`, w]));
 
   const r = HEX_W / 2;
@@ -85,7 +90,11 @@ export default function HexGrid({ worlds, cols, rows, onSelectWorld }: HexGridPr
                 cx={cx}
                 cy={cy - 4}
                 r={world.hasCharacter ? 3.5 : 2.5}
-                fill={world.hasCharacter ? "var(--hud-accent)" : "var(--hud-text-dim)"}
+                fill={
+                  world.hasCharacter
+                    ? "var(--hud-accent)"
+                    : "var(--hud-text-dim)"
+                }
               />
               {/* World name (clipped) */}
               <text
@@ -111,7 +120,7 @@ export default function HexGrid({ worlds, cols, rows, onSelectWorld }: HexGridPr
               </text>
             </>
           )}
-        </g>
+        </g>,
       );
     }
   }
@@ -129,3 +138,4 @@ export default function HexGrid({ worlds, cols, rows, onSelectWorld }: HexGridPr
     </div>
   );
 }
+export default HexGrid

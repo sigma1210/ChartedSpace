@@ -11,7 +11,7 @@ import MapModal from "./MapModal";
 import SystemDetailModal from "./SystemDetailModal";
 import UserProfileModal from "./UserProfileModal";
 
-export default function ModalLayer() {
+const ModalLayer = () => {
   const activeModal = useAppSelector(selectActiveModal);
 
   if (!activeModal) return null;
@@ -33,3 +33,4 @@ export default function ModalLayer() {
     </div>
   );
 }
+export default ModalLayer

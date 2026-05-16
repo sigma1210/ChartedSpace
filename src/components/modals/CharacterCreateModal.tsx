@@ -14,7 +14,7 @@ const STAT_FIELDS = [
   { key: "socialStanding", label: "SOC" },
 ] as const;
 
-export default function CharacterCreateModal() {
+const CharacterCreateModal = () => {
   const dispatch = useAppDispatch();
 
   const headerRight = (
@@ -87,3 +87,4 @@ export default function CharacterCreateModal() {
     </HudModal>
   );
 }
+export default CharacterCreateModal

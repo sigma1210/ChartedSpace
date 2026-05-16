@@ -1,8 +1,25 @@
-import { PrismaClient } from "../src/generated/prisma";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import * as fs from "fs";
 import * as path from "path";
 
-const prisma = new PrismaClient();
+function loadEnvLocal() {
+  const envPath = path.resolve(process.cwd(), ".env.local");
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, "utf-8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+    if (!process.env[key]) process.env[key] = val;
+  }
+}
+loadEnvLocal();
+
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const prisma = new PrismaClient({ adapter });
 
 interface SectorEntry {
   X: number;
@@ -31,8 +48,8 @@ interface WorldJson {
   remarks: string[];
   travelZone: string | null;
   pbg: {
-    belts: number;
-    gasGiants: number;
+    belts: number | string;
+    gasGiants: number | string;
   };
   worldsInSystem: number;
   allegiance: string | null;
@@ -53,12 +70,12 @@ function subsectorLetter(hexX: number, hexY: number): string {
 }
 
 async function main() {
-  const galaxyDir = path.resolve(__dirname, "../../Galaxy");
+  const galaxyDir = path.resolve(__dirname, "../Galaxy");
   const sectorsIndexPath = path.join(galaxyDir, "sectors.json");
   const sectorsDir = path.join(galaxyDir, "sectors");
 
   const { Sectors } = JSON.parse(
-    fs.readFileSync(sectorsIndexPath, "utf-8")
+    fs.readFileSync(sectorsIndexPath, "utf-8"),
   ) as { Sectors: SectorEntry[] };
 
   console.log(`Seeding ${Sectors.length} sectors…`);
@@ -71,7 +88,7 @@ async function main() {
     }
 
     const sectorFile = JSON.parse(
-      fs.readFileSync(filePath, "utf-8")
+      fs.readFileSync(filePath, "utf-8"),
     ) as SectorFileJson;
 
     const sector = await prisma.sector.upsert({
@@ -114,8 +131,8 @@ async function main() {
           travelZone: world.travelZone,
           allegiance: world.allegiance,
           stellar: world.stellar,
-          gasGiants: world.pbg?.gasGiants ?? 0,
-          belts: world.pbg?.belts ?? 0,
+          gasGiants: parseInt(String(world.pbg?.gasGiants ?? 0), 10) || 0,
+          belts: parseInt(String(world.pbg?.belts ?? 0), 10) || 0,
           worldsInSystem: world.worldsInSystem ?? 0,
         },
         create: {
@@ -138,15 +155,15 @@ async function main() {
           travelZone: world.travelZone,
           allegiance: world.allegiance,
           stellar: world.stellar,
-          gasGiants: world.pbg?.gasGiants ?? 0,
-          belts: world.pbg?.belts ?? 0,
+          gasGiants: parseInt(String(world.pbg?.gasGiants ?? 0), 10) || 0,
+          belts: parseInt(String(world.pbg?.belts ?? 0), 10) || 0,
           worldsInSystem: world.worldsInSystem ?? 0,
         },
       });
     }
 
     console.log(
-      `  ✓ ${entry.Abbreviation} (${sectorFile.sector}) — ${sectorFile.worlds.length} worlds`
+      `  ✓ ${entry.Abbreviation} (${sectorFile.sector}) — ${sectorFile.worlds.length} worlds`,
     );
   }
 

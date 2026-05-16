@@ -18,7 +18,7 @@ const FILTER_TABS: { label: string; value: SearchFilter }[] = [
   { label: "Characters", value: "characters" },
 ];
 
-export default function SearchModal() {
+const SearchModal = () => {
   const dispatch = useAppDispatch();
   const query = useAppSelector(selectSearchQuery);
   const filter = useAppSelector(selectSearchFilter);
@@ -73,3 +73,4 @@ export default function SearchModal() {
     </HudModal>
   );
 }
+export default SearchModal

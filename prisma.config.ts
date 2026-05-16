@@ -2,7 +2,6 @@ import { defineConfig } from "prisma/config";
 import * as fs from "fs";
 import * as path from "path";
 
-// Load .env.local for Next.js projects (Prisma CLI doesn't read it by default)
 function loadEnvLocal() {
   const envPath = path.resolve(process.cwd(), ".env.local");
   if (!fs.existsSync(envPath)) return;
@@ -21,9 +20,9 @@ function loadEnvLocal() {
 loadEnvLocal();
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    seed: "tsx prisma/seed.ts",
   },
   datasource: {
     url: process.env["DATABASE_URL"],
