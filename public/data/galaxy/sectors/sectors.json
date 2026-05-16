@@ -1,0 +1,1258 @@
+{
+  "Sectors": [
+    {
+      "X": -4,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Ghoe",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Ghoekhnael",
+          "Lang": "va"
+        },
+        {
+          "Text": "Anzsidiadl",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Ksin",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Ksinanirz",
+          "Lang": "va"
+        },
+        {
+          "Text": "Zheranzanj",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Zaok",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Zao Kfeng Ig Grilokh",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Knae",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Knaeleng",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Khar",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Kharrthon",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Oegh",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Oeghz Vaerrghr",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Kfaz",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Kfazz Ghik",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Angf",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Angfutsag",
+          "Lang": "va"
+        },
+        {
+          "Text": "Gzerzarssou",
+          "Lang": "va"
+        },
+        {
+          "Text": "Puragaaku"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": -4,
+      "Milieu": "M1105",
+      "Abbreviation": "Rfig",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Rfigh",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Knoe",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Knoellighz",
+          "Lang": "va"
+        },
+        {
+          "Text": "Khoellighz",
+          "Lang": "va",
+          "Source": "Consolidated Traveller Region Name List"
+        },
+        {
+          "Text": "Tlabrieish",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Dhue",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Dhuerorrg"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Ngat",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Ngathksirz"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Fadz",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Fa Dzaets"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Gzae",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Gzaekfueg"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Gash",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Gashikan"
+        },
+        {
+          "Text": "Lloellerz",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Tren",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Trenchans"
+        },
+        {
+          "Text": "Trenchan"
+        },
+        {
+          "Text": "Rukhs Dall",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Ktii",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Ktiin'gzat",
+          "Lang": "kk"
+        },
+        {
+          "Text": "Ogzuekhfos",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": -3,
+      "Milieu": "M1105",
+      "Abbreviation": "Mugh",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Mugheen't",
+          "Lang": "kk"
+        },
+        {
+          "Text": "Ogadogorz",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Gvur",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Gvurrdon",
+          "Lang": "va"
+        },
+        {
+          "Text": "Briakqra'",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Tugl",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Tuglikki",
+          "Lang": "va"
+        },
+        {
+          "Text": "Dravr",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Prov",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Provence"
+        },
+        {
+          "Text": "Orraenang",
+          "Lang": "va"
+        },
+        {
+          "Text": "Amshagi",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Wind",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Windhorn"
+        },
+        {
+          "Text": "Gotzdzo",
+          "Lang": "va"
+        },
+        {
+          "Text": "Kishadikhu",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Mesh",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Meshan"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Mend",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Mendan"
+        },
+        {
+          "Text": "Gotzdzo",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Amdu",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Amdukan"
+        },
+        {
+          "Text": "Outhofos",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Arzu",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Arzul",
+          "Lang": "va"
+        },
+        {
+          "Text": "Ingukrax",
+          "Lang": "kk"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": -2,
+      "Milieu": "M1105",
+      "Abbreviation": "Gnxh",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Gn'hk'r",
+          "Lang": "kk"
+        },
+        {
+          "Text": "Gelath",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Spin",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Spinward Marches"
+        },
+        {
+          "Text": "Tloql",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Dene",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Deneb"
+        },
+        {
+          "Text": "Nieklsdia",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Corr",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Corridor"
+        },
+        {
+          "Text": "Amshagi",
+          "Lang": "vi"
+        },
+        {
+          "Text": "Eneri",
+          "Lang": "vi"
+        },
+        {
+          "Text": "Roughantz",
+          "Lang": "va"
+        },
+        {
+          "Text": "Llananae Tourz",
+          "Lang": "va"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Vlan",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Vland"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Lish",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Lishun"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Anta",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Antares"
+        },
+        {
+          "Text": "Mikasirka",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Empt",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Empty Quarter"
+        },
+        {
+          "Text": "Gushgus",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Star",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Star's End"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": -1,
+      "Milieu": "M1105",
+      "Abbreviation": "Ghxh",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Gh!hken",
+          "Lang": "kk"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Troj",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Trojan Reach"
+        },
+        {
+          "Text": "Trojan Reaches"
+        },
+        {
+          "Text": "Hlaoirloahaurl",
+          "Lang": "as"
+        },
+        {
+          "Text": "Idrflanta",
+          "Lang": "zh"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Reft",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Reft"
+        },
+        {
+          "Text": "Reft Sector"
+        },
+        {
+          "Text": "Bransakral",
+          "Lang": "zh"
+        },
+        {
+          "Text": "Sushinar",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Gush",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Gushemege"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Dagu",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Dagudashaag"
+        },
+        {
+          "Text": "Dagudashag"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Core",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Core"
+        },
+        {
+          "Text": "Ukan",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Forn",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Fornast"
+        },
+        {
+          "Text": "Rishurir",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Ley",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Ley"
+        },
+        {
+          "Text": "Ley Sector"
+        },
+        {
+          "Text": "Makhuniim",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Gate",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Gateway"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": 0,
+      "Milieu": "M1105",
+      "Abbreviation": "Lure",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Luretiir!girr",
+          "Lang": "kk"
+        },
+        {
+          "Text": "Luretir!girr",
+          "Lang": "kk"
+        },
+        {
+          "Text": "Emaragamigu",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Rift",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Riftspan Reaches"
+        },
+        {
+          "Text": "Iiyoihuakh",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Verg",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Verge"
+        },
+        {
+          "Text": "Khtiyhkokaeiw",
+          "Lang": "as"
+        },
+        {
+          "Text": "Shaakasi",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Ilel",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Ilelish"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Zaru",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Zarushagar"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Mass",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Massilia",
+          "Source": "DGP"
+        },
+        {
+          "Text": "Massila",
+          "Source": "GDW"
+        },
+        {
+          "Text": "Masilaa",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Delp",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Delphi"
+        },
+        {
+          "Text": "Manadish Khurem",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Glim",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Glimmerdrift Reaches"
+        },
+        {
+          "Text": "Glimmerdrift"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Cruc",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Crucis Margin"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": 1,
+      "Milieu": "M1105",
+      "Abbreviation": "Numb",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Numbis",
+          "Lang": "hv"
+        },
+        {
+          "Text": "Kaa G!'kul",
+          "Lang": "kk"
+        },
+        {
+          "Text": "Galiin",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Hlak",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Hlakhoi",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Eali",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Ealiyasiyw",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Reav",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Reaver's Deep"
+        },
+        {
+          "Text": "Reavers' Deep"
+        },
+        {
+          "Text": "Reavers Deep"
+        },
+        {
+          "Text": "Aeitle Sakh",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Daib",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Daibei"
+        },
+        {
+          "Text": "Lankhisidam",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Dias",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Diaspora"
+        },
+        {
+          "Text": "Nakulakak",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Olde",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Old Expanses"
+        },
+        {
+          "Text": "Mikadira",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Hint",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Hinterworlds"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Leon",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Leonidae"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": 2,
+      "Milieu": "M1105",
+      "Abbreviation": "Exto",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Extolian"
+        },
+        {
+          "Text": "Krurrihkugr",
+          "Lang": "kk"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Stai",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Staihaia'yo",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Iwah",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Iwahfuah",
+          "Lang": "as"
+        },
+        {
+          "Text": "Zodia"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Dark",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Dark Nebula"
+        },
+        {
+          "Text": "I'aheako",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Magy",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Magyar"
+        },
+        {
+          "Text": "Magaar",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Solo",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Solomani Rim"
+        },
+        {
+          "Text": "Kushuggi",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Alph",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Alpha Crucis"
+        },
+        {
+          "Text": "Amkarim",
+          "Lang": "vi"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Spic",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Spica"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Phla",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Phlask",
+          "Lang": "Hv"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": 3,
+      "Milieu": "M1105",
+      "Abbreviation": "Cent",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Centrax",
+          "Lang": "hv"
+        }
+      ]
+    },
+    {
+      "X": -4,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Akti",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Aktifao",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -3,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Uist",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Uistilrao",
+          "Lang": "as"
+        },
+        {
+          "Text": "Uistilao",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -2,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Ustr",
+      "Tags": "Official OTU",
+      "Names": [
+        {
+          "Text": "Ustral Quadrant"
+        },
+        {
+          "Text": "Ftahtuak",
+          "Lang": "as"
+        }
+      ]
+    },
+    {
+      "X": -1,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Cano",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Canopus"
+        }
+      ]
+    },
+    {
+      "X": 0,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Alde",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Aldebaran"
+        }
+      ]
+    },
+    {
+      "X": 1,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Newo",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Neworld"
+        }
+      ]
+    },
+    {
+      "X": 2,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Lang",
+      "Tags": "InReview OTU",
+      "Names": [
+        {
+          "Text": "Langere",
+          "Lang": "hv"
+        }
+      ]
+    },
+    {
+      "X": 3,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Drak",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Drakken",
+          "Lang": "hv"
+        }
+      ]
+    },
+    {
+      "X": 4,
+      "Y": 4,
+      "Milieu": "M1105",
+      "Abbreviation": "Lors",
+      "Tags": "OTU",
+      "Names": [
+        {
+          "Text": "Lorspane",
+          "Lang": "hv"
+        }
+      ]
+    }
+  ]
+}

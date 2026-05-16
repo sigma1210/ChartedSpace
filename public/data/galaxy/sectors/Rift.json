@@ -1,0 +1,5902 @@
+{
+  "sector": "Riftspan Reaches",
+  "abbreviation": "Rift",
+  "milieu": "M1105",
+  "source": "Traveller 5 Second Survey",
+  "credits": "Riftspan Reaches sector was designed by Marc W. Miller and appears in Atlas of the Imperium (GDW, 1984). It was refined by James Holden and appears in The Travellers Digest.",
+  "subsectors": {
+    "A": "Aulryakh",
+    "B": "Hwiwuiyo",
+    "C": "Tyehlai",
+    "D": "Ewasya'",
+    "E": "Trawo",
+    "F": "Aokiylair",
+    "G": "Ryuhleiea",
+    "H": "Iyhaseakh",
+    "I": "Yuhiyah",
+    "J": "Jikhyrleirla",
+    "K": "Hryehkhtyel",
+    "L": "Aohelroiao",
+    "M": "Ftyoauial",
+    "N": "Ioihlehwa",
+    "O": "Tuistao",
+    "P": "Wahtoikoeakh"
+  },
+  "allegiances": {
+    "AsMw": "Aslan Hierate, single multiple-world clan dominates",
+    "AsSc": "Aslan Hierate, multiple clans split control",
+    "AsT0": "Aslan Hierate, Tlaukhu control, Yerlyaruiwo (1), Hrawoao (13), Eisohiyw (14), Ferekhearl (19)",
+    "AsT1": "Aslan Hierate, Tlaukhu control, Khaukheairl (2), Estoieie' (16), Toaseilwi (22)",
+    "AsT2": "Aslan Hierate, Tlaukhu control, Syoisuis (3)",
+    "AsT3": "Aslan Hierate, Tlaukhu control, Tralyeaeawi (4), Yulraleh (12), Aiheilar (25), Riyhalaei (28)",
+    "AsT4": "Aslan Hierate, Tlaukhu control, Eakhtiyho (5), Eteawyolei' (11), Fteweyeakh (23)",
+    "AsT5": "Aslan Hierate, Tlaukhu control, Hlyueawi (6), Isoitiyro (15)",
+    "AsT7": "Aslan Hierate, Tlaukhu control, Ikhtealyo (8), Tlerlearlyo (20), Yetahikh (24)",
+    "AsT8": "Aslan Hierate, Tlaukhu control, Seieakh (9), Akatoiloh (18), We'okurir (29)",
+    "AsT9": "Aslan Hierate, Tlaukhu control, Aokhalte (10), Sahao' (21), Ouokhoi (26)",
+    "AsTv": "Aslan Hierate, Tlaukhu vassal clan dominates",
+    "AsVc": "Aslan Hierate, vassal clan dominates",
+    "AsWc": "Aslan Hierate, single one-world clan dominates",
+    "AsXX": "Aslan Hierate, unknown",
+    "NaAs": "Non-Aligned, Aslan-dominated"
+  },
+  "worlds": [
+    {
+      "hex": "0102",
+      "hexX": 1,
+      "hexY": 2,
+      "name": "Areiha'is",
+      "uwp": {
+        "raw": "B54847A-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "8",
+        "population": "4",
+        "government": "7",
+        "lawLevel": "A",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Pa"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(634+3)",
+        "resources": "6",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[657D]",
+        "homogeneity": "6",
+        "acceptance": "5",
+        "strangeness": "7",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "900",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M3 V"
+      ]
+    },
+    {
+      "hex": "0103",
+      "hexX": 1,
+      "hexY": 3,
+      "name": "Triwayah",
+      "uwp": {
+        "raw": "C783214-8",
+        "starport": "C",
+        "size": "7",
+        "atmosphere": "8",
+        "hydrographics": "3",
+        "population": "2",
+        "government": "1",
+        "lawLevel": "4",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ -2 }",
+        "value": -2
+      },
+      "economics": {
+        "raw": "(610-4)",
+        "resources": "6",
+        "labour": "1",
+        "infrastructure": "0",
+        "efficiency": -4
+      },
+      "culture": {
+        "raw": "[1136]",
+        "homogeneity": "1",
+        "acceptance": "1",
+        "strangeness": "3",
+        "symbols": "6"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "820",
+        "populationMultiplier": 8,
+        "belts": 2,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsMw",
+      "stellar": [
+        "G2 V"
+      ]
+    },
+    {
+      "hex": "0104",
+      "hexX": 1,
+      "hexY": 4,
+      "name": "Ftyayu",
+      "uwp": {
+        "raw": "A664855-D",
+        "starport": "A",
+        "size": "6",
+        "atmosphere": "6",
+        "hydrographics": "4",
+        "population": "8",
+        "government": "5",
+        "lawLevel": "5",
+        "techLevel": "D"
+      },
+      "remarks": [
+        "Ri",
+        "Pa",
+        "Ph",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 3 }",
+        "value": 3
+      },
+      "economics": {
+        "raw": "(C7E+1)",
+        "resources": "C",
+        "labour": "7",
+        "infrastructure": "E",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[6B3B]",
+        "homogeneity": "6",
+        "acceptance": "B",
+        "strangeness": "3",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "702",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 6,
+      "allegiance": "AsTv",
+      "stellar": [
+        "A4 V"
+      ]
+    },
+    {
+      "hex": "0108",
+      "hexX": 1,
+      "hexY": 8,
+      "name": "Yolrilao",
+      "uwp": {
+        "raw": "B69A687-9",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "9",
+        "hydrographics": "A",
+        "population": "6",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "Ni",
+        "Wa"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(B54+1)",
+        "resources": "B",
+        "labour": "5",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[6659]",
+        "homogeneity": "6",
+        "acceptance": "6",
+        "strangeness": "5",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "712",
+        "populationMultiplier": 7,
+        "belts": 1,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsVc",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "0201",
+      "hexX": 2,
+      "hexY": 1,
+      "name": "Ehaosah",
+      "uwp": {
+        "raw": "B562478-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "2",
+        "population": "4",
+        "government": "7",
+        "lawLevel": "8",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(934+1)",
+        "resources": "9",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[455B]",
+        "homogeneity": "4",
+        "acceptance": "5",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "903",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "0204",
+      "hexX": 2,
+      "hexY": 4,
+      "name": "Staikhah",
+      "uwp": {
+        "raw": "B54036B-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "0",
+        "population": "3",
+        "government": "6",
+        "lawLevel": "B",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "De",
+        "He",
+        "Lo",
+        "Po",
+        "O:0104"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(921+3)",
+        "resources": "9",
+        "labour": "2",
+        "infrastructure": "1",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[547D]",
+        "homogeneity": "5",
+        "acceptance": "4",
+        "strangeness": "7",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "413",
+        "populationMultiplier": 4,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsTv",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "0303",
+      "hexX": 3,
+      "hexY": 3,
+      "name": "Iohfou",
+      "uwp": {
+        "raw": "C430785-A",
+        "starport": "C",
+        "size": "4",
+        "atmosphere": "3",
+        "hydrographics": "0",
+        "population": "7",
+        "government": "8",
+        "lawLevel": "5",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "De",
+        "Na",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(D6A-1)",
+        "resources": "D",
+        "labour": "6",
+        "infrastructure": "A",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[5838]",
+        "homogeneity": "5",
+        "acceptance": "8",
+        "strangeness": "3",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "204",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsWc",
+      "stellar": [
+        "K0 V"
+      ]
+    },
+    {
+      "hex": "0306",
+      "hexX": 3,
+      "hexY": 6,
+      "name": "Yailaw",
+      "uwp": {
+        "raw": "B310885-C",
+        "starport": "B",
+        "size": "3",
+        "atmosphere": "1",
+        "hydrographics": "0",
+        "population": "8",
+        "government": "8",
+        "lawLevel": "5",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Na",
+        "Ph",
+        "Pi",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(D7C+1)",
+        "resources": "D",
+        "labour": "7",
+        "infrastructure": "C",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[6A3A]",
+        "homogeneity": "6",
+        "acceptance": "A",
+        "strangeness": "3",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "803",
+        "populationMultiplier": 8,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 6,
+      "allegiance": "AsVc",
+      "stellar": [
+        "K3 V"
+      ]
+    },
+    {
+      "hex": "0402",
+      "hexX": 4,
+      "hexY": 2,
+      "name": "Fahaiye",
+      "uwp": {
+        "raw": "B633487-A",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "3",
+        "hydrographics": "3",
+        "population": "4",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(934+1)",
+        "resources": "9",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[455A]",
+        "homogeneity": "4",
+        "acceptance": "5",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "712",
+        "populationMultiplier": 7,
+        "belts": 1,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsTv",
+      "stellar": [
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "0403",
+      "hexX": 4,
+      "hexY": 3,
+      "name": "Oilraroi",
+      "uwp": {
+        "raw": "C5867BB-8",
+        "starport": "C",
+        "size": "5",
+        "atmosphere": "8",
+        "hydrographics": "6",
+        "population": "7",
+        "government": "B",
+        "lawLevel": "B",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Ag",
+        "Ri",
+        "Pz"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(969+3)",
+        "resources": "9",
+        "labour": "6",
+        "infrastructure": "9",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[987A]",
+        "homogeneity": "9",
+        "acceptance": "8",
+        "strangeness": "7",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": "A",
+      "pbg": {
+        "raw": "300",
+        "populationMultiplier": 3,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 4,
+      "allegiance": "AsWc",
+      "stellar": [
+        "A3 V",
+        "G7 V"
+      ]
+    },
+    {
+      "hex": "0404",
+      "hexX": 4,
+      "hexY": 4,
+      "name": "Teikhahfauoa",
+      "uwp": {
+        "raw": "B56258A-A",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "2",
+        "population": "5",
+        "government": "8",
+        "lawLevel": "A",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Ni",
+        "Pr"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(745+3)",
+        "resources": "7",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[767C]",
+        "homogeneity": "7",
+        "acceptance": "6",
+        "strangeness": "7",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "600",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 6,
+      "allegiance": "AsMw",
+      "stellar": [
+        "M3 V"
+      ]
+    },
+    {
+      "hex": "0407",
+      "hexX": 4,
+      "hexY": 7,
+      "name": "Hastaofta",
+      "uwp": {
+        "raw": "B200497-C",
+        "starport": "B",
+        "size": "2",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "4",
+        "government": "9",
+        "lawLevel": "7",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Ni",
+        "Va",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(A34+1)",
+        "resources": "A",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[455C]",
+        "homogeneity": "4",
+        "acceptance": "5",
+        "strangeness": "5",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "213",
+        "populationMultiplier": 2,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 13,
+      "allegiance": "AsWc",
+      "stellar": [
+        "M0 V",
+        "M4 V"
+      ]
+    },
+    {
+      "hex": "0503",
+      "hexX": 5,
+      "hexY": 3,
+      "name": "Wyoyohku'",
+      "uwp": {
+        "raw": "C31078A-A",
+        "starport": "C",
+        "size": "3",
+        "atmosphere": "1",
+        "hydrographics": "0",
+        "population": "7",
+        "government": "8",
+        "lawLevel": "A",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Na",
+        "Pi"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(D6A+3)",
+        "resources": "D",
+        "labour": "6",
+        "infrastructure": "A",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[987C]",
+        "homogeneity": "9",
+        "acceptance": "8",
+        "strangeness": "7",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "904",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsWc",
+      "stellar": [
+        "M0 V",
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "0507",
+      "hexX": 5,
+      "hexY": 7,
+      "name": "Aulryakh",
+      "uwp": {
+        "raw": "A542A54-E",
+        "starport": "A",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "2",
+        "population": "A",
+        "government": "5",
+        "lawLevel": "4",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "He",
+        "Hi",
+        "In",
+        "Po",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 4 }",
+        "value": 4
+      },
+      "economics": {
+        "raw": "(E9G+2)",
+        "resources": "E",
+        "labour": "9",
+        "infrastructure": "G",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[8E3C]",
+        "homogeneity": "8",
+        "acceptance": "E",
+        "strangeness": "3",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [
+        "T"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "502",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 13,
+      "allegiance": "AsTv",
+      "stellar": [
+        "K1 V"
+      ]
+    },
+    {
+      "hex": "0602",
+      "hexX": 6,
+      "hexY": 2,
+      "name": "Seihueiakh",
+      "uwp": {
+        "raw": "C567314-9",
+        "starport": "C",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "7",
+        "population": "3",
+        "government": "1",
+        "lawLevel": "4",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(920-3)",
+        "resources": "9",
+        "labour": "2",
+        "infrastructure": "0",
+        "efficiency": -3
+      },
+      "culture": {
+        "raw": "[1237]",
+        "homogeneity": "1",
+        "acceptance": "2",
+        "strangeness": "3",
+        "symbols": "7"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "504",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsMw",
+      "stellar": [
+        "G8 V",
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "0701",
+      "hexX": 7,
+      "hexY": 1,
+      "name": "Eioiye'",
+      "uwp": {
+        "raw": "A7A8777-D",
+        "starport": "A",
+        "size": "7",
+        "atmosphere": "A",
+        "hydrographics": "8",
+        "population": "7",
+        "government": "7",
+        "lawLevel": "7",
+        "techLevel": "D"
+      },
+      "remarks": [
+        "Fl",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(D6D+2)",
+        "resources": "D",
+        "labour": "6",
+        "infrastructure": "D",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[795D]",
+        "homogeneity": "7",
+        "acceptance": "9",
+        "strangeness": "5",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "704",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "0703",
+      "hexX": 7,
+      "hexY": 3,
+      "name": "Ieafe",
+      "uwp": {
+        "raw": "B310885-C",
+        "starport": "B",
+        "size": "3",
+        "atmosphere": "1",
+        "hydrographics": "0",
+        "population": "8",
+        "government": "8",
+        "lawLevel": "5",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Na",
+        "Ph",
+        "Pi",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(C7C+1)",
+        "resources": "C",
+        "labour": "7",
+        "infrastructure": "C",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[6A3A]",
+        "homogeneity": "6",
+        "acceptance": "A",
+        "strangeness": "3",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "602",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsT3",
+      "stellar": [
+        "G4 V",
+        "M8 V"
+      ]
+    },
+    {
+      "hex": "0804",
+      "hexX": 8,
+      "hexY": 4,
+      "name": "Stoafaohail",
+      "uwp": {
+        "raw": "E000755-A",
+        "starport": "E",
+        "size": "0",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "7",
+        "government": "5",
+        "lawLevel": "5",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "As",
+        "Na",
+        "Va",
+        "Pi"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(B69-2)",
+        "resources": "B",
+        "labour": "6",
+        "infrastructure": "9",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[5738]",
+        "homogeneity": "5",
+        "acceptance": "7",
+        "strangeness": "3",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "902",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsMw",
+      "stellar": [
+        "G4 IV",
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "0901",
+      "hexX": 9,
+      "hexY": 1,
+      "name": "Aistektao",
+      "uwp": {
+        "raw": "D637784-7",
+        "starport": "D",
+        "size": "6",
+        "atmosphere": "3",
+        "hydrographics": "7",
+        "population": "7",
+        "government": "8",
+        "lawLevel": "4",
+        "techLevel": "7"
+      },
+      "remarks": [],
+      "importance": {
+        "raw": "{ -2 }",
+        "value": -2
+      },
+      "economics": {
+        "raw": "(966-4)",
+        "resources": "9",
+        "labour": "6",
+        "infrastructure": "6",
+        "efficiency": -4
+      },
+      "culture": {
+        "raw": "[5535]",
+        "homogeneity": "5",
+        "acceptance": "5",
+        "strangeness": "3",
+        "symbols": "5"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "612",
+        "populationMultiplier": 6,
+        "belts": 1,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 13,
+      "allegiance": "AsVc",
+      "stellar": [
+        "K4 V",
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "0902",
+      "hexX": 9,
+      "hexY": 2,
+      "name": "Yeryorlo",
+      "uwp": {
+        "raw": "C666526-8",
+        "starport": "C",
+        "size": "6",
+        "atmosphere": "6",
+        "hydrographics": "6",
+        "population": "5",
+        "government": "2",
+        "lawLevel": "6",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Ag",
+        "Ni",
+        "Ga",
+        "Pr"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(C43-2)",
+        "resources": "C",
+        "labour": "4",
+        "infrastructure": "3",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[4447]",
+        "homogeneity": "4",
+        "acceptance": "4",
+        "strangeness": "4",
+        "symbols": "7"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "105",
+        "populationMultiplier": 1,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 16,
+      "allegiance": "AsWc",
+      "stellar": [
+        "M3 V"
+      ]
+    },
+    {
+      "hex": "0904",
+      "hexX": 9,
+      "hexY": 4,
+      "name": "Kouaoriy",
+      "uwp": {
+        "raw": "A536574-B",
+        "starport": "A",
+        "size": "5",
+        "atmosphere": "3",
+        "hydrographics": "6",
+        "population": "5",
+        "government": "7",
+        "lawLevel": "4",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(E45-1)",
+        "resources": "E",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[3639]",
+        "homogeneity": "3",
+        "acceptance": "6",
+        "strangeness": "3",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "425",
+        "populationMultiplier": 4,
+        "belts": 2,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 17,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M3 V"
+      ]
+    },
+    {
+      "hex": "0905",
+      "hexX": 9,
+      "hexY": 5,
+      "name": "Wehwilaw",
+      "uwp": {
+        "raw": "A67A238-D",
+        "starport": "A",
+        "size": "6",
+        "atmosphere": "7",
+        "hydrographics": "A",
+        "population": "2",
+        "government": "3",
+        "lawLevel": "8",
+        "techLevel": "D"
+      },
+      "remarks": [
+        "Lo",
+        "Wa",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(811+1)",
+        "resources": "8",
+        "labour": "1",
+        "infrastructure": "1",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[235D]",
+        "homogeneity": "2",
+        "acceptance": "3",
+        "strangeness": "5",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "704",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 16,
+      "allegiance": "AsTv",
+      "stellar": [
+        "K0 V"
+      ]
+    },
+    {
+      "hex": "1002",
+      "hexX": 10,
+      "hexY": 2,
+      "name": "Iyraweis",
+      "uwp": {
+        "raw": "D421576-9",
+        "starport": "D",
+        "size": "4",
+        "atmosphere": "2",
+        "hydrographics": "1",
+        "population": "5",
+        "government": "7",
+        "lawLevel": "6",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "He",
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ -2 }",
+        "value": -2
+      },
+      "economics": {
+        "raw": "(A42-3)",
+        "resources": "A",
+        "labour": "4",
+        "infrastructure": "2",
+        "efficiency": -3
+      },
+      "culture": {
+        "raw": "[4348]",
+        "homogeneity": "4",
+        "acceptance": "3",
+        "strangeness": "4",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "403",
+        "populationMultiplier": 4,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "1101",
+      "hexX": 11,
+      "hexY": 1,
+      "name": "Yutawe",
+      "uwp": {
+        "raw": "B552543-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "5",
+        "hydrographics": "2",
+        "population": "5",
+        "government": "4",
+        "lawLevel": "3",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(845-2)",
+        "resources": "8",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[2628]",
+        "homogeneity": "2",
+        "acceptance": "6",
+        "strangeness": "2",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "210",
+        "populationMultiplier": 2,
+        "belts": 1,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 6,
+      "allegiance": "AsWc",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "1103",
+      "hexX": 11,
+      "hexY": 3,
+      "name": "Aoikhekh",
+      "uwp": {
+        "raw": "B563597-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "3",
+        "population": "5",
+        "government": "9",
+        "lawLevel": "7",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Pr"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(C45+1)",
+        "resources": "C",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[565B]",
+        "homogeneity": "5",
+        "acceptance": "6",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "205",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 15,
+      "allegiance": "AsTv",
+      "stellar": [
+        "M2 V",
+        "M9 V"
+      ]
+    },
+    {
+      "hex": "1201",
+      "hexX": 12,
+      "hexY": 1,
+      "name": "Hkorou",
+      "uwp": {
+        "raw": "B879725-A",
+        "starport": "B",
+        "size": "8",
+        "atmosphere": "7",
+        "hydrographics": "9",
+        "population": "7",
+        "government": "2",
+        "lawLevel": "5",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Pi"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(F6B+1)",
+        "resources": "F",
+        "labour": "6",
+        "infrastructure": "B",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[5938]",
+        "homogeneity": "5",
+        "acceptance": "9",
+        "strangeness": "3",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "624",
+        "populationMultiplier": 6,
+        "belts": 2,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsT7",
+      "stellar": [
+        "G0 V"
+      ]
+    },
+    {
+      "hex": "1202",
+      "hexX": 12,
+      "hexY": 2,
+      "name": "Liylaeahal",
+      "uwp": {
+        "raw": "B420578-A",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "2",
+        "hydrographics": "0",
+        "population": "5",
+        "government": "7",
+        "lawLevel": "8",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "De",
+        "He",
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(B45+1)",
+        "resources": "B",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[565A]",
+        "homogeneity": "5",
+        "acceptance": "6",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "304",
+        "populationMultiplier": 3,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsSc",
+      "stellar": [
+        "A3 V",
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "1204",
+      "hexX": 12,
+      "hexY": 4,
+      "name": "Tikaorlu",
+      "uwp": {
+        "raw": "D000849-9",
+        "starport": "D",
+        "size": "0",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "8",
+        "government": "4",
+        "lawLevel": "9",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "As",
+        "Na",
+        "Va",
+        "Ph",
+        "Pi"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(E78+1)",
+        "resources": "E",
+        "labour": "7",
+        "infrastructure": "8",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[976A]",
+        "homogeneity": "9",
+        "acceptance": "7",
+        "strangeness": "6",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "713",
+        "populationMultiplier": 7,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 7,
+      "allegiance": "AsVc",
+      "stellar": [
+        "G0 V",
+        "M5 V",
+        "M6 V"
+      ]
+    },
+    {
+      "hex": "1209",
+      "hexX": 12,
+      "hexY": 9,
+      "name": "Aiolol",
+      "uwp": {
+        "raw": "B79A475-B",
+        "starport": "B",
+        "size": "7",
+        "atmosphere": "9",
+        "hydrographics": "A",
+        "population": "4",
+        "government": "7",
+        "lawLevel": "5",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Wa"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(A34-1)",
+        "resources": "A",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[2539]",
+        "homogeneity": "2",
+        "acceptance": "5",
+        "strangeness": "3",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "104",
+        "populationMultiplier": 1,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsSc",
+      "stellar": [
+        "K4 V"
+      ]
+    },
+    {
+      "hex": "1304",
+      "hexX": 13,
+      "hexY": 4,
+      "name": "Ryurarai",
+      "uwp": {
+        "raw": "B644897-A",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "4",
+        "hydrographics": "4",
+        "population": "8",
+        "government": "9",
+        "lawLevel": "7",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Pa",
+        "Ph",
+        "Pi"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(E7B+2)",
+        "resources": "E",
+        "labour": "7",
+        "infrastructure": "B",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[8A5A]",
+        "homogeneity": "8",
+        "acceptance": "A",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "504",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 15,
+      "allegiance": "AsT2",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "1401",
+      "hexX": 14,
+      "hexY": 1,
+      "name": "Htyeh",
+      "uwp": {
+        "raw": "C789358-B",
+        "starport": "C",
+        "size": "7",
+        "atmosphere": "8",
+        "hydrographics": "9",
+        "population": "3",
+        "government": "5",
+        "lawLevel": "8",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(B20+1)",
+        "resources": "B",
+        "labour": "2",
+        "infrastructure": "0",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[335B]",
+        "homogeneity": "3",
+        "acceptance": "3",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "724",
+        "populationMultiplier": 7,
+        "belts": 2,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 17,
+      "allegiance": "AsT8",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "1502",
+      "hexX": 15,
+      "hexY": 2,
+      "name": "Iraua",
+      "uwp": {
+        "raw": "B571677-A",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "7",
+        "hydrographics": "1",
+        "population": "6",
+        "government": "7",
+        "lawLevel": "7",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "He",
+        "Ni",
+        "Da"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(B55+1)",
+        "resources": "B",
+        "labour": "5",
+        "infrastructure": "5",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[675A]",
+        "homogeneity": "6",
+        "acceptance": "7",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": "A",
+      "pbg": {
+        "raw": "903",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 13,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "1608",
+      "hexX": 16,
+      "hexY": 8,
+      "name": "Elei'eah",
+      "uwp": {
+        "raw": "B436488-D",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "3",
+        "hydrographics": "6",
+        "population": "4",
+        "government": "8",
+        "lawLevel": "8",
+        "techLevel": "D"
+      },
+      "remarks": [
+        "Ni",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(B34+1)",
+        "resources": "B",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[455D]",
+        "homogeneity": "4",
+        "acceptance": "5",
+        "strangeness": "5",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "505",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsT4",
+      "stellar": [
+        "K2 V"
+      ]
+    },
+    {
+      "hex": "1801",
+      "hexX": 18,
+      "hexY": 1,
+      "name": "Iktaitlow",
+      "uwp": {
+        "raw": "E566787-6",
+        "starport": "E",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "6",
+        "population": "7",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "6"
+      },
+      "remarks": [
+        "Ag",
+        "Ri"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(967+1)",
+        "resources": "9",
+        "labour": "6",
+        "infrastructure": "7",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[7756]",
+        "homogeneity": "7",
+        "acceptance": "7",
+        "strangeness": "5",
+        "symbols": "6"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "622",
+        "populationMultiplier": 6,
+        "belts": 2,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsVc",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "2306",
+      "hexX": 23,
+      "hexY": 6,
+      "name": "Aoukeiwar",
+      "uwp": {
+        "raw": "A000113-C",
+        "starport": "A",
+        "size": "0",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "1",
+        "government": "1",
+        "lawLevel": "3",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "As",
+        "Lo",
+        "Va",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(501-2)",
+        "resources": "5",
+        "labour": "0",
+        "infrastructure": "1",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[1229]",
+        "homogeneity": "1",
+        "acceptance": "2",
+        "strangeness": "2",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "820",
+        "populationMultiplier": 8,
+        "belts": 2,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 9,
+      "allegiance": "NaAs",
+      "stellar": [
+        "K0 V"
+      ]
+    },
+    {
+      "hex": "0711",
+      "hexX": 7,
+      "hexY": 11,
+      "name": "Eao",
+      "uwp": {
+        "raw": "C94A475-B",
+        "starport": "C",
+        "size": "9",
+        "atmosphere": "4",
+        "hydrographics": "A",
+        "population": "4",
+        "government": "7",
+        "lawLevel": "5",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Wa"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(A33-2)",
+        "resources": "A",
+        "labour": "3",
+        "infrastructure": "3",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[2439]",
+        "homogeneity": "2",
+        "acceptance": "4",
+        "strangeness": "3",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "304",
+        "populationMultiplier": 3,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsSc",
+      "stellar": [
+        "G2 V"
+      ]
+    },
+    {
+      "hex": "0913",
+      "hexX": 9,
+      "hexY": 13,
+      "name": "Tleae'ah",
+      "uwp": {
+        "raw": "C756887-8",
+        "starport": "C",
+        "size": "7",
+        "atmosphere": "5",
+        "hydrographics": "6",
+        "population": "8",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Ga",
+        "Pa",
+        "Ph"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(E77-1)",
+        "resources": "E",
+        "labour": "7",
+        "infrastructure": "7",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[8758]",
+        "homogeneity": "8",
+        "acceptance": "7",
+        "strangeness": "5",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "413",
+        "populationMultiplier": 4,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsT9",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "1017",
+      "hexX": 10,
+      "hexY": 17,
+      "name": "Uasiwea",
+      "uwp": {
+        "raw": "B8A7268-C",
+        "starport": "B",
+        "size": "8",
+        "atmosphere": "A",
+        "hydrographics": "7",
+        "population": "2",
+        "government": "6",
+        "lawLevel": "8",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Fl",
+        "Lo",
+        "O:1118",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(811+1)",
+        "resources": "8",
+        "labour": "1",
+        "infrastructure": "1",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[235C]",
+        "homogeneity": "2",
+        "acceptance": "3",
+        "strangeness": "5",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "213",
+        "populationMultiplier": 2,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 15,
+      "allegiance": "AsSc",
+      "stellar": [
+        "K9 IV"
+      ]
+    },
+    {
+      "hex": "1113",
+      "hexX": 11,
+      "hexY": 13,
+      "name": "Wou'iwyar",
+      "uwp": {
+        "raw": "B9AA389-A",
+        "starport": "B",
+        "size": "9",
+        "atmosphere": "A",
+        "hydrographics": "A",
+        "population": "3",
+        "government": "8",
+        "lawLevel": "9",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Fl",
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(921+2)",
+        "resources": "9",
+        "labour": "2",
+        "infrastructure": "1",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[446B]",
+        "homogeneity": "4",
+        "acceptance": "4",
+        "strangeness": "6",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "804",
+        "populationMultiplier": 8,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 15,
+      "allegiance": "AsWc",
+      "stellar": [
+        "K9 V"
+      ]
+    },
+    {
+      "hex": "1115",
+      "hexX": 11,
+      "hexY": 15,
+      "name": "Souyehkeahte",
+      "uwp": {
+        "raw": "B5657B8-A",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "5",
+        "population": "7",
+        "government": "B",
+        "lawLevel": "8",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Ag",
+        "Ri"
+      ],
+      "importance": {
+        "raw": "{ 4 }",
+        "value": 4
+      },
+      "economics": {
+        "raw": "(B6D+4)",
+        "resources": "B",
+        "labour": "6",
+        "infrastructure": "D",
+        "efficiency": 4
+      },
+      "culture": {
+        "raw": "[7B5A]",
+        "homogeneity": "7",
+        "acceptance": "B",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "602",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsT9",
+      "stellar": [
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "1118",
+      "hexX": 11,
+      "hexY": 18,
+      "name": "Trahoheair",
+      "uwp": {
+        "raw": "B663A76-C",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "6",
+        "hydrographics": "3",
+        "population": "A",
+        "government": "7",
+        "lawLevel": "6",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Hi",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 3 }",
+        "value": 3
+      },
+      "economics": {
+        "raw": "(G9E+2)",
+        "resources": "G",
+        "labour": "9",
+        "infrastructure": "E",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[9D4B]",
+        "homogeneity": "9",
+        "acceptance": "D",
+        "strangeness": "4",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "313",
+        "populationMultiplier": 3,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsSc",
+      "stellar": [
+        "K7 V",
+        "M8 V"
+      ]
+    },
+    {
+      "hex": "1314",
+      "hexX": 13,
+      "hexY": 14,
+      "name": "Hfarauo",
+      "uwp": {
+        "raw": "B561269-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "1",
+        "population": "2",
+        "government": "6",
+        "lawLevel": "9",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Lo",
+        "O:1115"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(811+2)",
+        "resources": "8",
+        "labour": "1",
+        "infrastructure": "1",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[336C]",
+        "homogeneity": "3",
+        "acceptance": "3",
+        "strangeness": "6",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "613",
+        "populationMultiplier": 6,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsT9",
+      "stellar": [
+        "G4 V",
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "1315",
+      "hexX": 13,
+      "hexY": 15,
+      "name": "Auih",
+      "uwp": {
+        "raw": "B57A557-D",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "7",
+        "hydrographics": "A",
+        "population": "5",
+        "government": "5",
+        "lawLevel": "7",
+        "techLevel": "D"
+      },
+      "remarks": [
+        "Ni",
+        "Wa",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(745+1)",
+        "resources": "7",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[565D]",
+        "homogeneity": "5",
+        "acceptance": "6",
+        "strangeness": "5",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "500",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 3,
+      "allegiance": "AsTv",
+      "stellar": [
+        "M3 II"
+      ]
+    },
+    {
+      "hex": "1316",
+      "hexX": 13,
+      "hexY": 16,
+      "name": "Toawi",
+      "uwp": {
+        "raw": "B40075A-D",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "7",
+        "government": "5",
+        "lawLevel": "A",
+        "techLevel": "D"
+      },
+      "remarks": [
+        "Na",
+        "Va",
+        "Pi",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(96D+4)",
+        "resources": "9",
+        "labour": "6",
+        "infrastructure": "D",
+        "efficiency": 4
+      },
+      "culture": {
+        "raw": "[997F]",
+        "homogeneity": "9",
+        "acceptance": "9",
+        "strangeness": "7",
+        "symbols": "F"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "800",
+        "populationMultiplier": 8,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsMw",
+      "stellar": [
+        "K2 V",
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "1415",
+      "hexX": 14,
+      "hexY": 15,
+      "name": "Hyarlih",
+      "uwp": {
+        "raw": "B7C6166-C",
+        "starport": "B",
+        "size": "7",
+        "atmosphere": "C",
+        "hydrographics": "6",
+        "population": "1",
+        "government": "6",
+        "lawLevel": "6",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Fl",
+        "Lo",
+        "O:1517",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(501+1)",
+        "resources": "5",
+        "labour": "0",
+        "infrastructure": "1",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[124B]",
+        "homogeneity": "1",
+        "acceptance": "2",
+        "strangeness": "4",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "511",
+        "populationMultiplier": 5,
+        "belts": 1,
+        "gasGiants": 1
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsMw",
+      "stellar": [
+        "K5 V"
+      ]
+    },
+    {
+      "hex": "1420",
+      "hexX": 14,
+      "hexY": 20,
+      "name": "Waikhta",
+      "uwp": {
+        "raw": "C639267-B",
+        "starport": "C",
+        "size": "6",
+        "atmosphere": "3",
+        "hydrographics": "9",
+        "population": "2",
+        "government": "6",
+        "lawLevel": "7",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Lo",
+        "O:1517"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(810+1)",
+        "resources": "8",
+        "labour": "1",
+        "infrastructure": "0",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[225B]",
+        "homogeneity": "2",
+        "acceptance": "2",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "713",
+        "populationMultiplier": 7,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsMw",
+      "stellar": [
+        "K7 V",
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "1515",
+      "hexX": 15,
+      "hexY": 15,
+      "name": "Seisyaftao",
+      "uwp": {
+        "raw": "B544387-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "4",
+        "population": "3",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(921+1)",
+        "resources": "9",
+        "labour": "2",
+        "infrastructure": "1",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[345B]",
+        "homogeneity": "3",
+        "acceptance": "4",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "104",
+        "populationMultiplier": 1,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsWc",
+      "stellar": [
+        "G8 II"
+      ]
+    },
+    {
+      "hex": "1516",
+      "hexX": 15,
+      "hexY": 16,
+      "name": "Ehyeiyaw",
+      "uwp": {
+        "raw": "D53898A-8",
+        "starport": "D",
+        "size": "5",
+        "atmosphere": "3",
+        "hydrographics": "8",
+        "population": "9",
+        "government": "8",
+        "lawLevel": "A",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Hi"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(C88+1)",
+        "resources": "C",
+        "labour": "8",
+        "infrastructure": "8",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[B87A]",
+        "homogeneity": "B",
+        "acceptance": "8",
+        "strangeness": "7",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "410",
+        "populationMultiplier": 4,
+        "belts": 1,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsVc",
+      "stellar": [
+        "F4 V"
+      ]
+    },
+    {
+      "hex": "1517",
+      "hexX": 15,
+      "hexY": 17,
+      "name": "Hkurlei",
+      "uwp": {
+        "raw": "A5409DB-C",
+        "starport": "A",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "0",
+        "population": "9",
+        "government": "D",
+        "lawLevel": "B",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "De",
+        "He",
+        "Hi",
+        "In",
+        "Po",
+        "Pz",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 4 }",
+        "value": 4
+      },
+      "economics": {
+        "raw": "(F8F+5)",
+        "resources": "F",
+        "labour": "8",
+        "infrastructure": "F",
+        "efficiency": 5
+      },
+      "culture": {
+        "raw": "[BD7E]",
+        "homogeneity": "B",
+        "acceptance": "D",
+        "strangeness": "7",
+        "symbols": "E"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": "A",
+      "pbg": {
+        "raw": "404",
+        "populationMultiplier": 4,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 17,
+      "allegiance": "AsMw",
+      "stellar": [
+        "K2 V"
+      ]
+    },
+    {
+      "hex": "1614",
+      "hexX": 16,
+      "hexY": 14,
+      "name": "Oisewarla'",
+      "uwp": {
+        "raw": "C400687-A",
+        "starport": "C",
+        "size": "4",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "6",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Na",
+        "Ni",
+        "Va"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(C54+1)",
+        "resources": "C",
+        "labour": "5",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[665A]",
+        "homogeneity": "6",
+        "acceptance": "6",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "504",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsVc",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "1615",
+      "hexX": 16,
+      "hexY": 15,
+      "name": "Arleaya",
+      "uwp": {
+        "raw": "C7977CA-8",
+        "starport": "C",
+        "size": "7",
+        "atmosphere": "9",
+        "hydrographics": "7",
+        "population": "7",
+        "government": "C",
+        "lawLevel": "A",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Ag",
+        "Pi",
+        "Pz"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(G68+2)",
+        "resources": "G",
+        "labour": "6",
+        "infrastructure": "8",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[977A]",
+        "homogeneity": "9",
+        "acceptance": "7",
+        "strangeness": "7",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": "A",
+      "pbg": {
+        "raw": "725",
+        "populationMultiplier": 7,
+        "belts": 2,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsWc",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "1714",
+      "hexX": 17,
+      "hexY": 14,
+      "name": "Wiyeare",
+      "uwp": {
+        "raw": "A576685-C",
+        "starport": "A",
+        "size": "5",
+        "atmosphere": "7",
+        "hydrographics": "6",
+        "population": "6",
+        "government": "8",
+        "lawLevel": "5",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Ag",
+        "Ni",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(C56+1)",
+        "resources": "C",
+        "labour": "5",
+        "infrastructure": "6",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[483A]",
+        "homogeneity": "4",
+        "acceptance": "8",
+        "strangeness": "3",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "622",
+        "populationMultiplier": 6,
+        "belts": 2,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 16,
+      "allegiance": "AsVc",
+      "stellar": [
+        "M1 V",
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "1715",
+      "hexX": 17,
+      "hexY": 15,
+      "name": "Iukheaw",
+      "uwp": {
+        "raw": "D200575-7",
+        "starport": "D",
+        "size": "2",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "5",
+        "government": "7",
+        "lawLevel": "5",
+        "techLevel": "7"
+      },
+      "remarks": [
+        "Ni",
+        "Va"
+      ],
+      "importance": {
+        "raw": "{ -3 }",
+        "value": -3
+      },
+      "economics": {
+        "raw": "(741-5)",
+        "resources": "7",
+        "labour": "4",
+        "infrastructure": "1",
+        "efficiency": -5
+      },
+      "culture": {
+        "raw": "[3235]",
+        "homogeneity": "3",
+        "acceptance": "2",
+        "strangeness": "3",
+        "symbols": "5"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "203",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsSc",
+      "stellar": [
+        "K3 V"
+      ]
+    },
+    {
+      "hex": "1716",
+      "hexX": 17,
+      "hexY": 16,
+      "name": "Aufusyah",
+      "uwp": {
+        "raw": "B68326B-B",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "8",
+        "hydrographics": "3",
+        "population": "2",
+        "government": "6",
+        "lawLevel": "B",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Lo",
+        "O:1517"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(711+3)",
+        "resources": "7",
+        "labour": "1",
+        "infrastructure": "1",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[437D]",
+        "homogeneity": "4",
+        "acceptance": "3",
+        "strangeness": "7",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "812",
+        "populationMultiplier": 8,
+        "belts": 1,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsMw",
+      "stellar": [
+        "K9 V"
+      ]
+    },
+    {
+      "hex": "1815",
+      "hexX": 18,
+      "hexY": 15,
+      "name": "Ruhkei",
+      "uwp": {
+        "raw": "C586374-7",
+        "starport": "C",
+        "size": "5",
+        "atmosphere": "8",
+        "hydrographics": "6",
+        "population": "3",
+        "government": "7",
+        "lawLevel": "4",
+        "techLevel": "7"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ -2 }",
+        "value": -2
+      },
+      "economics": {
+        "raw": "(520-4)",
+        "resources": "5",
+        "labour": "2",
+        "infrastructure": "0",
+        "efficiency": -4
+      },
+      "culture": {
+        "raw": "[1135]",
+        "homogeneity": "1",
+        "acceptance": "1",
+        "strangeness": "3",
+        "symbols": "5"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "600",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 5,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "1816",
+      "hexX": 18,
+      "hexY": 16,
+      "name": "Aoki",
+      "uwp": {
+        "raw": "B888413-B",
+        "starport": "B",
+        "size": "8",
+        "atmosphere": "8",
+        "hydrographics": "8",
+        "population": "4",
+        "government": "1",
+        "lawLevel": "3",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Pa"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(A34-2)",
+        "resources": "A",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[1528]",
+        "homogeneity": "1",
+        "acceptance": "5",
+        "strangeness": "2",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [
+        "T"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "604",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 13,
+      "allegiance": "AsMw",
+      "stellar": [
+        "M3 V",
+        "M8 V"
+      ]
+    },
+    {
+      "hex": "1914",
+      "hexX": 19,
+      "hexY": 14,
+      "name": "Youiar",
+      "uwp": {
+        "raw": "B5A7274-9",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "A",
+        "hydrographics": "7",
+        "population": "2",
+        "government": "7",
+        "lawLevel": "4",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "Fl",
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(710-2)",
+        "resources": "7",
+        "labour": "1",
+        "infrastructure": "0",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[1237]",
+        "homogeneity": "1",
+        "acceptance": "2",
+        "strangeness": "3",
+        "symbols": "7"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "703",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "2219",
+      "hexX": 22,
+      "hexY": 19,
+      "name": "Ahfatre",
+      "uwp": {
+        "raw": "B541499-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "1",
+        "population": "4",
+        "government": "9",
+        "lawLevel": "9",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "He",
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(834+2)",
+        "resources": "8",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[556C]",
+        "homogeneity": "5",
+        "acceptance": "5",
+        "strangeness": "6",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "502",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsTv",
+      "stellar": [
+        "F0 V",
+        "M3 V",
+        "M7 V"
+      ]
+    },
+    {
+      "hex": "2419",
+      "hexX": 24,
+      "hexY": 19,
+      "name": "Iyakhoryeh",
+      "uwp": {
+        "raw": "B639675-C",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "3",
+        "hydrographics": "9",
+        "population": "6",
+        "government": "7",
+        "lawLevel": "5",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Ni",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(C55-1)",
+        "resources": "C",
+        "labour": "5",
+        "infrastructure": "5",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[473A]",
+        "homogeneity": "4",
+        "acceptance": "7",
+        "strangeness": "3",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "404",
+        "populationMultiplier": 4,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsSc",
+      "stellar": [
+        "F3 V"
+      ]
+    },
+    {
+      "hex": "3219",
+      "hexX": 32,
+      "hexY": 19,
+      "name": "Ahoahea",
+      "uwp": {
+        "raw": "A540654-A",
+        "starport": "A",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "0",
+        "population": "6",
+        "government": "5",
+        "lawLevel": "4",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "De",
+        "He",
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(A55-1)",
+        "resources": "A",
+        "labour": "5",
+        "infrastructure": "5",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[4738]",
+        "homogeneity": "4",
+        "acceptance": "7",
+        "strangeness": "3",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "202",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 7,
+      "allegiance": "NaAs",
+      "stellar": [
+        "K2 V",
+        "M7 V"
+      ]
+    },
+    {
+      "hex": "0124",
+      "hexX": 1,
+      "hexY": 24,
+      "name": "Khtyeai",
+      "uwp": {
+        "raw": "A6455A6-B",
+        "starport": "A",
+        "size": "6",
+        "atmosphere": "4",
+        "hydrographics": "5",
+        "population": "5",
+        "government": "A",
+        "lawLevel": "6",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ag",
+        "Ni"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(946+1)",
+        "resources": "9",
+        "labour": "4",
+        "infrastructure": "6",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[474A]",
+        "homogeneity": "4",
+        "acceptance": "7",
+        "strangeness": "4",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "102",
+        "populationMultiplier": 1,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsT8",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "0630",
+      "hexX": 6,
+      "hexY": 30,
+      "name": "Uistihwoa",
+      "uwp": {
+        "raw": "A767259-E",
+        "starport": "A",
+        "size": "7",
+        "atmosphere": "6",
+        "hydrographics": "7",
+        "population": "2",
+        "government": "5",
+        "lawLevel": "9",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "Lo",
+        "Ga",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(611+2)",
+        "resources": "6",
+        "labour": "1",
+        "infrastructure": "1",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[336F]",
+        "homogeneity": "3",
+        "acceptance": "3",
+        "strangeness": "6",
+        "symbols": "F"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "520",
+        "populationMultiplier": 5,
+        "belts": 2,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsTv",
+      "stellar": [
+        "G3 V"
+      ]
+    },
+    {
+      "hex": "0722",
+      "hexX": 7,
+      "hexY": 22,
+      "name": "Teirikh",
+      "uwp": {
+        "raw": "A54787C-C",
+        "starport": "A",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "7",
+        "population": "8",
+        "government": "7",
+        "lawLevel": "C",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Pa",
+        "Ph",
+        "Pi",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(C7C+5)",
+        "resources": "C",
+        "labour": "7",
+        "infrastructure": "C",
+        "efficiency": 5
+      },
+      "culture": {
+        "raw": "[BA8F]",
+        "homogeneity": "B",
+        "acceptance": "A",
+        "strangeness": "8",
+        "symbols": "F"
+      },
+      "nobility": null,
+      "bases": [
+        "T"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "311",
+        "populationMultiplier": 3,
+        "belts": 1,
+        "gasGiants": 1
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsSc",
+      "stellar": [
+        "G0 V"
+      ]
+    },
+    {
+      "hex": "1624",
+      "hexX": 16,
+      "hexY": 24,
+      "name": "Ouohlolr",
+      "uwp": {
+        "raw": "C89A576-8",
+        "starport": "C",
+        "size": "8",
+        "atmosphere": "9",
+        "hydrographics": "A",
+        "population": "5",
+        "government": "7",
+        "lawLevel": "6",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Ni",
+        "Wa"
+      ],
+      "importance": {
+        "raw": "{ -2 }",
+        "value": -2
+      },
+      "economics": {
+        "raw": "(B42-3)",
+        "resources": "B",
+        "labour": "4",
+        "infrastructure": "2",
+        "efficiency": -3
+      },
+      "culture": {
+        "raw": "[4347]",
+        "homogeneity": "4",
+        "acceptance": "3",
+        "strangeness": "4",
+        "symbols": "7"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "504",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 15,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "1629",
+      "hexX": 16,
+      "hexY": 29,
+      "name": "Uikhyrleirla",
+      "uwp": {
+        "raw": "B400A75-C",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "A",
+        "government": "7",
+        "lawLevel": "5",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Hi",
+        "In",
+        "Na",
+        "Va",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 4 }",
+        "value": 4
+      },
+      "economics": {
+        "raw": "(H9F+2)",
+        "resources": "H",
+        "labour": "9",
+        "infrastructure": "F",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[8E3A]",
+        "homogeneity": "8",
+        "acceptance": "E",
+        "strangeness": "3",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "614",
+        "populationMultiplier": 6,
+        "belts": 1,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 16,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M1 V",
+        "M3 V",
+        "M6 V"
+      ]
+    },
+    {
+      "hex": "1927",
+      "hexX": 19,
+      "hexY": 27,
+      "name": "Atliyai",
+      "uwp": {
+        "raw": "E512000-0",
+        "starport": "E",
+        "size": "5",
+        "atmosphere": "1",
+        "hydrographics": "2",
+        "population": "0",
+        "government": "0",
+        "lawLevel": "0",
+        "techLevel": "0"
+      },
+      "remarks": [
+        "Ba",
+        "Ic",
+        "Lt"
+      ],
+      "importance": {
+        "raw": "{ -3 }",
+        "value": -3
+      },
+      "economics": {
+        "raw": "(200-5)",
+        "resources": "2",
+        "labour": "0",
+        "infrastructure": "0",
+        "efficiency": -5
+      },
+      "culture": {
+        "raw": "[0000]",
+        "homogeneity": "0",
+        "acceptance": "0",
+        "strangeness": "0",
+        "symbols": "0"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "004",
+        "populationMultiplier": 0,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsXX",
+      "stellar": [
+        "K4 V"
+      ]
+    },
+    {
+      "hex": "2226",
+      "hexX": 22,
+      "hexY": 26,
+      "name": "Ta'ali",
+      "uwp": {
+        "raw": "B43015A-9",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "3",
+        "hydrographics": "0",
+        "population": "1",
+        "government": "5",
+        "lawLevel": "A",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "De",
+        "Lo",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(500+2)",
+        "resources": "5",
+        "labour": "0",
+        "infrastructure": "0",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[317B]",
+        "homogeneity": "3",
+        "acceptance": "1",
+        "strangeness": "7",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "202",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 10,
+      "allegiance": "NaAs",
+      "stellar": [
+        "M3 V",
+        "M4 V"
+      ]
+    },
+    {
+      "hex": "2423",
+      "hexX": 24,
+      "hexY": 23,
+      "name": "Uihwayu",
+      "uwp": {
+        "raw": "B43427A-8",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "3",
+        "hydrographics": "4",
+        "population": "2",
+        "government": "7",
+        "lawLevel": "A",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(910+1)",
+        "resources": "9",
+        "labour": "1",
+        "infrastructure": "0",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[417A]",
+        "homogeneity": "4",
+        "acceptance": "1",
+        "strangeness": "7",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "305",
+        "populationMultiplier": 3,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 18,
+      "allegiance": "AsSc",
+      "stellar": [
+        "F4 V"
+      ]
+    },
+    {
+      "hex": "2427",
+      "hexX": 24,
+      "hexY": 27,
+      "name": "Eaiyr",
+      "uwp": {
+        "raw": "E420216-8",
+        "starport": "E",
+        "size": "4",
+        "atmosphere": "2",
+        "hydrographics": "0",
+        "population": "2",
+        "government": "1",
+        "lawLevel": "6",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "De",
+        "He",
+        "Lo",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ -3 }",
+        "value": -3
+      },
+      "economics": {
+        "raw": "(710-4)",
+        "resources": "7",
+        "labour": "1",
+        "infrastructure": "0",
+        "efficiency": -4
+      },
+      "culture": {
+        "raw": "[1147]",
+        "homogeneity": "1",
+        "acceptance": "1",
+        "strangeness": "4",
+        "symbols": "7"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "212",
+        "populationMultiplier": 2,
+        "belts": 1,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 16,
+      "allegiance": "NaAs",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "2521",
+      "hexX": 25,
+      "hexY": 21,
+      "name": "Stairearlehfa",
+      "uwp": {
+        "raw": "C422A79-9",
+        "starport": "C",
+        "size": "4",
+        "atmosphere": "2",
+        "hydrographics": "2",
+        "population": "A",
+        "government": "7",
+        "lawLevel": "9",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "He",
+        "Hi",
+        "In",
+        "Na",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(H9C+3)",
+        "resources": "H",
+        "labour": "9",
+        "infrastructure": "C",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[BC6A]",
+        "homogeneity": "B",
+        "acceptance": "C",
+        "strangeness": "6",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "305",
+        "populationMultiplier": 3,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 17,
+      "allegiance": "NaAs",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "2726",
+      "hexX": 27,
+      "hexY": 26,
+      "name": "Uiryo'yahoh",
+      "uwp": {
+        "raw": "B420697-C",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "2",
+        "hydrographics": "0",
+        "population": "6",
+        "government": "9",
+        "lawLevel": "7",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "De",
+        "He",
+        "Na",
+        "Ni",
+        "Po",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(B55+1)",
+        "resources": "B",
+        "labour": "5",
+        "infrastructure": "5",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[675C]",
+        "homogeneity": "6",
+        "acceptance": "7",
+        "strangeness": "5",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "203",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "NaAs",
+      "stellar": [
+        "M2 V",
+        "M7 V"
+      ]
+    },
+    {
+      "hex": "2729",
+      "hexX": 27,
+      "hexY": 29,
+      "name": "Esui",
+      "uwp": {
+        "raw": "B200456-E",
+        "starport": "B",
+        "size": "2",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "4",
+        "government": "5",
+        "lawLevel": "6",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "Ni",
+        "Va",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(834+1)",
+        "resources": "8",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[354D]",
+        "homogeneity": "3",
+        "acceptance": "5",
+        "strangeness": "4",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "202",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsMw",
+      "stellar": [
+        "M1 V",
+        "M4 V"
+      ]
+    },
+    {
+      "hex": "3030",
+      "hexX": 30,
+      "hexY": 30,
+      "name": "Hluarelai",
+      "uwp": {
+        "raw": "B561387-9",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "1",
+        "population": "3",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(920+1)",
+        "resources": "9",
+        "labour": "2",
+        "infrastructure": "0",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[3359]",
+        "homogeneity": "3",
+        "acceptance": "3",
+        "strangeness": "5",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "804",
+        "populationMultiplier": 8,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 9,
+      "allegiance": "NaAs",
+      "stellar": [
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "3121",
+      "hexX": 31,
+      "hexY": 21,
+      "name": "Oyoiy",
+      "uwp": {
+        "raw": "B69855A-A",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "9",
+        "hydrographics": "8",
+        "population": "5",
+        "government": "5",
+        "lawLevel": "A",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Ag",
+        "Ni"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(746+4)",
+        "resources": "7",
+        "labour": "4",
+        "infrastructure": "6",
+        "efficiency": 4
+      },
+      "culture": {
+        "raw": "[777C]",
+        "homogeneity": "7",
+        "acceptance": "7",
+        "strangeness": "7",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "400",
+        "populationMultiplier": 4,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 7,
+      "allegiance": "NaAs",
+      "stellar": [
+        "M1 V",
+        "M3 V"
+      ]
+    },
+    {
+      "hex": "0133",
+      "hexX": 1,
+      "hexY": 33,
+      "name": "Aouakh",
+      "uwp": {
+        "raw": "E000349-7",
+        "starport": "E",
+        "size": "0",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "3",
+        "government": "4",
+        "lawLevel": "9",
+        "techLevel": "7"
+      },
+      "remarks": [
+        "As",
+        "Lo",
+        "Va"
+      ],
+      "importance": {
+        "raw": "{ -3 }",
+        "value": -3
+      },
+      "economics": {
+        "raw": "(520-2)",
+        "resources": "5",
+        "labour": "2",
+        "infrastructure": "0",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[4168]",
+        "homogeneity": "4",
+        "acceptance": "1",
+        "strangeness": "6",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "200",
+        "populationMultiplier": 2,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 3,
+      "allegiance": "AsWc",
+      "stellar": [
+        "K4 V"
+      ]
+    },
+    {
+      "hex": "0236",
+      "hexX": 2,
+      "hexY": 36,
+      "name": "Uaka",
+      "uwp": {
+        "raw": "E673795-6",
+        "starport": "E",
+        "size": "6",
+        "atmosphere": "7",
+        "hydrographics": "3",
+        "population": "7",
+        "government": "9",
+        "lawLevel": "5",
+        "techLevel": "6"
+      },
+      "remarks": [
+        "Pi"
+      ],
+      "importance": {
+        "raw": "{ -2 }",
+        "value": -2
+      },
+      "economics": {
+        "raw": "(965-4)",
+        "resources": "9",
+        "labour": "6",
+        "infrastructure": "5",
+        "efficiency": -4
+      },
+      "culture": {
+        "raw": "[5534]",
+        "homogeneity": "5",
+        "acceptance": "5",
+        "strangeness": "3",
+        "symbols": "4"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "905",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsTv",
+      "stellar": [
+        "K1 V",
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "0339",
+      "hexX": 3,
+      "hexY": 39,
+      "name": "Aletoli",
+      "uwp": {
+        "raw": "B984487-9",
+        "starport": "B",
+        "size": "9",
+        "atmosphere": "8",
+        "hydrographics": "4",
+        "population": "4",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "Ni",
+        "Pa"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(633+1)",
+        "resources": "6",
+        "labour": "3",
+        "infrastructure": "3",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[4459]",
+        "homogeneity": "4",
+        "acceptance": "4",
+        "strangeness": "5",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [
+        "T"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "100",
+        "populationMultiplier": 1,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 5,
+      "allegiance": "AsWc",
+      "stellar": [
+        "K5 V",
+        "M5 V"
+      ]
+    },
+    {
+      "hex": "1037",
+      "hexX": 10,
+      "hexY": 37,
+      "name": "Ftuaktaol",
+      "uwp": {
+        "raw": "D597488-7",
+        "starport": "D",
+        "size": "5",
+        "atmosphere": "9",
+        "hydrographics": "7",
+        "population": "4",
+        "government": "8",
+        "lawLevel": "8",
+        "techLevel": "7"
+      },
+      "remarks": [
+        "Ni",
+        "Pa"
+      ],
+      "importance": {
+        "raw": "{ -3 }",
+        "value": -3
+      },
+      "economics": {
+        "raw": "(631-3)",
+        "resources": "6",
+        "labour": "3",
+        "infrastructure": "1",
+        "efficiency": -3
+      },
+      "culture": {
+        "raw": "[4157]",
+        "homogeneity": "4",
+        "acceptance": "1",
+        "strangeness": "5",
+        "symbols": "7"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "815",
+        "populationMultiplier": 8,
+        "belts": 1,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 17,
+      "allegiance": "AsT0",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "1638",
+      "hexX": 16,
+      "hexY": 38,
+      "name": "Ityerleira",
+      "uwp": {
+        "raw": "BAF7756-C",
+        "starport": "B",
+        "size": "A",
+        "atmosphere": "F",
+        "hydrographics": "7",
+        "population": "7",
+        "government": "5",
+        "lawLevel": "6",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(D6C+1)",
+        "resources": "D",
+        "labour": "6",
+        "infrastructure": "C",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[694B]",
+        "homogeneity": "6",
+        "acceptance": "9",
+        "strangeness": "4",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "522",
+        "populationMultiplier": 5,
+        "belts": 2,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsT7",
+      "stellar": [
+        "G2 V"
+      ]
+    },
+    {
+      "hex": "1731",
+      "hexX": 17,
+      "hexY": 31,
+      "name": "Ktelrahe",
+      "uwp": {
+        "raw": "A649268-E",
+        "starport": "A",
+        "size": "6",
+        "atmosphere": "4",
+        "hydrographics": "9",
+        "population": "2",
+        "government": "6",
+        "lawLevel": "8",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "Lo",
+        "O:1629",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(911+1)",
+        "resources": "9",
+        "labour": "1",
+        "infrastructure": "1",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[235E]",
+        "homogeneity": "2",
+        "acceptance": "3",
+        "strangeness": "5",
+        "symbols": "E"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "605",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsSc",
+      "stellar": [
+        "F2 V"
+      ]
+    },
+    {
+      "hex": "1837",
+      "hexX": 18,
+      "hexY": 37,
+      "name": "Khoiriyrl",
+      "uwp": {
+        "raw": "E615559-7",
+        "starport": "E",
+        "size": "6",
+        "atmosphere": "1",
+        "hydrographics": "5",
+        "population": "5",
+        "government": "5",
+        "lawLevel": "9",
+        "techLevel": "7"
+      },
+      "remarks": [
+        "Ic",
+        "Ni"
+      ],
+      "importance": {
+        "raw": "{ -3 }",
+        "value": -3
+      },
+      "economics": {
+        "raw": "(741-2)",
+        "resources": "7",
+        "labour": "4",
+        "infrastructure": "1",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[6268]",
+        "homogeneity": "6",
+        "acceptance": "2",
+        "strangeness": "6",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "603",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsVc",
+      "stellar": [
+        "M3 V"
+      ]
+    },
+    {
+      "hex": "1838",
+      "hexX": 18,
+      "hexY": 38,
+      "name": "Tarealao",
+      "uwp": {
+        "raw": "B564944-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "4",
+        "population": "9",
+        "government": "4",
+        "lawLevel": "4",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Hi",
+        "Pr"
+      ],
+      "importance": {
+        "raw": "{ 3 }",
+        "value": 3
+      },
+      "economics": {
+        "raw": "(F8E+1)",
+        "resources": "F",
+        "labour": "8",
+        "infrastructure": "E",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[7C39]",
+        "homogeneity": "7",
+        "acceptance": "C",
+        "strangeness": "3",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "313",
+        "populationMultiplier": 3,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsTv",
+      "stellar": [
+        "M0 V"
+      ]
+    },
+    {
+      "hex": "1839",
+      "hexX": 18,
+      "hexY": 39,
+      "name": "Ouououa",
+      "uwp": {
+        "raw": "D87498A-7",
+        "starport": "D",
+        "size": "8",
+        "atmosphere": "7",
+        "hydrographics": "4",
+        "population": "9",
+        "government": "8",
+        "lawLevel": "A",
+        "techLevel": "7"
+      },
+      "remarks": [
+        "Hi",
+        "In"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(B89+2)",
+        "resources": "B",
+        "labour": "8",
+        "infrastructure": "9",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[B979]",
+        "homogeneity": "B",
+        "acceptance": "9",
+        "strangeness": "7",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "103",
+        "populationMultiplier": 1,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsWc",
+      "stellar": [
+        "K7 IV"
+      ]
+    },
+    {
+      "hex": "1840",
+      "hexX": 18,
+      "hexY": 40,
+      "name": "Earawalr",
+      "uwp": {
+        "raw": "B43047A-9",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "3",
+        "hydrographics": "0",
+        "population": "4",
+        "government": "7",
+        "lawLevel": "A",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "De",
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(B33+2)",
+        "resources": "B",
+        "labour": "3",
+        "infrastructure": "3",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[647B]",
+        "homogeneity": "6",
+        "acceptance": "4",
+        "strangeness": "7",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "805",
+        "populationMultiplier": 8,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M1 II",
+        "D"
+      ]
+    },
+    {
+      "hex": "1937",
+      "hexX": 19,
+      "hexY": 37,
+      "name": "Hfeae'yo",
+      "uwp": {
+        "raw": "B549833-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "9",
+        "population": "8",
+        "government": "3",
+        "lawLevel": "3",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ph",
+        "Pi"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(E7C-1)",
+        "resources": "E",
+        "labour": "7",
+        "infrastructure": "C",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[5A28]",
+        "homogeneity": "5",
+        "acceptance": "A",
+        "strangeness": "2",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "704",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsMw",
+      "stellar": [
+        "K9 IV"
+      ]
+    },
+    {
+      "hex": "2137",
+      "hexX": 21,
+      "hexY": 37,
+      "name": "Htoisofea",
+      "uwp": {
+        "raw": "D565656-7",
+        "starport": "D",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "5",
+        "population": "6",
+        "government": "5",
+        "lawLevel": "6",
+        "techLevel": "7"
+      },
+      "remarks": [
+        "Ag",
+        "Ni",
+        "Ri"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(853-2)",
+        "resources": "8",
+        "labour": "5",
+        "infrastructure": "3",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[5546]",
+        "homogeneity": "5",
+        "acceptance": "5",
+        "strangeness": "4",
+        "symbols": "6"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "903",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsWc",
+      "stellar": [
+        "F4 V"
+      ]
+    },
+    {
+      "hex": "2139",
+      "hexX": 21,
+      "hexY": 39,
+      "name": "Stiyseakhih",
+      "uwp": {
+        "raw": "B67697C-B",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "7",
+        "hydrographics": "6",
+        "population": "9",
+        "government": "7",
+        "lawLevel": "C",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Hi",
+        "In"
+      ],
+      "importance": {
+        "raw": "{ 4 }",
+        "value": 4
+      },
+      "economics": {
+        "raw": "(B8F+5)",
+        "resources": "B",
+        "labour": "8",
+        "infrastructure": "F",
+        "efficiency": 5
+      },
+      "culture": {
+        "raw": "[CD8E]",
+        "homogeneity": "C",
+        "acceptance": "D",
+        "strangeness": "8",
+        "symbols": "E"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "500",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M3 V"
+      ]
+    },
+    {
+      "hex": "2238",
+      "hexX": 22,
+      "hexY": 38,
+      "name": "Stiyteatiru",
+      "uwp": {
+        "raw": "C9A5977-B",
+        "starport": "C",
+        "size": "9",
+        "atmosphere": "A",
+        "hydrographics": "5",
+        "population": "9",
+        "government": "7",
+        "lawLevel": "7",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Fl",
+        "Hi",
+        "In"
+      ],
+      "importance": {
+        "raw": "{ 3 }",
+        "value": 3
+      },
+      "economics": {
+        "raw": "(D8E+3)",
+        "resources": "D",
+        "labour": "8",
+        "infrastructure": "E",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[9C5B]",
+        "homogeneity": "9",
+        "acceptance": "C",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "211",
+        "populationMultiplier": 2,
+        "belts": 1,
+        "gasGiants": 1
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsSc",
+      "stellar": [
+        "K2 V",
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "2239",
+      "hexX": 22,
+      "hexY": 39,
+      "name": "Resoi",
+      "uwp": {
+        "raw": "C5899CA-A",
+        "starport": "C",
+        "size": "5",
+        "atmosphere": "8",
+        "hydrographics": "9",
+        "population": "9",
+        "government": "C",
+        "lawLevel": "A",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Hi",
+        "Pr",
+        "Pz"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(F8C+4)",
+        "resources": "F",
+        "labour": "8",
+        "infrastructure": "C",
+        "efficiency": 4
+      },
+      "culture": {
+        "raw": "[BB7C]",
+        "homogeneity": "B",
+        "acceptance": "B",
+        "strangeness": "7",
+        "symbols": "C"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": "A",
+      "pbg": {
+        "raw": "713",
+        "populationMultiplier": 7,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsTv",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "2437",
+      "hexX": 24,
+      "hexY": 37,
+      "name": "Staoiya",
+      "uwp": {
+        "raw": "A796438-B",
+        "starport": "A",
+        "size": "7",
+        "atmosphere": "9",
+        "hydrographics": "6",
+        "population": "4",
+        "government": "3",
+        "lawLevel": "8",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Pa",
+        "Da"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(834+1)",
+        "resources": "8",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[455B]",
+        "homogeneity": "4",
+        "acceptance": "5",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": "A",
+      "pbg": {
+        "raw": "520",
+        "populationMultiplier": 5,
+        "belts": 2,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 10,
+      "allegiance": "AsVc",
+      "stellar": [
+        "F0 V",
+        "M9 V"
+      ]
+    },
+    {
+      "hex": "2439",
+      "hexX": 24,
+      "hexY": 39,
+      "name": "Oiharael",
+      "uwp": {
+        "raw": "C544646-8",
+        "starport": "C",
+        "size": "5",
+        "atmosphere": "4",
+        "hydrographics": "4",
+        "population": "6",
+        "government": "4",
+        "lawLevel": "6",
+        "techLevel": "8"
+      },
+      "remarks": [
+        "Ag",
+        "Ni"
+      ],
+      "importance": {
+        "raw": "{ -1 }",
+        "value": -1
+      },
+      "economics": {
+        "raw": "(D53-2)",
+        "resources": "D",
+        "labour": "5",
+        "infrastructure": "3",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[5547]",
+        "homogeneity": "5",
+        "acceptance": "5",
+        "strangeness": "4",
+        "symbols": "7"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "523",
+        "populationMultiplier": 5,
+        "belts": 2,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsMw",
+      "stellar": [
+        "M2 V",
+        "M4 V"
+      ]
+    },
+    {
+      "hex": "2440",
+      "hexX": 24,
+      "hexY": 40,
+      "name": "Feoael",
+      "uwp": {
+        "raw": "A9A8453-E",
+        "starport": "A",
+        "size": "9",
+        "atmosphere": "A",
+        "hydrographics": "8",
+        "population": "4",
+        "government": "5",
+        "lawLevel": "3",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "Fl",
+        "Ni",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(934-2)",
+        "resources": "9",
+        "labour": "3",
+        "infrastructure": "4",
+        "efficiency": -2
+      },
+      "culture": {
+        "raw": "[152B]",
+        "homogeneity": "1",
+        "acceptance": "5",
+        "strangeness": "2",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "803",
+        "populationMultiplier": 8,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsWc",
+      "stellar": [
+        "K0 V",
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "2539",
+      "hexX": 25,
+      "hexY": 39,
+      "name": "Teakhiru",
+      "uwp": {
+        "raw": "A735859-D",
+        "starport": "A",
+        "size": "7",
+        "atmosphere": "3",
+        "hydrographics": "5",
+        "population": "8",
+        "government": "5",
+        "lawLevel": "9",
+        "techLevel": "D"
+      },
+      "remarks": [
+        "Ph",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(A7D+3)",
+        "resources": "A",
+        "labour": "7",
+        "infrastructure": "D",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[9A6E]",
+        "homogeneity": "9",
+        "acceptance": "A",
+        "strangeness": "6",
+        "symbols": "E"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "300",
+        "populationMultiplier": 3,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 6,
+      "allegiance": "AsT1",
+      "stellar": [
+        "K4 V",
+        "M6 V"
+      ]
+    },
+    {
+      "hex": "2639",
+      "hexX": 26,
+      "hexY": 39,
+      "name": "Oraorya",
+      "uwp": {
+        "raw": "B20316B-B",
+        "starport": "B",
+        "size": "2",
+        "atmosphere": "0",
+        "hydrographics": "3",
+        "population": "1",
+        "government": "6",
+        "lawLevel": "B",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ic",
+        "Lo",
+        "Va",
+        "O:2539"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(601+3)",
+        "resources": "6",
+        "labour": "0",
+        "infrastructure": "1",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[327D]",
+        "homogeneity": "3",
+        "acceptance": "2",
+        "strangeness": "7",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "312",
+        "populationMultiplier": 3,
+        "belts": 1,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 15,
+      "allegiance": "AsT1",
+      "stellar": [
+        "M2 V"
+      ]
+    },
+    {
+      "hex": "2640",
+      "hexX": 26,
+      "hexY": 40,
+      "name": "Reaoarl",
+      "uwp": {
+        "raw": "B554975-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "5",
+        "hydrographics": "4",
+        "population": "9",
+        "government": "7",
+        "lawLevel": "5",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Hi"
+      ],
+      "importance": {
+        "raw": "{ 3 }",
+        "value": 3
+      },
+      "economics": {
+        "raw": "(B8E+1)",
+        "resources": "B",
+        "labour": "8",
+        "infrastructure": "E",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[7C39]",
+        "homogeneity": "7",
+        "acceptance": "C",
+        "strangeness": "3",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "700",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M2 V",
+        "M7 V"
+      ]
+    },
+    {
+      "hex": "2738",
+      "hexX": 27,
+      "hexY": 38,
+      "name": "Heakht",
+      "uwp": {
+        "raw": "B55357A-B",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "5",
+        "hydrographics": "3",
+        "population": "5",
+        "government": "7",
+        "lawLevel": "A",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(745+3)",
+        "resources": "7",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[767D]",
+        "homogeneity": "7",
+        "acceptance": "6",
+        "strangeness": "7",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "400",
+        "populationMultiplier": 4,
+        "belts": 0,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M0 V",
+        "M8 V"
+      ]
+    },
+    {
+      "hex": "2740",
+      "hexX": 27,
+      "hexY": 40,
+      "name": "Kewyewa",
+      "uwp": {
+        "raw": "B433647-9",
+        "starport": "B",
+        "size": "4",
+        "atmosphere": "3",
+        "hydrographics": "3",
+        "population": "6",
+        "government": "4",
+        "lawLevel": "7",
+        "techLevel": "9"
+      },
+      "remarks": [
+        "Na",
+        "Ni",
+        "Po"
+      ],
+      "importance": {
+        "raw": "{ 0 }",
+        "value": 0
+      },
+      "economics": {
+        "raw": "(954+1)",
+        "resources": "9",
+        "labour": "5",
+        "infrastructure": "4",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[6659]",
+        "homogeneity": "6",
+        "acceptance": "6",
+        "strangeness": "5",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "810",
+        "populationMultiplier": 8,
+        "belts": 1,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 14,
+      "allegiance": "AsVc",
+      "stellar": [
+        "K3 V"
+      ]
+    },
+    {
+      "hex": "2838",
+      "hexX": 28,
+      "hexY": 38,
+      "name": "Khiaita",
+      "uwp": {
+        "raw": "B537658-A",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "3",
+        "hydrographics": "7",
+        "population": "6",
+        "government": "5",
+        "lawLevel": "8",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Ni"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(E55+1)",
+        "resources": "E",
+        "labour": "5",
+        "infrastructure": "5",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[675A]",
+        "homogeneity": "6",
+        "acceptance": "7",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "924",
+        "populationMultiplier": 9,
+        "belts": 2,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsWc",
+      "stellar": [
+        "K1 V",
+        "M6 V"
+      ]
+    },
+    {
+      "hex": "2840",
+      "hexX": 28,
+      "hexY": 40,
+      "name": "Uafaya",
+      "uwp": {
+        "raw": "A10016B-E",
+        "starport": "A",
+        "size": "1",
+        "atmosphere": "0",
+        "hydrographics": "0",
+        "population": "1",
+        "government": "6",
+        "lawLevel": "B",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "Lo",
+        "Va",
+        "O:2940",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(601+3)",
+        "resources": "6",
+        "labour": "0",
+        "infrastructure": "1",
+        "efficiency": 3
+      },
+      "culture": {
+        "raw": "[327G]",
+        "homogeneity": "3",
+        "acceptance": "2",
+        "strangeness": "7",
+        "symbols": "G"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "503",
+        "populationMultiplier": 5,
+        "belts": 0,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsMw",
+      "stellar": [
+        "K8 V"
+      ]
+    },
+    {
+      "hex": "2933",
+      "hexX": 29,
+      "hexY": 33,
+      "name": "Oisyasais",
+      "uwp": {
+        "raw": "A9AA87A-E",
+        "starport": "A",
+        "size": "9",
+        "atmosphere": "A",
+        "hydrographics": "A",
+        "population": "8",
+        "government": "7",
+        "lawLevel": "A",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "Fl",
+        "Ph",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(F7D+4)",
+        "resources": "F",
+        "labour": "7",
+        "infrastructure": "D",
+        "efficiency": 4
+      },
+      "culture": {
+        "raw": "[AA7G]",
+        "homogeneity": "A",
+        "acceptance": "A",
+        "strangeness": "7",
+        "symbols": "G"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "414",
+        "populationMultiplier": 4,
+        "belts": 1,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsSc",
+      "stellar": [
+        "G4 V"
+      ]
+    },
+    {
+      "hex": "2936",
+      "hexX": 29,
+      "hexY": 36,
+      "name": "Wahtoikoeakh",
+      "uwp": {
+        "raw": "A773A87-E",
+        "starport": "A",
+        "size": "7",
+        "atmosphere": "7",
+        "hydrographics": "3",
+        "population": "A",
+        "government": "8",
+        "lawLevel": "7",
+        "techLevel": "E"
+      },
+      "remarks": [
+        "Hi",
+        "In",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 4 }",
+        "value": 4
+      },
+      "economics": {
+        "raw": "(E9G+4)",
+        "resources": "E",
+        "labour": "9",
+        "infrastructure": "G",
+        "efficiency": 4
+      },
+      "culture": {
+        "raw": "[AE5E]",
+        "homogeneity": "A",
+        "acceptance": "E",
+        "strangeness": "5",
+        "symbols": "E"
+      },
+      "nobility": null,
+      "bases": [
+        "T"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "902",
+        "populationMultiplier": 9,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsTv",
+      "stellar": [
+        "M1 V"
+      ]
+    },
+    {
+      "hex": "2940",
+      "hexX": 29,
+      "hexY": 40,
+      "name": "Elyayol",
+      "uwp": {
+        "raw": "A58089A-C",
+        "starport": "A",
+        "size": "5",
+        "atmosphere": "8",
+        "hydrographics": "0",
+        "population": "8",
+        "government": "9",
+        "lawLevel": "A",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "De",
+        "Ri",
+        "Ph",
+        "Pz",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 3 }",
+        "value": 3
+      },
+      "economics": {
+        "raw": "(E7D+5)",
+        "resources": "E",
+        "labour": "7",
+        "infrastructure": "D",
+        "efficiency": 5
+      },
+      "culture": {
+        "raw": "[AB7E]",
+        "homogeneity": "A",
+        "acceptance": "B",
+        "strangeness": "7",
+        "symbols": "E"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": "A",
+      "pbg": {
+        "raw": "913",
+        "populationMultiplier": 9,
+        "belts": 1,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 12,
+      "allegiance": "AsMw",
+      "stellar": [
+        "G3 V"
+      ]
+    },
+    {
+      "hex": "3038",
+      "hexX": 30,
+      "hexY": 38,
+      "name": "Iyw",
+      "uwp": {
+        "raw": "A65978A-B",
+        "starport": "A",
+        "size": "6",
+        "atmosphere": "5",
+        "hydrographics": "9",
+        "population": "7",
+        "government": "8",
+        "lawLevel": "A",
+        "techLevel": "B"
+      },
+      "remarks": [],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(E6C+4)",
+        "resources": "E",
+        "labour": "6",
+        "infrastructure": "C",
+        "efficiency": 4
+      },
+      "culture": {
+        "raw": "[997D]",
+        "homogeneity": "9",
+        "acceptance": "9",
+        "strangeness": "7",
+        "symbols": "D"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "705",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 5
+      },
+      "worldsInSystem": 16,
+      "allegiance": "AsT5",
+      "stellar": [
+        "K4 V"
+      ]
+    },
+    {
+      "hex": "3039",
+      "hexX": 30,
+      "hexY": 39,
+      "name": "Auhahkei",
+      "uwp": {
+        "raw": "A86768B-C",
+        "starport": "A",
+        "size": "8",
+        "atmosphere": "6",
+        "hydrographics": "7",
+        "population": "6",
+        "government": "8",
+        "lawLevel": "B",
+        "techLevel": "C"
+      },
+      "remarks": [
+        "Ag",
+        "Ni",
+        "Ga",
+        "Ri",
+        "Ht"
+      ],
+      "importance": {
+        "raw": "{ 3 }",
+        "value": 3
+      },
+      "economics": {
+        "raw": "(A57+5)",
+        "resources": "A",
+        "labour": "5",
+        "infrastructure": "7",
+        "efficiency": 5
+      },
+      "culture": {
+        "raw": "[897E]",
+        "homogeneity": "8",
+        "acceptance": "9",
+        "strangeness": "7",
+        "symbols": "E"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "220",
+        "populationMultiplier": 2,
+        "belts": 2,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 8,
+      "allegiance": "AsVc",
+      "stellar": [
+        "K4 V"
+      ]
+    },
+    {
+      "hex": "3131",
+      "hexX": 31,
+      "hexY": 31,
+      "name": "Hasawe'i",
+      "uwp": {
+        "raw": "B7A8138-B",
+        "starport": "B",
+        "size": "7",
+        "atmosphere": "A",
+        "hydrographics": "8",
+        "population": "1",
+        "government": "3",
+        "lawLevel": "8",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Fl",
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(801+1)",
+        "resources": "8",
+        "labour": "0",
+        "infrastructure": "1",
+        "efficiency": 1
+      },
+      "culture": {
+        "raw": "[125B]",
+        "homogeneity": "1",
+        "acceptance": "2",
+        "strangeness": "5",
+        "symbols": "B"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "223",
+        "populationMultiplier": 2,
+        "belts": 2,
+        "gasGiants": 3
+      },
+      "worldsInSystem": 17,
+      "allegiance": "AsMw",
+      "stellar": [
+        "G1 V",
+        "M9 V"
+      ]
+    },
+    {
+      "hex": "3139",
+      "hexX": 31,
+      "hexY": 39,
+      "name": "Kaiktal",
+      "uwp": {
+        "raw": "B648114-B",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "4",
+        "hydrographics": "8",
+        "population": "1",
+        "government": "1",
+        "lawLevel": "4",
+        "techLevel": "B"
+      },
+      "remarks": [
+        "Lo"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(501-1)",
+        "resources": "5",
+        "labour": "0",
+        "infrastructure": "1",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[1239]",
+        "homogeneity": "1",
+        "acceptance": "2",
+        "strangeness": "3",
+        "symbols": "9"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "602",
+        "populationMultiplier": 6,
+        "belts": 0,
+        "gasGiants": 2
+      },
+      "worldsInSystem": 9,
+      "allegiance": "AsMw",
+      "stellar": [
+        "M1 V",
+        "M6 V"
+      ]
+    },
+    {
+      "hex": "3239",
+      "hexX": 32,
+      "hexY": 39,
+      "name": "Ihlahyohao",
+      "uwp": {
+        "raw": "B683678-A",
+        "starport": "B",
+        "size": "6",
+        "atmosphere": "8",
+        "hydrographics": "3",
+        "population": "6",
+        "government": "7",
+        "lawLevel": "8",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "Ni",
+        "Ri"
+      ],
+      "importance": {
+        "raw": "{ 2 }",
+        "value": 2
+      },
+      "economics": {
+        "raw": "(956+2)",
+        "resources": "9",
+        "labour": "5",
+        "infrastructure": "6",
+        "efficiency": 2
+      },
+      "culture": {
+        "raw": "[685A]",
+        "homogeneity": "6",
+        "acceptance": "8",
+        "strangeness": "5",
+        "symbols": "A"
+      },
+      "nobility": null,
+      "bases": [
+        "R"
+      ],
+      "travelZone": null,
+      "pbg": {
+        "raw": "810",
+        "populationMultiplier": 8,
+        "belts": 1,
+        "gasGiants": 0
+      },
+      "worldsInSystem": 11,
+      "allegiance": "AsSc",
+      "stellar": [
+        "M1 V",
+        "M4 V"
+      ]
+    },
+    {
+      "hex": "3240",
+      "hexX": 32,
+      "hexY": 40,
+      "name": "Iheiu",
+      "uwp": {
+        "raw": "B560594-A",
+        "starport": "B",
+        "size": "5",
+        "atmosphere": "6",
+        "hydrographics": "0",
+        "population": "5",
+        "government": "9",
+        "lawLevel": "4",
+        "techLevel": "A"
+      },
+      "remarks": [
+        "De",
+        "Ni",
+        "Pr"
+      ],
+      "importance": {
+        "raw": "{ 1 }",
+        "value": 1
+      },
+      "economics": {
+        "raw": "(B45-1)",
+        "resources": "B",
+        "labour": "4",
+        "infrastructure": "5",
+        "efficiency": -1
+      },
+      "culture": {
+        "raw": "[3638]",
+        "homogeneity": "3",
+        "acceptance": "6",
+        "strangeness": "3",
+        "symbols": "8"
+      },
+      "nobility": null,
+      "bases": [],
+      "travelZone": null,
+      "pbg": {
+        "raw": "704",
+        "populationMultiplier": 7,
+        "belts": 0,
+        "gasGiants": 4
+      },
+      "worldsInSystem": 13,
+      "allegiance": "AsWc",
+      "stellar": [
+        "M2 V"
+      ]
+    }
+  ]
+}

@@ -1,157 +1,159 @@
-# Prompt for giving context to Claude and making it understand what I want to build
+# Project Overview — Charted Space
 
-I need you to act as a senior software engineer on this project and as an expert in the modern Next.js stack, and the Redux Toolkit following best practices in modern software development.
-You are also an expert on Traveller Role playing game and understand its background and mechanics. 
+A Traveller RPG companion app. Players track characters, ships, and adventures across the Third Imperium universe (Charted Space). The long-term goal is a full interactive galaxy/sector/subsector map SPA.
 
-The travller wiki can be found at https://wiki.travellerrpg.com/Main_Page
-
-documentation on travller world maps can be found at https://www.travellerworlds.com/
-
-The documentation in ./documentation/world-api.txt for the world map Api
-
-The documentation in  ./documentation/map-api.txt. describe the official traveller map api.
- 
-
-This project is an RPG character tracker.  
-The tool will allow user to create characters and track where they are.
-
-The characters exist in a role playing game set in the Charted Space as descriped in the Traveller role playing game
-
-
-You must focus only on the requirements I give you.  
-❌ Do not suggest additional features  
-❌ Do not suggest other libraries or frameworks  
-
-This is the exact tech stack for the project — nothing more and nothing less:
-
-- Claude Code → AI pair programmer  
-- Next.js 16 (App Router)  
-- TypeScript  
-- React  
-- Tailwind CSS  
-- shadcn/ui → fast, beautiful UI  
-- Clerk → authentication  
-- Prisma + PostgreSQL → production-ready database layer  
-- Redux toolkit
-- React 3js fibre
-- Jest for unit test
-
-we will use pnpm for package management 
-
-Again:  
-👉 Do not suggest any other libraries or frameworks unless asked
+Traveller wiki: https://wiki.travellerrpg.com/Main_Page
+World map docs: https://www.travellerworlds.com/
+Local API docs: `./documentation/world-api.txt`, `./documentation/map-api.txt`
 
 ---
 
-# 📌 Application requirements
+## Role
 
-These are the only features I want in the app:
-
-- A database schema that does not exceed 8 models under any circumstances  
-- A landing page that also includes the sign-in interface  
-- A sign-up page  
-- A main page that forms a SPA with a Redux store with multiple components that can derive state and dispatch action in the redux store this pages will include 
-  - A Character list page
-  - A search modal  
-  - A notifications modal  
-  - A character profile page
-  - A Map view on the galaxy
-  - A MAp view of a Sector
-  - A Map view of a Subsector
-  - A System Detal Modal
-  - A Users Profile page  
-   - For the page owner  
-   - For other users’ profiles  
+Act as a senior software engineer and Traveller RPG expert. Implement only what is requested — no unsolicited feature suggestions, no alternative libraries.
 
 ---
 
-# 🧠 Development & coding rules
+## Tech Stack — exact versions matter
 
-Always follow the existing coding style of the project
+| Package | Version | Notes |
+|---|---|---|
+| Next.js | 16.2.6 | App Router; read `node_modules/next/dist/docs/` before writing any Next.js code |
+| `@clerk/nextjs` | 7.3.4 | Completely new API — see Clerk section in CLAUDE.md |
+| `zod` | 3.25.76 | Stay on v3; `@hookform/resolvers` is incompatible with Zod v4 |
+| Prisma | 7.8.0 | Requires `@prisma/adapter-pg` — `new PrismaClient()` bare fails |
+| React | 19.2.4 | |
+| Tailwind | 4 | |
+| Redux Toolkit | latest | All UI state and async logic lives here |
+| Jest + ts-jest | 30 / 29 | Unit tests for all selectors and reducers |
 
-- Naming conventions  
-- File structure  
-- Component patterns  
-
-Follow best practices for client-side code
-
-- Avoid using useEffect unless it is strictly unavoidable  
-- Prefer server components  
-- Prefer derived state  
-- Prefer event-driven logic  
-- derive all state using redux selectors
-- issue all actions by dispatching actions
-- all redux selectors and reducer will be full unit tested
-
-Do not overcomplicate solutions
-
-- Always write clean, readable, and maintainable code  
-- Break logic into small, well-structured components and utilities  
-- Follow best practices for any code you write  
-
-When I provide official documentation or examples, you must match the same patterns.
+Package manager: `pnpm`
 
 ---
 
-# ⚙️ Next.js route best practices (required)
+## Code Style Rules
 
-When creating any route in the Next.js App Router:
-
-- Always include an error.tsx file as an error fallback  
-- Always include a loading.tsx file as a loading fallback  
-- Treat these files as mandatory best practices for proper UX and resilience  
-- Follow the same coding style and project structure when generating these files  
+- **Arrow functions everywhere.** Never write `function foo()`, `export function foo()`, or `export default function Foo()`. Always use `const foo = () => {}`. For default exports, declare the const first, then `export default Foo` on its own line at the bottom of the file.
+- No comments unless the WHY is genuinely non-obvious.
+- No light mode — always dark HUD theme.
+- `font-mono` for all text.
 
 ---
 
-# 📷 Visual reference rules
+## Design System — HUD Theme
 
-I will provide screenshots inside a folder named screenshots
+Always dark, cyan/holographic. Never add a light mode.
 
-You must analyze the images inside this folder carefully
+**CSS tokens:**
+```
+--hud-bg          #020c14   Page background
+--hud-surface     #0c1a2e   Panel background
+--hud-surface-2   #0f2035   Input / secondary surface
+--hud-text        #22d3ee   Primary text
+--hud-text-dim    #0891b2   Muted text / labels
+--hud-border      #155e75   Borders
+--hud-accent      #06b6d4   Interactive / highlight
+--hud-error       #ef4444   Errors
+```
 
-Treat these screenshots as the primary and ongoing reference for:
+**CSS classes:**
+- `.starfield` — animated star-dot background. Its `::before`/`::after` must keep `pointer-events: none`.
+- `.hud-panel` — framed surface
+- `.hud-panel-header` — top bar of a panel
 
-- UI  
-- UX  
-- Layout  
-- Behavior  
-
-We will always use these screenshots as a reference throughout the project.
-
----
-
-# ⚠️ Certainty & knowledge constraint
-
-If you do not know something, are uncertain, or do not have enough information, you must explicitly say:
-
-“I don’t know.”
-
-Do not guess, do not assume, and do not hallucinate behavior or implementation details.
-
-In such cases, do not proceed or generate anything until you are 100% confident and have enough information to move forward.
+Typography: always `font-mono`, labels are `uppercase tracking-widest text-xs`.
 
 ---
 
-# ✅ Understanding confirmation (required)
+## Route Structure
 
-Provide a clear, structured overview of your understanding of:
+```
+/                            Landing page + embedded sign-in form (public)
+/sign-up/[[...sign-up]]/     Custom sign-up form, catch-all (public)
+/verify                      OAuth callback handler (public)
+/map                         Post-auth destination, future SPA (protected)
+/(app)/app                   Existing cockpit/SPA view (protected)
+```
 
-- The project goal  
-- The constraints  
-- The allowed tech stack  
-- The required features  
-- The development rules  
-
-Explicitly mention any uncertainties or missing information.  
-Wait for my confirmation or corrections before proceeding.
+Middleware: `src/proxy.ts` (not `middleware.ts`). Public routes declared there with `createRouteMatcher`.
 
 ---
 
-# ⚠️ Important instruction
+## Prisma v7
 
-Do not generate any code or implementation yet.  
-This prompt is only to help you understand the project I want to build.
+`new PrismaClient()` fails bare. Always use the adapter:
 
+```ts
+import { PrismaPg } from "@prisma/adapter-pg"
+import { PrismaClient } from "@prisma/client"
 
-Please ask me to clarify any thing that is unclear at this point
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+export const prisma = new PrismaClient({ adapter })
+```
+
+---
+
+## Database
+
+Schema must stay at or under 8 models. Docker for local Postgres:
+
+```bash
+docker run --name charted-space-db \
+  -e POSTGRES_USER=traveller \
+  -e POSTGRES_PASSWORD=traveller \
+  -e POSTGRES_DB=charted_space \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+---
+
+## Redux / State Rules
+
+- All UI state lives in the Redux store.
+- Derive all state via selectors; issue all mutations via dispatched actions.
+- All selectors and reducers must be fully unit tested.
+- Avoid `useEffect` unless strictly unavoidable.
+- Prefer derived state and event-driven logic.
+
+---
+
+## Next.js Route Best Practices (mandatory)
+
+Every route must include:
+- `error.tsx` — error fallback, styled with HUD theme
+- `loading.tsx` — loading fallback, styled with HUD theme
+
+---
+
+## Application Features
+
+### Built
+- Landing page (`/`) — two-column layout, left branding panel, right sign-in form
+- Custom sign-in with email/password + Google, GitHub, Discord OAuth
+- Custom sign-up with email verification step + birthday capture
+- OAuth callback handler at `/verify`
+- `/map` placeholder with dev-mode logout button
+- Clerk middleware in `src/proxy.ts`
+- Auth check in `src/lib/auth.ts`
+- `/app` cockpit SPA shell with Redux store, bottom nav, modal layer
+- Modals: CharacterList, CharacterProfile, CharacterCreate, Search, Notifications, Map (galaxy/sector/subsector), SystemDetail, UserProfile
+- HexGrid and GalaxyGrid SVG map components
+- Redux slices: `uiSlice`, `notificationsSlice` — fully unit tested
+
+### Next
+- Clerk webhooks at `src/app/api/webhooks/clerk/route.ts` (sync `user.created`, `user.updated`, `user.deleted`)
+- Wire `src/actions/user.ts` to database after webhook sync
+- Charted Space map SPA at `/map` (replace placeholder)
+
+---
+
+## Certainty Rule
+
+If you are uncertain or don't have enough information, say so explicitly. Do not guess or hallucinate. Do not proceed until you are confident.
+
+---
+
+## Confirmation Required
+
+Before implementing anything, provide a structured summary of your understanding of the goal, constraints, tech stack, and required features. Wait for confirmation before writing code.

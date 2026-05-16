@@ -29,6 +29,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       previousModal: null,
     },
     notifications,
+    galaxy: { sectors: [], sectorData: {}, loadingStatus: {} },
   };
 }
 

@@ -1,0 +1,29 @@
+{
+  "sector": "Rfigh",
+  "abbreviation": "Rfig",
+  "milieu": "M1105",
+  "source": "Underdeveloped Sectors",
+  "credits": null,
+  "subsectors": {
+    "A": "Unknown Subsector A",
+    "B": "Unknown Subsector B",
+    "C": "Unknown Subsector C",
+    "D": "Unknown Subsector D",
+    "E": "Unknown Subsector E",
+    "F": "Unknown Subsector F",
+    "G": "Unknown Subsector G",
+    "H": "Unknown Subsector H",
+    "I": "Unknown Subsector I",
+    "J": "Unknown Subsector J",
+    "K": "Unknown Subsector K",
+    "L": "Unknown Subsector L",
+    "M": "Unknown Subsector M",
+    "N": "Unknown Subsector N",
+    "O": "Unknown Subsector O",
+    "P": "Unknown Subsector P"
+  },
+  "allegiances": {
+    "--": "Unknown"
+  },
+  "worlds": []
+}

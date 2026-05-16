@@ -48,7 +48,7 @@ const initialState: UIState = {
 };
 
 const makeRoot = (ui: UIState): RootState => {
-  return { ui, notifications: { items: [] } };
+  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {} } };
 }
 
 describe("uiSlice reducers", () => {

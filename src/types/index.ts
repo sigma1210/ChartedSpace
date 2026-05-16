@@ -38,3 +38,67 @@ export interface UIState {
 export interface NotificationsState {
   items: Notification[];
 }
+
+export interface SectorName {
+  Text: string;
+  Lang?: string;
+}
+
+export interface SectorMeta {
+  X: number;
+  Y: number;
+  Milieu: string;
+  Abbreviation: string;
+  Tags: string;
+  Names: SectorName[];
+}
+
+export interface WorldUWP {
+  raw: string;
+  starport: string;
+  size: string;
+  atmosphere: string;
+  hydrographics: string;
+  population: string;
+  government: string;
+  lawLevel: string;
+  techLevel: string;
+}
+
+export interface World {
+  hex: string;
+  hexX: number;
+  hexY: number;
+  name: string;
+  uwp: WorldUWP;
+  remarks: string;
+  importance: string;
+  economics: string;
+  culture: string;
+  nobility: string;
+  bases: string;
+  travelZone: string;
+  pbg: string;
+  worldsInSystem: number;
+  allegiance: string;
+  stellar: string | null;
+}
+
+export interface SectorDetail {
+  sector: string;
+  abbreviation: string;
+  milieu: string;
+  source: string;
+  credits: string;
+  subsectors: Record<string, string>;
+  allegiances: Record<string, string>;
+  worlds: World[];
+}
+
+export type SectorLoadStatus = "idle" | "loading" | "loaded" | "error";
+
+export interface GalaxyState {
+  sectors: SectorMeta[];
+  sectorData: Record<string, SectorDetail>;
+  loadingStatus: Record<string, SectorLoadStatus>;
+}

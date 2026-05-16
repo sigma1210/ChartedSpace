@@ -1,4 +1,5 @@
 import DevLogoutButton from "./DevLogoutButton"
+import SubsectorNavigator from "../../components/map/SubsectorNavigator"
 
 const isDevMode = process.env.DEV_MODE === "true"
 
@@ -14,18 +15,8 @@ const MapPage = () => {
         </div>
       </header>
 
-      <main className="flex flex-1 items-center justify-center">
-        <div className="hud-panel w-full max-w-md rounded-sm">
-          <div className="hud-panel-header">◈ Charted Space</div>
-          <div className="p-8 text-center space-y-2">
-            <p className="font-mono text-sm text-(--hud-text) uppercase tracking-widest">
-              Authentication Successful
-            </p>
-            <p className="font-mono text-xs text-(--hud-text-dim) uppercase tracking-wider">
-              Map SPA — coming soon
-            </p>
-          </div>
-        </div>
+      <main className="flex flex-1 flex-col overflow-auto p-4">
+        <SubsectorNavigator sectorAbbr="Spin" initialSubsectorKey="J" />
       </main>
     </div>
   )

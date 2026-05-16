@@ -20,15 +20,20 @@ interface HexGridProps {
   /** Number of hex rows in this grid (40 for sector, 10 for subsector) */
   rows: number;
   onSelectWorld: (worldId: string) => void;
+  /** Uniform scale applied to the rendered SVG dimensions; viewBox unchanged so aspect ratio is preserved. Defaults to 1. */
+  scale?: number;
 }
 
-const HEX_W = 40;
-const HEX_H = 44;
-const HEX_VERT_SPACING = HEX_H * 0.75;
+// Flat-top hex geometry: columns run left→right, rows top→bottom.
+// Even columns (hexX % 2 === 0) are offset down by half a row-height.
+const HEX_RADIUS = 20;
+const COL_SPACING = HEX_RADIUS * 1.5;                   // 30 — horizontal center-to-center
+const ROW_SPACING = HEX_RADIUS * Math.sqrt(3);          // ≈34.6 — vertical center-to-center
+const EVEN_COL_OFFSET = ROW_SPACING / 2;                // ≈17.3 — even-column downward shift
 
 const hexPoints = (cx: number, cy: number, r: number): string => {
   return Array.from({ length: 6 }, (_, i) => {
-    const angle = (Math.PI / 180) * (60 * i - 30);
+    const angle = (Math.PI / 180) * (60 * i);           // 0° start → flat-top orientation
     return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
   }).join(" ");
 }
@@ -44,19 +49,20 @@ const HexGrid = ({
   cols,
   rows,
   onSelectWorld,
+  scale = 1,
 }: HexGridProps) => {
   const worldMap = new Map(worlds.map((w) => [`${w.hexX},${w.hexY}`, w]));
 
-  const r = HEX_W / 2;
-  const svgWidth = cols * HEX_W + HEX_W / 2 + 4;
-  const svgHeight = rows * HEX_VERT_SPACING + HEX_H * 0.25 + 4;
+  const PAD = 4;
+  const svgWidth = (cols - 1) * COL_SPACING + HEX_RADIUS * 2 + PAD * 2;
+  const svgHeight = rows * ROW_SPACING + EVEN_COL_OFFSET + PAD * 2;
 
   const hexElements: React.ReactNode[] = [];
 
   for (let col = 1; col <= cols; col++) {
     for (let row = 1; row <= rows; row++) {
-      const cx = (col - 1) * HEX_W + r + 2 + (row % 2 === 0 ? r : 0);
-      const cy = (row - 1) * HEX_VERT_SPACING + r * 1.15 + 2;
+      const cx = (col - 1) * COL_SPACING + HEX_RADIUS + PAD;
+      const cy = (row - 1) * ROW_SPACING + ROW_SPACING / 2 + PAD + (col % 2 === 0 ? EVEN_COL_OFFSET : 0);
       const world = worldMap.get(`${col},${row}`);
       const zoneColor = travelZoneColor(world?.travelZone ?? null);
       const hexId = `${col}-${row}`;
@@ -69,15 +75,15 @@ const HexGrid = ({
         >
           {/* Hex cell */}
           <polygon
-            points={hexPoints(cx, cy, r - 1)}
-            fill="var(--hud-surface)"
+            points={hexPoints(cx, cy, HEX_RADIUS - 1)}
+            fill="#1a3a5c"
             stroke={world ? "var(--hud-border)" : "var(--hud-border-subtle)"}
             strokeWidth={world ? 0.8 : 0.4}
           />
           {/* Travel zone ring */}
           {zoneColor !== "transparent" && (
             <polygon
-              points={hexPoints(cx, cy, r - 1)}
+              points={hexPoints(cx, cy, HEX_RADIUS - 1)}
               fill="none"
               stroke={zoneColor}
               strokeWidth={1.5}
@@ -102,7 +108,7 @@ const HexGrid = ({
                 y={cy + 8}
                 textAnchor="middle"
                 fontSize={5}
-                fill="var(--hud-text-dim)"
+                fill="var(--hud-text)"
                 fontFamily="monospace"
               >
                 {world.name.length > 7 ? world.name.slice(0, 7) : world.name}
@@ -128,8 +134,8 @@ const HexGrid = ({
   return (
     <div className="overflow-auto">
       <svg
-        width={svgWidth}
-        height={svgHeight}
+        width={svgWidth * scale}
+        height={svgHeight * scale}
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         className="block"
       >
