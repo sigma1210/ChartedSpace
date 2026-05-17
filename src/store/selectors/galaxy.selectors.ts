@@ -69,7 +69,9 @@ export const selectActiveWorld = (state: RootState) => {
   const abbr = state.galaxy.activeWorldSectorAbbr;
   const hex = state.galaxy.activeWorldHex;
   if (!abbr || !hex) return null;
-  return state.galaxy.sectorData[abbr]?.worlds.find((w) => w.hex === hex) ?? null;
+  return (
+    state.galaxy.sectorData[abbr]?.worlds.find((w) => w.hex === hex) ?? null
+  );
 };
 
 export const selectActiveWorldName = (state: RootState) =>
@@ -108,7 +110,7 @@ export const TRADE_CODE_COST_MODS: Record<string, number> = {
   De: 1000,
   Fl: 1000,
   Ga: 0,
-  Hi: 1000,
+  Hi: -1000,
   Ht: 0,
   Ic: 0,
   In: -1000,
@@ -268,7 +270,7 @@ export const MARKET_DEMAND_TABLE: Record<string, Record<string, number>> = {
     Na: 0,
     Ni: 0,
     Po: 0,
-    Ri: 0,
+    Ri: 1,
     Va: 0,
     Wa: 0,
   },
@@ -279,7 +281,7 @@ export const MARKET_DEMAND_TABLE: Record<string, Record<string, number>> = {
     De: 0,
     Fl: 0,
     Ga: 0,
-    Hi: 1,
+    Hi: 0,
     Ht: 0,
     Ic: 0,
     In: 0,
@@ -530,7 +532,9 @@ export const selectTargetWorld = (state: RootState) => {
   const abbr = state.galaxy.targetWorldSectorAbbr;
   const hex = state.galaxy.targetWorldHex;
   if (!abbr || !hex) return null;
-  return state.galaxy.sectorData[abbr]?.worlds.find((w) => w.hex === hex) ?? null;
+  return (
+    state.galaxy.sectorData[abbr]?.worlds.find((w) => w.hex === hex) ?? null
+  );
 };
 
 export const selectTargetWorldName = (state: RootState) =>
@@ -551,28 +555,23 @@ export const selectTargetWorldCost = (state: RootState): number | null => {
   return world ? deriveWorldCost(world) : null;
 };
 
-export const deriveExpectedSalePrice = (sourceWorld: World, targetWorld: World): number => {
+export const deriveExpectedSalePrice = (
+  sourceWorld: World,
+  targetWorld: World,
+): number => {
   const sourceCodes = deriveTradeClassifications(sourceWorld);
   const targetCodes = deriveTradeClassifications(targetWorld);
-
   const demandSum = sourceCodes.reduce(
     (sum, sc) =>
       sum +
-      targetCodes.reduce(
-        (inner, tc) => inner + (MARKET_DEMAND_TABLE[sc]?.[tc] ?? 0),
-        0,
-      ),
+      targetCodes.reduce((inner, tc) => inner + (MARKET_DEMAND_TABLE[sc]?.[tc] ?? 0), 0),
     0,
   );
 
   const sourceTL = hx(sourceWorld.uwp.techLevel);
   const targetTL = hx(targetWorld.uwp.techLevel);
-
-  return (
-    deriveWorldCost(sourceWorld) +
-    demandSum * 5000 +
-    (sourceTL - targetTL) * 105
-  );
+  const techDelta = (sourceTL - targetTL) * 0.1;
+  return Math.max(0, (demandSum * 1000 + 5000) * (1 + techDelta));
 };
 
 export const selectExpectedSalePrice = (state: RootState): number | null => {
@@ -582,7 +581,8 @@ export const selectExpectedSalePrice = (state: RootState): number | null => {
   if (
     state.galaxy.activeWorldHex === state.galaxy.targetWorldHex &&
     state.galaxy.activeWorldSectorAbbr === state.galaxy.targetWorldSectorAbbr
-  ) return 0;
+  )
+    return 0;
   return deriveExpectedSalePrice(sourceWorld, targetWorld);
 };
 
@@ -601,7 +601,9 @@ export interface WorldLocation {
   subsectorName: string;
 }
 
-export const selectActiveWorldLocation = (state: RootState): WorldLocation | null => {
+export const selectActiveWorldLocation = (
+  state: RootState,
+): WorldLocation | null => {
   const world = selectActiveWorld(state);
   const abbr = state.galaxy.activeWorldSectorAbbr;
   if (!world || !abbr) return null;
@@ -616,7 +618,9 @@ export const selectActiveWorldLocation = (state: RootState): WorldLocation | nul
   };
 };
 
-export const selectTargetWorldLocation = (state: RootState): WorldLocation | null => {
+export const selectTargetWorldLocation = (
+  state: RootState,
+): WorldLocation | null => {
   const world = selectTargetWorld(state);
   const abbr = state.galaxy.targetWorldSectorAbbr;
   if (!world || !abbr) return null;

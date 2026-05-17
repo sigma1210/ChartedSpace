@@ -1,20 +1,17 @@
 "use client";
 
-import { Plus, ChevronRight } from "lucide-react";
+import { useEffect } from "react";
+import { Plus, ChevronRight, Loader2 } from "lucide-react";
 import HudModal from "./HudModal";
-import { useAppDispatch } from "../../store/hooks";
-import { openCharacterCreate, openCharacterProfile } from "../../store/slices/uiSlice";
-
-interface CharacterSummary {
-  id: string;
-  name: string;
-  upp: string;
-  credits: number;
-  skillCount: number;
-  worldName: string | null;
-  sectorAbbr: string | null;
-  hex: string | null;
-}
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { closeModal, openCharacterCreate, openCharacterProfile } from "../../store/slices/uiSlice";
+import { fetchCharacters } from "../../store/slices/characterSlice";
+import {
+  selectCharacters,
+  selectCharactersStatus,
+} from "../../store/selectors/character.selectors";
+import { selectActiveModal } from "../../store/selectors/ui.selectors";
+import type { CharacterSummary } from "../../store/slices/characterSlice";
 
 const CharacterCard = ({ character }: { character: CharacterSummary }) => {
   const dispatch = useAppDispatch();
@@ -30,30 +27,37 @@ const CharacterCard = ({ character }: { character: CharacterSummary }) => {
         </span>
         <ChevronRight size={14} strokeWidth={1.5} className="text-(--hud-text-dim) shrink-0" />
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-(--hud-text-dim)">
-        {character.worldName && (
+      {character.worldName && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-(--hud-text-dim)">
           <span>
             ◉ {character.worldName}
             {character.sectorAbbr && ` · ${character.sectorAbbr}`}
             {character.hex && ` · ${character.hex}`}
           </span>
-        )}
-      </div>
+        </div>
+      )}
       <div className="mt-1 flex gap-4 font-mono text-xs text-(--hud-text-dim)">
         <span>{character.upp}</span>
         <span>Cr {character.credits.toLocaleString()}</span>
-        <span>Skills: {character.skillCount}</span>
+        <span>Skills: {character.skills.length}</span>
       </div>
     </button>
   );
-}
-
-// Placeholder data — will be replaced with server data fetch
-const PLACEHOLDER_CHARACTERS: CharacterSummary[] = [];
+};
 
 const CharacterListModal = () => {
   const dispatch = useAppDispatch();
-  const characters = PLACEHOLDER_CHARACTERS;
+  const activeModal = useAppSelector(selectActiveModal);
+  const characters = useAppSelector(selectCharacters);
+  const status = useAppSelector(selectCharactersStatus);
+
+  useEffect(() => {
+    if (activeModal === "characterList") {
+      dispatch(fetchCharacters());
+    }
+  }, [activeModal, dispatch]);
+
+  if (activeModal !== "characterList") return null;
 
   const headerRight = (
     <button
@@ -66,9 +70,24 @@ const CharacterListModal = () => {
   );
 
   return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => dispatch(closeModal())}>
+      <div className="w-full max-w-md px-4" onClick={e => e.stopPropagation()}>
     <HudModal title="Characters" headerRight={headerRight}>
       <div className="flex flex-col gap-2 p-3">
-        {characters.length === 0 ? (
+        {status === "loading" && (
+          <div className="flex items-center justify-center gap-2 py-8 text-xs text-(--hud-text-dim) uppercase tracking-wider">
+            <Loader2 size={14} className="animate-spin" />
+            Loading…
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="py-8 text-center text-xs text-(--hud-error) uppercase tracking-wider">
+            Failed to load characters
+          </div>
+        )}
+
+        {(status === "loaded" || status === "idle") && characters.length === 0 && (
           <div className="py-8 text-center">
             <p className="text-xs text-(--hud-text-dim) uppercase tracking-wider">
               No characters yet
@@ -80,18 +99,23 @@ const CharacterListModal = () => {
               Create your first character
             </button>
           </div>
-        ) : (
+        )}
+
+        {status === "loaded" && characters.length > 0 && (
           <>
             {characters.map((c) => (
               <CharacterCard key={c.id} character={c} />
             ))}
             <p className="pt-1 text-center text-[10px] text-(--hud-text-dim) uppercase tracking-wider">
-              Showing {characters.length} character{characters.length !== 1 ? "s" : ""}
+              {characters.length} character{characters.length !== 1 ? "s" : ""}
             </p>
           </>
         )}
       </div>
     </HudModal>
+      </div>
+    </div>
   );
-}
-export default CharacterListModal
+};
+
+export default CharacterListModal;

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { selectActiveModal } from "../../store/selectors/ui.selectors";
 import { closeModal } from "../../store/slices/uiSlice";
+import { invalidateCharacters } from "../../store/slices/characterSlice";
 import { generateCharacter, CharacterDeathError } from "../../lib/characters/engine";
 import { RandomDecisionProvider } from "../../lib/characters/providers/random";
 import {
@@ -182,6 +183,7 @@ const SheetDisplay = ({ sheet }: { sheet: CharacterSheet }) => {
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 type Phase = "idle" | "running" | "deciding" | "complete" | "dead";
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 const CharacterCreateModal = () => {
   const dispatch = useAppDispatch();
@@ -192,6 +194,9 @@ const CharacterCreateModal = () => {
   const [deathMsg, setDeathMsg] = useState<string | null>(null);
   const [pendingPoint, setPendingPoint] = useState<DecisionPoint | null>(null);
   const [log, setLog] = useState<string[]>([]);
+  const [charName, setCharName] = useState("Unnamed Traveller");
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [savedId, setSavedId] = useState<string | null>(null);
   const providerRef = useRef<HumanDecisionProvider | null>(null);
 
   if (activeModal !== "characterCreate") return null;
@@ -204,6 +209,9 @@ const CharacterCreateModal = () => {
     setDeathMsg(null);
     setPendingPoint(null);
     setLog([]);
+    setCharName("Unnamed Traveller");
+    setSaveState("idle");
+    setSavedId(null);
   };
 
   const handleClose = () => {
@@ -222,6 +230,7 @@ const CharacterCreateModal = () => {
         { mode: "random" }
       );
       setSheet(result);
+      setCharName("Unnamed Traveller");
       setPhase("complete");
     } catch (e) {
       if (e instanceof CharacterDeathError) {
@@ -241,6 +250,7 @@ const CharacterCreateModal = () => {
     generateCharacter("Unnamed Traveller", provider, { mode: "guided" })
       .then(result => {
         setSheet(result);
+        setCharName("Unnamed Traveller");
         setPendingPoint(null);
         setPhase("complete");
       })
@@ -253,6 +263,32 @@ const CharacterCreateModal = () => {
           setPhase("idle");
         }
       });
+  };
+
+  // ── Save ─────────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!sheet || saveState === "saving" || saveState === "saved") return;
+    setSaveState("saving");
+    try {
+      const res = await fetch("/api/characters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheet, name: charName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("[save character]", err);
+        setSaveState("error");
+        return;
+      }
+      const data: { id: string; name: string } = await res.json();
+      setSavedId(data.id);
+      setSaveState("saved");
+      dispatch(invalidateCharacters());
+    } catch (err) {
+      console.error("[save character]", err);
+      setSaveState("error");
+    }
   };
 
   const handleChoice = (point: DecisionPoint, id: string) => {
@@ -415,12 +451,61 @@ const CharacterCreateModal = () => {
         {phase === "complete" && sheet && (
           <div className="flex flex-col gap-5">
             <SheetDisplay sheet={sheet} />
-            <button
-              onClick={reset}
-              className="font-mono text-xs uppercase tracking-widest px-3 py-1.5 border border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) transition-colors self-start"
-            >
-              Generate Another
-            </button>
+
+            {/* Save controls */}
+            <div className="flex flex-col gap-2 pt-3 border-t border-(--hud-border)/40">
+              {saveState !== "saved" ? (
+                <>
+                  <div className="flex flex-col gap-1">
+                    <label className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim)">
+                      Character Name
+                    </label>
+                    <input
+                      type="text"
+                      value={charName}
+                      onChange={e => setCharName(e.target.value)}
+                      maxLength={64}
+                      className="font-mono text-xs bg-(--hud-surface-2) border border-(--hud-border) focus:border-(--hud-accent) text-(--hud-text) px-2 py-1.5 outline-none w-full"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleSave}
+                      disabled={saveState === "saving" || !charName.trim()}
+                      className="font-mono text-xs uppercase tracking-widest px-3 py-1.5 border border-(--hud-accent) text-(--hud-accent) hover:bg-(--hud-accent)/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {saveState === "saving" ? "Saving…" : "Save Character"}
+                    </button>
+                    <button
+                      onClick={reset}
+                      className="font-mono text-xs uppercase tracking-widest px-3 py-1.5 border border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) transition-colors"
+                    >
+                      Generate Another
+                    </button>
+                    {saveState === "error" && (
+                      <span className="font-mono text-[10px] text-(--hud-error)">Save failed — try again.</span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-[10px] text-(--hud-accent)">
+                      ✓ {charName} saved
+                    </span>
+                    {savedId && (
+                      <span className="font-mono text-[9px] text-(--hud-text-dim)">{savedId}</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={reset}
+                    className="font-mono text-xs uppercase tracking-widest px-3 py-1.5 border border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) transition-colors"
+                  >
+                    Generate Another
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

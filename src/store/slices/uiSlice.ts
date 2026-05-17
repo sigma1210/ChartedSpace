@@ -39,7 +39,6 @@ const uiSlice = createSlice({
     openCharacterList(state) {
       state.previousModal = state.activeModal;
       state.activeModal = "characterList";
-      state.activeCharacterId = null;
     },
     openCharacterProfile(state, action: PayloadAction<string>) {
       state.previousModal = state.activeModal;

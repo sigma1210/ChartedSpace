@@ -13,6 +13,7 @@ import type { SectorMeta, SectorDetail } from "../../types";
 import SubsectorGrid from "./SubsectorGrid";
 import StarField from "./StarField";
 import GalaxyStarField from "./GalaxyStarField";
+import TradeValuesCard from "./TradeValuesCard";
 
 
 const KEYS = "ABCDEFGHIJKLMNOP";
@@ -201,6 +202,9 @@ const SubsectorNavigator = () => {
 
         <NavButton target={nav.down}  icon={<ChevronDown  size={10} />} onNavigate={navigate} />
       </div>
+
+      {/* Trade values panel */}
+      <TradeValuesCard />
     </div>
   );
 };
