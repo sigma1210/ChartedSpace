@@ -1,0 +1,384 @@
+{
+  "_source": "Classic Traveller Book 1: Characters and Combat. Tables cross-referenced against pgorman/travellercharactergenerator (github.com/pgorman/travellercharactergenerator) and makhidkarun/CTchargen.",
+  "_notes": [
+    "Skill table access: tables 0-1 always available, table 2 requires EDU 8+, table 3 requires commission (or EDU 8+ for Scouts/Other which have no commission).",
+    "Cascade entries resolve via cascades.json.",
+    "Stat delta entries modify the character's UPP directly.",
+    "enlistmentBonus: skill granted automatically on successful enlistment (before first term).",
+    "Verified against original 1981 source text. Merchants personal development entry 4 confirmed as INT+1."
+  ],
+
+  "careers": {
+    "navy": {
+      "name": "Navy",
+      "enlistment":   { "target": 8, "dms": [{ "stat": "INT", "min": 8, "dm": 1 }, { "stat": "EDU", "min": 9, "dm": 2 }] },
+      "survival":     { "target": 5, "dms": [{ "stat": "INT", "min": 7, "dm": 2 }] },
+      "commission":   { "target": 10, "dms": [{ "stat": "SOC", "min": 9, "dm": 1 }] },
+      "promotion":    { "target": 8,  "dms": [{ "stat": "EDU", "min": 8, "dm": 1 }] },
+      "reenlistment": { "target": 6 },
+      "enlistmentBonus": null,
+      "ranks": ["", "Ensign", "Lieutenant", "Lt Commander", "Commander", "Captain", "Admiral"],
+      "musterBonusRolls": [0, 1, 1, 2, 2, 3, 3],
+      "skillTables": [
+        {
+          "key": "personal_development",
+          "access": null,
+          "entries": [
+            { "type": "stat", "stat": "STR", "delta": 1 },
+            { "type": "stat", "stat": "DEX", "delta": 1 },
+            { "type": "stat", "stat": "END", "delta": 1 },
+            { "type": "stat", "stat": "INT", "delta": 1 },
+            { "type": "stat", "stat": "EDU", "delta": 1 },
+            { "type": "stat", "stat": "SOC", "delta": 1 }
+          ]
+        },
+        {
+          "key": "service_skills",
+          "access": null,
+          "entries": [
+            { "type": "skill", "name": "Ship's Boat" },
+            { "type": "skill", "name": "Vacc Suit" },
+            { "type": "skill", "name": "Forward Observer" },
+            { "type": "skill", "name": "Gunnery" },
+            { "type": "cascade", "name": "blade" },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "advanced_education",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "skill", "name": "Vacc Suit" },
+            { "type": "skill", "name": "Mechanical" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Engineering" },
+            { "type": "skill", "name": "Gunnery" },
+            { "type": "skill", "name": "Jack-of-Trades" }
+          ]
+        },
+        {
+          "key": "officer",
+          "access": { "requiresCommission": true },
+          "entries": [
+            { "type": "skill", "name": "Medical" },
+            { "type": "skill", "name": "Navigation" },
+            { "type": "skill", "name": "Engineering" },
+            { "type": "skill", "name": "Computer" },
+            { "type": "skill", "name": "Pilot" },
+            { "type": "skill", "name": "Admin" }
+          ]
+        }
+      ]
+    },
+
+    "marines": {
+      "name": "Marines",
+      "enlistment":   { "target": 9, "dms": [{ "stat": "INT", "min": 8, "dm": 1 }, { "stat": "STR", "min": 8, "dm": 2 }] },
+      "survival":     { "target": 6, "dms": [{ "stat": "END", "min": 8, "dm": 2 }] },
+      "commission":   { "target": 9,  "dms": [{ "stat": "EDU", "min": 7, "dm": 1 }] },
+      "promotion":    { "target": 9,  "dms": [{ "stat": "SOC", "min": 8, "dm": 1 }] },
+      "reenlistment": { "target": 6 },
+      "enlistmentBonus": { "type": "skill", "name": "Cutlass" },
+      "ranks": ["", "Lieutenant", "Captain", "Force Commander", "Lt Colonel", "Colonel", "Brigadier"],
+      "musterBonusRolls": [0, 1, 1, 2, 2, 3, 3],
+      "skillTables": [
+        {
+          "key": "personal_development",
+          "access": null,
+          "entries": [
+            { "type": "stat", "stat": "STR", "delta": 1 },
+            { "type": "stat", "stat": "DEX", "delta": 1 },
+            { "type": "stat", "stat": "END", "delta": 1 },
+            { "type": "skill", "name": "Gambling" },
+            { "type": "skill", "name": "Brawling" },
+            { "type": "cascade", "name": "blade" }
+          ]
+        },
+        {
+          "key": "service_skills",
+          "access": null,
+          "entries": [
+            { "type": "cascade", "name": "vehicle" },
+            { "type": "skill", "name": "Vacc Suit" },
+            { "type": "cascade", "name": "blade" },
+            { "type": "cascade", "name": "gun" },
+            { "type": "cascade", "name": "blade" },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "advanced_education",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "cascade", "name": "vehicle" },
+            { "type": "skill", "name": "Mechanical" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Tactics" },
+            { "type": "cascade", "name": "blade" },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "officer",
+          "access": { "requiresCommission": true },
+          "entries": [
+            { "type": "skill", "name": "Medical" },
+            { "type": "skill", "name": "Tactics" },
+            { "type": "skill", "name": "Tactics" },
+            { "type": "skill", "name": "Computer" },
+            { "type": "skill", "name": "Leader" },
+            { "type": "skill", "name": "Admin" }
+          ]
+        }
+      ]
+    },
+
+    "army": {
+      "name": "Army",
+      "enlistment":   { "target": 5, "dms": [{ "stat": "DEX", "min": 6, "dm": 1 }, { "stat": "END", "min": 5, "dm": 2 }] },
+      "survival":     { "target": 5, "dms": [{ "stat": "EDU", "min": 5, "dm": 2 }] },
+      "commission":   { "target": 5,  "dms": [{ "stat": "END", "min": 7, "dm": 1 }] },
+      "promotion":    { "target": 6,  "dms": [{ "stat": "EDU", "min": 7, "dm": 1 }] },
+      "reenlistment": { "target": 7 },
+      "enlistmentBonus": { "type": "skill", "name": "Rifle" },
+      "ranks": ["", "Lieutenant", "Captain", "Major", "Lt Colonel", "Colonel", "General"],
+      "musterBonusRolls": [0, 1, 1, 2, 2, 3, 3],
+      "skillTables": [
+        {
+          "key": "personal_development",
+          "access": null,
+          "entries": [
+            { "type": "stat", "stat": "STR", "delta": 1 },
+            { "type": "stat", "stat": "DEX", "delta": 1 },
+            { "type": "stat", "stat": "END", "delta": 1 },
+            { "type": "skill", "name": "Gambling" },
+            { "type": "stat", "stat": "EDU", "delta": 1 },
+            { "type": "skill", "name": "Brawling" }
+          ]
+        },
+        {
+          "key": "service_skills",
+          "access": null,
+          "entries": [
+            { "type": "cascade", "name": "vehicle" },
+            { "type": "skill", "name": "Air/Raft" },
+            { "type": "cascade", "name": "gun" },
+            { "type": "skill", "name": "Forward Observer" },
+            { "type": "cascade", "name": "blade" },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "advanced_education",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "cascade", "name": "vehicle" },
+            { "type": "skill", "name": "Mechanical" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Tactics" },
+            { "type": "cascade", "name": "blade" },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "officer",
+          "access": { "requiresCommission": true },
+          "entries": [
+            { "type": "skill", "name": "Medical" },
+            { "type": "skill", "name": "Tactics" },
+            { "type": "skill", "name": "Tactics" },
+            { "type": "skill", "name": "Computer" },
+            { "type": "skill", "name": "Leader" },
+            { "type": "skill", "name": "Admin" }
+          ]
+        }
+      ]
+    },
+
+    "scouts": {
+      "name": "Scouts",
+      "enlistment":   { "target": 7, "dms": [{ "stat": "INT", "min": 6, "dm": 1 }, { "stat": "STR", "min": 8, "dm": 2 }] },
+      "survival":     { "target": 7, "dms": [{ "stat": "END", "min": 9, "dm": 2 }] },
+      "commission":   null,
+      "promotion":    null,
+      "reenlistment": { "target": 3 },
+      "enlistmentBonus": { "type": "skill", "name": "Pilot" },
+      "ranks": [],
+      "musterBonusRolls": [0, 0, 0, 0, 0, 0, 0],
+      "skillTables": [
+        {
+          "key": "personal_development",
+          "access": null,
+          "entries": [
+            { "type": "stat", "stat": "STR", "delta": 1 },
+            { "type": "stat", "stat": "DEX", "delta": 1 },
+            { "type": "stat", "stat": "END", "delta": 1 },
+            { "type": "stat", "stat": "INT", "delta": 1 },
+            { "type": "stat", "stat": "EDU", "delta": 1 },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "service_skills",
+          "access": null,
+          "entries": [
+            { "type": "skill", "name": "Air/Raft" },
+            { "type": "skill", "name": "Vacc Suit" },
+            { "type": "skill", "name": "Mechanical" },
+            { "type": "skill", "name": "Navigation" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Jack-of-Trades" }
+          ]
+        },
+        {
+          "key": "advanced_education",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "skill", "name": "Air/Raft" },
+            { "type": "skill", "name": "Mechanical" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Jack-of-Trades" },
+            { "type": "skill", "name": "Gunnery" },
+            { "type": "skill", "name": "Medical" }
+          ]
+        },
+        {
+          "key": "advanced_education_2",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "skill", "name": "Medical" },
+            { "type": "skill", "name": "Navigation" },
+            { "type": "skill", "name": "Engineering" },
+            { "type": "skill", "name": "Computer" },
+            { "type": "skill", "name": "Pilot" },
+            { "type": "skill", "name": "Jack-of-Trades" }
+          ]
+        }
+      ]
+    },
+
+    "merchants": {
+      "name": "Merchants",
+      "enlistment":   { "target": 7, "dms": [{ "stat": "STR", "min": 7, "dm": 1 }, { "stat": "INT", "min": 6, "dm": 2 }] },
+      "survival":     { "target": 5, "dms": [{ "stat": "INT", "min": 7, "dm": 2 }] },
+      "commission":   { "target": 4,  "dms": [{ "stat": "INT", "min": 6, "dm": 1 }] },
+      "promotion":    { "target": 10, "dms": [{ "stat": "INT", "min": 9, "dm": 1 }] },
+      "reenlistment": { "target": 4 },
+      "enlistmentBonus": null,
+      "ranks": ["", "4th Officer", "3rd Officer", "2nd Officer", "1st Officer", "Captain", "Senior Captain"],
+      "musterBonusRolls": [0, 1, 1, 2, 2, 3, 3],
+      "skillTables": [
+        {
+          "key": "personal_development",
+          "access": null,
+          "entries": [
+            { "type": "stat", "stat": "STR", "delta": 1 },
+            { "type": "stat", "stat": "DEX", "delta": 1 },
+            { "type": "stat", "stat": "END", "delta": 1 },
+            { "type": "stat", "stat": "INT", "delta": 1 },
+            { "type": "cascade", "name": "blade" },
+            { "type": "skill", "name": "Bribery" }
+          ]
+        },
+        {
+          "key": "service_skills",
+          "access": null,
+          "entries": [
+            { "type": "skill", "name": "Pilot" },
+            { "type": "skill", "name": "Vacc Suit" },
+            { "type": "skill", "name": "Jack-of-Trades" },
+            { "type": "skill", "name": "Steward" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "advanced_education",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "skill", "name": "Streetwise" },
+            { "type": "skill", "name": "Mechanical" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Navigation" },
+            { "type": "skill", "name": "Gunnery" },
+            { "type": "skill", "name": "Medical" }
+          ]
+        },
+        {
+          "key": "officer",
+          "access": { "requiresCommission": true },
+          "entries": [
+            { "type": "skill", "name": "Medical" },
+            { "type": "skill", "name": "Navigation" },
+            { "type": "skill", "name": "Engineering" },
+            { "type": "skill", "name": "Computer" },
+            { "type": "skill", "name": "Pilot" },
+            { "type": "skill", "name": "Admin" }
+          ]
+        }
+      ]
+    },
+
+    "other": {
+      "name": "Other",
+      "enlistment":   { "target": 3, "dms": [] },
+      "survival":     { "target": 5, "dms": [{ "stat": "INT", "min": 9, "dm": 2 }] },
+      "commission":   null,
+      "promotion":    null,
+      "reenlistment": { "target": 5 },
+      "enlistmentBonus": null,
+      "ranks": [],
+      "musterBonusRolls": [0, 0, 0, 0, 0, 0, 0],
+      "skillTables": [
+        {
+          "key": "personal_development",
+          "access": null,
+          "entries": [
+            { "type": "stat", "stat": "STR", "delta": 1 },
+            { "type": "stat", "stat": "DEX", "delta": 1 },
+            { "type": "stat", "stat": "END", "delta": 1 },
+            { "type": "cascade", "name": "blade" },
+            { "type": "skill", "name": "Brawling" },
+            { "type": "stat", "stat": "SOC", "delta": -1 }
+          ]
+        },
+        {
+          "key": "service_skills",
+          "access": null,
+          "entries": [
+            { "type": "skill", "name": "Forgery" },
+            { "type": "skill", "name": "Gambling" },
+            { "type": "skill", "name": "Brawling" },
+            { "type": "skill", "name": "Bribery" },
+            { "type": "cascade", "name": "blade" },
+            { "type": "cascade", "name": "gun" }
+          ]
+        },
+        {
+          "key": "advanced_education",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "skill", "name": "Streetwise" },
+            { "type": "skill", "name": "Mechanical" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Gambling" },
+            { "type": "skill", "name": "Brawling" },
+            { "type": "skill", "name": "Forgery" }
+          ]
+        },
+        {
+          "key": "advanced_education_2",
+          "access": { "minEDU": 8 },
+          "entries": [
+            { "type": "skill", "name": "Medical" },
+            { "type": "skill", "name": "Forgery" },
+            { "type": "skill", "name": "Electronics" },
+            { "type": "skill", "name": "Computer" },
+            { "type": "skill", "name": "Streetwise" },
+            { "type": "skill", "name": "Jack-of-Trades" }
+          ]
+        }
+      ]
+    }
+  }
+}

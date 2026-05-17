@@ -1,6 +1,9 @@
 import DevLogoutButton from "./DevLogoutButton";
 import SubsectorNavigator from "../../components/map/SubsectorNavigator";
 import MapBreadcrumb from "./MapBreadcrumb";
+import WorldDetailModal from "./WorldDetailModal";
+import CharacterCreateModal from "./CharacterCreateModal";
+import CreateCharacterButton from "./CreateCharacterButton";
 
 const isDevMode = process.env.DEV_MODE === "true";
 
@@ -13,13 +16,18 @@ const MapPage = () => {
             ◈ Charted Space
           </span>
           <MapBreadcrumb />
-          {isDevMode && <DevLogoutButton />}
+          <div className="flex items-center gap-3">
+            <CreateCharacterButton />
+            {isDevMode && <DevLogoutButton />}
+          </div>
         </div>
       </header>
 
       <main className="flex flex-1 flex-col overflow-auto p-4">
         <SubsectorNavigator />
       </main>
+      <WorldDetailModal />
+      <CharacterCreateModal />
     </div>
   );
 };

@@ -163,12 +163,17 @@ Typography is always `font-mono`, labels are `uppercase tracking-widest text-xs`
 - `/map` SPA — interactive galaxy map (see Map SPA section below)
 - Clerk middleware in `src/proxy.ts`
 - Auth check in `src/lib/auth.ts`
+- Classic Traveller Book 1 character generation engine (see Character Generation section below)
+- "Create Character" button in the `/map` header — opens `CharacterCreateModal`
+- `CharacterCreateModal` supports two modes: **Random** (instant full lifepath) and **Guided** (step-by-step, player makes every choice via `HumanDecisionProvider`)
 
 ## What is next
 
+- **Directed provider** — `RoleDirectedDecisionProvider` in `src/lib/characters/providers/directed.ts` that weights choices toward a target role archetype. Add a third "Directed" mode card to `CharacterCreateModal`.
+- **Save character** — server action to write the completed `CharacterSheet` to the database (`sheet` JSON blob + tabular columns on the `Character` model). Requires the user to be authenticated and the Clerk webhook sync to be in place.
 - Clerk webhooks at `src/app/api/webhooks/clerk/route.ts` — sync `user.created`, `user.updated`, `user.deleted` to the database. Requires `/api/webhooks/clerk` added to public routes in `proxy.ts` and `CLERK_WEBHOOK_SIGNING_SECRET` in env.
-- Wire `src/actions/user.ts` to the database after webhook sync is in place
-- World detail panel when a hex is clicked in the subsector grid
+- Wire `src/actions/user.ts` to the database after webhook sync is in place.
+- Save generated characters to the database (write the `sheet` JSON blob + tabular columns to the `Character` model).
 - Stellar color on star field dots (spectral class → color mapping already stubbed)
 - Character/ship pinning to worlds
 
@@ -284,7 +289,105 @@ Three columns, `flex gap-4 items-start`:
 ### `/map` route files
 
 ```
-src/app/map/layout.tsx      Wraps route in <StoreProvider> — required for Redux
-src/app/map/page.tsx        Renders <SubsectorNavigator sectorAbbr="Spin" initialSubsectorKey="J" />
-src/app/map/DevLogoutButton.tsx  Dev-only logout, shown when DEV_MODE=true
+src/app/map/layout.tsx              Wraps route in <StoreProvider> — required for Redux
+src/app/map/page.tsx                Header + SubsectorNavigator + WorldDetailModal + CharacterCreateModal
+src/app/map/DevLogoutButton.tsx     Dev-only logout, shown when DEV_MODE=true
+src/app/map/CreateCharacterButton.tsx   Header button — dispatches openCharacterCreate()
+src/app/map/CharacterCreateModal.tsx    Character generation modal (see Character Generation below)
 ```
+
+---
+
+## Character Generation
+
+Classic Traveller Book 1 lifepath system. The engine is **pure** — decisions in, character sheet out. No Prisma, no server actions, no side effects.
+
+### Source tables — `src/data/classic/`
+
+| File | Contents |
+|---|---|
+| `careers.json` | 6 careers — enlistment/survival/commission/promotion/reenlistment targets + DMs, skill tables, rank names, muster bonus rolls |
+| `mustering-out.json` | Cash tables (7 entries × 6 careers), benefits tables, retirement pay schedule |
+| `cascades.json` | `blade`, `gun`, `vehicle` subtables (6 entries each) |
+| `aging.json` | 3 aging brackets (34–46, 47–62, 63+) with stat checks |
+| `character-schema.json` | JSON Schema draft-07 — source of truth for the shape of a complete character sheet |
+
+All characters must validate against `character-schema.json` before being saved.
+
+### Engine files — `src/lib/characters/`
+
+| File | Role |
+|---|---|
+| `types.ts` | All public TypeScript interfaces: `CharacterSheet`, `UPP`, `Skill`, `CareerRecord`, `Benefits`, `DecisionRecord`, `Generation`, `DecisionProvider`, `DecisionPoint`, `GenerationOptions` |
+| `tables.ts` | Typed imports of the four CT JSON files; exports `getCareer()`, `getRetirementPay()`, typed interfaces for raw table data |
+| `engine.ts` | `generateCharacter(name, provider, options): Promise<CharacterSheet>` — full lifepath state machine; throws `CharacterDeathError` on survival/aging death |
+| `providers/random.ts` | `RandomDecisionProvider` — picks uniformly at random from offered options |
+| `providers/human.ts` | `HumanDecisionProvider` — suspends at each decision until `provider.choose(id)` is called from the UI; `provider.cancel()` rejects with `GenerationCancelledError` |
+
+### Lifepath phases (engine.ts)
+
+1. **Characteristics** — 2D6 × 6, clamped 1–15
+2. **Career selection** — provider chooses from 6 careers
+3. **Enlistment** — 2D6 + stat DMs vs target; failure → 1D6 draft table
+4. **Enlistment bonus** — automatic skill grant (no roll), not recorded in decisions
+5. **Term loop** (max 7 terms):
+   - Survival (2D6 + DMs) — fail = `CharacterDeathError`
+   - Commission (2D6 + DMs) — scouts/other have no commission
+   - Promotion (2D6 + DMs) — commissioned officers only, max rank 6
+   - Skill rolls — 1 base + 1 per commission + 1 per promotion; provider picks table each roll
+   - Aging — kicks in at age 34; medical skill grants DM+1 on each check
+   - Reenlistment — roll 12 = forced in; < target = forced out; ≥ target = provider decides
+6. **Mustering out** — terms + rank bonus rolls; max 3 cash rolls; gambling DM on cash; rank 5+ DM on benefits
+7. **Retirement pay** — 5+ terms (not scouts/other): Cr4000–Cr8000+/year
+
+### DecisionProvider interface
+
+```ts
+interface DecisionProvider {
+  decide(point: DecisionPoint): Promise<string>; // returns chosen option id
+}
+```
+
+Every decision point goes through the provider. Dice rolls happen inside the engine and are recorded in `generation.decisions[]` with `madeBy: "random"`. Provider-driven choices record `madeBy` from the mode (`random` / `human` / `directed`).
+
+**Steps the provider handles:** `career_selection`, `skill_table_choice`, `reenlistment_decision`, `muster_roll_type`
+
+**Steps the engine handles internally (dice only):** `characteristics`, `enlistment_roll`, `survival_roll`, `commission_roll`, `promotion_roll`, `skill_roll`, `cascade_roll`, `aging_roll`, `muster_roll`
+
+### Two-layer storage (Prisma)
+
+- `sheet Json?` column holds the complete character sheet — this is the canonical record
+- Tabular columns (`strength`, `dexterity`, etc.) are queryable projections for filtering
+- **Sheet wins** when tabular columns conflict with sheet data
+- Sync process between sheet and tabular columns is pending
+
+### CharacterCreateModal
+
+`src/app/map/CharacterCreateModal.tsx` — renders when `activeModal === "characterCreate"`.
+
+Driven by a `phase` state machine: `idle → running/deciding → complete | dead`.
+
+**Idle** — two mode cards side-by-side:
+- **Random** — instant full lifepath via `RandomDecisionProvider`
+- **Guided** — step-by-step via `HumanDecisionProvider`; engine suspends at each `DecisionPoint`
+
+**Deciding (guided)** — shows the current decision prompt, optional context (term number, reenlistment roll), and option buttons. Career options include a one-line description. Skill table keys are mapped to human-readable names. A running log below the options records every choice made so far. Cancel button resets to idle and calls `provider.cancel()` to clean up the in-flight promise.
+
+**Complete** — `SheetDisplay` component renders: UPP hex + individual stats, career summary (name, terms, rank, age), skills as badges, credits, and any benefits (retirement pay, ship, passages, weapons). "Generate Another" button resets to idle.
+
+**Dead** — death message with "Try Again" button.
+
+#### HumanDecisionProvider pattern
+
+```ts
+// Engine suspends here until choose() or cancel() is called
+async decide(point: DecisionPoint): Promise<string> {
+  return new Promise((resolve, reject) => {
+    this.resolveNext = resolve;
+    this.rejectNext = reject;
+    this.onDecision(point);   // fires setPendingPoint(point) in the modal
+  });
+}
+```
+
+The modal holds the provider in a `useRef` so it survives re-renders. `handleChoice(point, id)` calls `provider.choose(id)` → the engine's awaited promise resolves → next step begins immediately (synchronous dice rolls) → next `DecisionPoint` is emitted (or generation completes).

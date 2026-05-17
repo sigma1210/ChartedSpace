@@ -4,8 +4,7 @@ import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { loadSector } from "../../store/slices/galaxySlice";
 import { selectSectorData, selectSectorLoadStatus } from "../../store/selectors/galaxy.selectors";
-import { openSystemDetail } from "../../store/slices/uiSlice";
-import { setActiveWorldHex } from "../../store/slices/galaxySlice";
+import { setActiveWorldHex, setTargetWorldHex, clearTargetWorldHex } from "../../store/slices/galaxySlice";
 import { selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
 import HexGrid from "./HexGrid";
 
@@ -102,10 +101,9 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
         cols={8}
         rows={10}
         selectedWorldId={activeWorldHex ?? undefined}
-        onSelectWorld={(id) => {
-          dispatch(setActiveWorldHex(id));
-          dispatch(openSystemDetail(id));
-        }}
+        onSelectWorld={(id) => dispatch(setActiveWorldHex({ sectorAbbr, hex: id }))}
+        onHoverWorld={(id) => dispatch(setTargetWorldHex({ sectorAbbr, hex: id }))}
+        onLeaveGrid={() => dispatch(clearTargetWorldHex())}
       />
     </div>
   );

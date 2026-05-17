@@ -31,7 +31,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   configureStore({
     reducer: { galaxy: galaxyReducer },
     preloadedState: preloaded
-      ? { galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, ...preloaded } }
+      ? { galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null, ...preloaded } }
       : undefined,
   });
 
@@ -140,6 +140,9 @@ describe("galaxy selectors", () => {
     activeSectorAbbr: "Core",
     activeSubsectorKey: "A",
     activeWorldHex: null,
+    activeWorldSectorAbbr: null,
+    targetWorldHex: null,
+    targetWorldSectorAbbr: null,
   };
 
   const root = makeRoot(galaxyState);

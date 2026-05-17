@@ -1,5 +1,7 @@
 "use client";
 
+import { HEX_RADIUS, hexSvgWidth, hexSvgHeight, hexCenter } from "./hexGeometry";
+
 interface HexWorld {
   id: string;
   hex: string;
@@ -20,18 +22,16 @@ interface HexGridProps {
   /** Number of hex rows in this grid (40 for sector, 10 for subsector) */
   rows: number;
   onSelectWorld: (worldId: string) => void;
+  /** Called when the pointer enters a hex that has a world. */
+  onHoverWorld?: (worldId: string) => void;
+  /** Called when the pointer leaves the grid entirely. */
+  onLeaveGrid?: () => void;
   /** Uniform scale applied to the rendered SVG dimensions; viewBox unchanged so aspect ratio is preserved. Defaults to 1. */
   scale?: number;
   /** World id that is currently selected — renders an accent selection ring. */
   selectedWorldId?: string;
 }
 
-// Flat-top hex geometry: columns run left→right, rows top→bottom.
-// Even columns (hexX % 2 === 0) are offset down by half a row-height.
-const HEX_RADIUS = 20;
-const COL_SPACING = HEX_RADIUS * 1.5;                   // 30 — horizontal center-to-center
-const ROW_SPACING = HEX_RADIUS * Math.sqrt(3);          // ≈34.6 — vertical center-to-center
-const EVEN_COL_OFFSET = ROW_SPACING / 2;                // ≈17.3 — even-column downward shift
 
 const hexPoints = (cx: number, cy: number, r: number): string => {
   return Array.from({ length: 6 }, (_, i) => {
@@ -63,21 +63,21 @@ const HexGrid = ({
   cols,
   rows,
   onSelectWorld,
+  onHoverWorld,
+  onLeaveGrid,
   scale = 1,
   selectedWorldId,
 }: HexGridProps) => {
   const worldMap = new Map(worlds.map((w) => [`${w.hexX},${w.hexY}`, w]));
 
-  const PAD = 4;
-  const svgWidth = (cols - 1) * COL_SPACING + HEX_RADIUS * 2 + PAD * 2;
-  const svgHeight = rows * ROW_SPACING + EVEN_COL_OFFSET + PAD * 2;
+  const svgWidth = hexSvgWidth(cols);
+  const svgHeight = hexSvgHeight(rows);
 
   const hexElements: React.ReactNode[] = [];
 
   for (let col = 1; col <= cols; col++) {
     for (let row = 1; row <= rows; row++) {
-      const cx = (col - 1) * COL_SPACING + HEX_RADIUS + PAD;
-      const cy = (row - 1) * ROW_SPACING + ROW_SPACING / 2 + PAD + (col % 2 === 0 ? EVEN_COL_OFFSET : 0);
+      const { cx, cy } = hexCenter(col, row);
       const world = worldMap.get(`${col},${row}`);
       const zone = world?.travelZone ?? null;
       const zoneColor = travelZoneColor(zone);
@@ -88,6 +88,7 @@ const HexGrid = ({
         <g
           key={hexId}
           onClick={() => world && onSelectWorld(world.id)}
+          onMouseEnter={() => world ? onHoverWorld?.(world.id) : onLeaveGrid?.()}
           style={{ cursor: world ? "pointer" : "default" }}
         >
           {/* Hex cell */}
@@ -165,6 +166,7 @@ const HexGrid = ({
         height={svgHeight * scale}
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         className="block"
+        onMouseLeave={() => onLeaveGrid?.()}
       >
         {hexElements}
       </svg>

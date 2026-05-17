@@ -9,6 +9,9 @@ const initialState: GalaxyState = {
   activeSectorAbbr: "Spin",
   activeSubsectorKey: "A",
   activeWorldHex: null,
+  activeWorldSectorAbbr: null,
+  targetWorldHex: null,
+  targetWorldSectorAbbr: null,
 };
 
 export const loadSector = createAsyncThunk<SectorDetail, string, { rejectValue: string }>(
@@ -38,22 +41,29 @@ const galaxySlice = createSlice({
     setActiveSector: (state, action: { payload: string }) => {
       state.activeSectorAbbr = action.payload;
       state.activeSubsectorKey = "A";
-      state.activeWorldHex = null;
     },
     setActiveSubsector: (state, action: { payload: string }) => {
       state.activeSubsectorKey = action.payload;
-      state.activeWorldHex = null;
     },
     setActiveLocation: (state, action: { payload: { sectorAbbr: string; subsectorKey: string } }) => {
       state.activeSectorAbbr = action.payload.sectorAbbr;
       state.activeSubsectorKey = action.payload.subsectorKey;
-      state.activeWorldHex = null;
     },
-    setActiveWorldHex: (state, action: { payload: string }) => {
-      state.activeWorldHex = action.payload;
+    setActiveWorldHex: (state, action: { payload: { sectorAbbr: string; hex: string } }) => {
+      state.activeWorldHex = action.payload.hex;
+      state.activeWorldSectorAbbr = action.payload.sectorAbbr;
     },
     clearActiveWorldHex: (state) => {
       state.activeWorldHex = null;
+      state.activeWorldSectorAbbr = null;
+    },
+    setTargetWorldHex: (state, action: { payload: { sectorAbbr: string; hex: string } }) => {
+      state.targetWorldHex = action.payload.hex;
+      state.targetWorldSectorAbbr = action.payload.sectorAbbr;
+    },
+    clearTargetWorldHex: (state) => {
+      state.targetWorldHex = null;
+      state.targetWorldSectorAbbr = null;
     },
   },
   extraReducers: (builder) => {
@@ -71,5 +81,5 @@ const galaxySlice = createSlice({
   },
 });
 
-export const { setActiveSector, setActiveSubsector, setActiveLocation, setActiveWorldHex, clearActiveWorldHex } = galaxySlice.actions;
+export const { setActiveSector, setActiveSubsector, setActiveLocation, setActiveWorldHex, clearActiveWorldHex, setTargetWorldHex, clearTargetWorldHex } = galaxySlice.actions;
 export default galaxySlice.reducer;

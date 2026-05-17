@@ -104,4 +104,7 @@ export interface GalaxyState {
   activeSectorAbbr: string;
   activeSubsectorKey: string;
   activeWorldHex: string | null;
+  activeWorldSectorAbbr: string | null;
+  targetWorldHex: string | null;
+  targetWorldSectorAbbr: string | null;
 }

@@ -155,7 +155,7 @@ const SubsectorNavigator = () => {
                     "relative overflow-hidden w-8.25 aspect-258/372 transition-colors",
                     s
                       ? isActive
-                        ? "bg-(--hud-accent)/20 border border-(--hud-accent)"
+                        ? "bg-(--hud-accent)/8 border border-(--hud-accent)"
                         : "bg-(--hud-surface) border border-transparent hover:border-(--hud-border) cursor-pointer"
                       : "bg-(--hud-bg) border border-transparent cursor-default",
                   ].join(" ")}

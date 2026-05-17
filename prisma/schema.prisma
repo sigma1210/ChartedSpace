@@ -26,6 +26,7 @@ model Character {
   education      Int
   socialStanding Int
   credits        Int              @default(0)
+  sheet          Json?
   currentWorldId String?
   currentWorld   World?           @relation(fields: [currentWorldId], references: [id])
   skills         CharacterSkill[]

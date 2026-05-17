@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "classic-traveller-character",
+  "title": "Classic Traveller Character",
+  "description": "A fully generated Classic Traveller Book 1 character.",
+  "type": "object",
+  "required": ["name", "age", "upp", "skills", "careers", "credits"],
+  "additionalProperties": false,
+
+  "definitions": {
+
+    "upp": {
+      "title": "Universal Person Profile",
+      "type": "object",
+      "required": ["str", "dex", "end", "int", "edu", "soc"],
+      "additionalProperties": false,
+      "properties": {
+        "str": { "type": "integer", "minimum": 1, "maximum": 15 },
+        "dex": { "type": "integer", "minimum": 1, "maximum": 15 },
+        "end": { "type": "integer", "minimum": 1, "maximum": 15 },
+        "int": { "type": "integer", "minimum": 1, "maximum": 15 },
+        "edu": { "type": "integer", "minimum": 1, "maximum": 15 },
+        "soc": { "type": "integer", "minimum": 1, "maximum": 15 }
+      }
+    },
+
+    "skill": {
+      "type": "object",
+      "required": ["name", "level"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "level": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "careerRecord": {
+      "title": "Career Record",
+      "description": "One career served during character generation.",
+      "type": "object",
+      "required": ["career", "terms", "rank", "commissioned"],
+      "additionalProperties": false,
+      "properties": {
+        "career": {
+          "type": "string",
+          "enum": ["navy", "marines", "army", "scouts", "merchants", "other"]
+        },
+        "terms":       { "type": "integer", "minimum": 1, "maximum": 7 },
+        "rank":        { "type": "integer", "minimum": 0, "maximum": 6 },
+        "commissioned": { "type": "boolean" }
+      }
+    },
+
+    "benefits": {
+      "title": "Mustering Out Benefits",
+      "type": "object",
+      "required": ["passages", "ships", "societies", "weapons", "retirementPay"],
+      "additionalProperties": false,
+      "properties": {
+        "passages": {
+          "type": "object",
+          "required": ["low", "middle", "high"],
+          "additionalProperties": false,
+          "properties": {
+            "low":    { "type": "integer", "minimum": 0 },
+            "middle": { "type": "integer", "minimum": 0 },
+            "high":   { "type": "integer", "minimum": 0 }
+          }
+        },
+        "ships": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["scout", "free_trader"] }
+        },
+        "societies": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["TAS"] }
+        },
+        "weapons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Specific weapon names received as benefits (e.g. Cutlass, Laser Rifle)."
+        },
+        "retirementPay": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Annual pension in credits. Null if ineligible (scouts, other, or fewer than 5 terms)."
+        }
+      }
+    },
+
+    "decisionRecord": {
+      "title": "Decision Record",
+      "description": "A single decision made during character generation — used for replay and audit.",
+      "type": "object",
+      "required": ["step", "chosen", "madeBy"],
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "type": "string",
+          "enum": [
+            "characteristics",
+            "career_selection",
+            "enlistment_roll",
+            "survival_roll",
+            "commission_roll",
+            "promotion_roll",
+            "skill_table_choice",
+            "skill_roll",
+            "cascade_roll",
+            "aging_roll",
+            "reenlistment_decision",
+            "muster_roll_type",
+            "muster_roll"
+          ]
+        },
+        "term":    { "type": ["integer", "null"], "minimum": 1 },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "chosen":  { "type": "string" },
+        "roll":    { "type": ["integer", "null"], "description": "The 2D6 or 1D6 result, if applicable." },
+        "madeBy":  { "type": "string", "enum": ["random", "human", "directed"] }
+      }
+    },
+
+    "generation": {
+      "title": "Generation Provenance",
+      "type": "object",
+      "required": ["ruleset", "mode", "decisions"],
+      "additionalProperties": false,
+      "properties": {
+        "ruleset":    { "type": "string", "enum": ["classic"] },
+        "mode":       { "type": "string", "enum": ["random", "guided", "directed"] },
+        "targetRole": { "type": ["string", "null"], "description": "Role archetype used by the directed provider, if any." },
+        "decisions":  { "type": "array", "items": { "$ref": "#/definitions/decisionRecord" } }
+      }
+    }
+
+  },
+
+  "properties": {
+    "name":          { "type": "string", "minLength": 1 },
+    "age":           { "type": "integer", "minimum": 18 },
+    "upp":           { "$ref": "#/definitions/upp" },
+    "skills":        { "type": "array", "items": { "$ref": "#/definitions/skill" } },
+    "careers":       { "type": "array", "items": { "$ref": "#/definitions/careerRecord" }, "minItems": 1 },
+    "credits":       { "type": "integer", "minimum": 0 },
+    "benefits":      { "$ref": "#/definitions/benefits" },
+    "homeWorldId":   { "type": ["string", "null"] },
+    "currentWorldId":{ "type": ["string", "null"] },
+    "generation":    { "$ref": "#/definitions/generation" }
+  }
+}

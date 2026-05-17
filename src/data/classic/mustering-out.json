@@ -1,0 +1,87 @@
+{
+  "_source": "Classic Traveller Book 1. Cross-referenced against pgorman/travellercharactergenerator.",
+  "_notes": [
+    "Each completed term grants 1 muster roll. Rank bonuses (from careers.json musterBonusRolls) add extra rolls.",
+    "Maximum 3 cash table rolls per character (regardless of total rolls available).",
+    "Gambling skill grants DM+1 on cash table.",
+    "Rank 5+ grants DM+1 on material benefits table.",
+    "Die roll is 1D6; DMs may push result above 6 (treat 7+ as entry index 6, 0-based)."
+  ],
+
+  "cash": {
+    "navy":      [1000, 5000, 5000, 10000, 20000, 30000, 50000],
+    "marines":   [2000, 5000, 5000, 10000, 20000, 30000, 40000],
+    "army":      [2000, 5000, 10000, 10000, 10000, 20000, 30000],
+    "scouts":    [20000, 20000, 30000, 30000, 50000, 50000, 50000],
+    "merchants": [1000, 5000, 10000, 20000, 20000, 40000, 40000],
+    "other":     [1000, 5000, 10000, 10000, 10000, 50000, 100000]
+  },
+
+  "benefits": {
+    "navy": [
+      { "type": "passage", "class": "low" },
+      { "type": "stat", "stat": "INT", "delta": 1 },
+      { "type": "stat", "stat": "EDU", "delta": 1 },
+      { "type": "cascade", "name": "blade" },
+      { "type": "society", "name": "TAS" },
+      { "type": "passage", "class": "high" },
+      { "type": "stat", "stat": "SOC", "delta": 2 }
+    ],
+    "marines": [
+      { "type": "passage", "class": "low" },
+      { "type": "stat", "stat": "INT", "delta": 1 },
+      { "type": "stat", "stat": "EDU", "delta": 1 },
+      { "type": "cascade", "name": "blade" },
+      { "type": "society", "name": "TAS" },
+      { "type": "passage", "class": "high" },
+      { "type": "stat", "stat": "SOC", "delta": 2 }
+    ],
+    "army": [
+      { "type": "passage", "class": "low" },
+      { "type": "stat", "stat": "INT", "delta": 1 },
+      { "type": "stat", "stat": "EDU", "delta": 1 },
+      { "type": "cascade", "name": "gun" },
+      { "type": "passage", "class": "high" },
+      { "type": "passage", "class": "middle" },
+      { "type": "stat", "stat": "SOC", "delta": 1 }
+    ],
+    "scouts": [
+      { "type": "passage", "class": "low" },
+      { "type": "stat", "stat": "INT", "delta": 2 },
+      { "type": "stat", "stat": "EDU", "delta": 2 },
+      { "type": "cascade", "name": "blade" },
+      { "type": "cascade", "name": "gun" },
+      { "type": "ship", "name": "scout" },
+      { "type": "stat", "stat": "SOC", "delta": 1 }
+    ],
+    "merchants": [
+      { "type": "passage", "class": "low" },
+      { "type": "stat", "stat": "INT", "delta": 1 },
+      { "type": "stat", "stat": "EDU", "delta": 1 },
+      { "type": "cascade", "name": "gun" },
+      { "type": "cascade", "name": "blade" },
+      { "type": "passage", "class": "low" },
+      { "type": "ship", "name": "free_trader" }
+    ],
+    "other": [
+      { "type": "passage", "class": "low" },
+      { "type": "stat", "stat": "INT", "delta": 1 },
+      { "type": "stat", "stat": "EDU", "delta": 1 },
+      { "type": "cascade", "name": "gun" },
+      { "type": "passage", "class": "high" },
+      { "type": "none" },
+      { "type": "none" }
+    ]
+  },
+
+  "retirementPay": {
+    "_note": "Annual pension in credits for characters who serve 5+ terms (not scouts or other).",
+    "5":  4000,
+    "6":  6000,
+    "7":  8000,
+    "8":  10000,
+    "9":  12000,
+    "10": 14000,
+    "formula": "terms >= 10 ? 12000 + (terms - 9) * 2000 : retirementPay[terms]"
+  }
+}

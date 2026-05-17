@@ -1,0 +1,40 @@
+{
+  "_source": "Classic Traveller Book 1.",
+  "_notes": [
+    "Aging checks apply after each term once the character reaches age 34 (after completing 4 terms, starting age 18).",
+    "For each bracket, roll 2D6 for each listed stat. If the roll is LESS than the target, apply the delta (always negative).",
+    "If a stat is reduced to 0 or below the character dies.",
+    "Medical skill grants DM+1 per level on all aging throws."
+  ],
+
+  "brackets": [
+    {
+      "ageMin": 34,
+      "ageMax": 46,
+      "checks": [
+        { "stat": "STR", "target": 8, "delta": -1 },
+        { "stat": "DEX", "target": 7, "delta": -1 },
+        { "stat": "END", "target": 8, "delta": -1 }
+      ]
+    },
+    {
+      "ageMin": 47,
+      "ageMax": 62,
+      "checks": [
+        { "stat": "STR", "target": 9, "delta": -1 },
+        { "stat": "DEX", "target": 8, "delta": -1 },
+        { "stat": "END", "target": 9, "delta": -1 }
+      ]
+    },
+    {
+      "ageMin": 63,
+      "ageMax": null,
+      "checks": [
+        { "stat": "STR", "target": 9, "delta": -2 },
+        { "stat": "DEX", "target": 9, "delta": -2 },
+        { "stat": "END", "target": 9, "delta": -2 },
+        { "stat": "INT", "target": 9, "delta": -1 }
+      ]
+    }
+  ]
+}

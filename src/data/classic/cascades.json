@@ -1,0 +1,74 @@
+{
+  "_source": "Classic Traveller Book 1. Cascade subtables for weapons and vehicles.",
+  "_notes": [
+    "When a cascade entry is rolled, roll 1D6 on the matching subtable to determine the specific skill or weapon.",
+    "Blade and gun results are weapon proficiencies (skills named after the weapon).",
+    "Vehicle results are vehicle operation skills."
+  ],
+
+  "blade": [
+    "Dagger",
+    "Foil",
+    "Sword",
+    "Cutlass",
+    "Broadsword",
+    "Bayonet"
+  ],
+
+  "blade_extended": [
+    "Dagger",
+    "Foil",
+    "Sword",
+    "Cutlass",
+    "Broadsword",
+    "Bayonet",
+    "Spear",
+    "Halberd",
+    "Pike",
+    "Cudgel"
+  ],
+
+  "gun": [
+    "Body Pistol",
+    "Auto Pistol",
+    "Revolver",
+    "Rifle",
+    "Auto Rifle",
+    "Shotgun"
+  ],
+
+  "gun_extended": [
+    "Body Pistol",
+    "Auto Pistol",
+    "Revolver",
+    "Carbine",
+    "Rifle",
+    "Auto Rifle",
+    "Shotgun",
+    "SMG",
+    "Laser Carbine",
+    "Laser Rifle"
+  ],
+
+  "vehicle": [
+    "Aircraft (prop)",
+    "Aircraft (jet)",
+    "Helicopter",
+    "Grav Vehicle",
+    "Tracked Vehicle",
+    "Wheeled Vehicle"
+  ],
+
+  "vehicle_extended": [
+    "Aircraft (prop)",
+    "Aircraft (jet)",
+    "Helicopter",
+    "Grav Vehicle",
+    "Tracked Vehicle",
+    "Wheeled Vehicle",
+    "Large Watercraft",
+    "Small Watercraft",
+    "Hovercraft",
+    "Submersible"
+  ]
+}
