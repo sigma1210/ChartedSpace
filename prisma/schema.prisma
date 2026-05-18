@@ -7,11 +7,13 @@ datasource db {
 }
 
 model User {
-  id         String      @id @default(cuid())
-  clerkId    String      @unique
-  username   String?
-  characters Character[]
-  createdAt  DateTime    @default(now())
+  id          String      @id @default(cuid())
+  clerkId     String      @unique
+  username    String?
+  characters  Character[]
+  ship        Ship?
+  currentTurn Int         @default(1)
+  createdAt   DateTime    @default(now())
 }
 
 model Character {
@@ -31,6 +33,8 @@ model Character {
   currentWorld   World?           @relation(fields: [currentWorldId], references: [id])
   skills         CharacterSkill[]
   locationLog    LocationLog[]
+  crewAssignment ShipCrew?
+  shipPassage    ShipPassenger?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 }
@@ -89,6 +93,62 @@ model World {
   worldsInSystem Int           @default(0)
   characters     Character[]
   locationLogs   LocationLog[]
+  dockedShips    Ship[]        @relation("ShipCurrentWorld")
+  inboundShips   Ship[]        @relation("ShipDestinationWorld")
+  cargoOrigins   CargoLot[]
 
   @@unique([sectorId, hex])
+}
+
+model Ship {
+  id                  String          @id @default(cuid())
+  name                String
+  type                String
+  jumpRating          Int
+  isMortgaged         Boolean         @default(true)
+  mortgagePaid        Int             @default(0)
+  status              String          @default("docked")
+  sheet               Json?
+  currentWorldId      String?
+  currentWorld        World?          @relation("ShipCurrentWorld", fields: [currentWorldId], references: [id])
+  destinationWorldId  String?
+  destinationWorld    World?          @relation("ShipDestinationWorld", fields: [destinationWorldId], references: [id])
+  jumpArrivesTurn     Int?
+  userId              String?         @unique
+  user                User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  crew                ShipCrew[]
+  passengers          ShipPassenger[]
+  cargo               CargoLot[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model ShipCrew {
+  id          String    @id @default(cuid())
+  shipId      String
+  ship        Ship      @relation(fields: [shipId], references: [id], onDelete: Cascade)
+  characterId String    @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  role        String
+}
+
+model ShipPassenger {
+  id          String    @id @default(cuid())
+  shipId      String
+  ship        Ship      @relation(fields: [shipId], references: [id], onDelete: Cascade)
+  characterId String    @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  passage     String
+}
+
+model CargoLot {
+  id            String   @id @default(cuid())
+  shipId        String
+  ship          Ship     @relation(fields: [shipId], references: [id], onDelete: Cascade)
+  commodity     String
+  tons          Int
+  purchasePrice Int
+  originWorldId String
+  originWorld   World    @relation(fields: [originWorldId], references: [id])
+  acquiredAt    DateTime @default(now())
 }

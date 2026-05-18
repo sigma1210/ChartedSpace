@@ -25,8 +25,7 @@ Traveller RPG companion app. Players track characters, ships, and adventures acr
 /                          Landing page + embedded sign-in form (public)
 /sign-up/[[...sign-up]]/   Custom sign-up form, catch-all (public)
 /verify                    OAuth callback handler (public)
-/map                       Post-auth destination, future SPA (protected)
-/(app)/app                 Existing cockpit view (protected)
+/map                       Post-auth destination, interactive galaxy map SPA (protected)
 ```
 
 Middleware lives in `src/proxy.ts` — NOT `middleware.ts`. Public routes are declared there with `createRouteMatcher`.
@@ -165,15 +164,21 @@ Typography is always `font-mono`, labels are `uppercase tracking-widest text-xs`
 - Auth check in `src/lib/auth.ts`
 - Classic Traveller Book 1 character generation engine (see Character Generation section below)
 - "Create Character" button in the `/map` header — opens `CharacterCreateModal`
-- `CharacterCreateModal` supports two modes: **Random** (instant full lifepath) and **Guided** (step-by-step, player makes every choice via `HumanDecisionProvider`)
+- `CharacterCreateModal` supports two modes: **Random** (instant full lifepath) and **Guided** (step-by-step, player makes every choice via `HumanDecisionProvider`). Player generates characters until satisfied, then saves manually.
+- **Character persistence** — `POST /api/characters` saves a `CharacterSheet` to the database; `GET /api/characters` returns the list; `PATCH /api/characters/[id]` updates name or sheet; `DELETE /api/characters/[id]` removes a character. DEV_MODE bypasses auth and saves with `userId: null`.
+- **Character Redux slice** (`src/store/slices/characterSlice.ts`) — `CharacterSummary` type, `fetchCharacters` thunk (condition guard prevents duplicate fetches), `invalidateCharacters` (resets to idle so next open re-fetches), `updateCharacterInList` (in-place name update after PATCH).
+- **Character selectors** (`src/store/selectors/character.selectors.ts`) — `selectCharacters`, `selectCharactersStatus`, `selectCurrentCharacter` (cross-slice: looks up `state.ui.activeCharacterId` in `state.characters.items`).
+- **`CharacterListModal`** — opens via `CharacterListButton` in header; fetches on open; dispatches `openCharacterProfile(id)` on row click.
+- **`CharacterProfileModal`** — shows UPP, stats, skills, credits, location; unnamed characters get a name-input prompt that PATCHes the API and updates Redux in-place. `useEffect` resets local state on `char?.id` change to prevent stale name/save-state across selections.
+- **`CharacterAvatar`** — badge in the header showing initials of the current character; click opens `CharacterProfileModal`.
+- **Trade System card** (`src/components/map/TradeValuesCard.tsx`) — collapsible panel to the right of the hex grid. Shows origin world (sector › subsector › name, trade code badges, TL badge, purchase cost) and destination world (same fields + expected sale price). `CodeBadge` component shows hover tooltip with full trade classification name.
 
 ## What is next
 
+- **Ships** — Free Trader (Type A) as the first ship type. See Ship schema section below.
 - **Directed provider** — `RoleDirectedDecisionProvider` in `src/lib/characters/providers/directed.ts` that weights choices toward a target role archetype. Add a third "Directed" mode card to `CharacterCreateModal`.
-- **Save character** — server action to write the completed `CharacterSheet` to the database (`sheet` JSON blob + tabular columns on the `Character` model). Requires the user to be authenticated and the Clerk webhook sync to be in place.
 - Clerk webhooks at `src/app/api/webhooks/clerk/route.ts` — sync `user.created`, `user.updated`, `user.deleted` to the database. Requires `/api/webhooks/clerk` added to public routes in `proxy.ts` and `CLERK_WEBHOOK_SIGNING_SECRET` in env.
 - Wire `src/actions/user.ts` to the database after webhook sync is in place.
-- Save generated characters to the database (write the `sheet` JSON blob + tabular columns to the `Character` model).
 - Stellar color on star field dots (spectral class → color mapping already stubbed)
 - Character/ship pinning to worlds
 
@@ -259,11 +264,12 @@ M N O P
 | `src/components/map/SectorMapGrid.tsx` | 4×4 CSS grid of all 16 subsectors as a full sector overview. Uses `scale={0.5/1.2}` on each HexGrid. |
 | `src/components/map/StarField.tsx` | Interactive 4×4 grid of subsector star-dot panels. Replaces the subsector minimap — clicking a cell sets the active subsector. Props: `sectorAbbr`, `activeKey`, `onSelectKey`. Cells are `w-7 aspect-258/372`. |
 | `src/components/map/GalaxyStarField.tsx` | Single-sector star-dot SVG (`absolute inset-0 w-full h-full`) used inside each galaxy grid cell. Dispatches `loadSector` on mount; condition guard makes it safe to render in bulk. |
-| `src/components/map/SubsectorNavigator.tsx` | Main map UI — three-column layout (see below). |
+| `src/components/map/SubsectorNavigator.tsx` | Main map UI — four-column layout (see below). |
+| `src/components/map/TradeValuesCard.tsx` | Collapsible Trade System panel — origin/destination world trade codes, TL, cost, expected sale price. |
 
 ### SubsectorNavigator layout
 
-Three columns, `flex gap-4 items-start`:
+Four columns, `flex gap-4 items-start`:
 
 **Column 1 — Galaxy overview (9×9 grid)**
 - `GRID_SIZE = 9`, `COORD_MIN = -4` — maps sector X/Y coordinates to grid positions
@@ -286,14 +292,22 @@ Three columns, `flex gap-4 items-start`:
   - Bottom edge → neighbor(0,1), subsector row 0: `KEYS[subCol]`
 - Arrow buttons are disabled (not hidden) when no neighboring sector exists in that direction
 
+**Column 4 — Trade System panel**
+- `TradeValuesCard` — collapsible; shows origin world and destination (hovered) world side by side
+- `CodeBadge` — `relative group` wrapper; trade code in bordered box; full label appears on hover via `opacity-0 group-hover:opacity-100` tooltip
+
 ### `/map` route files
 
 ```
-src/app/map/layout.tsx              Wraps route in <StoreProvider> — required for Redux
-src/app/map/page.tsx                Header + SubsectorNavigator + WorldDetailModal + CharacterCreateModal
-src/app/map/DevLogoutButton.tsx     Dev-only logout, shown when DEV_MODE=true
+src/app/map/layout.tsx                  Wraps route in <StoreProvider> — required for Redux
+src/app/map/page.tsx                    Header + SubsectorNavigator + modals
+src/app/map/DevLogoutButton.tsx         Dev-only logout, shown when DEV_MODE=true
 src/app/map/CreateCharacterButton.tsx   Header button — dispatches openCharacterCreate()
+src/app/map/CharacterListButton.tsx     Header button — dispatches openCharacterList()
+src/app/map/CharacterAvatar.tsx         Header badge — shows initials of current character; click opens profile
 src/app/map/CharacterCreateModal.tsx    Character generation modal (see Character Generation below)
+src/components/modals/CharacterListModal.tsx     Lists saved characters; fetches on open via fetchCharacters thunk
+src/components/modals/CharacterProfileModal.tsx  Shows UPP/stats/skills; name prompt for unnamed characters
 ```
 
 ---
@@ -391,3 +405,54 @@ async decide(point: DecisionPoint): Promise<string> {
 ```
 
 The modal holds the provider in a `useRef` so it survives re-renders. `handleChoice(point, id)` calls `provider.choose(id)` → the engine's awaited promise resolves → next step begins immediately (synchronous dice rolls) → next `DecisionPoint` is emitted (or generation completes).
+
+---
+
+## Ships
+
+Ships are the vehicle characters use to move between worlds. Without a ship a character cannot travel. The only ship type in MVP is the **Free Trader (Type A)**.
+
+### Static ship types — `src/data/classic/ships.json`
+
+One entry per ship class, analogous to `careers.json`. Fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | string | Unique key — `"free_trader"` |
+| `designation` | string | CT designation — `"Type A"` |
+| `hullTons` | number | 200 |
+| `jumpRating` | number | 1 — determines jump range in parsecs on the map |
+| `maneuverRating` | number | 1G |
+| `fuelCostPerJump` | number | Credits — 20 tons × Cr500/ton = Cr10,000 |
+| `cargoCapacity` | number | 82 tons |
+| `stateroomsTotal` | number | 10 (4 crew + 6 passenger) |
+| `stateroomsCrew` | number | 4 |
+| `stateroomsPassenger` | number | 6 |
+| `lowBerths` | number | 20 |
+| `hardpoints` | number | 1 |
+| `computer` | string | `"Model/1bis"` |
+| `purchasePrice` | number | Cr28,000,000 |
+| `monthlyMortgage` | number | Cr150,920 |
+| `mortgageYears` | number | 40 |
+| `requiredCrew` | string[] | `["pilot", "navigator", "engineer", "steward"]` |
+
+### Prisma models
+
+```
+Ship            — instance data: name, type, jumpRating, mortgage status, location, owner
+ShipCrew        — which characters fill which crew roles (pilot/navigator/engineer/steward)
+ShipPassenger   — characters explicitly boarded as passengers (high/middle/low passage)
+CargoLot        — individual trade lots: commodity, tons, purchase price per ton, origin world
+```
+
+**Ownership** is single-character for MVP (`ownerId` FK on Ship). Co-ownership comes later.
+
+**Fuel** is abstracted to a credit cost per jump (`fuelCostPerJump` from the type template). No tonnage tracking.
+
+**Cargo** is a full manifest — each `CargoLot` records what was bought, how many tons, at what price, and from which world. This feeds into the trade route profit calculation.
+
+**Travel** uses explicit boarding — characters must be on a `ShipCrew` or `ShipPassenger` record to travel with the ship. When the ship jumps to a new world, its `currentWorldId` updates and all boarded characters move with it.
+
+### Jump range on the map
+
+`jumpRating` maps directly to hex distance on the subsector grid. A J-1 ship can reach any world within 1 parsec (1 hex). The map already has hex geometry and world coordinates — jump range filtering will use the same distance calculation as the nav arrows.

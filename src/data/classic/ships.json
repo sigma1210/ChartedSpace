@@ -1,0 +1,21 @@
+[
+  {
+    "type": "free_trader",
+    "designation": "Type A",
+    "hullTons": 200,
+    "jumpRating": 1,
+    "maneuverRating": 1,
+    "fuelCostPerJump": 10000,
+    "cargoCapacity": 82,
+    "stateroomsTotal": 10,
+    "stateroomsCrew": 4,
+    "stateroomsPassenger": 6,
+    "lowBerths": 20,
+    "hardpoints": 1,
+    "computer": "Model/1bis",
+    "purchasePrice": 28000000,
+    "monthlyMortgage": 150920,
+    "mortgageYears": 40,
+    "requiredCrew": ["pilot", "navigator", "engineer", "steward"]
+  }
+]
