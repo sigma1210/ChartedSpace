@@ -3,6 +3,7 @@ import uiReducer from "./slices/uiSlice";
 import notificationsReducer from "./slices/notificationsSlice";
 import galaxyReducer from "./slices/galaxySlice";
 import characterReducer from "./slices/characterSlice";
+import shipReducer from "./slices/shipSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     notifications: notificationsReducer,
     galaxy: galaxyReducer,
     characters: characterReducer,
+    ship: shipReducer,
   },
 });
 

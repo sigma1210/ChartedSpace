@@ -97,6 +97,18 @@ export interface SectorDetail {
 
 export type SectorLoadStatus = "idle" | "loading" | "loaded" | "error";
 
+export interface WorldCoord {
+  hex:        string;
+  sectorAbbr: string;
+}
+
+export type MapMode = "galaxyMiniMap" | "subsectorMiniMap";
+
+export interface WorldDotStyle {
+  fill: string;
+  r:    number;
+}
+
 export interface GalaxyState {
   sectors: SectorMeta[];
   sectorData: Record<string, SectorDetail>;

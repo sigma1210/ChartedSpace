@@ -1,25 +1,20 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/actions/user";
 import type { Prisma } from "@prisma/client";
 import type { CharacterSheet } from "@/lib/characters/types";
-
-const DEV_MODE = process.env.DEV_MODE === "true";
+import { getClerkId } from "@/lib/devAuth";
 
 type Params = { params: Promise<{ id: string }> };
 
-// Resolve the authenticated DB user. Returns null in DEV_MODE (ownership skipped).
-const resolveDbUser = async (clerkId: string | null) => {
-  if (DEV_MODE) return null;
-  if (!clerkId) return undefined; // undefined = unauthenticated
-  return await getUser(clerkId); // null = authenticated but no DB record
+const resolveDbUser = async () => {
+  const clerkId = await getClerkId();
+  if (!clerkId) return undefined;
+  return await getUser(clerkId);
 };
 
-// Confirm the caller owns the character, or that DEV_MODE bypasses ownership.
 const canModify = (characterUserId: string | null, dbUserId: string | null | undefined): boolean => {
-  if (DEV_MODE) return true;
-  if (dbUserId === undefined) return false; // unauthenticated
+  if (dbUserId === undefined) return false;
   return characterUserId === dbUserId;
 };
 
@@ -28,8 +23,7 @@ const canModify = (characterUserId: string | null, dbUserId: string | null | und
 export const PATCH = async (request: Request, { params }: Params) => {
   try {
     const { id } = await params;
-    const { userId: clerkId } = await auth();
-    const dbUser = await resolveDbUser(clerkId);
+    const dbUser = await resolveDbUser();
 
     const character = await prisma.character.findUnique({ where: { id } });
     if (!character) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -73,8 +67,7 @@ export const PATCH = async (request: Request, { params }: Params) => {
 export const DELETE = async (_request: Request, { params }: Params) => {
   try {
     const { id } = await params;
-    const { userId: clerkId } = await auth();
-    const dbUser = await resolveDbUser(clerkId);
+    const dbUser = await resolveDbUser();
 
     const character = await prisma.character.findUnique({ where: { id } });
     if (!character) return NextResponse.json({ error: "Not found" }, { status: 404 });

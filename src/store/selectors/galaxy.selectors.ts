@@ -1,5 +1,5 @@
 import type { RootState } from "../index";
-import type { World } from "../../types";
+import type { World, WorldCoord, MapMode, WorldDotStyle } from "../../types";
 
 const hx = (s: string) => parseInt(s, 16);
 
@@ -615,6 +615,31 @@ export const selectActiveWorldLocation = (
     sectorName: sectorData.sector,
     subsectorKey,
     subsectorName: sectorData.subsectors[subsectorKey] ?? subsectorKey,
+  };
+};
+
+export const selectWorldDotStyle = (state: RootState) => {
+  const activeHex    = state.galaxy.activeWorldHex;
+  const activeSector = state.galaxy.activeWorldSectorAbbr;
+  const targetHex    = state.galaxy.targetWorldHex;
+  const targetSector = state.galaxy.targetWorldSectorAbbr;
+  const shipHex      = state.ship.ship?.hex    ?? null;
+  const shipSector   = state.ship.ship?.sectorAbbr ?? null;
+
+  return (coord: WorldCoord, mode: MapMode): WorldDotStyle => {
+    const { hex, sectorAbbr } = coord;
+    const selectedR = mode === "galaxyMiniMap" ? 20 : 10;
+
+    if (shipHex && shipSector && shipHex === hex && shipSector === sectorAbbr) {
+      return { fill: "var(--hud-ship)",    r: selectedR * 2 };
+    }
+    if (activeHex === hex && activeSector === sectorAbbr) {
+      return { fill: "var(--hud-error)",   r: selectedR };
+    }
+    if (targetHex === hex && targetSector === sectorAbbr) {
+      return { fill: "var(--hud-success)", r: selectedR };
+    }
+    return { fill: "white", r: 5 };
   };
 };
 

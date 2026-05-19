@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { selectActiveModal } from "../../store/selectors/ui.selectors";
 import { closeModal } from "../../store/slices/uiSlice";
-import { invalidateCharacters } from "../../store/slices/characterSlice";
+import { invalidateCharacters, fetchCharacters } from "../../store/slices/characterSlice";
+import { selectCharacters, selectCharactersStatus } from "../../store/selectors/character.selectors";
 import { generateCharacter, CharacterDeathError } from "../../lib/characters/engine";
 import { RandomDecisionProvider } from "../../lib/characters/providers/random";
 import {
@@ -182,12 +183,22 @@ const SheetDisplay = ({ sheet }: { sheet: CharacterSheet }) => {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
+const CREW_ROLES = [
+  { id: "pilot",     label: "Pilot",     desc: "Flies the ship" },
+  { id: "navigator", label: "Navigator", desc: "Plots jump routes" },
+  { id: "engineer",  label: "Engineer",  desc: "Maintains drives and power plant" },
+  { id: "steward",   label: "Steward",   desc: "Passengers and cargo" },
+] as const;
+
+type CrewRoleId = typeof CREW_ROLES[number]["id"];
 type Phase = "idle" | "running" | "deciding" | "complete" | "dead";
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 const CharacterCreateModal = () => {
   const dispatch = useAppDispatch();
   const activeModal = useAppSelector(selectActiveModal);
+  const characters    = useAppSelector(selectCharacters);
+  const charStatus    = useAppSelector(selectCharactersStatus);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
@@ -197,9 +208,16 @@ const CharacterCreateModal = () => {
   const [charName, setCharName] = useState("Unnamed Traveller");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<CrewRoleId | null>(null);
   const providerRef = useRef<HumanDecisionProvider | null>(null);
 
+  useEffect(() => {
+    if (activeModal === "characterCreate") dispatch(fetchCharacters());
+  }, [activeModal, dispatch]);
+
   if (activeModal !== "characterCreate") return null;
+
+  const isFirstCharacter = characters.length === 0;
 
   const reset = () => {
     providerRef.current?.cancel();
@@ -212,6 +230,7 @@ const CharacterCreateModal = () => {
     setCharName("Unnamed Traveller");
     setSaveState("idle");
     setSavedId(null);
+    setSelectedRole(null);
   };
 
   const handleClose = () => {
@@ -268,12 +287,17 @@ const CharacterCreateModal = () => {
   // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!sheet || saveState === "saving" || saveState === "saved") return;
+    if (isFirstCharacter && !selectedRole) return;
     setSaveState("saving");
     try {
       const res = await fetch("/api/characters", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheet, name: charName }),
+        body: JSON.stringify({
+          sheet,
+          name: charName,
+          ...(isFirstCharacter && selectedRole ? { role: selectedRole } : {}),
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -456,6 +480,32 @@ const CharacterCreateModal = () => {
             <div className="flex flex-col gap-2 pt-3 border-t border-(--hud-border)/40">
               {saveState !== "saved" ? (
                 <>
+                  {/* Role picker — first character only */}
+                  {isFirstCharacter && (
+                    <div className="flex flex-col gap-2">
+                      <span className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim)">
+                        Choose Your Crew Role
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {CREW_ROLES.map(r => (
+                          <button
+                            key={r.id}
+                            onClick={() => setSelectedRole(r.id)}
+                            className={[
+                              "flex flex-col gap-0.5 px-3 py-2 border text-left transition-colors",
+                              selectedRole === r.id
+                                ? "border-(--hud-accent) bg-(--hud-accent)/5 text-(--hud-accent)"
+                                : "border-(--hud-border) hover:border-(--hud-accent) text-(--hud-text)",
+                            ].join(" ")}
+                          >
+                            <span className="font-mono text-xs uppercase tracking-wider">{r.label}</span>
+                            <span className="font-mono text-[9px] text-(--hud-text-dim)">{r.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-1">
                     <label className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim)">
                       Character Name
@@ -471,7 +521,7 @@ const CharacterCreateModal = () => {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={handleSave}
-                      disabled={saveState === "saving" || !charName.trim()}
+                      disabled={saveState === "saving" || !charName.trim() || (isFirstCharacter && !selectedRole)}
                       className="font-mono text-xs uppercase tracking-widest px-3 py-1.5 border border-(--hud-accent) text-(--hud-accent) hover:bg-(--hud-accent)/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       {saveState === "saving" ? "Saving…" : "Save Character"}

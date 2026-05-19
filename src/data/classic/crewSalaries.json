@@ -1,0 +1,8 @@
+{
+  "pilot":     6000,
+  "navigator": 5000,
+  "engineer":  4000,
+  "steward":   3000,
+  "gunner":    2000,
+  "medic":     3000
+}

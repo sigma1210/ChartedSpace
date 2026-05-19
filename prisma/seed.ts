@@ -70,6 +70,13 @@ function subsectorLetter(hexX: number, hexY: number): string {
 }
 
 async function main() {
+  await prisma.user.upsert({
+    where:  { clerkId: "dev_user_local" },
+    create: { clerkId: "dev_user_local", username: "dev" },
+    update: {},
+  });
+  console.log("Dev user upserted.");
+
   const galaxyDir = path.resolve(__dirname, "../Galaxy");
   const sectorsIndexPath = path.join(galaxyDir, "sectors.json");
   const sectorsDir = path.join(galaxyDir, "sectors");

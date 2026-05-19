@@ -124,12 +124,15 @@ model Ship {
 }
 
 model ShipCrew {
-  id          String    @id @default(cuid())
-  shipId      String
-  ship        Ship      @relation(fields: [shipId], references: [id], onDelete: Cascade)
-  characterId String    @unique
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  role        String
+  id              String     @id @default(cuid())
+  shipId          String
+  ship            Ship       @relation(fields: [shipId], references: [id], onDelete: Cascade)
+  characterId     String?    @unique
+  character       Character? @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  npcName         String?
+  role            String
+  isOwnerOperator Boolean    @default(false)
+  monthlySalary   Int        @default(0)
 }
 
 model ShipPassenger {

@@ -8,17 +8,16 @@ import {
   selectActiveSectorAbbr,
   selectActiveSubsectorKey,
 } from "../../store/selectors/galaxy.selectors";
-import { setActiveSector, setActiveSubsector, setActiveLocation } from "../../store/slices/galaxySlice";
+import { setActiveLocation } from "../../store/slices/galaxySlice";
 import type { SectorMeta, SectorDetail } from "../../types";
-import SubsectorGrid from "./SubsectorGrid";
-import StarField from "./StarField";
-import GalaxyStarField from "./GalaxyStarField";
-import TradeValuesCard from "./TradeValuesCard";
 
+import SubsectorGrid from "./SubsectorGrid";
+import GalaxyMiniMap from "./GalaxyMiniMap";
+import SectorMiniMap from "./SectorMiniMap";
+import TradeValuesCard from "./TradeValuesCard";
+import ShipCard from "./ShipCard";
 
 const KEYS = "ABCDEFGHIJKLMNOP";
-const COORD_MIN = -4;
-const GRID_SIZE = 9;
 
 // ── Navigation target ────────────────────────────────────────────────────────
 
@@ -109,80 +108,25 @@ const NavButton = ({ target, icon, onNavigate, vertical = false }: NavButtonProp
 // ── Component ────────────────────────────────────────────────────────────────
 
 const SubsectorNavigator = () => {
-  const dispatch = useAppDispatch();
+  const dispatch         = useAppDispatch();
   const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
-  const activeKey = useAppSelector(selectActiveSubsectorKey);
-  const allSectors = useAppSelector(selectAllSectors);
-  const sector = useAppSelector(selectSectorData(activeSectorAbbr));
+  const activeKey        = useAppSelector(selectActiveSubsectorKey);
+  const allSectors       = useAppSelector(selectAllSectors);
+  const sector           = useAppSelector(selectSectorData(activeSectorAbbr));
 
-  const sectorByCoord = new Map(allSectors.map((s) => [`${s.X},${s.Y}`, s]));
-
-  const nav = buildNavTargets(activeKey, activeSectorAbbr, allSectors, sector, sectorByCoord);
+  const sectorByCoord = new Map(allSectors.map(s => [`${s.X},${s.Y}`, s]));
+  const nav           = buildNavTargets(activeKey, activeSectorAbbr, allSectors, sector, sectorByCoord);
 
   const navigate = (target: NavTarget) => {
     dispatch(setActiveLocation({ sectorAbbr: target.sectorAbbr, subsectorKey: target.subsectorKey }));
   };
 
-  const selectSector = (abbr: string) => {
-    dispatch(setActiveSector(abbr));
-  };
-
   return (
     <div className="flex gap-4 items-start">
 
-      {/* Galaxy overview — 9×9 grid */}
-      <div className="flex flex-col gap-2 shrink-0">
-        <span className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim)">
-          Charted Space
-        </span>
-        <div
-          className="grid gap-px bg-(--hud-border-subtle)"
-          style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, max-content)` }}
-        >
-          {Array.from({ length: GRID_SIZE }, (_, rowIdx) =>
-            Array.from({ length: GRID_SIZE }, (_, colIdx) => {
-              const gx = COORD_MIN + colIdx;
-              const gy = COORD_MIN + rowIdx;
-              const s = sectorByCoord.get(`${gx},${gy}`);
-              const isActive = s?.Abbreviation === activeSectorAbbr;
+      <GalaxyMiniMap />
 
-              return (
-                <button
-                  key={`${gx},${gy}`}
-                  title={s ? sectorLabel(s) : ""}
-                  disabled={!s}
-                  onClick={() => s && selectSector(s.Abbreviation)}
-                  className={[
-                    "relative overflow-hidden w-8.25 aspect-258/372 transition-colors",
-                    s
-                      ? isActive
-                        ? "bg-(--hud-accent)/8 border border-(--hud-accent)"
-                        : "bg-(--hud-surface) border border-transparent hover:border-(--hud-border) cursor-pointer"
-                      : "bg-(--hud-bg) border border-transparent cursor-default",
-                  ].join(" ")}
-                >
-                  {s && <GalaxyStarField sectorAbbr={s.Abbreviation} />}
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Sector subsector minimap — StarField 4×4 */}
-      <div className="flex flex-col gap-2 shrink-0">
-        <span className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim)">
-          {sector?.sector ?? activeSectorAbbr}
-        </span>
-        <StarField
-          sectorAbbr={activeSectorAbbr}
-          activeKey={activeKey}
-          onSelectKey={(key) => dispatch(setActiveSubsector(key))}
-        />
-        <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-accent)">
-          {sector?.subsectors[activeKey] ?? activeKey}
-        </span>
-      </div>
+      <SectorMiniMap />
 
       {/* Subsector hex map with directional nav */}
       <div className="flex flex-col items-center gap-1">
@@ -203,8 +147,11 @@ const SubsectorNavigator = () => {
         <NavButton target={nav.down}  icon={<ChevronDown  size={10} />} onNavigate={navigate} />
       </div>
 
-      {/* Trade values panel */}
-      <TradeValuesCard />
+      {/* Right panel — trade + ship */}
+      <div className="flex flex-col gap-2">
+        <TradeValuesCard />
+        <ShipCard />
+      </div>
     </div>
   );
 };

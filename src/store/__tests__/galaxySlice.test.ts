@@ -36,7 +36,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   });
 
 const makeRoot = (galaxy: GalaxyState): RootState =>
-  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"] });
+  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], ship: {} as RootState["ship"] });
 
 describe("galaxySlice reducers", () => {
   it("populates sectors from the index on initialization", () => {

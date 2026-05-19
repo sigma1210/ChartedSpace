@@ -50,6 +50,9 @@ const uiSlice = createSlice({
       state.activeModal = "characterCreate";
       state.activeCharacterId = null;
     },
+    setActiveCharacter(state, action: PayloadAction<string>) {
+      state.activeCharacterId = action.payload;
+    },
     openMap(state, action: PayloadAction<MapView | undefined>) {
       state.previousModal = state.activeModal;
       state.activeModal = "map";
@@ -108,6 +111,7 @@ export const {
   openCharacterList,
   openCharacterProfile,
   openCharacterCreate,
+  setActiveCharacter,
   openMap,
   setMapView,
   setActiveSector,
