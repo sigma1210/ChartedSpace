@@ -6,6 +6,7 @@ import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { fetchShip, invalidateShip } from "../../store/slices/shipSlice";
 import { invalidateCharacters } from "../../store/slices/characterSlice";
 import { selectShip, selectShipStatus } from "../../store/selectors/ship.selectors";
+import { openCrewManagement } from "../../store/slices/uiSlice";
 
 const ROLE_LABELS: Record<string, string> = {
   pilot:     "PILOT",
@@ -162,8 +163,8 @@ const ShipCard = () => {
                       <span className="w-9 shrink-0 text-(--hud-text-dim)">
                         {ROLE_LABELS[c.role] ?? c.role.toUpperCase()}
                       </span>
-                      <span className={`flex-1 truncate ${c.characterName ? "text-(--hud-text)" : "text-(--hud-text-dim) italic"}`}>
-                        {c.characterName ?? "—"}
+                      <span className={`flex-1 truncate ${c.characterName ?? c.npcName ? "text-(--hud-text)" : "text-(--hud-text-dim) italic"}`}>
+                        {c.characterName ?? c.npcName ?? "—"}
                       </span>
                       {c.isOwnerOperator && (
                         <span className="text-(--hud-accent)" title="Owner-operator">★</span>
@@ -172,6 +173,18 @@ const ShipCard = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Crew management button — docked only */}
+              {ship.status === "docked" && (
+                <div className="p-2 pt-0">
+                  <button
+                    onClick={() => dispatch(openCrewManagement())}
+                    className="w-full font-mono text-[9px] uppercase tracking-widest border border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) px-2 py-1 transition-colors"
+                  >
+                    Manage Crew
+                  </button>
+                </div>
+              )}
 
               {/* Cargo */}
               <div>

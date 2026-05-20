@@ -31,11 +31,15 @@ export const PATCH = async (request: Request, { params }: Params) => {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body: { name?: string; sheet?: CharacterSheet } = await request.json();
+    const body: { name?: string; sheet?: CharacterSheet; credits?: number } = await request.json();
     const updates: Record<string, unknown> = {};
 
     if (typeof body.name === "string" && body.name.trim()) {
       updates.name = body.name.trim();
+    }
+
+    if (typeof body.credits === "number" && Number.isInteger(body.credits)) {
+      updates.credits = Math.max(0, body.credits);
     }
 
     if (body.sheet) {

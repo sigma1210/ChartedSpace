@@ -6,6 +6,8 @@ import { loadSector } from "../../store/slices/galaxySlice";
 import { selectSectorData, selectSectorLoadStatus } from "../../store/selectors/galaxy.selectors";
 import { setActiveWorldHex, setTargetWorldHex, clearTargetWorldHex } from "../../store/slices/galaxySlice";
 import { selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
+import { selectShip, selectShipColor } from "../../store/selectors/ship.selectors";
+import { parseHex } from "../../lib/hex";
 import HexGrid from "./HexGrid";
 
 interface SubsectorGridProps {
@@ -34,6 +36,8 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
   const status = useAppSelector(selectSectorLoadStatus(sectorAbbr));
   const sector = useAppSelector(selectSectorData(sectorAbbr));
   const activeWorldHex = useAppSelector(selectActiveWorldHex);
+  const ship      = useAppSelector(selectShip);
+  const shipColor = useAppSelector(selectShipColor);
 
   useEffect(() => {
     dispatch(loadSector(sectorAbbr));
@@ -89,6 +93,16 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
       allegiance: w.allegiance || null,
     }));
 
+  // Ship position in subsector-local coords, or null if ship is elsewhere
+  const shipLocalHex = (() => {
+    if (!ship?.hex || ship.sectorAbbr !== sectorAbbr) return undefined;
+    const coord = parseHex(ship.hex);
+    if (!coord) return undefined;
+    const { col, row } = coord;
+    if (col < hexXStart || col > hexXEnd || row < hexYStart || row > hexYEnd) return undefined;
+    return { hexX: col - hexXStart + 1, hexY: row - hexYStart + 1 };
+  })();
+
   return (
     <div className="flex flex-col gap-2">
       {showHeader && (
@@ -104,6 +118,8 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
         onSelectWorld={(id) => dispatch(setActiveWorldHex({ sectorAbbr, hex: id }))}
         onHoverWorld={(id) => dispatch(setTargetWorldHex({ sectorAbbr, hex: id }))}
         onLeaveGrid={() => dispatch(clearTargetWorldHex())}
+        shipHex={shipLocalHex}
+        shipColor={shipColor}
       />
     </div>
   );

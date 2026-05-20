@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import {
+  JumpDestination,
   MapView,
   ModalType,
   SearchFilter,
@@ -18,6 +19,7 @@ const initialState: UIState = {
   searchFilter: "all",
   searchQuery: "",
   previousModal: null,
+  pendingJumpDestination: null,
 };
 
 const uiSlice = createSlice({
@@ -101,6 +103,23 @@ const uiSlice = createSlice({
       state.isOwnProfile = false;
       state.activeUserId = action.payload;
     },
+    openJumpRangeSelector(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "jumpRangeSelector";
+      state.pendingJumpDestination = null;
+    },
+    openCrewManagement(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "crewManagement";
+    },
+    setJumpDestination(state, action: PayloadAction<JumpDestination>) {
+      state.pendingJumpDestination = action.payload;
+      state.activeModal = null;
+      state.previousModal = null;
+    },
+    clearJumpDestination(state) {
+      state.pendingJumpDestination = null;
+    },
   },
 });
 
@@ -123,6 +142,10 @@ export const {
   openNotifications,
   openOwnProfile,
   openUserProfile,
+  openJumpRangeSelector,
+  setJumpDestination,
+  clearJumpDestination,
+  openCrewManagement,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

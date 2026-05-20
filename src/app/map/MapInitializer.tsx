@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { fetchCharacters } from "../../store/slices/characterSlice";
 import { fetchShip } from "../../store/slices/shipSlice";
+import { fetchTurn } from "../../store/slices/turnSlice";
+import { refreshWorldCrew } from "../../store/slices/availableCrewSlice";
 import { selectCharacters, selectCharactersStatus } from "../../store/selectors/character.selectors";
 import { setActiveLocation } from "../../store/slices/galaxySlice";
 import { setActiveCharacter } from "../../store/slices/uiSlice";
@@ -25,6 +27,8 @@ const MapInitializer = () => {
   useEffect(() => {
     dispatch(fetchCharacters());
     dispatch(fetchShip());
+    dispatch(fetchTurn());
+    dispatch(refreshWorldCrew());
   }, [dispatch]);
 
   useEffect(() => {

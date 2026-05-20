@@ -1,6 +1,8 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "../index";
 
+export const DEFAULT_SHIP_COLOR = "#9ca3af";
+
 export interface CrewMember {
   id: string;
   role: string;
@@ -9,6 +11,8 @@ export interface CrewMember {
   characterId: string | null;
   characterName: string | null;
   npcName: string | null;
+  keySkillName: string | null;
+  keySkillLevel: number;
 }
 
 export interface CargoLotSummary {
@@ -32,6 +36,8 @@ export interface ShipSummary {
   sectorAbbr: string | null;
   hex: string | null;
   cargoCapacity: number;
+  destinationWorldId: string | null;
+  jumpArrivesTurn: number | null;
   crew: CrewMember[];
   cargo: CargoLotSummary[];
 }
@@ -40,12 +46,14 @@ interface ShipState {
   ship: ShipSummary | null;
   status: "idle" | "loading" | "loaded" | "error";
   error: string | null;
+  shipColor: string;
 }
 
 const initialState: ShipState = {
   ship: null,
   status: "idle",
   error: null,
+  shipColor: DEFAULT_SHIP_COLOR,
 };
 
 export const fetchShip = createAsyncThunk(
@@ -76,6 +84,9 @@ const shipSlice = createSlice({
         state.ship.name = action.payload.name;
       }
     },
+    setShipColor(state, action: PayloadAction<string>) {
+      state.shipColor = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -94,5 +105,5 @@ const shipSlice = createSlice({
   },
 });
 
-export const { invalidateShip, updateShipInStore } = shipSlice.actions;
+export const { invalidateShip, updateShipInStore, setShipColor } = shipSlice.actions;
 export default shipSlice.reducer;

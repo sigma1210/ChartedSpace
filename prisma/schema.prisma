@@ -133,6 +133,8 @@ model ShipCrew {
   role            String
   isOwnerOperator Boolean    @default(false)
   monthlySalary   Int        @default(0)
+  keySkillName    String?
+  keySkillLevel   Int        @default(0)
 }
 
 model ShipPassenger {

@@ -4,6 +4,8 @@ import notificationsReducer from "./slices/notificationsSlice";
 import galaxyReducer from "./slices/galaxySlice";
 import characterReducer from "./slices/characterSlice";
 import shipReducer from "./slices/shipSlice";
+import turnReducer from "./slices/turnSlice";
+import availableCrewReducer from "./slices/availableCrewSlice";
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +14,8 @@ export const store = configureStore({
     galaxy: galaxyReducer,
     characters: characterReducer,
     ship: shipReducer,
+    turn: turnReducer,
+    availableCrew: availableCrewReducer,
   },
 });
 

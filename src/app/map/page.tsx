@@ -6,12 +6,15 @@ import CharacterAvatar from "./CharacterAvatar";
 import CharacterCreateModal from "./CharacterCreateModal";
 import CharacterListModal from "../../components/modals/CharacterListModal";
 import CharacterProfileModal from "../../components/modals/CharacterProfileModal";
+import JumpRangeModal from "../../components/modals/JumpRangeModal";
+import CrewManagementModal from "../../components/modals/CrewManagementModal";
 import WorldDetailModal from "./WorldDetailModal";
 import GalaxyMiniMap from "../../components/map/GalaxyMiniMap";
 import SectorMiniMap from "../../components/map/SectorMiniMap";
 import SubsectorMiniMap from "../../components/map/SubsectorMiniMap";
 import TradeValuesCard from "../../components/map/TradeValuesCard";
 import ShipCard from "../../components/map/ShipCard";
+import TurnCard from "../../components/map/TurnCard";
 
 const isDevMode = process.env.DEV_MODE === "true";
 
@@ -43,6 +46,7 @@ const MapPage = () => {
           <div className="flex flex-col gap-2">
             <TradeValuesCard />
             <ShipCard />
+            <TurnCard />
           </div>
         </div>
       </main>
@@ -51,6 +55,8 @@ const MapPage = () => {
       <CharacterCreateModal />
       <CharacterListModal />
       <CharacterProfileModal />
+      <JumpRangeModal />
+      <CrewManagementModal />
     </div>
   );
 };

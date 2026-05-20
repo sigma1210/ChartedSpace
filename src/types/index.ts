@@ -6,7 +6,9 @@ export type ModalType =
   | "notifications"
   | "map"
   | "systemDetail"
-  | "userProfile";
+  | "userProfile"
+  | "jumpRangeSelector"
+  | "crewManagement";
 
 export type MapView = "galaxy" | "sector" | "subsector";
 
@@ -21,6 +23,12 @@ export interface Notification {
   timestamp: number;
 }
 
+export interface JumpDestination {
+  hex: string;
+  sectorAbbr: string;
+  name: string;
+}
+
 export interface UIState {
   activeModal: ModalType | null;
   mapView: MapView;
@@ -33,6 +41,7 @@ export interface UIState {
   searchFilter: SearchFilter;
   searchQuery: string;
   previousModal: ModalType | null;
+  pendingJumpDestination: JumpDestination | null;
 }
 
 export interface NotificationsState {
@@ -103,6 +112,20 @@ export interface WorldCoord {
 }
 
 export type MapMode = "galaxyMiniMap" | "subsectorMiniMap";
+
+// ─── Crew library ─────────────────────────────────────────────────────────────
+
+export interface CrewLibraryEntry {
+  age:     number;
+  upp:     { str: number; dex: number; end: number; int: number; edu: number; soc: number };
+  skills:  Array<{ name: string; level: number }>;
+  careers: Array<{ career: string; terms: number; rank: number; commissioned: boolean }>;
+}
+
+export interface AvailableCrewMember extends CrewLibraryEntry {
+  id:   string;
+  name: string;
+}
 
 export interface WorldDotStyle {
   fill: string;

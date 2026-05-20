@@ -30,7 +30,9 @@ export const GET = async () => {
         status:       true,
         isMortgaged:  true,
         mortgagePaid: true,
-        currentWorldId: true,
+        currentWorldId:     true,
+        destinationWorldId: true,
+        jumpArrivesTurn:    true,
         currentWorld: {
           select: {
             name:   true,
@@ -46,6 +48,8 @@ export const GET = async () => {
             monthlySalary:   true,
             characterId:     true,
             npcName:         true,
+            keySkillName:    true,
+            keySkillLevel:   true,
             character:       { select: { name: true } },
           },
         },
@@ -75,8 +79,10 @@ export const GET = async () => {
         status:         ship.status,
         isMortgaged:    ship.isMortgaged,
         mortgagePaid:   ship.mortgagePaid,
-        currentWorldId: ship.currentWorldId,
-        worldName:      ship.currentWorld?.name ?? null,
+        currentWorldId:     ship.currentWorldId,
+        destinationWorldId: ship.destinationWorldId,
+        jumpArrivesTurn:    ship.jumpArrivesTurn,
+        worldName:          ship.currentWorld?.name ?? null,
         sectorAbbr:     ship.currentWorld?.sector.abbreviation ?? null,
         hex:            ship.currentWorld?.hex ?? null,
         cargoCapacity:  typeData?.cargoCapacity ?? 0,
@@ -88,6 +94,8 @@ export const GET = async () => {
           characterId:     c.characterId,
           characterName:   c.character?.name ?? null,
           npcName:         c.npcName,
+          keySkillName:    c.keySkillName,
+          keySkillLevel:   c.keySkillLevel,
         })),
         cargo:          ship.cargo.map(lot => ({
           id:              lot.id,
@@ -114,11 +122,33 @@ export const PATCH = async (request: Request) => {
     const ship = await prisma.ship.findUnique({ where: { userId: dbUser.id } });
     if (!ship) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const body: { name?: string } = await request.json();
+    const body: {
+      name?: string;
+      status?: string;
+      currentWorldId?: string | null;
+      destinationWorldId?: string | null;
+      jumpArrivesTurn?: number | null;
+    } = await request.json();
     const updates: Record<string, unknown> = {};
 
     if (typeof body.name === "string" && body.name.trim()) {
       updates.name = body.name.trim();
+    }
+
+    if (body.status === "docked" || body.status === "in_jump") {
+      updates.status = body.status;
+    }
+
+    if (body.currentWorldId !== undefined) {
+      updates.currentWorldId = body.currentWorldId;
+    }
+
+    if (body.destinationWorldId !== undefined) {
+      updates.destinationWorldId = body.destinationWorldId;
+    }
+
+    if (body.jumpArrivesTurn !== undefined) {
+      updates.jumpArrivesTurn = body.jumpArrivesTurn;
     }
 
     if (Object.keys(updates).length === 0) {

@@ -14,7 +14,8 @@
     "db:seed": "prisma db seed",
     "test": "jest",
     "test:watch": "jest --watch",
-    "tunnel": "ngrok http 3000"
+    "tunnel": "ngrok http 3000",
+    "generate:crew": "tsx scripts/generateCrewLibrary.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

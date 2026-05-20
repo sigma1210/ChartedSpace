@@ -165,22 +165,69 @@ Typography is always `font-mono`, labels are `uppercase tracking-widest text-xs`
 - Classic Traveller Book 1 character generation engine (see Character Generation section below)
 - "Create Character" button in the `/map` header — opens `CharacterCreateModal`
 - `CharacterCreateModal` supports two modes: **Random** (instant full lifepath) and **Guided** (step-by-step, player makes every choice via `HumanDecisionProvider`). Player generates characters until satisfied, then saves manually.
-- **Character persistence** — `POST /api/characters` saves a `CharacterSheet` to the database; `GET /api/characters` returns the list; `PATCH /api/characters/[id]` updates name or sheet; `DELETE /api/characters/[id]` removes a character. DEV_MODE bypasses auth and saves with `userId: null`.
+- **Character persistence** — `POST /api/characters` saves a `CharacterSheet` to the database; `GET /api/characters` returns the list; `PATCH /api/characters/[id]` updates name, sheet, or credits; `DELETE /api/characters/[id]` removes a character. DEV_MODE bypasses auth and saves with `userId: null`.
 - **Character Redux slice** (`src/store/slices/characterSlice.ts`) — `CharacterSummary` type, `fetchCharacters` thunk (condition guard prevents duplicate fetches), `invalidateCharacters` (resets to idle so next open re-fetches), `updateCharacterInList` (in-place name update after PATCH).
 - **Character selectors** (`src/store/selectors/character.selectors.ts`) — `selectCharacters`, `selectCharactersStatus`, `selectCurrentCharacter` (cross-slice: looks up `state.ui.activeCharacterId` in `state.characters.items`).
 - **`CharacterListModal`** — opens via `CharacterListButton` in header; fetches on open; dispatches `openCharacterProfile(id)` on row click.
 - **`CharacterProfileModal`** — shows UPP, stats, skills, credits, location; unnamed characters get a name-input prompt that PATCHes the API and updates Redux in-place. `useEffect` resets local state on `char?.id` change to prevent stale name/save-state across selections.
 - **`CharacterAvatar`** — badge in the header showing initials of the current character; click opens `CharacterProfileModal`.
 - **Trade System card** (`src/components/map/TradeValuesCard.tsx`) — collapsible panel to the right of the hex grid. Shows origin world (sector › subsector › name, trade code badges, TL badge, purchase cost) and destination world (same fields + expected sale price). `CodeBadge` component shows hover tooltip with full trade classification name.
+- **Ship system** — Free Trader (Type A) fully implemented. See Ship section below.
+- **`ShipCard`** (`src/components/map/ShipCard.tsx`) — collapsible panel showing ship name/type/status/location, crew roster, cargo manifest, market (buy cargo when docked), and "Manage Crew" button. Market panel fetches prices for the current world.
+- **Ship API** — `GET /api/ship` (full ship summary including crew and cargo), `PATCH /api/ship` (name, status, world, jump state). Ship is created automatically on first character save when a crew role is selected.
+- **Cargo API** — `POST /api/ship/cargo` buys cargo (deducts credits from owner, adds CargoLot); `DELETE /api/ship/cargo/[lotId]` removes a lot. `GET /api/ship/market` returns commodity price and capacity for the current world.
+- **Crew system** — `CrewManagementModal` (`src/components/modals/CrewManagementModal.tsx`) — split panel: left shows required role slots (captain in their role with ★, "hire from pool →" on vacant slots); right shows 20 available crew from port with "Hire as [Role]" buttons per qualifying skill. Captain can reassign their role via inline buttons. Pool refreshes on world arrival.
+- **Crew API** — `POST /api/ship/crew` hires an NPC; `DELETE /api/ship/crew/[crewId]` fires; `PATCH /api/ship/crew/[crewId]` changes captain's role (auto-fires any NPC in the target slot).
+- **Crew library** — 2,500 pre-generated crew templates in `src/data/crewLibrary.json` (~1 MB). Imported at module level in `availableCrewSlice` (not stored in Redux — keeps DevTools fast). Names randomised at selection time. Skill names verified: `"Engineering"` / `"Gunnery"` (not Engineer/Gunner).
+- **`src/lib/crew.ts`** — `ROLE_REQUIRED_SKILL`, `calculateSalary` (base + Cr1,000 × skill level), `qualifiesForRole`, `skillLevelForRole`, `formatUPP`.
+- **Turn system** — `TurnCard` (`src/components/map/TurnCard.tsx`) — turn counter, "Remain on World" / "Jump" / "Proceed" state machine with animated dice roll display. `turnSlice` tracks `currentTurn`. `GET /api/turn`, `POST /api/turn/advance` (increments turn, updates ship atomically).
+- **Turn event registry** (`src/lib/turns/handlers.ts`) — `onEndTurn`/`fireEndTurn`, `onStartTurn`/`fireStartTurn`, `onStartJumpTurn`/`fireStartJumpTurn`. Handlers registered via module import side effects (import in client component, not server).
+- **Monthly costs** (`src/lib/turns/monthlyCosts.ts`) — registered as `onEndTurn` handler; fires every 2 turns (`turn % 2 === 0`); deducts mortgage + crew salaries from owner's credits via `PATCH /api/characters/[id]`.
+- **Jump flow** — Navigation check (2D6 + navDM, 3 attempts at targets 4/6/8), jump drive check (2D6 + engDM, target 4). Misjump on drive failure stays docked. Fuel (Cr10,000) deducted atomically inside `POST /api/turn/advance` transaction when entering jump. Jump blocked client-side by `selectJumpReadiness` if credits < fuel cost or any required crew slot is vacant.
+- **`JumpRangeModal`** (`src/components/modals/JumpRangeModal.tsx`) — hex-shaped SVG grid (radius = jumpRating) centred on the ship's world. Loads adjacent sectors as needed. Ship marker (◈) at centre. Clicking a world sets it as the jump destination.
+- **Ship silhouette** — rendered on `SubsectorGrid`/`HexGrid` at the ship's current hex. Color driven by `selectShipColor` (default `#9ca3af`); `setShipColor` action in `shipSlice` for future status-based colour changes.
+- **Utilities** — `src/lib/dice.ts` (`roll1d6`, `roll2d6`, `statDM`); `src/lib/hex.ts` (`parseHex`, `hexDistance` via cube coordinates); `src/components/map/hexGeometry.ts` (shared constants HEX_RADIUS=20 etc.).
 
 ## What is next
 
-- **Ships** — Free Trader (Type A) as the first ship type. See Ship schema section below.
-- **Directed provider** — `RoleDirectedDecisionProvider` in `src/lib/characters/providers/directed.ts` that weights choices toward a target role archetype. Add a third "Directed" mode card to `CharacterCreateModal`.
-- Clerk webhooks at `src/app/api/webhooks/clerk/route.ts` — sync `user.created`, `user.updated`, `user.deleted` to the database. Requires `/api/webhooks/clerk` added to public routes in `proxy.ts` and `CLERK_WEBHOOK_SIGNING_SECRET` in env.
-- Wire `src/actions/user.ts` to the database after webhook sync is in place.
-- Stellar color on star field dots (spectral class → color mapping already stubbed)
-- Character/ship pinning to worlds
+- **Sell cargo** — player arrives at a world and sells CargoLots at the destination price. Profit = sale price − purchase price per ton. Credits added to owner. Lot removed from manifest. See Cargo Sale section below.
+- **Maintenance system** — condition levels (Good / Fair / Poor / Critical) driven by a debt counter; each skipped maintenance cycle increments debt; starport-class cost table; Poor/Critical conditions add misjump risk and will eventually affect passengers. Schema change needed.
+- **Passengers** — booking high/middle/low passage berths, travel revenue per jump, boarding/disembarking flow.
+- **Directed provider** — `RoleDirectedDecisionProvider` in `src/lib/characters/providers/directed.ts` that weights choices toward a target role archetype. Third "Directed" mode card in `CharacterCreateModal`.
+- Clerk webhooks at `src/app/api/webhooks/clerk/route.ts` — sync `user.created`, `user.updated`, `user.deleted` to the database.
+- Stellar color on star field dots (spectral class → color mapping already stubbed).
+- Character/ship pinning to worlds.
+
+---
+
+## Cargo Sale
+
+**Design (not yet implemented — branch: selling cargo)**
+
+When docked, the player can sell any CargoLot at the current world's expected sale price.
+
+### Sale price
+Use `selectExpectedSalePrice` (already implemented in `galaxy.selectors.ts`) which computes a price from the origin world's trade codes vs the current world's trade codes plus tech level delta. The same value displayed in `TradeValuesCard` as "Expected Sale Price".
+
+### API endpoint
+`POST /api/ship/cargo/[lotId]/sell` — no body required.
+- Verify lot belongs to ship, ship is docked.
+- Look up current world trade codes + TL and origin world trade codes + TL.
+- Calculate sale price per ton using the same formula as `deriveExpectedSalePrice`.
+- Atomically: delete CargoLot, add `salePrice × tons` credits to owner character.
+- Return `{ creditsEarned, newCredits }`.
+
+### UI
+Add a "Sell" button per cargo lot in `ShipCard`'s cargo panel — visible only when docked. Show profit/loss vs purchase price. After sale: `invalidateShip()`, `fetchShip()`, `invalidateCharacters()`, `fetchCharacters()`.
+
+### Sale price formula
+```
+demandSum = Σ MARKET_DEMAND_TABLE[sourceCode][targetCode]
+  over all (sourceCode in originWorld.tradeCodes) × (targetCode in currentWorld.tradeCodes)
+techDelta = (originTL - currentTL) * 0.1
+salePrice = Math.max(0, (demandSum * 1000 + 5000) * (1 + techDelta))
+```
+This is already implemented in `deriveExpectedSalePrice` in `src/store/selectors/galaxy.selectors.ts` — reuse that logic server-side.
 
 ---
 
@@ -439,20 +486,34 @@ One entry per ship class, analogous to `careers.json`. Fields:
 ### Prisma models
 
 ```
-Ship            — instance data: name, type, jumpRating, mortgage status, location, owner
-ShipCrew        — which characters fill which crew roles (pilot/navigator/engineer/steward)
-ShipPassenger   — characters explicitly boarded as passengers (high/middle/low passage)
-CargoLot        — individual trade lots: commodity, tons, purchase price per ton, origin world
+Ship            — name, type, jumpRating, status ("docked"/"in_jump"), mortgage tracking,
+                  currentWorldId, destinationWorldId, jumpArrivesTurn, userId
+ShipCrew        — shipId, characterId (null for NPCs), npcName, role, isOwnerOperator,
+                  monthlySalary, keySkillName, keySkillLevel
+ShipPassenger   — not yet implemented
+CargoLot        — shipId, commodity, tons, purchasePrice (per ton), originWorldId, acquiredAt
 ```
 
-**Ownership** is single-character for MVP (`ownerId` FK on Ship). Co-ownership comes later.
+**Ownership** is single-user for MVP (Ship.userId FK). One ship per user.
 
 **Fuel** is abstracted to a credit cost per jump (`fuelCostPerJump` from the type template). No tonnage tracking.
 
-**Cargo** is a full manifest — each `CargoLot` records what was bought, how many tons, at what price, and from which world. This feeds into the trade route profit calculation.
+**Cargo** is a full manifest — each `CargoLot` records commodity, tons, purchase price per ton, and origin world. Profit on sale = `(salePrice − purchasePrice) × tons`.
 
-**Travel** uses explicit boarding — characters must be on a `ShipCrew` or `ShipPassenger` record to travel with the ship. When the ship jumps to a new world, its `currentWorldId` updates and all boarded characters move with it.
+**Crew qualification** — each role requires a minimum skill-0 in the key skill (Pilot/Navigation/Engineering/Steward/Gunnery/Medical). The owner-operator (captain) is exempt from qualification but still occupies a specific role slot. NPC crew salary = base rate from `crewSalaries.json` + Cr1,000 × `keySkillLevel`.
 
-### Jump range on the map
+**Jump readiness** — `selectJumpReadiness` (`src/store/selectors/jumpReadiness.selectors.ts`) checks all required crew slots filled + owner credits ≥ `fuelCostPerJump`. Drives the Jump button gate in TurnCard. Server also enforces this in `POST /api/turn/advance`.
 
-`jumpRating` maps directly to hex distance on the subsector grid. A J-1 ship can reach any world within 1 parsec (1 hex). The map already has hex geometry and world coordinates — jump range filtering will use the same distance calculation as the nav arrows.
+**Travel** — when the ship enters jump it stores `destinationWorldId` and `jumpArrivesTurn`. On "Proceed" the ship status becomes "docked" and `currentWorldId` is set to the destination. Characters move with the ship implicitly (they are associated via ShipCrew).
+
+### Ship + crew selectors
+
+```
+selectShip          — ShipSummary | null (full ship with crew + cargo arrays)
+selectShipStatus    — "idle" | "loading" | "loaded" | "error"
+selectShipCrew      — CrewMember[] shortcut
+selectShipColor     — string (default #9ca3af); driven by setShipColor action
+selectJumpReadiness — { canJump: boolean, reasons: string[], fuelCost: number }
+selectAvailableCrew — AvailableCrewMember[] (20-member port pool)
+selectCrewPoolSize  — number (default 20, configurable via setPoolSize)
+```

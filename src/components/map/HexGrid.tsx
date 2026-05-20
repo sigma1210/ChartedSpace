@@ -30,6 +30,10 @@ interface HexGridProps {
   scale?: number;
   /** World id that is currently selected — renders an accent selection ring. */
   selectedWorldId?: string;
+  /** Grid-local position of the ship — renders a top-down silhouette in that hex. */
+  shipHex?: { hexX: number; hexY: number };
+  /** Fill color for the ship silhouette. */
+  shipColor?: string;
 }
 
 
@@ -58,6 +62,22 @@ const selectionFill = (zone: string | null): string => {
   return "rgba(6,182,212,0.25)";
 }
 
+// Top-down starship silhouette centered at (cx, cy)
+const shipSilhouette = (cx: number, cy: number): string => {
+  const x = cx, y = cy;
+  return [
+    `M ${x},${y - 8}`,         // bow
+    `L ${x + 5},${y - 1}`,     // starboard forward
+    `L ${x + 6},${y + 3}`,     // starboard wing tip
+    `L ${x + 3},${y + 5}`,     // starboard stern quarter
+    `L ${x},${y + 4}`,         // stern
+    `L ${x - 3},${y + 5}`,     // port stern quarter
+    `L ${x - 6},${y + 3}`,     // port wing tip
+    `L ${x - 5},${y - 1}`,     // port forward
+    "Z",
+  ].join(" ");
+};
+
 const HexGrid = ({
   worlds,
   cols,
@@ -67,6 +87,8 @@ const HexGrid = ({
   onLeaveGrid,
   scale = 1,
   selectedWorldId,
+  shipHex,
+  shipColor = "#9ca3af",
 }: HexGridProps) => {
   const worldMap = new Map(worlds.map((w) => [`${w.hexX},${w.hexY}`, w]));
 
@@ -159,6 +181,21 @@ const HexGrid = ({
     }
   }
 
+  const shipOverlay = (() => {
+    if (!shipHex) return null;
+    const { cx, cy } = hexCenter(shipHex.hexX, shipHex.hexY);
+    return (
+      <path
+        d={shipSilhouette(cx, cy)}
+        fill={shipColor}
+        stroke="var(--hud-bg)"
+        strokeWidth={0.8}
+        opacity={0.9}
+        style={{ pointerEvents: "none" }}
+      />
+    );
+  })();
+
   return (
     <div className="overflow-auto">
       <svg
@@ -169,6 +206,7 @@ const HexGrid = ({
         onMouseLeave={() => onLeaveGrid?.()}
       >
         {hexElements}
+        {shipOverlay}
       </svg>
     </div>
   );

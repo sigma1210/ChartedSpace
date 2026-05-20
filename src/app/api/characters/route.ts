@@ -6,18 +6,12 @@ import type { CharacterSheet } from "@/lib/characters/types";
 import { getClerkId } from "@/lib/devAuth";
 import spawnPoints from "@/data/spawnPoints.json";
 import shipTypes from "@/data/classic/ships.json";
-import crewSalaries from "@/data/classic/crewSalaries.json";
+
 
 const toHex = (n: number) => Math.min(15, Math.max(0, n)).toString(16).toUpperCase();
 
 const REQUIRED_CREW = ["pilot", "navigator", "engineer", "steward"] as const;
 type CrewRole = typeof REQUIRED_CREW[number];
-
-const NPC_NAMES = [
-  "Kiera Voss", "Talon Reth", "Mira Soto", "Dax Holt",
-  "Sera Vance", "Joren Mak", "Lena Cruz", "Bram Tesh",
-  "Yuki Hale", "Dorn Slater", "Cali Wren", "Fen Okafor",
-];
 
 const pickRandom = <T>(arr: readonly T[] | T[]): T =>
   arr[Math.floor(Math.random() * arr.length)];
@@ -60,24 +54,6 @@ const createShipForNewPlayer = async (
       monthlySalary:   0,
     },
   });
-
-  const remainingRoles = REQUIRED_CREW.filter(r => r !== role);
-  const usedNames = new Set<string>();
-  for (const npcRole of remainingRoles) {
-    let npcName: string;
-    do { npcName = pickRandom(NPC_NAMES); } while (usedNames.has(npcName));
-    usedNames.add(npcName);
-    await tx.shipCrew.create({
-      data: {
-        shipId:          ship.id,
-        characterId:     null,
-        npcName,
-        role:            npcRole,
-        isOwnerOperator: false,
-        monthlySalary:   (crewSalaries as Record<string, number>)[npcRole] ?? 0,
-      },
-    });
-  }
 
   await tx.character.update({
     where: { id: characterId },
