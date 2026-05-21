@@ -22,10 +22,10 @@ Remaining on world causes a turn to end and a new turn to begin.
                   2nd : 6+ on 2D6 succeeds and they proceed.
                   3rd : 8+ on 2D6 succeeds and they proceed. if they fail they must Remain on world
 
-    step 2 : Fire Jump Drive
+    step 3 : Fire Jump Drive
                  roll 4+ 2d6 failure is misjump they will generate a misjump random event which for the time being remaining on world
 
-    step 3: End Turn and Enter Into Jump state. 
+    step 4: End Turn and Enter Into Jump state. 
 
         When a turn end follow the instructions on handling turn ending. We want to assign event listeners to an onEndTurnEvent which we will refer to as a EndTurnEventHandler which we will discuss later
      
@@ -34,7 +34,7 @@ Remaining on world causes a turn to end and a new turn to begin.
 
     While in a jump turn a user is provided one option to Proceed. when they provide they will end the jump turn and start an New turn docked but its location will be the destination world. 
 
-    
+
 
                   
 

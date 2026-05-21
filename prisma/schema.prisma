@@ -135,6 +135,7 @@ model ShipCrew {
   monthlySalary   Int        @default(0)
   keySkillName    String?
   keySkillLevel   Int        @default(0)
+  unpaidTurns     Int        @default(0)
 }
 
 model ShipPassenger {

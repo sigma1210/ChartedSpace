@@ -5,9 +5,11 @@ import { ChevronLeft, Check, Loader2 } from "lucide-react";
 import HudModal from "./HudModal";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { closeModal, goBack } from "../../store/slices/uiSlice";
-import { updateCharacterInList } from "../../store/slices/characterSlice";
+import { fetchCharacters, invalidateCharacters, updateCharacterInList } from "../../store/slices/characterSlice";
+import { fetchShip, invalidateShip } from "../../store/slices/shipSlice";
 import { selectCurrentCharacter } from "../../store/selectors/character.selectors";
 import { selectActiveModal } from "../../store/selectors/ui.selectors";
+import { selectShip } from "../../store/selectors/ship.selectors";
 
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
@@ -34,9 +36,11 @@ const CharacterProfileModal = () => {
   const dispatch = useAppDispatch();
   const activeModal = useAppSelector(selectActiveModal);
   const char = useAppSelector(selectCurrentCharacter);
+  const ship = useAppSelector(selectShip);
 
-  const [nameInput, setNameInput] = useState("");
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [nameInput,  setNameInput]  = useState("");
+  const [saveState,  setSaveState]  = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [playState,  setPlayState]  = useState<"idle" | "playing" | "error">("idle");
 
   useEffect(() => {
     setNameInput("");
@@ -67,6 +71,24 @@ const CharacterProfileModal = () => {
       setSaveState("saved");
     } catch {
       setSaveState("error");
+    }
+  };
+
+  const handlePlayAsCaptain = async () => {
+    if (!char || playState === "playing") return;
+    setPlayState("playing");
+    try {
+      const res = await fetch(`/api/characters/${char.id}/play`, { method: "POST" });
+      if (!res.ok) { setPlayState("error"); return; }
+      dispatch(invalidateShip());
+      dispatch(invalidateCharacters());
+      await dispatch(fetchShip());
+      await dispatch(fetchCharacters());
+      dispatch(closeModal());
+    } catch {
+      setPlayState("error");
+    } finally {
+      setPlayState("idle");
     }
   };
 
@@ -140,6 +162,21 @@ const CharacterProfileModal = () => {
                   Cr {char.credits.toLocaleString()}
                 </p>
               </div>
+
+              {!ship && (
+                <div className="border-t border-(--hud-border-subtle) pt-3 flex flex-col gap-1.5">
+                  <button
+                    onClick={handlePlayAsCaptain}
+                    disabled={playState === "playing"}
+                    className="w-full border border-(--hud-accent) px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) hover:bg-(--hud-accent)/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {playState === "playing" ? "Launching…" : "Play as Captain"}
+                  </button>
+                  {playState === "error" && (
+                    <p className="text-[10px] text-(--hud-error)">Failed — try again</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Right — location + skills */}

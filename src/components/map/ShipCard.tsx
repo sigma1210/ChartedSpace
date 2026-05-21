@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { fetchShip, invalidateShip } from "../../store/slices/shipSlice";
-import { invalidateCharacters } from "../../store/slices/characterSlice";
+import { fetchCharacters, invalidateCharacters } from "../../store/slices/characterSlice";
 import { selectShip, selectShipStatus } from "../../store/selectors/ship.selectors";
 import { openCrewManagement } from "../../store/slices/uiSlice";
 
@@ -44,6 +44,8 @@ const ShipCard = () => {
   const [tons,          setTons]          = useState("1");
   const [buyState,      setBuyState]      = useState<"idle" | "buying" | "error">("idle");
   const [buyError,      setBuyError]      = useState<string | null>(null);
+  const [sellingLotId,  setSellingLotId]  = useState<string | null>(null);
+  const [sellError,     setSellError]     = useState<string | null>(null);
 
   useEffect(() => { dispatch(fetchShip()); }, [dispatch]);
 
@@ -62,12 +64,13 @@ const ShipCard = () => {
       .finally(() => setMarketLoading(false));
   }, [marketOpen]);
 
-  const typeInfo = ship ? (SHIP_LABELS[ship.type] ?? { label: ship.type, designation: "" }) : null;
-  const usedTons = ship?.cargo.reduce((sum, lot) => sum + lot.tons, 0) ?? 0;
+  const typeInfo         = ship ? (SHIP_LABELS[ship.type] ?? { label: ship.type, designation: "" }) : null;
+  const usedTons         = ship?.cargo.reduce((sum, lot) => sum + lot.tons, 0) ?? 0;
+  const remainingCapacity = (ship?.cargoCapacity ?? 0) - usedTons;
 
-  const tonsNum      = parseInt(tons, 10);
-  const validTons    = !isNaN(tonsNum) && tonsNum >= 1 && tonsNum <= (marketData?.remainingCapacity ?? 0);
-  const totalCost    = validTons && marketData ? tonsNum * marketData.pricePerTon : 0;
+  const tonsNum   = parseInt(tons, 10);
+  const validTons = !isNaN(tonsNum) && tonsNum >= 1 && tonsNum <= remainingCapacity;
+  const totalCost = validTons && marketData ? tonsNum * marketData.pricePerTon : 0;
 
   const handleBuy = async () => {
     if (!commodity || !validTons || !marketData) return;
@@ -87,13 +90,34 @@ const ShipCard = () => {
       }
       setBuyState("idle");
       setTons("1");
-      setMarketData(m => m ? { ...m, remainingCapacity: m.remainingCapacity - tonsNum } : m);
       dispatch(invalidateShip());
       dispatch(fetchShip());
       dispatch(invalidateCharacters());
+      dispatch(fetchCharacters());
     } catch {
       setBuyError("Purchase failed");
       setBuyState("error");
+    }
+  };
+
+  const handleSell = async (lotId: string) => {
+    setSellingLotId(lotId);
+    setSellError(null);
+    try {
+      const res = await fetch(`/api/ship/cargo/${lotId}/sell`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        setSellError(err.error ?? "Sale failed");
+        return;
+      }
+      dispatch(invalidateShip());
+      dispatch(fetchShip());
+      dispatch(invalidateCharacters());
+      dispatch(fetchCharacters());
+    } catch {
+      setSellError("Sale failed");
+    } finally {
+      setSellingLotId(null);
     }
   };
 
@@ -210,20 +234,34 @@ const ShipCard = () => {
                     {ship.cargo.length === 0 ? (
                       <p className="font-mono text-[9px] text-(--hud-text-dim) italic">Empty hold</p>
                     ) : (
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-1">
                         {ship.cargo.map(lot => (
-                          <div key={lot.id} className="flex items-center gap-1.5 font-mono text-[9px]">
-                            <span className="w-6 shrink-0 border border-(--hud-border) px-0.5 text-center text-(--hud-text-dim)">
-                              {lot.commodity}
-                            </span>
-                            <span className="w-7 shrink-0 text-right text-(--hud-text)">
-                              {lot.tons}T
-                            </span>
-                            <span className="text-(--hud-text-dim)">
-                              Cr{lot.purchasePrice.toLocaleString()}
-                            </span>
+                          <div key={lot.id} className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 font-mono text-[9px]">
+                              <span className="w-6 shrink-0 border border-(--hud-border) px-0.5 text-center text-(--hud-text-dim)">
+                                {lot.commodity}
+                              </span>
+                              <span className="w-7 shrink-0 text-right text-(--hud-text)">
+                                {lot.tons}T
+                              </span>
+                              <span className="flex-1 text-(--hud-text-dim)">
+                                Cr{lot.purchasePrice.toLocaleString()}
+                              </span>
+                              {ship.status === "docked" && (
+                                <button
+                                  onClick={() => handleSell(lot.id)}
+                                  disabled={sellingLotId === lot.id}
+                                  className="shrink-0 border border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) px-1 py-px transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  {sellingLotId === lot.id ? "…" : "Sell"}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
+                        {sellError && (
+                          <p className="font-mono text-[9px] text-(--hud-error)">{sellError}</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -292,13 +330,18 @@ const ShipCard = () => {
                               type="number"
                               value={tons}
                               min={1}
-                              max={marketData.remainingCapacity}
+                              max={remainingCapacity}
                               onChange={e => { setTons(e.target.value); setBuyState("idle"); setBuyError(null); }}
                               className="w-14 bg-(--hud-surface-2) border border-(--hud-border) focus:border-(--hud-accent) text-(--hud-text) px-1.5 py-0.5 outline-none text-right"
                             />
-                            <span className="text-(--hud-text-dim)">
-                              / {marketData.remainingCapacity}T
-                            </span>
+                            <span className="text-(--hud-text-dim)">/ {remainingCapacity}T</span>
+                            <button
+                              onClick={() => { setTons(String(remainingCapacity)); setBuyState("idle"); setBuyError(null); }}
+                              disabled={remainingCapacity <= 0}
+                              className="border border-(--hud-border) px-1 py-px text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Fill
+                            </button>
                           </div>
 
                           {/* Total cost */}

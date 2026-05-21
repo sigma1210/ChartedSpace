@@ -3,6 +3,7 @@ import MapInitializer from "./MapInitializer";
 import CreateCharacterButton from "./CreateCharacterButton";
 import CharacterListButton from "./CharacterListButton";
 import CharacterAvatar from "./CharacterAvatar";
+import ResignButton from "./ResignButton";
 import CharacterCreateModal from "./CharacterCreateModal";
 import CharacterListModal from "../../components/modals/CharacterListModal";
 import CharacterProfileModal from "../../components/modals/CharacterProfileModal";
@@ -30,6 +31,7 @@ const MapPage = () => {
             <CharacterAvatar />
           </div>
           <div className="flex items-center gap-3">
+            <ResignButton />
             <CharacterListButton />
             <CreateCharacterButton />
             {isDevMode && <DevLogoutButton />}

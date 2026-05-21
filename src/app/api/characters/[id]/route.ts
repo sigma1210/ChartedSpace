@@ -39,7 +39,7 @@ export const PATCH = async (request: Request, { params }: Params) => {
     }
 
     if (typeof body.credits === "number" && Number.isInteger(body.credits)) {
-      updates.credits = Math.max(0, body.credits);
+      updates.credits = body.credits;
     }
 
     if (body.sheet) {
