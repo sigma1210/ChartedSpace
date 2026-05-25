@@ -16,6 +16,7 @@ import SubsectorMiniMap from "../../components/map/SubsectorMiniMap";
 import TradeValuesCard from "../../components/map/TradeValuesCard";
 import ShipCard from "../../components/map/ShipCard";
 import TurnCard from "../../components/map/TurnCard";
+import FreeTraderDeckPlan from "../../components/ship/FreeTraderDeckPlan";
 
 const isDevMode = process.env.DEV_MODE === "true";
 
@@ -49,6 +50,9 @@ const MapPage = () => {
             <TradeValuesCard />
             <ShipCard />
             <TurnCard />
+          </div>
+          <div className="hud-panel w-64 shrink-0 p-2">
+            <FreeTraderDeckPlan />
           </div>
         </div>
       </main>
