@@ -25,11 +25,26 @@ const FreeTraderDeckPlan = () => (
         hue-rotate(155deg) → shift to cyan (~#22d3ee)
         brightness(0.85)   → pull back slightly so it reads as dim cyan on dark
     */}
-    <img
-      src="/images/freeTrader.svg"
-      alt="Free Trader Type A deck plan"
-      className="w-full"
-    />
+    {/*
+      SVG is 808×1127 (portrait). Rotated 90° CW:
+        img pre-rotation:  width=367  height=512
+        container:         width=512  height=367
+      Formula: rotate(90deg) translateY(-100%) with transformOrigin 0 0
+      brings bottom-left of the img to (0,0) and top-right to (512,367).
+    */}
+    <div style={{ width: 512, height: 367, overflow: "hidden", position: "relative" }}>
+      <img
+        src="/images/freeTrader.svg"
+        alt="Free Trader Type A deck plan"
+        style={{
+          display: "block",
+          width: 367,
+          height: 512,
+          transform: "rotate(90deg) translateY(-100%)",
+          transformOrigin: "0 0",
+        }}
+      />
+    </div>
 
   </div>
 );

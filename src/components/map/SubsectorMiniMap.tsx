@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
@@ -9,10 +10,12 @@ import {
   selectActiveSubsectorKey,
 } from "../../store/selectors/galaxy.selectors";
 import { setActiveLocation } from "../../store/slices/galaxySlice";
+import { toggleSubsectorMiniMap } from "../../store/slices/uiSlice";
 import type { SectorMeta, SectorDetail } from "../../types";
 import SubsectorGrid from "./SubsectorGrid";
 
 const KEYS = "ABCDEFGHIJKLMNOP";
+const TRANSITION = { duration: 0.35, ease: [0.4, 0, 0.2, 1] } as const;
 
 interface NavTarget {
   sectorAbbr:   string;
@@ -85,6 +88,7 @@ const SubsectorMiniMap = () => {
   const activeKey        = useAppSelector(selectActiveSubsectorKey);
   const allSectors       = useAppSelector(selectAllSectors);
   const sector           = useAppSelector(selectSectorData(activeSectorAbbr));
+  const visible          = useAppSelector(s => s.ui.showSubsectorMiniMap);
 
   const sectorByCoord = new Map(allSectors.map(s => [`${s.X},${s.Y}`, s]));
   const nav           = buildNavTargets(activeKey, activeSectorAbbr, allSectors, sector, sectorByCoord);
@@ -94,21 +98,48 @@ const SubsectorMiniMap = () => {
   };
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <NavButton target={nav.up}   icon={<ChevronUp    size={10} />} onNavigate={navigate} />
-
-      <div className="flex items-center gap-1">
-        <NavButton target={nav.left}  icon={<ChevronLeft  size={10} />} onNavigate={navigate} vertical />
-        <SubsectorGrid
-          sectorAbbr={activeSectorAbbr}
-          subsectorKey={activeKey}
-          showHeader={false}
-        />
-        <NavButton target={nav.right} icon={<ChevronRight size={10} />} onNavigate={navigate} vertical />
+    <motion.div
+      layout
+      animate={{ maxWidth: visible ? 1000 : 32 }}
+      transition={TRANSITION}
+      className="shrink-0 overflow-hidden flex flex-col gap-2"
+    >
+      <div className="flex items-center gap-2">
+        {visible && (
+          <span className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim) whitespace-nowrap">
+            {sector?.subsectors[activeKey] ?? activeKey}
+          </span>
+        )}
+        <button
+          onClick={() => dispatch(toggleSubsectorMiniMap())}
+          className="font-mono text-[9px] text-(--hud-text-dim) hover:text-(--hud-text) transition-colors"
+          title={visible ? "Hide subsector map" : "Show subsector map"}
+        >
+          {visible ? "✕" : "◈"}
+        </button>
       </div>
 
-      <NavButton target={nav.down} icon={<ChevronDown  size={10} />} onNavigate={navigate} />
-    </div>
+      <motion.div
+        initial={false}
+        animate={visible ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
+        transition={TRANSITION}
+        style={{ overflow: "hidden" }}
+      >
+        <div className="flex flex-col items-center gap-1">
+          <NavButton target={nav.up}   icon={<ChevronUp    size={10} />} onNavigate={navigate} />
+          <div className="flex items-center gap-1">
+            <NavButton target={nav.left}  icon={<ChevronLeft  size={10} />} onNavigate={navigate} vertical />
+            <SubsectorGrid
+              sectorAbbr={activeSectorAbbr}
+              subsectorKey={activeKey}
+              showHeader={false}
+            />
+            <NavButton target={nav.right} icon={<ChevronRight size={10} />} onNavigate={navigate} vertical />
+          </div>
+          <NavButton target={nav.down} icon={<ChevronDown  size={10} />} onNavigate={navigate} />
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

@@ -42,6 +42,9 @@ export interface UIState {
   searchQuery: string;
   previousModal: ModalType | null;
   pendingJumpDestination: JumpDestination | null;
+  showGalaxyMiniMap: boolean;
+  showSectorMiniMap: boolean;
+  showSubsectorMiniMap: boolean;
 }
 
 export interface NotificationsState {

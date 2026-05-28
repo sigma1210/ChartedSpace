@@ -10,13 +10,7 @@ import CharacterProfileModal from "../../components/modals/CharacterProfileModal
 import JumpRangeModal from "../../components/modals/JumpRangeModal";
 import CrewManagementModal from "../../components/modals/CrewManagementModal";
 import WorldDetailModal from "./WorldDetailModal";
-import GalaxyMiniMap from "../../components/map/GalaxyMiniMap";
-import SectorMiniMap from "../../components/map/SectorMiniMap";
-import SubsectorMiniMap from "../../components/map/SubsectorMiniMap";
-import TradeValuesCard from "../../components/map/TradeValuesCard";
-import ShipCard from "../../components/map/ShipCard";
-import TurnCard from "../../components/map/TurnCard";
-import FreeTraderDeckPlan from "../../components/ship/FreeTraderDeckPlan";
+import MapColumns from "./MapColumns";
 
 const isDevMode = process.env.DEV_MODE === "true";
 
@@ -42,19 +36,7 @@ const MapPage = () => {
 
       <main className="flex flex-1 overflow-auto p-4">
         <MapInitializer />
-        <div className="flex gap-4 items-start">
-          <GalaxyMiniMap />
-          <SectorMiniMap />
-          <SubsectorMiniMap />
-          <div className="flex flex-col gap-2">
-            <TradeValuesCard />
-            <ShipCard />
-            <TurnCard />
-          </div>
-          <div className="hud-panel w-64 shrink-0 p-2">
-            <FreeTraderDeckPlan />
-          </div>
-        </div>
+        <MapColumns />
       </main>
 
       <WorldDetailModal />

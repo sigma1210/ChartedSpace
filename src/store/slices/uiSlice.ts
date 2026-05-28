@@ -20,6 +20,9 @@ const initialState: UIState = {
   searchQuery: "",
   previousModal: null,
   pendingJumpDestination: null,
+  showGalaxyMiniMap: true,
+  showSectorMiniMap: true,
+  showSubsectorMiniMap: true,
 };
 
 const uiSlice = createSlice({
@@ -120,6 +123,15 @@ const uiSlice = createSlice({
     clearJumpDestination(state) {
       state.pendingJumpDestination = null;
     },
+    toggleGalaxyMiniMap(state) {
+      state.showGalaxyMiniMap = !state.showGalaxyMiniMap;
+    },
+    toggleSectorMiniMap(state) {
+      state.showSectorMiniMap = !state.showSectorMiniMap;
+    },
+    toggleSubsectorMiniMap(state) {
+      state.showSubsectorMiniMap = !state.showSubsectorMiniMap;
+    },
   },
 });
 
@@ -146,6 +158,9 @@ export const {
   setJumpDestination,
   clearJumpDestination,
   openCrewManagement,
+  toggleGalaxyMiniMap,
+  toggleSectorMiniMap,
+  toggleSubsectorMiniMap,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;
