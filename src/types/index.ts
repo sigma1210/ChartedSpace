@@ -83,7 +83,7 @@ export interface World {
   hexY: number;
   name: string;
   uwp: WorldUWP;
-  remarks: string;
+  remarks: string[];
   importance: string;
   economics: string;
   culture: string;

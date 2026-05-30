@@ -46,6 +46,9 @@ const initialState: UIState = {
   searchQuery: "",
   previousModal: null,
   pendingJumpDestination: null,
+  showGalaxyMiniMap: true,
+  showSectorMiniMap: true,
+  showSubsectorMiniMap: true,
 };
 
 const makeRoot = (ui: UIState): RootState => {

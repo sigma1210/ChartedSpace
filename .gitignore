@@ -3,6 +3,7 @@
 # dependencies
 /books
 /node_modules
+/worlds
 /.pnp
 .pnp.*
 .yarn/*
