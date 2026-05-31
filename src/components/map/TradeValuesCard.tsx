@@ -12,12 +12,16 @@ import {
   selectActiveWorldTradeCodes,
   selectTargetWorld,
   selectTargetWorldName,
+  selectTargetWorldHex,
+  selectTargetWorldSectorAbbr,
   selectTargetWorldLocation,
   selectTargetWorldTradeCodes,
   selectExpectedSalePrice,
   TRADE_CODE_LABELS,
 } from "../../store/selectors/galaxy.selectors";
-import { openSystemDetail } from "../../store/slices/uiSlice";
+import { openWorldDetail } from "../../store/slices/uiSlice";
+import { setActiveWorldHex } from "../../store/slices/galaxySlice";
+import { uwpVal } from "../../lib/worldMap";
 import CreditsBadge from "../ui/CreditsBadge";
 
 const Sep = () => <span className="mx-1 text-(--hud-border)">›</span>;
@@ -46,12 +50,14 @@ const TradeValuesCard = () => {
 
   const targetWorld         = useAppSelector(selectTargetWorld);
   const targetWorldName     = useAppSelector(selectTargetWorldName);
+  const targetWorldHex      = useAppSelector(selectTargetWorldHex);
+  const targetWorldSector   = useAppSelector(selectTargetWorldSectorAbbr);
   const targetWorldLocation = useAppSelector(selectTargetWorldLocation);
   const targetTradeLabels   = useAppSelector(selectTargetWorldTradeCodes);
   const expectedSalePrice   = useAppSelector(selectExpectedSalePrice);
 
-  const activeTL  = activeWorld  ? parseInt(activeWorld.uwp.techLevel,  16) : null;
-  const targetTL  = targetWorld  ? parseInt(targetWorld.uwp.techLevel,  16) : null;
+  const activeTL  = activeWorld  ? uwpVal(activeWorld.uwp.techLevel)  : null;
+  const targetTL  = targetWorld  ? uwpVal(targetWorld.uwp.techLevel)  : null;
 
   return (
     <div className="hud-panel w-52 shrink-0">
@@ -79,7 +85,7 @@ const TradeValuesCard = () => {
                   <span className="text-(--hud-text-dim)">{activeWorldLocation.subsectorName}</span>
                   <Sep />
                   <button
-                    onClick={() => activeWorldHex && dispatch(openSystemDetail(activeWorldHex))}
+                    onClick={() => dispatch(openWorldDetail())}
                     className="text-(--hud-text) hover:text-white transition-colors"
                   >
                     {activeWorldName}
@@ -110,7 +116,17 @@ const TradeValuesCard = () => {
                   <Sep />
                   <span className="text-(--hud-text-dim)">{targetWorldLocation.subsectorName}</span>
                   <Sep />
-                  <span className="text-(--hud-text)">{targetWorldName}</span>
+                  <button
+                    onClick={() => {
+                      if (targetWorldHex && targetWorldSector) {
+                        dispatch(setActiveWorldHex({ hex: targetWorldHex, sectorAbbr: targetWorldSector }));
+                        dispatch(openWorldDetail());
+                      }
+                    }}
+                    className="text-(--hud-text) hover:text-white transition-colors"
+                  >
+                    {targetWorldName}
+                  </button>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-(--hud-text-dim)">
                   {targetTradeLabels.map(l => <CodeBadge key={l} code={l} />)}

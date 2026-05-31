@@ -5,6 +5,7 @@ export type ModalType =
   | "search"
   | "notifications"
   | "map"
+  | "worldDetail"
   | "systemDetail"
   | "userProfile"
   | "jumpRangeSelector"
@@ -77,6 +78,13 @@ export interface WorldUWP {
   techLevel: string;
 }
 
+export interface WorldPBG {
+  raw: string;
+  populationMultiplier: number;
+  belts: number;
+  gasGiants: number;
+}
+
 export interface World {
   hex: string;
   hexX: number;
@@ -90,7 +98,7 @@ export interface World {
   nobility: string;
   bases: string;
   travelZone: string;
-  pbg: string;
+  pbg: WorldPBG;
   worldsInSystem: number;
   allegiance: string;
   stellar: string | null;

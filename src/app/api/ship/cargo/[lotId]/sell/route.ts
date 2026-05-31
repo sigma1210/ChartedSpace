@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getUser } from "@/actions/user";
 import { getClerkId } from "@/lib/devAuth";
 import { deriveTradeClassifications, calculateSalePrice } from "@/lib/trade";
+import { uwpVal } from "@/lib/worldMap";
 
 const UWP_SELECT = {
   size:          true,
@@ -61,8 +62,8 @@ export const POST = async (_req: Request, { params }: Params) => {
 
     const originCodes = deriveTradeClassifications(lot.originWorld);
     const destCodes   = deriveTradeClassifications(lot.ship.currentWorld);
-    const originTL    = parseInt(lot.originWorld.techLevel, 16);
-    const destTL      = parseInt(lot.ship.currentWorld.techLevel, 16);
+    const originTL    = uwpVal(lot.originWorld.techLevel);
+    const destTL      = uwpVal(lot.ship.currentWorld.techLevel);
 
     const salePricePerTon = calculateSalePrice(originCodes, originTL, destCodes, destTL);
     const saleProceeds    = Math.round(salePricePerTon * lot.tons);

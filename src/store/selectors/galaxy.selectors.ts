@@ -5,6 +5,7 @@ import {
   calculateSalePrice,
   deriveWorldPricePerTon,
 } from "@/lib/trade";
+import { uwpVal } from "@/lib/worldMap";
 
 // Wrapper so callers using the World shape still work
 export const deriveTradeClassifications = (world: World): string[] =>
@@ -120,8 +121,8 @@ export const deriveExpectedSalePrice = (
 ): number => {
   const sourceCodes = deriveTradeCodes(sourceWorld.uwp);
   const targetCodes = deriveTradeCodes(targetWorld.uwp);
-  const sourceTL = parseInt(sourceWorld.uwp.techLevel, 16);
-  const targetTL = parseInt(targetWorld.uwp.techLevel, 16);
+  const sourceTL = uwpVal(sourceWorld.uwp.techLevel);
+  const targetTL = uwpVal(targetWorld.uwp.techLevel);
   return calculateSalePrice(sourceCodes, sourceTL, targetCodes, targetTL);
 };
 

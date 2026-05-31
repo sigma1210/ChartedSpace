@@ -7,6 +7,9 @@ import { closeModal } from "../../store/slices/uiSlice";
 import CreditsBadge from "../../components/ui/CreditsBadge";
 import WorldMap from "../../components/world/WorldMap";
 import PlanetGlobe from "../../components/world/PlanetGlobe";
+import StellarView from "../../components/world/StellarView";
+import { uwpVal } from "../../lib/worldMap";
+import { parseAllStars, physicalRadius } from "../../lib/stellar";
 
 // ─── UWP decode tables ────────────────────────────────────────────────────────
 
@@ -64,12 +67,6 @@ const TL_DESC = [
   "Imperial Max",
 ];
 
-const uwpVal = (c: string): number => {
-  if (!c || c === "?") return 0;
-  const n = parseInt(c, 16);
-  return isNaN(n) ? 0 : n;
-};
-
 const desc = (table: string[], c: string, fallback = "—") =>
   table[uwpVal(c)] ?? fallback;
 
@@ -98,9 +95,13 @@ const WorldDetailModal = () => {
   const tradeLabels = useAppSelector(selectActiveWorldTradeLabels);
   const cost        = useAppSelector(selectActiveWorldCost);
 
-  if (activeModal !== "systemDetail" || !world) return null;
+  if (activeModal !== "worldDetail" || !world) return null;
 
-  const zone = travelZoneLabel(world.travelZone);
+  const zone  = travelZoneLabel(world.travelZone);
+  const stars = parseAllStars(world.stellar);
+  const radii = stars.map(physicalRadius);
+  const maxR  = Math.max(...radii, 0.001);
+  const scales = radii.map(r => Math.max(0.15, Math.sqrt(r) / Math.sqrt(maxR)));
 
   return (
     <div
@@ -151,13 +152,18 @@ const WorldDetailModal = () => {
         </div>
 
         {/* ── World map + globe ── */}
-        <div className="flex gap-3 items-start">
-          <div className="flex-1 min-w-0">
-            <WorldMap world={world} />
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-3 w-full">
+            <div className="flex-1 min-w-0">
+              <PlanetGlobe world={world} />
+            </div>
+            {stars.map((star, i) => (
+              <div key={star.raw} className="flex-1 min-w-0">
+                <StellarView starStr={star.raw} scale={scales[i]} />
+              </div>
+            ))}
           </div>
-          <div className="w-40 shrink-0">
-            <PlanetGlobe world={world} />
-          </div>
+          <WorldMap world={world} />
         </div>
 
         {/* ── UWP raw ── */}

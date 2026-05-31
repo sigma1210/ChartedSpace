@@ -74,6 +74,10 @@ const uiSlice = createSlice({
       state.activeSubsector = action.payload;
       state.mapView = "subsector";
     },
+    openWorldDetail(state) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "worldDetail";
+    },
     openSystemDetail(state, action: PayloadAction<string>) {
       state.previousModal = state.activeModal;
       state.activeModal = "systemDetail";
@@ -147,6 +151,7 @@ export const {
   setMapView,
   setActiveSector,
   setActiveSubsector,
+  openWorldDetail,
   openSystemDetail,
   openSearch,
   setSearchQuery,
