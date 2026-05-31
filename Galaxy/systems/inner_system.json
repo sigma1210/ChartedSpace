@@ -1,0 +1,89 @@
+{
+  "type": "center",
+  "distance": 0,
+  "$ref": null,
+  "orbits": [
+    {
+      "ring": 0,
+      "$ref": null
+    },
+    {
+      "ring": 1,
+      "$ref": null
+    },
+    {
+      "ring": 2,
+      "$ref": null,
+      "orbits": [
+        {
+          "ring": 0,
+          "$ref": null
+        }
+      ]
+    },
+    {
+      "ring": 3,
+      "$ref": null,
+      "orbits": [
+        {
+          "ring": 0,
+          "$ref": null
+        }
+      ]
+    },
+    {
+      "ring": 4,
+      "$ref": null,
+      "orbits": [
+        {
+          "ring": 0,
+          "$ref": null
+        },
+        {
+          "ring": 1,
+          "$ref": null
+        }
+      ]
+    },
+    {
+      "ring": 5,
+      "$ref": null,
+      "orbits": [
+        {
+          "ring": 0,
+          "$ref": null
+        },
+        {
+          "ring": 1,
+          "$ref": null
+        },
+        {
+          "ring": 2,
+          "$ref": null
+        }
+      ]
+    },
+    {
+      "ring": 6,
+      "$ref": null,
+      "orbits": [
+        {
+          "ring": 0,
+          "$ref": null
+        },
+        {
+          "ring": 1,
+          "$ref": null
+        },
+        {
+          "ring": 2,
+          "$ref": null
+        },
+        {
+          "ring": 3,
+          "$ref": null
+        }
+      ]
+    }
+  ]
+}

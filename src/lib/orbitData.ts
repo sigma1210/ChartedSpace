@@ -1,4 +1,5 @@
 import type { World } from '../types';
+import { isAsteroid } from './worldMap';
 
 // ─── Orbit AU distances (index = orbit number 0–20) ──────────────────────────
 
@@ -232,8 +233,9 @@ export const buildWorldPlacements = (world: World): WorldPlacement[] => {
 
   // Main world at hz orbit (±1 seeded variation, avoids 0)
   const mainOrbit = place(Math.max(1, hzOrbit + Math.round((rng() - 0.5) * 2)));
+  const mainIsAsteroid = isAsteroid(world);
   result.push({
-    type: 'mainWorld',
+    type: mainIsAsteroid ? 'belt' : 'mainWorld',
     orbitNum: mainOrbit,
     sceneRadius: orbitToScene(mainOrbit),
     angle0: rng() * Math.PI * 2,

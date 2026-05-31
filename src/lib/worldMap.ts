@@ -59,6 +59,9 @@ export const uwpVal = (c: string): number => {
   return isNaN(n) ? 0 : n;
 };
 
+export const isAsteroid = (world: { uwp: { size: string } }): boolean =>
+  uwpVal(world.uwp.size) === 0;
+
 export const terrainColor = (t: Terrain, landColor: string): string => {
   switch (t) {
     case "ocean":
