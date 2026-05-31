@@ -196,22 +196,23 @@ export const assignTerrain = (hexes: HexCell[], world: World, totalH: number): H
   }
 
   // ── Ice caps ─────────────────────────────────────────────────────────────────
-  // Formula from source: floor(hydro/2) - 1 base rows; Ic code adds 1 bonus row.
-  // Polar cap hexes (isPolar) always freeze when iceCapRows >= 0.
+  // Source formula: floor(hydro/2) - 1 rows; Ic adds 1. Row count is relative to
+  // actualTotalRows = 3*size - 1 (not our fixed render size), so small worlds get
+  // proportionally larger polar caps than large ones at the same hydro value.
+  const actualTotalRows = Math.max(1, 3 * size - 1);
   const iceCapRows = Math.floor(hydro / 2) - 1 + (isIc ? 1 : 0);
-  const totalRows  = 3 * RENDER_SIZE - 1;  // 23 for S=8
 
-  cells.forEach(h => {
-    if (h.terrain !== "land") return;
-    if (iceCapRows < 0) return;
-    const latFrac  = h.top / totalH;
-    const rowApprox = latFrac * totalRows;
-    const inNorthCap = h.isPolar && latFrac < 0.5;
-    const inSouthCap = h.isPolar && latFrac >= 0.5;
-    const inNorthRow = iceCapRows >= 1 && rowApprox < iceCapRows;
-    const inSouthRow = iceCapRows >= 1 && (totalRows - rowApprox) < iceCapRows;
-    if (inNorthCap || inSouthCap || inNorthRow || inSouthRow) h.terrain = "ice";
-  });
+  if (iceCapRows >= 0) {
+    // Convert to a fraction of the rendered grid's latitude range.
+    // iceCapRows=0 → freeze only the literal pole tips (~2% of each hemisphere).
+    const iceCapFrac = iceCapRows === 0 ? 0.02 : iceCapRows / actualTotalRows;
+
+    cells.forEach(h => {
+      if (h.terrain !== "land") return;
+      const latFrac = h.top / totalH;
+      if (latFrac < iceCapFrac || latFrac > 1 - iceCapFrac) h.terrain = "ice";
+    });
+  }
 
   // ── Planet-wide climate overrides ────────────────────────────────────────────
   // Applied after ice caps so poles already have ice; these override remaining land/ocean.
