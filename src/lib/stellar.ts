@@ -85,7 +85,8 @@ const RADIUS_TABLE: Record<string, Record<string, [number, number]>> = {
 };
 
 export const physicalRadius = (star: PrimaryStar): number => {
-  if (star.spectralClass === 'D') return 0.013; // white dwarf ~Earth-size
+  if (star.spectralClass === 'D')  return 0.013; // white dwarf ~Earth-size
+  if (star.spectralClass === 'BD') return 0.1;   // brown dwarf ~Jupiter-size
   const classEntry = RADIUS_TABLE[star.spectralClass];
   if (!classEntry) return 1;
   const [r0, r9] = classEntry[star.luminosityClass] ?? classEntry['V'] ?? [1, 1];
@@ -98,12 +99,20 @@ export const DEFAULT_COLORS: StarColors = {
   core: '#fff5a0', mid: '#ffcc00', limb: '#cc2200', glow: '#ff8800',
 };
 
+const BD_COLORS: StarColors = {
+  core: '#8B3A00', mid: '#6B2A00', limb: '#3A1200', glow: '#8B3A00',
+};
+
 export const parseStar = (raw: string): PrimaryStar | null => {
   if (!raw?.trim()) return null;
 
   const parts = raw.trim().split(/\s+/);
   const classStr   = parts[0] ?? '';
   const luminosity = parts[1] ?? 'V';
+
+  if (classStr === 'BD') {
+    return { raw, spectralClass: 'BD', subtype: 0, luminosityClass: '', colors: BD_COLORS };
+  }
 
   if (classStr === 'D') {
     return {

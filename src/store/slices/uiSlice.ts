@@ -83,6 +83,11 @@ const uiSlice = createSlice({
       state.activeModal = "systemDetail";
       state.activeWorldId = action.payload;
     },
+    openUpdatedSystemDetail(state, action: PayloadAction<string>) {
+      state.previousModal = state.activeModal;
+      state.activeModal = "updatedSystemDetail";
+      state.activeWorldId = action.payload;
+    },
     openSearch(state) {
       state.previousModal = state.activeModal;
       state.activeModal = "search";
@@ -153,6 +158,7 @@ export const {
   setActiveSubsector,
   openWorldDetail,
   openSystemDetail,
+  openUpdatedSystemDetail,
   openSearch,
   setSearchQuery,
   setSearchFilter,

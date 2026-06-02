@@ -1,0 +1,115 @@
+[
+  {
+    "Roll": 1,
+    "LGG": -4,
+    "SGG": -3,
+    "IG": 0,
+    "Belt": -2,
+    "World1": 11,
+    "World2": 14
+  },
+  {
+    "Roll": 2,
+    "LGG": -3,
+    "SGG": -2,
+    "IG": 1,
+    "Belt": -1,
+    "World1": 10,
+    "World2": 17
+  },
+  {
+    "Roll": 3,
+    "LGG": -2,
+    "SGG": -1,
+    "IG": 2,
+    "Belt": 0,
+    "World1": 8,
+    "World2": 10
+  },
+  {
+    "Roll": 4,
+    "LGG": -1,
+    "SGG": 0,
+    "IG": 3,
+    "Belt": 1,
+    "World1": 6,
+    "World2": 15
+  },
+  {
+    "Roll": 5,
+    "LGG": 0,
+    "SGG": 1,
+    "IG": 4,
+    "Belt": 2,
+    "World1": 4,
+    "World2": 14
+  },
+  {
+    "Roll": 6,
+    "LGG": 1,
+    "SGG": 2,
+    "IG": 5,
+    "Belt": 3,
+    "World1": 2,
+    "World2": 13
+  },
+  {
+    "Roll": 7,
+    "LGG": 2,
+    "SGG": 3,
+    "IG": 6,
+    "Belt": 4,
+    "World1": 0,
+    "World2": 12
+  },
+  {
+    "Roll": 8,
+    "LGG": 3,
+    "SGG": 4,
+    "IG": 7,
+    "Belt": 5,
+    "World1": 1,
+    "World2": 11
+  },
+  {
+    "Roll": 9,
+    "LGG": 4,
+    "SGG": 5,
+    "IG": 8,
+    "Belt": 6,
+    "World1": 3,
+    "World2": 10
+  },
+  {
+    "Roll": 10,
+    "LGG": 5,
+    "SGG": 6,
+    "IG": 9,
+    "Belt": 7,
+    "World1": 5,
+    "World2": 9
+  },
+  {
+    "Roll": 11,
+    "LGG": 6,
+    "SGG": 7,
+    "IG": 10,
+    "Belt": 8,
+    "World1": 7,
+    "World2": 8
+  },
+  {
+    "Roll": 12,
+    "LGG": 7,
+    "SGG": 8,
+    "IG": 11,
+    "Belt": 9,
+    "World1": 9,
+    "World2": 7
+  },
+  {
+    "_note1": "world placement is based on Orbit",
+    "_note2": "If an orbit is duplicated or precluded, adjust to an adjecent or the closest possible orbit",
+    "_note3": "GG and Belt placement are relative to HZ"
+  }
+]

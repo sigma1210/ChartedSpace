@@ -207,6 +207,7 @@ export interface WorldPlacement {
   sceneRadius: number;
   angle0:      number; // initial angle (radians)
   label?:      string;
+  satellite?:  { moonRadius: number }; // gas giant hosting the main world as a moon
 }
 
 // ─── Build placements ─────────────────────────────────────────────────────────

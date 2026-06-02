@@ -1,0 +1,209 @@
+{
+  "version": "1.0",
+  "id": "Spin/1910",
+  "sector": "Spin",
+  "hex": "1910",
+  "name": "Regina",
+  "dataSource": "derived",
+
+  "stars": [
+    {
+      "index": 0,
+      "role": "primary",
+      "spectral": "F7 V",
+      "dataSource": "derived",
+      "stellarClass": "main-sequence",
+      "color": "#FFFACD",
+      "radiusScale": 1.2,
+      "habitableZone": {
+        "orbitId": 4,
+        "hz": 4.1,
+        "innerAU": 1.6,
+        "outerAU": 2.0
+      },
+      "orbitId": null
+    },
+    {
+      "index": 1,
+      "role": "close-companion",
+      "spectral": "BD",
+      "dataSource": "canonical",
+      "stellarClass": "brown-dwarf",
+      "color": "#8B3A00",
+      "radiusScale": 0.1,
+      "habitableZone": null,
+      "orbitId": 0,
+      "au": 0.2,
+      "proximity": "close",
+      "_note": "BD forms a close pair with the F7 V primary — together they are the gravitational center of the primary system. Placed at orbitId 0 (0.2 AU) by convention."
+    },
+    {
+      "index": 2,
+      "role": "far-companion",
+      "spectral": "M3 V",
+      "dataSource": "canonical",
+      "stellarClass": "main-sequence",
+      "color": "#FF4500",
+      "radiusScale": 0.35,
+      "habitableZone": null,
+      "orbitId": 16,
+      "au": 4900,
+      "canonicalAU": 5000,
+      "proximity": "far",
+      "_note": "M3 V secondary in far orbit at 5000 AU (canonical). Mapped to orbitId 16 (4900 AU) — nearest slot in orbits.json."
+    }
+  ],
+
+  "orbits": [
+    {
+      "_note": "Main world placed at orbitId 4 (1.6 AU) — nearest integer to F7 V hz 4.1. Derived from STAR_HZ lookup.",
+      "orbitId": 4,
+      "au": 1.6,
+      "zone": "habitable",
+      "dataSource": "derived",
+      "body": {
+        "kind": "world",
+        "isMainWorld": true,
+        "dataSource": "derived",
+
+        "name": "Regina",
+        "sizeCode": "7",
+        "diameterKm": 11200,
+
+        "atmosphereCode": "8",
+        "atmosphereType": "dense",
+
+        "hydrographicsCode": "8",
+        "surfaceType": "terran",
+
+        "tradeCodes": ["Ri", "Pa", "Ph", "An", "Cp", "Ht"],
+
+        "axialTilt": null,
+        "rotationPeriodH": null,
+        "canonicalTexture": null,
+        "moons": [],
+        "hasRings": null
+      }
+    }
+  ],
+
+  "unplaced": [
+    {
+      "kind": "gasGiant",
+      "dataSource": "derived",
+      "classification": null,
+      "hasRings": null,
+      "moons": []
+    },
+    {
+      "kind": "gasGiant",
+      "dataSource": "derived",
+      "classification": null,
+      "hasRings": null,
+      "moons": []
+    },
+    {
+      "kind": "gasGiant",
+      "dataSource": "derived",
+      "classification": null,
+      "hasRings": null,
+      "moons": []
+    },
+    {
+      "kind": "world",
+      "dataSource": "derived",
+      "sizeCode": null,
+      "diameterKm": null,
+      "atmosphereCode": null,
+      "atmosphereType": null,
+      "hydrographicsCode": null,
+      "surfaceType": null,
+      "tradeCodes": [],
+      "axialTilt": null,
+      "rotationPeriodH": null,
+      "canonicalTexture": null,
+      "moons": [],
+      "hasRings": null
+    },
+    {
+      "kind": "world",
+      "dataSource": "derived",
+      "sizeCode": null,
+      "diameterKm": null,
+      "atmosphereCode": null,
+      "atmosphereType": null,
+      "hydrographicsCode": null,
+      "surfaceType": null,
+      "tradeCodes": [],
+      "axialTilt": null,
+      "rotationPeriodH": null,
+      "canonicalTexture": null,
+      "moons": [],
+      "hasRings": null
+    },
+    {
+      "kind": "world",
+      "dataSource": "derived",
+      "sizeCode": null,
+      "diameterKm": null,
+      "atmosphereCode": null,
+      "atmosphereType": null,
+      "hydrographicsCode": null,
+      "surfaceType": null,
+      "tradeCodes": [],
+      "axialTilt": null,
+      "rotationPeriodH": null,
+      "canonicalTexture": null,
+      "moons": [],
+      "hasRings": null
+    },
+    {
+      "kind": "world",
+      "dataSource": "derived",
+      "sizeCode": null,
+      "diameterKm": null,
+      "atmosphereCode": null,
+      "atmosphereType": null,
+      "hydrographicsCode": null,
+      "surfaceType": null,
+      "tradeCodes": [],
+      "axialTilt": null,
+      "rotationPeriodH": null,
+      "canonicalTexture": null,
+      "moons": [],
+      "hasRings": null
+    },
+    {
+      "kind": "world",
+      "dataSource": "derived",
+      "sizeCode": null,
+      "diameterKm": null,
+      "atmosphereCode": null,
+      "atmosphereType": null,
+      "hydrographicsCode": null,
+      "surfaceType": null,
+      "tradeCodes": [],
+      "axialTilt": null,
+      "rotationPeriodH": null,
+      "canonicalTexture": null,
+      "moons": [],
+      "hasRings": null
+    }
+  ],
+
+  "counts": {
+    "totalWorldsInSystem": 9,
+    "gasGiants": 3,
+    "belts": 0,
+    "otherRockyWorlds": 5,
+    "_note": "otherRockyWorlds = worldsInSystem (9) - mainWorld (1) - gasGiants (3) - belts (0) = 5"
+  },
+
+  "infrastructure": {
+    "navalBase": true,
+    "scoutBase": true,
+    "wayStation": false
+  },
+
+  "travelZone": null
+}

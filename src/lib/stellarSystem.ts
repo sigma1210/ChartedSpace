@@ -1,4 +1,6 @@
 import { parseStar, physicalRadius, type PrimaryStar } from './stellar';
+import { orbitToScene } from './orbitData';
+import type { SystemStar } from '../store/selectors/system.selectors';
 
 // ─── Mass estimation (solar masses) ──────────────────────────────────────────
 // Interpolated from subtype 0 to 9 within each class.
@@ -11,7 +13,8 @@ const MASS_BY_CLASS: Record<string, [number, number]> = {
 const LUM_FACTOR: Record<string, number> = { V: 1, IV: 1.3, II: 2.5, D: 1 };
 
 export const deriveMass = (star: PrimaryStar): number => {
-  if (star.spectralClass === 'D') return 0.6;
+  if (star.spectralClass === 'D')  return 0.6;
+  if (star.spectralClass === 'BD') return 0.05;
   const [m0, m9] = MASS_BY_CLASS[star.spectralClass] ?? [1, 1];
   const base = m0 + (m9 - m0) * (star.subtype / 9);
   return base * (LUM_FACTOR[star.luminosityClass] ?? 1);
@@ -100,6 +103,88 @@ const trinaryLayout = (a: PrimaryStar, b: PrimaryStar, c: PrimaryStar): SystemLa
     innerAngularVelocity: INNER_ω,
     innerBinaryRadius: OUTER_SEP * mC  / total,
     companionRadius:   OUTER_SEP * mAB / total,
+  };
+};
+
+// ─── Layout from SystemData ───────────────────────────────────────────────────
+// Builds a SystemLayout directly from parsed SystemData.stars[].
+// Uses radiusScale from the data for visual sizing instead of re-deriving
+// from spectral physics, so canonical overrides (e.g. BD companion) render
+// at the correct relative size.
+
+const toSlot = (s: SystemStar, orbitRadius: number, maxScale: number): StarSlot => {
+  const parsed = parseStar(s.spectral) ?? parseStar('G2 V')!;
+  const t = Math.min(Math.sqrt(s.radiusScale / maxScale), 1.0);
+  return {
+    star:         parsed,
+    mass:         deriveMass(parsed),
+    visualRadius: MIN_VR + t * (MAX_VR - MIN_VR),
+    orbitRadius,
+  };
+};
+
+export const buildLayoutFromSystemData = (stars: SystemStar[]): SystemLayout => {
+  if (stars.length === 0) return buildSystemLayout(null);
+
+  const maxScale  = Math.max(...stars.map(s => s.radiusScale));
+  const primary   = stars.find(s => s.role === 'primary') ?? stars[0];
+  const close     = stars.find(s => s.role === 'close-companion');
+  const far       = stars.find(s => s.role === 'far-companion');
+
+  if (!close && !far) {
+    return {
+      type: 'single',
+      slots: [toSlot(primary, 0, maxScale)],
+      outerAngularVelocity: 0,
+      innerAngularVelocity: 0,
+      innerBinaryRadius: 0,
+      companionRadius: 0,
+    };
+  }
+
+  const companion = close ?? far!;
+  if (!close || !far) {
+    const pSlot = toSlot(primary, 0, maxScale);
+    const cSlot = toSlot(companion, 0, maxScale);
+    const total = pSlot.mass + cSlot.mass;
+    // Close companion: use orbitToScene so it matches planet orbit scale.
+    // Far companion: keep fixed visual constant — 4900 AU is not literally scaleable.
+    const sep = companion.role === 'close-companion'
+      ? orbitToScene(companion.orbitId ?? 0)
+      : BINARY_SEP;
+    return {
+      type: 'binary',
+      slots: [
+        { ...pSlot, orbitRadius: sep * cSlot.mass / total },
+        { ...cSlot, orbitRadius: sep * pSlot.mass / total },
+      ],
+      outerAngularVelocity: OUTER_ω,
+      innerAngularVelocity: 0,
+      innerBinaryRadius: 0,
+      companionRadius: 0,
+    };
+  }
+
+  // Trinary: primary + close-companion (inner pair) + far-companion (outer).
+  // Inner separation driven by close companion's actual orbitId so it sits at
+  // the same scale as planet orbits. Outer separation stays a fixed visual constant.
+  const pSlot    = toSlot(primary, 0, maxScale);
+  const cSlot    = toSlot(close, 0, maxScale);
+  const fSlot    = toSlot(far, 0, maxScale);
+  const mAB      = pSlot.mass + cSlot.mass;
+  const total    = mAB + fSlot.mass;
+  const innerSep = orbitToScene(close.orbitId ?? 0);
+  return {
+    type: 'trinary',
+    slots: [
+      { ...pSlot, orbitRadius: innerSep * cSlot.mass / (pSlot.mass + cSlot.mass) },
+      { ...cSlot, orbitRadius: innerSep * pSlot.mass / (pSlot.mass + cSlot.mass) },
+      { ...fSlot, orbitRadius: OUTER_SEP * mAB / total },
+    ],
+    outerAngularVelocity: OUTER_ω,
+    innerAngularVelocity: INNER_ω,
+    innerBinaryRadius:    OUTER_SEP * fSlot.mass / total,
+    companionRadius:      OUTER_SEP * mAB / total,
   };
 };
 

@@ -5,6 +5,7 @@ import CharacterListButton from "./CharacterListButton";
 import CharacterAvatar from "./CharacterAvatar";
 import ResignButton from "./ResignButton";
 import SystemViewButton from "./SystemViewButton";
+import UpdatedSystemViewButton from "./UpdatedSystemViewButton";
 import CharacterCreateModal from "./CharacterCreateModal";
 import CharacterListModal from "../../components/modals/CharacterListModal";
 import CharacterProfileModal from "../../components/modals/CharacterProfileModal";
@@ -12,6 +13,7 @@ import JumpRangeModal from "../../components/modals/JumpRangeModal";
 import CrewManagementModal from "../../components/modals/CrewManagementModal";
 import WorldDetailModal from "../../components/modals/WorldDetailModal";
 import SystemDetailModal from "../../components/modals/SystemDetailModal";
+import UpdatedSystemDetailModal from "../../components/modals/UpdatedSystemDetailModal";
 import MapColumns from "./MapColumns";
 
 const isDevMode = process.env.DEV_MODE === "true";
@@ -30,6 +32,7 @@ const MapPage = () => {
           <div className="flex items-center gap-3">
             <ResignButton />
             <SystemViewButton />
+            <UpdatedSystemViewButton />
             <CharacterListButton />
             <CreateCharacterButton />
             {isDevMode && <DevLogoutButton />}
@@ -44,6 +47,7 @@ const MapPage = () => {
 
       <WorldDetailModal />
       <SystemDetailModal />
+      <UpdatedSystemDetailModal />
       <CharacterCreateModal />
       <CharacterListModal />
       <CharacterProfileModal />

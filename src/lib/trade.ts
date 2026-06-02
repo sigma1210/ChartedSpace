@@ -38,7 +38,6 @@ export const deriveTradeClassifications = (uwp: TradeUWP): string[] => {
   const g = hx(uwp.government);
   const l = hx(uwp.lawLevel);
   const t = hx(uwp.techLevel);
-console.log({t});
   const codes: string[] = [];
   if (a >= 4 && a <= 9 && h >= 4 && h <= 8 && p >= 5 && p <= 7) codes.push("Ag");
   if (s === 0 && a === 0 && h === 0)                               codes.push("As");

@@ -1,14 +1,17 @@
 "use client";
 
 import { useMemo, useRef, useCallback, useEffect } from "react";
+import { useSelector } from "react-redux";
 import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { World } from "../../types";
-import { buildSystemLayout, type SystemLayout, type StarSlot } from "../../lib/stellarSystem";
-import { buildWorldPlacements, type WorldPlacement } from "../../lib/orbitData";
+import { buildSystemLayout, buildLayoutFromSystemData, type SystemLayout, type StarSlot } from "../../lib/stellarSystem";
+import { buildWorldPlacements, orbitToScene, seededRng, type WorldPlacement, type WorldBodyType } from "../../lib/orbitData";
+import { spectralMass, epochAngle, elapsedDaysAtTurn } from "../../lib/orbitalMechanics";
 import { buildTexture, cloudConfig, getCloudTex, PLANET_SPEED, type CloudConfig } from "./PlanetGlobe";
 import { uwpVal } from "../../lib/worldMap";
+import { selectActiveWorldSystem, type SystemData, type WorldBody as SystemWorldBody, type SystemOrbit, type UnplacedBody } from "../../store/selectors/system.selectors";
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
 
@@ -129,16 +132,21 @@ const StarSphere = ({ slot, position, onPivot }: StarSphereProps) => {
 
 // ─── Star scenes ─────────────────────────────────────────────────────────────
 
-type SceneProps = { layout: SystemLayout; onPivot: (pos: THREE.Vector3) => void };
+type SceneProps = {
+  layout: SystemLayout;
+  onPivot: (pos: THREE.Vector3) => void;
+  companionChildren?: React.ReactNode;
+  epochAngles?: { inner: number; outer: number };
+};
 
 const SingleScene = ({ layout, onPivot }: SceneProps) => (
   <StarSphere slot={layout.slots[0]} position={[0, 0, 0]} onPivot={onPivot} />
 );
 
-const BinaryScene = ({ layout, onPivot }: SceneProps) => {
+const BinaryScene = ({ layout, onPivot, companionChildren, epochAngles }: SceneProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const [sA, sB] = layout.slots;
-  useFrame((_, dt) => { if (groupRef.current) groupRef.current.rotation.y += layout.outerAngularVelocity * dt; });
+  useEffect(() => { if (groupRef.current) groupRef.current.rotation.y = epochAngles?.outer ?? 0; }, []);
   return (
     <>
       <OrbitalRing radius={sA.orbitRadius} />
@@ -146,19 +154,24 @@ const BinaryScene = ({ layout, onPivot }: SceneProps) => {
       <group ref={groupRef}>
         <StarSphere slot={sA} position={[ sA.orbitRadius, 0, 0]} onPivot={onPivot} />
         <StarSphere slot={sB} position={[-sB.orbitRadius, 0, 0]} onPivot={onPivot} />
+        {companionChildren && (
+          <group position={[-sB.orbitRadius, 0, 0]}>
+            {companionChildren}
+          </group>
+        )}
       </group>
     </>
   );
 };
 
-const TrinaryScene = ({ layout, onPivot }: SceneProps) => {
+const TrinaryScene = ({ layout, onPivot, companionChildren, epochAngles }: SceneProps) => {
   const outerRef = useRef<THREE.Group>(null);
   const innerRef = useRef<THREE.Group>(null);
   const [sA, sB, sC] = layout.slots;
-  useFrame((_, dt) => {
-    if (outerRef.current) outerRef.current.rotation.y += layout.outerAngularVelocity * dt;
-    if (innerRef.current) innerRef.current.rotation.y += layout.innerAngularVelocity * dt;
-  });
+  useEffect(() => {
+    if (outerRef.current) outerRef.current.rotation.y = epochAngles?.outer ?? 0;
+    if (innerRef.current) innerRef.current.rotation.y = epochAngles?.inner ?? 0;
+  }, []);
   return (
     <>
       <OrbitalRing radius={layout.innerBinaryRadius} />
@@ -171,15 +184,20 @@ const TrinaryScene = ({ layout, onPivot }: SceneProps) => {
           </group>
         </group>
         <StarSphere slot={sC} position={[-layout.companionRadius, 0, 0]} onPivot={onPivot} />
+        {companionChildren && (
+          <group position={[-layout.companionRadius, 0, 0]}>
+            {companionChildren}
+          </group>
+        )}
       </group>
     </>
   );
 };
 
-const SystemScene = ({ layout, onPivot }: SceneProps) => {
+const SystemScene = ({ layout, onPivot, companionChildren, epochAngles }: SceneProps) => {
   if (layout.type === "single")  return <SingleScene  layout={layout} onPivot={onPivot} />;
-  if (layout.type === "binary")  return <BinaryScene  layout={layout} onPivot={onPivot} />;
-  return                                <TrinaryScene layout={layout} onPivot={onPivot} />;
+  if (layout.type === "binary")  return <BinaryScene  layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />;
+  return                                <TrinaryScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />;
 };
 
 // ─── World body (orbiting planet) ────────────────────────────────────────────
@@ -199,6 +217,8 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
   const speed    = 0.03 / Math.sqrt(Math.max(1, placement.orbitNum));
   const r        = placement.sceneRadius;
 
+  useEffect(() => { if (orbitRef.current) orbitRef.current.rotation.y = placement.angle0; }, []);
+
   const texture = useMemo(() => buildTexture(world), [world]);
   useEffect(() => () => texture.dispose(), [texture]);
 
@@ -208,7 +228,6 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
   );
 
   useFrame((_, dt) => {
-    if (orbitRef.current) orbitRef.current.rotation.y += speed * dt;
     if (spinRef.current)  spinRef.current.rotation.y  += dt * PLANET_SPEED;
     if (cloudRef.current && clouds)
       cloudRef.current.rotation.y += dt * PLANET_SPEED * clouds.speedMult;
@@ -248,6 +267,65 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
             {placement.label}
           </span>
         </Html>
+      </group>
+    </>
+  );
+};
+
+// ─── Placed world body (non-main world from SystemData) ──────────────────────
+// Renders a placed non-main world using surface type for colour. No World object
+// available so no Voronoi texture — a flat material is honest about what we know.
+
+const SURFACE_COLOR: Record<string, string> = {
+  barren: "#6b7280", vacuum: "#4b5563", desert: "#c2750c",
+  arid: "#92644a",   terran: "#2563eb", ocean: "#1d4ed8",
+  ice: "#bae6fd",    exotic: "#7c3aed", corrosive: "#b45309",
+  insidious: "#991b1b", hellworld: "#dc2626",
+};
+
+const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: THREE.Vector3) => void }) => {
+  const body = orbit.body as SystemWorldBody;
+  const orbitRef = useRef<THREE.Group>(null);
+  const cloudRef = useRef<THREE.Mesh>(null);
+  const r     = orbitToScene(orbit.orbitId);
+  const color = SURFACE_COLOR[body.surfaceType ?? "barren"] ?? "#6b7280";
+  const atmoVal = uwpVal(body.atmosphereCode ?? "0");
+  const clouds = useMemo(() => cloudConfig(atmoVal), [atmoVal]);
+
+  useEffect(() => { if (orbitRef.current) orbitRef.current.rotation.y = orbit.angle0; }, []);
+
+  useFrame((_, dt) => {
+    if (cloudRef.current && clouds) cloudRef.current.rotation.y += dt * PLANET_SPEED * clouds.speedMult;
+  });
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    const pos = new THREE.Vector3();
+    e.object.getWorldPosition(pos);
+    onPivot(pos);
+  };
+
+  return (
+    <>
+      <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
+      <group ref={orbitRef}>
+        <group position={[r, 0, 0]}>
+          <mesh onClick={handleClick}>
+            <sphereGeometry args={[WORLD_R, 16, 16]} />
+            <meshStandardMaterial color={color} />
+          </mesh>
+          {clouds && (
+            <mesh ref={cloudRef}>
+              <sphereGeometry args={[WORLD_R * 1.015, 16, 16]} />
+              <meshStandardMaterial alphaMap={getCloudTex()} color={clouds.color} transparent opacity={clouds.opacity} depthWrite={false} />
+            </mesh>
+          )}
+        </group>
+        {body.name && (
+          <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none" }}>
+            <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#22d3ee", whiteSpace: "nowrap" }}>{body.name}</span>
+          </Html>
+        )}
       </group>
     </>
   );
@@ -323,13 +401,16 @@ type GasGiantBodyProps = {
   placement: WorldPlacement;
   idx: number;
   onPivot: (pos: THREE.Vector3) => void;
+  world?: World;
 };
 
-const GasGiantBody = ({ placement, idx, onPivot }: GasGiantBodyProps) => {
+const GasGiantBody = ({ placement, idx, onPivot, world }: GasGiantBodyProps) => {
   const ref   = useRef<THREE.Group>(null);
   const speed = 0.018 / Math.sqrt(Math.max(1, placement.orbitNum));
   const r     = placement.sceneRadius;
   const type  = ggType(placement.orbitNum);
+
+  useEffect(() => { if (ref.current) ref.current.rotation.y = placement.angle0; }, []);
 
   // Ringed: jovian every 4th, ice every other — use Saturn texture + ring image
   const hasRing = (type === 'jovian' && idx % 4 === 0) || (type === 'ice' && idx % 2 === 0);
@@ -346,7 +427,10 @@ const GasGiantBody = ({ placement, idx, onPivot }: GasGiantBodyProps) => {
     [hasRing, radius],
   );
 
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += speed * dt; });
+  const moonPlacement = useMemo((): WorldPlacement | null => {
+    if (!placement.satellite || !world) return null;
+    return { type: "mainWorld", orbitNum: 1, sceneRadius: placement.satellite.moonRadius, angle0: 0, label: world.name };
+  }, [placement.satellite, world]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -368,6 +452,9 @@ const GasGiantBody = ({ placement, idx, onPivot }: GasGiantBodyProps) => {
             <mesh geometry={ringGeo} rotation={[Math.PI / 2.3, 0, 0]}>
               <meshBasicMaterial map={ringTex()} side={THREE.DoubleSide} transparent />
             </mesh>
+          )}
+          {moonPlacement && world && (
+            <WorldBody placement={moonPlacement} world={world} onPivot={onPivot} />
           )}
         </group>
       </group>
@@ -408,7 +495,7 @@ const OtherWorld = ({ placement, onPivot }: { placement: WorldPlacement; onPivot
   const speed = 0.05 / Math.sqrt(Math.max(1, placement.orbitNum));
   const r     = placement.sceneRadius;
 
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += speed * dt; });
+  useEffect(() => { if (ref.current) ref.current.rotation.y = placement.angle0; }, []);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -430,49 +517,178 @@ const OtherWorld = ({ placement, onPivot }: { placement: WorldPlacement; onPivot
   );
 };
 
-// ─── World system layer (all bodies) ─────────────────────────────────────────
+// ─── Companion bodies (orbiting the far companion star) ──────────────────────
+// Rendered inside the companion's animated group in BinaryScene/TrinaryScene,
+// so they move with the companion rather than orbiting the primary.
 
-type WorldSystemProps = { world: World; onPivot: (pos: THREE.Vector3) => void };
-
-const WorldSystem = ({ world, onPivot }: WorldSystemProps) => {
-  const placements = useMemo(() => buildWorldPlacements(world), [world]);
-
-  // Pre-assign a stable per-giant index so useMemo deps inside GasGiantBody are stable
-  let ggCount = 0;
-  const tagged = placements.map(p => ({ p, ggIdx: p.type === "gasGiant" ? ggCount++ : -1 }));
-
+const CompanionBodies = ({
+  orbits, onPivot,
+}: {
+  orbits: SystemOrbit[];
+  onPivot: (p: THREE.Vector3) => void;
+}) => {
+  let ggIdx = 0;
   return (
     <>
-      {tagged.map(({ p, ggIdx }, i) => {
-        if (p.type === "mainWorld") return <WorldBody    key={i} placement={p} world={world} onPivot={onPivot} />;
-        if (p.type === "gasGiant")  return <GasGiantBody key={i} placement={p} idx={ggIdx}   onPivot={onPivot} />;
-        if (p.type === "belt")      return <BeltRing     key={i} placement={p} />;
-        return                             <OtherWorld   key={i} placement={p} onPivot={onPivot} />;
+      {orbits.map((orbit, i) => {
+        const b = orbit.body;
+        if (b.kind === "gasGiant") {
+          const p: WorldPlacement = { type: "gasGiant", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 };
+          return <GasGiantBody key={i} placement={p} idx={ggIdx++} onPivot={onPivot} />;
+        }
+        if (b.kind === "belt") {
+          const p: WorldPlacement = { type: "belt", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: 0 };
+          return <BeltRing key={i} placement={p} />;
+        }
+        return <OtherWorld key={i} placement={{ type: "otherWorld", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 }} onPivot={onPivot} />;
       })}
     </>
   );
 };
 
+// ─── World system layer (all bodies) ─────────────────────────────────────────
+// Placed bodies render directly from SystemData.orbits[] using orbit.orbitId for
+// position. Unplaced bodies are scattered procedurally — their orbit is unknown.
+
+type WorldSystemProps = {
+  world: World;
+  onPivot: (pos: THREE.Vector3) => void;
+  systemData: SystemData | null;
+};
+
+const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
+  const useData = !!(systemData && systemData.hex === world.hex);
+  const rng     = useMemo(() => seededRng(world.hex), [world.hex]);
+
+  // ── Placed bodies (data-driven) ────────────────────────────────────────────
+  const placedElements = useMemo(() => {
+    if (!useData || !systemData) return null;
+    let ggIdx = 0;
+    return systemData.orbits.map((orbit, i) => {
+      const b = orbit.body;
+      if (b.kind === "gasGiant") {
+        const hasMainMoon = b.moons.some(m => m.kind === "world" && m.isMainWorld);
+        const placement: WorldPlacement = {
+          type: "gasGiant", orbitNum: orbit.orbitId,
+          sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0,
+          ...(hasMainMoon ? { satellite: { moonRadius: 0.5 } } : {}),
+        };
+        return <GasGiantBody key={i} placement={placement} idx={ggIdx++} onPivot={onPivot} world={hasMainMoon ? world : undefined} />;
+      }
+      if (b.kind === "belt") {
+        const placement: WorldPlacement = { type: "belt", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 };
+        return <BeltRing key={i} placement={placement} />;
+      }
+      if (b.kind === "world" && b.isMainWorld) {
+        const placement: WorldPlacement = { type: "mainWorld", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0, label: world.name };
+        return <WorldBody key={i} placement={placement} world={world} onPivot={onPivot} />;
+      }
+      // Non-main placed world — render from body data
+      return <PlacedWorldBody key={i} orbit={orbit} onPivot={onPivot} />;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useData, systemData, world, onPivot]);
+
+  // ── Unplaced bodies (procedural scatter) ───────────────────────────────────
+  const unplacedElements = useMemo(() => {
+    if (!useData || !systemData) return null;
+    const used       = new Set(systemData.orbits.map(o => o.orbitId));
+    const mainOrbit  = systemData.orbits[0]?.orbitId ?? 3;
+    const place      = (c: number) => { let o = Math.max(1, c); while (used.has(o)) o++; used.add(o); return o; };
+    let ggOffset = 2, otherOffset = 1, ggIdx = systemData.orbits.filter(o => o.body.kind === "gasGiant").length;
+
+    return systemData.unplaced.map((body, i) => {
+      if (body.kind === "gasGiant") {
+        const orbitNum = place(mainOrbit + ggOffset++);
+        const p: WorldPlacement = { type: "gasGiant", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: rng() * Math.PI * 2 };
+        return <GasGiantBody key={`u${i}`} placement={p} idx={ggIdx++} onPivot={onPivot} />;
+      }
+      if (body.kind === "belt") {
+        const orbitNum = place(mainOrbit - 1);
+        const p: WorldPlacement = { type: "belt", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: 0 };
+        return <BeltRing key={`u${i}`} placement={p} />;
+      }
+      if (body.kind === "world") {
+        const candidate = mainOrbit - otherOffset++;
+        if (candidate < 1) return null;
+        const orbitNum = place(candidate);
+        const p: WorldPlacement = { type: "otherWorld", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: rng() * Math.PI * 2 };
+        return <OtherWorld key={`u${i}`} placement={p} onPivot={onPivot} />;
+      }
+      return null;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useData, systemData, onPivot]);
+
+  // ── Procedural fallback (no system data) ──────────────────────────────────
+  const proceduralElements = useMemo(() => {
+    if (useData) return null;
+    const placements = buildWorldPlacements(world);
+    let ggCount = 0;
+    return placements.map((p, i) => {
+      if (p.type === "mainWorld") return <WorldBody    key={i} placement={p} world={world} onPivot={onPivot} />;
+      if (p.type === "gasGiant")  return <GasGiantBody key={i} placement={p} idx={ggCount++} onPivot={onPivot} />;
+      if (p.type === "belt")      return <BeltRing     key={i} placement={p} />;
+      return                             <OtherWorld   key={i} placement={p} onPivot={onPivot} />;
+    });
+  }, [useData, world, onPivot]);
+
+  return <>{placedElements}{unplacedElements}{proceduralElements}</>;
+};
+
 // ─── Camera distance ──────────────────────────────────────────────────────────
 
-const cameraZ = (layout: SystemLayout, placements: WorldPlacement[]): number => {
-  const outermost = placements.reduce((max, p) => Math.max(max, p.sceneRadius), 0);
-  const starBase  = layout.type === "single" ? 10 : layout.type === "binary" ? 16 : Math.max(22, layout.companionRadius * 2.8);
-  return Math.max(starBase, outermost * 1.5);
+const cameraZ = (layout: SystemLayout, outermostScene: number): number => {
+  const starBase = layout.type === "single" ? 10 : layout.type === "binary" ? 16 : Math.max(22, layout.companionRadius * 2.8);
+  return Math.max(starBase, outermostScene * 1.5);
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const StarSystemView = ({ world }: { world: World }) => {
-  const layout      = useMemo(() => buildSystemLayout(world.stellar), [world.stellar]);
-  const placements  = useMemo(() => buildWorldPlacements(world), [world]);
-  const camZ        = cameraZ(layout, placements);
+  const systemData = useSelector(selectActiveWorldSystem);
+  const useData    = !!(systemData && systemData.hex === world.hex);
+
+  const layout = useMemo(
+    () => useData ? buildLayoutFromSystemData(systemData!.stars) : buildSystemLayout(world.stellar),
+    [useData, systemData, world.stellar],
+  );
+
+  const currentTurn = useSelector((s: { turn?: { currentTurn?: number } }) => s.turn?.currentTurn ?? 1);
+
+  // Star epoch angles — companions frozen at their calendar position
+  const epochAngles = useMemo(() => {
+    if (!useData || !systemData) return { inner: 0, outer: 0 };
+    const elapsed = elapsedDaysAtTurn(currentTurn);
+    const primary = systemData.stars.find(s => s.role === "primary");
+    const close   = systemData.stars.find(s => s.role === "close-companion");
+    const far     = systemData.stars.find(s => s.role === "far-companion");
+    const pMass = primary ? spectralMass(primary.spectral) : 1.0;
+    const cMass = close   ? spectralMass(close.spectral)   : 0;
+    const fMass = far     ? spectralMass(far.spectral)     : 0;
+    return {
+      inner: close?.au ? epochAngle(close.au, elapsed, pMass + cMass) : 0,
+      outer: far?.au   ? epochAngle(far.au,   elapsed, pMass + cMass + fMass) : 0,
+    };
+  }, [useData, systemData, currentTurn]);
+
   const controlsRef = useRef<ControlsHandle>(null);
   const pivotTarget = useRef(new THREE.Vector3());
+  const onPivot = useCallback((pos: THREE.Vector3) => { pivotTarget.current.copy(pos); }, []);
 
-  const onPivot = useCallback((pos: THREE.Vector3) => {
-    pivotTarget.current.copy(pos);
-  }, []);
+  const companionChildren = useData && systemData && systemData.companionOrbits.length > 0
+    ? <CompanionBodies orbits={systemData.companionOrbits} onPivot={onPivot} />
+    : undefined;
+
+  const outermostScene = useMemo(() => {
+    if (useData && systemData) {
+      const all = [...systemData.orbits, ...systemData.companionOrbits];
+      return all.reduce((m, o) => Math.max(m, orbitToScene(o.orbitId)), 0);
+    }
+    return buildWorldPlacements(world).reduce((m, p) => Math.max(m, p.sceneRadius), 0);
+  }, [useData, systemData, world]);
+
+  const camZ = cameraZ(layout, outermostScene);
 
   return (
     <div style={{ width: "100%", height: "100%", background: "#020c14" }}>
@@ -480,8 +696,8 @@ const StarSystemView = ({ world }: { world: World }) => {
         <ambientLight intensity={0.6} />
         <directionalLight position={[2, 3, 4]} intensity={1.4} />
         <Starfield />
-        <SystemScene layout={layout} onPivot={onPivot} />
-        <WorldSystem world={world} onPivot={onPivot} />
+        <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
+        <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
         <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />

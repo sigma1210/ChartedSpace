@@ -1,0 +1,110 @@
+[
+  {
+    "Roll": 1,
+    "SizeCode": "L",
+    "SizeValue": 20,
+    "Diameter": 20000,
+    "Type": "SGG",
+    "G": 0.2
+  },
+  {
+    "Roll": 2,
+    "SizeCode": "M",
+    "SizeValue": 21,
+    "Diameter": 30000,
+    "Type": "SGG",
+    "G": 0.3
+  },
+  {
+    "Roll": 3,
+    "SizeCode": "N",
+    "SizeValue": 22,
+    "Diameter": 40000,
+    "Type": "SGG",
+    "G": 0.4
+  },
+  {
+    "Roll": 4,
+    "SizeCode": "P",
+    "SizeValue": 23,
+    "Diameter": 50000,
+    "Type": "SGG",
+    "G": 0.5
+  },
+  {
+    "Roll": 5,
+    "SizeCode": "Q",
+    "SizeValue": 24,
+    "Diameter": 60000,
+    "Type": "LGG",
+    "G": 0.6
+  },
+  {
+    "Roll": 6,
+    "SizeCode": "R",
+    "SizeValue": 25,
+    "Diameter": 70000,
+    "Type": "LGG",
+    "G": 0.7
+  },
+  {
+    "Roll": 7,
+    "SizeCode": "S",
+    "SizeValue": 26,
+    "Diameter": 80000,
+    "Type": "LGG",
+    "G": 0.8
+  },
+  {
+    "Roll": 8,
+    "SizeCode": "T",
+    "SizeValue": 27,
+    "Diameter": 90000,
+    "Type": "LGG",
+    "G": 0.9
+  },
+  {
+    "Roll": 9,
+    "SizeCode": "U",
+    "SizeValue": 28,
+    "Diameter": 125000,
+    "Type": "LGG",
+    "G": 1.2
+  },
+  {
+    "Roll": 10,
+    "SizeCode": "V",
+    "SizeValue": 29,
+    "Diameter": 180000,
+    "Type": "LGG",
+    "G": 1.8
+  },
+  {
+    "Roll": 11,
+    "SizeCode": "W",
+    "SizeValue": 30,
+    "Diameter": 220000,
+    "Type": "LGG",
+    "G": 2.2
+  },
+  {
+    "Roll": 12,
+    "SizeCode": "X",
+    "SizeValue": 31,
+    "Diameter": 250000,
+    "Type": "LGG",
+    "G": 2.5
+  },
+  {
+    "Roll": 13,
+    "SizeCode": "Y",
+    "SizeValue": 32,
+    "Diameter": 250000,
+    "Type": ">LGG",
+    "G": 3
+  },
+  {
+    "_note1": "Diameter in miles, all BD brown dwarfs are size=Y",
+    "_note2": "convert every second SGG to IG (Ice Giant) same size"
+  }
+]
