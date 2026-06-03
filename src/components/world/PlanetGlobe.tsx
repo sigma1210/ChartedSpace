@@ -6,7 +6,7 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { World } from "../../types";
 import {
-  RENDER_SIZE, LAND_BY_ATMO,
+  RENDER_SIZE, LAND_BY_ATMO, HEX_W,
   buildHexGrid, assignTerrain, terrainColor, svgDimensions, uwpVal, isAsteroid,
 } from "../../lib/worldMap";
 
@@ -26,7 +26,15 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
   const atmoV     = uwpVal(world.uwp.atmosphere);
   const landColor = LAND_BY_ATMO[atmoV] ?? "#2a5818";
 
-  const centers = hexes.map(h => {
+  // Mirror worldMapping.js reposition(): ghost copies of the left column
+  // (triangle IDs 0 and 1) placed at +5 columns to the right so the
+  // left and right edges of the Voronoi map carry the same terrain colours.
+  const ghostShift = 5 * S * HEX_W;
+  const ghosts = hexes
+    .filter(h => h.triangleId === 0 || h.triangleId === 1)
+    .map(h => ({ ...h, left: h.left + ghostShift }));
+
+  const centers = [...hexes, ...ghosts].map(h => {
     const col = terrainColor(h.terrain, landColor);
     return {
       nx: (h.left + 16) / svgW,

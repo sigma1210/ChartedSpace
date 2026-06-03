@@ -331,6 +331,46 @@ const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: 
   );
 };
 
+// ─── Rocky parent body (bigworld hosting main world as a moon) ───────────────
+
+const RockyParentBody = ({
+  orbit, world, onPivot,
+}: {
+  orbit: SystemOrbit;
+  world: World;
+  onPivot: (p: THREE.Vector3) => void;
+}) => {
+  const orbitRef = useRef<THREE.Group>(null);
+  const r = orbitToScene(orbit.orbitId);
+  const moonPlacement = useMemo((): WorldPlacement => ({
+    type: "mainWorld", orbitNum: 1, sceneRadius: 0.45, angle0: 0, label: world.name,
+  }), [world.name]);
+
+  useEffect(() => { if (orbitRef.current) orbitRef.current.rotation.y = orbit.angle0; }, []);
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    const pos = new THREE.Vector3();
+    e.object.getWorldPosition(pos);
+    onPivot(pos);
+  };
+
+  return (
+    <>
+      <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
+      <group ref={orbitRef}>
+        <group position={[r, 0, 0]}>
+          <mesh onClick={handleClick}>
+            <sphereGeometry args={[0.18, 24, 24]} />
+            <meshStandardMaterial color="#6b7280" />
+          </mesh>
+          <WorldBody placement={moonPlacement} world={world} onPivot={onPivot} />
+        </group>
+      </group>
+    </>
+  );
+};
+
 // ─── Gas giant classification ─────────────────────────────────────────────────
 
 type GasGiantType = 'hot' | 'jovian' | 'ice';
@@ -582,6 +622,10 @@ const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
       if (b.kind === "world" && b.isMainWorld) {
         const placement: WorldPlacement = { type: "mainWorld", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0, label: world.name };
         return <WorldBody key={i} placement={placement} world={world} onPivot={onPivot} />;
+      }
+      // Rocky parent (bigworld) hosting main world as a moon — isSatellite + no gas giants
+      if (b.kind === "world" && b.isParent) {
+        return <RockyParentBody key={i} orbit={orbit} world={world} onPivot={onPivot} />;
       }
       // Non-main placed world — render from body data
       return <PlacedWorldBody key={i} orbit={orbit} onPivot={onPivot} />;

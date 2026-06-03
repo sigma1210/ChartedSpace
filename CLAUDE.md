@@ -174,14 +174,19 @@ Typography is always `font-mono`, labels are `uppercase tracking-widest text-xs`
 - **Trade System card** (`src/components/map/TradeValuesCard.tsx`) — collapsible panel to the right of the hex grid. Shows origin world (sector › subsector › name, trade code badges, TL badge, purchase cost) and destination world (same fields + expected sale price). `CodeBadge` component shows hover tooltip with full trade classification name. Origin world name opens `WorldDetailModal` via `openWorldDetail()`; destination world name sets `activeWorldHex` then opens `WorldDetailModal`.
 - **`WorldDetailModal`** (`src/components/modals/WorldDetailModal.tsx`) — checks `activeModal === "worldDetail"` (separate from `"systemDetail"`). `openWorldDetail` action in `uiSlice`.
 - **`PlanetGlobe`** (`src/components/world/PlanetGlobe.tsx`) — 3D rotating planet in React Three Fiber. Procedural terrain texture (`buildTexture`) baked to 512×256 `CanvasTexture` via Voronoi hex map seeded from `world.hex + world.name`. Cloud layer driven by `cloudConfig(atmo)` — null for atmo ≤1; opacity/color/speedMult vary by atmosphere code through sulphuric (atmo 11) and insidious (atmo 12+). Exports: `buildTexture`, `cloudConfig`, `getCloudTex`, `PLANET_SPEED`, `CloudConfig`.
-- **`StarSystemView`** (`src/components/world/StarSystemView.tsx`) — React Three Fiber scene showing the full star system. Stars positioned by `buildSystemLayout(world.stellar)` from `src/lib/stellarSystem.ts`. Planets/belts/gas giants positioned by `buildWorldPlacements(world)` from `src/lib/orbitData.ts` (473-entry `STAR_HZ` habitable-zone table, seeded PRNG from `world.hex`). Gas giants: `hot` / `jovian` / `ice` classification by orbit; ringed variants use Saturn texture with radially-remapped UVs; Jupiter texture for unringed jovians; procedural banded canvas for hot/ice. Main world: `meshStandardMaterial` + `buildTexture` map (via `useMemo` — synchronous, first frame) + cloud layer matching `PlanetGlobe`. Click any body to pivot `OrbitControls` target to it (`PivotSmoother` lerps at rate 0.1 each frame). Textures in `public/textures/`: `jupiter.jpg`, `saturn.jpg`, `saturn_ring.png`, `earth_clouds.png`.
+- **`StarSystemView`** (`src/components/world/StarSystemView.tsx`) — React Three Fiber scene showing the full star system. Prefers `SystemData` from `selectActiveWorldSystem` when available; falls back to procedural `buildWorldPlacements`. Stars positioned by `buildLayoutFromSystemData`/`buildSystemLayout` from `src/lib/stellarSystem.ts`. Gas giants: `hot`/`jovian`/`ice` by orbit; ringed variants use Saturn texture; Jupiter texture for unringed jovians; procedural banded canvas for hot/ice. Main world as satellite of non-gas-giant parent rendered via `RockyParentBody` (parent sphere + `WorldBody` moon at radius 0.45). Click any body to pivot `OrbitControls` target (`PivotSmoother` lerps at 0.1/frame). Textures in `public/textures/`: `jupiter.jpg`, `saturn.jpg`, `saturn_ring.png`, `earth_clouds.png`.
 - **`WorldPBG`** interface in `src/types/index.ts` — `{ raw, populationMultiplier, belts, gasGiants }`; `World.pbg` is this type (was incorrectly `string`).
 - **`isAsteroid(world)`** exported from `src/lib/worldMap.ts` — `uwpVal(size) === 0`.
 - **`src/lib/orbitData.ts`** — `STAR_HZ` lookup (473 entries), `ORBIT_AU[]`, `lookupHz`, `orbitToScene`, `seededRng`, `WorldPlacement` interface, `buildWorldPlacements`.
+- **`src/lib/stellar.ts`** — `StarColors`, `PrimaryStar` interface, per-class color anchors (O–M + D), `parseStar(str)`, `physicalRadius(star)`. Used by `stellarSystem.ts` and `system.selectors.ts`.
+- **`src/lib/stellarSystem.ts`** — `StarSlot`, `SystemLayout` interfaces; `deriveMass(star)`, `buildSystemLayout(stellar)` (procedural, for fallback), `buildLayoutFromSystemData(stars)` (data-driven). Single/binary/trinary scene geometry constants: `BINARY_SEP=5`, `OUTER_SEP=12`.
+- **`src/lib/orbitalMechanics.ts`** — Kepler's 3rd law (`orbitalPeriodDays`), Imperial calendar epoch (`GAME_START_ELAPSED = 38,690 days`, `DAYS_PER_TURN = 14`), `elapsedDaysAtTurn(turn)`, `epochAngle(au, elapsed, mass)`, `spectralMass(spectral)`.
+- **`src/store/selectors/system.selectors.ts`** — `SystemData` type and `selectActiveWorldSystem` selector. Reads `world.stellar` + PBG + `world.remarks` (checks `"Sa"` for satellite), builds fully-typed `SystemOrbit[]` using GG/P2 tables from `Galaxy/systems/gg.json` / `Galaxy/systems/p2.json`. Body shapes: `WorldBody` (`kind:"world"`, `isParent?:true` for bigworld parent), `GasGiantBody`, `BeltBody`. `isSatellite && gasGiants>0` → main world as moon of gas giant; `isSatellite && gasGiants===0` → main world as moon of rocky parent (`isParent:true`). Orbital angles are epoch-based (Kepler). **Renderer rule:** every `orbit.body` shape must have a matching branch in `StarSystemView`'s `placedElements` — missing branches silently drop bodies.
+- **`selectActiveWorld`** in `galaxy.selectors.ts` — returns the `World` for the currently active `activeWorldHex` / `activeWorldSectorAbbr`.
 - **Ship system** — Free Trader (Type A) fully implemented. See Ship section below.
 - **`ShipCard`** (`src/components/map/ShipCard.tsx`) — collapsible panel showing ship name/type/status/location, crew roster, cargo manifest, market (buy cargo when docked), and "Manage Crew" button. Market panel fetches prices for the current world.
 - **Ship API** — `GET /api/ship` (full ship summary including crew and cargo), `PATCH /api/ship` (name, status, world, jump state). Ship is created automatically on first character save when a crew role is selected.
-- **Cargo API** — `POST /api/ship/cargo` buys cargo (deducts credits from owner, adds CargoLot); `DELETE /api/ship/cargo/[lotId]` removes a lot. `GET /api/ship/market` returns commodity price and capacity for the current world.
+- **Cargo API** — `POST /api/ship/cargo` buys cargo (deducts credits from owner, adds CargoLot); `DELETE /api/ship/cargo/[lotId]` removes a lot. `GET /api/ship/market` returns commodity price and capacity for the current world. `POST /api/ship/cargo/[lotId]/sell` sells a lot when docked — atomically deletes lot and credits owner; returns `{ creditsEarned, newCredits }`. Sale price uses the same demand formula as `deriveExpectedSalePrice`.
 - **Crew system** — `CrewManagementModal` (`src/components/modals/CrewManagementModal.tsx`) — split panel: left shows required role slots (captain in their role with ★, "hire from pool →" on vacant slots); right shows 20 available crew from port with "Hire as [Role]" buttons per qualifying skill. Captain can reassign their role via inline buttons. Pool refreshes on world arrival.
 - **Crew API** — `POST /api/ship/crew` hires an NPC; `DELETE /api/ship/crew/[crewId]` fires; `PATCH /api/ship/crew/[crewId]` changes captain's role (auto-fires any NPC in the target slot).
 - **Crew library** — 2,500 pre-generated crew templates in `src/data/crewLibrary.json` (~1 MB). Imported at module level in `availableCrewSlice` (not stored in Redux — keeps DevTools fast). Names randomised at selection time. Skill names verified: `"Engineering"` / `"Gunnery"` (not Engineer/Gunner).
@@ -201,45 +206,33 @@ Typography is always `font-mono`, labels are `uppercase tracking-widest text-xs`
 - **Passengers** — booking high/middle/low passage berths, travel revenue per jump, boarding/disembarking flow.
 - **Directed provider** — `RoleDirectedDecisionProvider` in `src/lib/characters/providers/directed.ts` that weights choices toward a target role archetype. Third "Directed" mode card in `CharacterCreateModal`.
 - Clerk webhooks at `src/app/api/webhooks/clerk/route.ts` — sync `user.created`, `user.updated`, `user.deleted` to the database.
-- Stellar color on star field dots (spectral class → color mapping already stubbed).
+- Stellar color on star field dots — `stellar.ts` color data is available; apply to `GalaxyStarField`/`StarField` dot colors.
 - Character/ship pinning to worlds.
 
 ---
 
 ## Cargo Sale
 
-**Design (not yet implemented — branch: selling cargo)**
-
-When docked, the player can sell any CargoLot at the current world's expected sale price.
+**Implemented.** When docked, the player can sell any CargoLot at the current world's expected sale price.
 
 ### Sale price
-Use `selectExpectedSalePrice` (already implemented in `galaxy.selectors.ts`) which computes a price from the origin world's trade codes vs the current world's trade codes plus tech level delta. The same value displayed in `TradeValuesCard` as "Expected Sale Price".
+`selectExpectedSalePrice` in `galaxy.selectors.ts` and `deriveExpectedSalePrice` (server-side reuse in the sell route):
 
-### API endpoint
-`POST /api/ship/cargo/[lotId]/sell` — no body required.
-- Verify lot belongs to ship, ship is docked.
-- Look up current world trade codes + TL and origin world trade codes + TL.
-- Calculate sale price per ton using the same formula as `deriveExpectedSalePrice`.
-- Atomically: delete CargoLot, add `salePrice × tons` credits to owner character.
-- Return `{ creditsEarned, newCredits }`.
-
-### UI
-Add a "Sell" button per cargo lot in `ShipCard`'s cargo panel — visible only when docked. Show profit/loss vs purchase price. After sale: `invalidateShip()`, `fetchShip()`, `invalidateCharacters()`, `fetchCharacters()`.
-
-### Sale price formula
 ```
 demandSum = Σ MARKET_DEMAND_TABLE[sourceCode][targetCode]
   over all (sourceCode in originWorld.tradeCodes) × (targetCode in currentWorld.tradeCodes)
 techDelta = (originTL - currentTL) * 0.1
 salePrice = Math.max(0, (demandSum * 1000 + 5000) * (1 + techDelta))
 ```
-This is already implemented in `deriveExpectedSalePrice` in `src/store/selectors/galaxy.selectors.ts` — reuse that logic server-side.
+
+### API endpoint
+`POST /api/ship/cargo/[lotId]/sell` — no body. Verifies lot belongs to ship and ship is docked. Atomically deletes lot and adds `salePrice × tons` credits to owner. Returns `{ creditsEarned, newCredits }`.
 
 ---
 
 ## Map SPA
 
-The `/map` route is a fully client-side interactive map of Charted Space, built around `SubsectorNavigator`.
+The `/map` route is a fully client-side interactive map of Charted Space, built around `MapColumns`.
 
 ### Static galaxy data — two-tier loading
 
@@ -315,53 +308,42 @@ M N O P
 | `src/components/map/HexGrid.tsx` | Core SVG hex renderer. Props: `worlds`, `cols`, `rows`, `scale?`, `onSelectWorld`. `scale` multiplies rendered `width`/`height`; `viewBox` is fixed so aspect ratio is preserved. |
 | `src/components/map/SubsectorGrid.tsx` | Loads a sector, slices one 8×10 subsector, renders via HexGrid. Props: `sectorAbbr`, `subsectorKey`, `showHeader?` |
 | `src/components/map/SectorMapGrid.tsx` | 4×4 CSS grid of all 16 subsectors as a full sector overview. Uses `scale={0.5/1.2}` on each HexGrid. |
-| `src/components/map/StarField.tsx` | Interactive 4×4 grid of subsector star-dot panels. Replaces the subsector minimap — clicking a cell sets the active subsector. Props: `sectorAbbr`, `activeKey`, `onSelectKey`. Cells are `w-7 aspect-258/372`. |
+| `src/components/map/StarField.tsx` | Interactive 4×4 grid of subsector star-dot panels. Clicking a cell sets the active subsector. Props: `sectorAbbr`, `activeKey`, `onSelectKey`. Cells are `w-7 aspect-258/372`. |
 | `src/components/map/GalaxyStarField.tsx` | Single-sector star-dot SVG (`absolute inset-0 w-full h-full`) used inside each galaxy grid cell. Dispatches `loadSector` on mount; condition guard makes it safe to render in bulk. |
-| `src/components/map/SubsectorNavigator.tsx` | Main map UI — four-column layout (see below). |
+| `src/components/map/GalaxyMiniMap.tsx` | Collapsible 9×9 galaxy overview panel. `GRID_SIZE=9`, `COORD_MIN=-4`. Each cell is a `GalaxyStarField`. Clicking a cell sets `activeSectorAbbr`. Toggle via `toggleGalaxyMiniMap` action; collapses to 32 px with `motion.div`. |
+| `src/components/map/SectorMiniMap.tsx` | Collapsible sector minimap — 4×4 `StarField` grid. Clicking a panel sets `activeSubsectorKey`. Toggle via `toggleSectorMiniMap`. |
+| `src/components/map/SubsectorMiniMap.tsx` | Collapsible subsector detail with directional nav buttons (up/down/left/right). `buildNavTargets` handles within-sector and cross-sector navigation. Toggle via `toggleSubsectorMiniMap`. Cross-sector edge mapping: left→neighbor(-1,0) col 3, right→neighbor(1,0) col 0, top→neighbor(0,-1) row 3, bottom→neighbor(0,1) row 0. Arrows disabled (not hidden) at sector edges. |
+| `src/app/map/MapColumns.tsx` | Top-level map layout — `flex gap-4 items-start` containing `FreeTraderDeckPlan` + `GalaxyMiniMap` + `SectorMiniMap` + `SubsectorMiniMap` + right column (`TradeValuesCard`, `ShipCard`, `TurnCard`). Replaces old `SubsectorNavigator`. |
 | `src/components/map/TradeValuesCard.tsx` | Collapsible Trade System panel — origin/destination world trade codes, TL, cost, expected sale price. |
-
-### SubsectorNavigator layout
-
-Four columns, `flex gap-4 items-start`:
-
-**Column 1 — Galaxy overview (9×9 grid)**
-- `GRID_SIZE = 9`, `COORD_MIN = -4` — maps sector X/Y coordinates to grid positions
-- Each cell: `relative overflow-hidden w-8.25 aspect-258/372` button containing a `GalaxyStarField`
-- Clicking a cell sets `activeSectorAbbr` and resets `activeKey` to `"A"`
-- Empty grid positions (no sector at that coordinate) render as inert dark cells
-
-**Column 2 — Sector minimap (StarField 4×4)**
-- `StarField` component — interactive 4×4 grid of star-dot panels
-- Clicking a panel sets `activeKey`; active panel has accent background + outline
-- Below it: subsector name label in accent color
-
-**Column 3 — Subsector detail with directional nav**
-- `NavButton` up/down/left/right around a `SubsectorGrid`
-- `buildNavTargets` handles within-sector and cross-sector navigation using `sectorByCoord` (built from `selectAllSectors`, always populated)
-- Cross-sector edge mapping:
-  - Left edge → neighbor(-1,0), subsector col 3: `KEYS[subRow*4+3]`
-  - Right edge → neighbor(1,0), subsector col 0: `KEYS[subRow*4]`
-  - Top edge → neighbor(0,-1), subsector row 3: `KEYS[12+subCol]`
-  - Bottom edge → neighbor(0,1), subsector row 0: `KEYS[subCol]`
-- Arrow buttons are disabled (not hidden) when no neighboring sector exists in that direction
-
-**Column 4 — Trade System panel**
-- `TradeValuesCard` — collapsible; shows origin world and destination (hovered) world side by side
-- `CodeBadge` — `relative group` wrapper; trade code in bordered box; full label appears on hover via `opacity-0 group-hover:opacity-100` tooltip
+| `src/components/ship/FreeTraderDeckPlan.tsx` | Static SVG deck plan for the Free Trader. Rendered as the leftmost panel in `MapColumns`. |
 
 ### `/map` route files
 
 ```
 src/app/map/layout.tsx                  Wraps route in <StoreProvider> — required for Redux
-src/app/map/page.tsx                    Header + SubsectorNavigator + modals
+src/app/map/page.tsx                    Header + MapColumns + modals
+src/app/map/MapColumns.tsx              Top-level map layout (see Map components above)
 src/app/map/DevLogoutButton.tsx         Dev-only logout, shown when DEV_MODE=true
 src/app/map/CreateCharacterButton.tsx   Header button — dispatches openCharacterCreate()
 src/app/map/CharacterListButton.tsx     Header button — dispatches openCharacterList()
 src/app/map/CharacterAvatar.tsx         Header badge — shows initials of current character; click opens profile
+src/app/map/SystemViewButton.tsx        Header button — dispatches openSystemDetail(world.hex); opens StarSystemView modal
+src/app/map/UpdatedSystemViewButton.tsx Dev/test button — dispatches openUpdatedSystemDetail(world.hex)
 src/app/map/CharacterCreateModal.tsx    Character generation modal (see Character Generation below)
 src/components/modals/CharacterListModal.tsx     Lists saved characters; fetches on open via fetchCharacters thunk
 src/components/modals/CharacterProfileModal.tsx  Shows UPP/stats/skills; name prompt for unnamed characters
 ```
+
+### uiSlice state added for map layout
+
+```ts
+showGalaxyMiniMap:    boolean  // toggled by toggleGalaxyMiniMap action (default true)
+showSectorMiniMap:    boolean  // toggled by toggleSectorMiniMap action (default true)
+showSubsectorMiniMap: boolean  // toggled by toggleSubsectorMiniMap action (default true)
+```
+
+`openSystemDetail(hex)` sets `activeModal = "systemDetail"` and `activeWorldHex`.
+`openUpdatedSystemDetail(hex)` sets `activeModal = "updatedSystemDetail"` and `activeWorldHex`.
 
 ---
 

@@ -3,7 +3,7 @@
 import { useMemo, useRef } from "react";
 import type { World } from "../../types";
 import {
-  RENDER_SIZE,
+  RENDER_SIZE, HEX_W,
   LAND_BY_ATMO,
   buildHexGrid, assignTerrain, terrainColor, hexPts, svgDimensions, uwpVal,
 } from "../../lib/worldMap";
@@ -27,7 +27,15 @@ const WorldMap = ({ world }: WorldMapProps) => {
   const baseHexes = useMemo(() => buildHexGrid(S, 0, 0), []);
   const hexes     = useMemo(() => {
     if (realSize === 0) return [];
-    return assignTerrain(baseHexes, world, svgH);
+    const assigned = assignTerrain(baseHexes, world, svgH);
+    // Ghost copies of the left column (triangle IDs 0 + 1) shifted right by
+    // 5 columns — mirrors worldMapping.js reposition() so left and right
+    // edges of the flat map carry matching terrain (no visible seam).
+    const ghostShift = 5 * S * HEX_W;
+    const ghosts = assigned
+      .filter(h => h.triangleId === 0 || h.triangleId === 1)
+      .map(h => ({ ...h, left: h.left + ghostShift }));
+    return [...assigned, ...ghosts];
   }, [baseHexes, world, realSize, svgH]);
 
   const atmoV    = uwpVal(world.uwp.atmosphere);
