@@ -203,6 +203,7 @@ const SystemScene = ({ layout, onPivot, companionChildren, epochAngles }: SceneP
 // ─── World body (orbiting planet) ────────────────────────────────────────────
 
 const WORLD_R = 0.1;
+const WORLD_SEGMENTS: [number, number] = [64, 32];
 
 type WorldBodyProps = {
   placement: WorldPlacement;
@@ -246,12 +247,12 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
       <group ref={orbitRef}>
         <group position={[r, 0, 0]}>
           <mesh ref={spinRef} onClick={handleClick}>
-            <sphereGeometry args={[WORLD_R, 16, 16]} />
+            <sphereGeometry args={[WORLD_R, ...WORLD_SEGMENTS]} />
             <meshStandardMaterial map={texture} />
           </mesh>
           {clouds && (
             <mesh ref={cloudRef}>
-              <sphereGeometry args={[WORLD_R * 1.015, 16, 16]} />
+              <sphereGeometry args={[WORLD_R * 1.015, ...WORLD_SEGMENTS]} />
               <meshStandardMaterial
                 alphaMap={getCloudTex()}
                 color={clouds.color}
