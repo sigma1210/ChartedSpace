@@ -5,6 +5,7 @@ import type { World } from "../../types";
 import {
   LAND_BY_ATMO,
   buildDisplayHexes, buildHexGrid, buildWorldMapOverlays, assignTerrain, terrainColor, hexPts, svgDimensions, uwpVal,
+  visibleFeatures,
 } from "../../lib/worldMap";
 import type { Terrain, TerrainFeature } from "../../lib/worldMap";
 
@@ -37,11 +38,17 @@ const FEATURE_LABELS: Record<TerrainFeature, string> = {
   town: "Town",
   city: "City",
   suburb: "Suburb",
+  rural: "Rural",
+  crop: "Crop",
+  domedCity: "Domed City",
+  arcology: "Arcology",
+  nobleEstate: "Noble Estate",
+  penalSettlement: "Penal Settlement",
 };
 
 const FEATURE_ORDER: TerrainFeature[] = [
   "mountain", "island", "crater", "volcano", "chasm", "precipice", "resource", "mine", "oil",
-  "starport", "city", "town", "suburb",
+  "starport", "city", "town", "suburb", "rural", "crop", "domedCity", "arcology", "nobleEstate", "penalSettlement",
 ];
 
 interface WorldMapProps { world: World }
@@ -72,9 +79,12 @@ const WorldMap = ({ world }: WorldMapProps) => {
 
   const presentFeatures = useMemo(() => {
     const seen = new Set<TerrainFeature>();
-    hexes.forEach(h => h.features.forEach((feature) => seen.add(feature)));
+    hexes.forEach(h => visibleFeatures(h).forEach((feature) => seen.add(feature)));
     return FEATURE_ORDER.filter((feature) => seen.has(feature));
   }, [hexes]);
+
+  const hasFeature = (hex: { features: TerrainFeature[] }, feature: TerrainFeature) =>
+    visibleFeatures(hex).includes(feature);
 
   const triggerDownload = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -121,7 +131,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
         {hexes.map((h, i) => (
           <polygon key={i} points={hexPts(h.left, h.top)} fill={tColor(h.terrain)} stroke="#000" strokeWidth={0.8} />
         ))}
-        {hexes.map((h, i) => h.features.includes("island") && (
+        {hexes.map((h, i) => hasFeature(h, "island") && (
           <circle
             key={`island-${i}`}
             cx={h.left + 16}
@@ -132,7 +142,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeWidth={1}
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("mountain") && (
+        {hexes.map((h, i) => hasFeature(h, "mountain") && (
           <path
             key={`mountain-${i}`}
             d={`M ${h.left + 6} ${h.top + 25} L ${h.left + 15} ${h.top + 9} L ${h.left + 22} ${h.top + 25} M ${h.left + 13} ${h.top + 17} L ${h.left + 18} ${h.top + 25}`}
@@ -143,7 +153,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeLinejoin="round"
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("crater") && (
+        {hexes.map((h, i) => hasFeature(h, "crater") && (
           <g key={`crater-${i}`}>
             <ellipse
               cx={h.left + 16}
@@ -163,7 +173,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             />
           </g>
         ))}
-        {hexes.map((h, i) => h.features.includes("volcano") && (
+        {hexes.map((h, i) => hasFeature(h, "volcano") && (
           <g key={`volcano-${i}`}>
             <path
               d={`M ${h.left + 7} ${h.top + 25} L ${h.left + 16} ${h.top + 8} L ${h.left + 25} ${h.top + 25} Z`}
@@ -182,7 +192,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             />
           </g>
         ))}
-        {hexes.map((h, i) => h.features.includes("chasm") && (
+        {hexes.map((h, i) => hasFeature(h, "chasm") && (
           <path
             key={`chasm-${i}`}
             d={`M ${h.left + 8} ${h.top + 9} L ${h.left + 13} ${h.top + 15} L ${h.left + 11} ${h.top + 20} L ${h.left + 18} ${h.top + 25} L ${h.left + 16} ${h.top + 31} L ${h.left + 23} ${h.top + 35}`}
@@ -193,7 +203,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeLinejoin="round"
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("precipice") && (
+        {hexes.map((h, i) => hasFeature(h, "precipice") && (
           <path
             key={`precipice-${i}`}
             d={`M ${h.left + 8} ${h.top + 12} L ${h.left + 24} ${h.top + 12} M ${h.left + 11} ${h.top + 12} L ${h.left + 8} ${h.top + 19} M ${h.left + 16} ${h.top + 12} L ${h.left + 13} ${h.top + 22} M ${h.left + 21} ${h.top + 12} L ${h.left + 18} ${h.top + 19}`}
@@ -204,7 +214,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeLinejoin="round"
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("resource") && (
+        {hexes.map((h, i) => hasFeature(h, "resource") && (
           <path
             key={`resource-${i}`}
             d={`M ${h.left + 16} ${h.top + 9} L ${h.left + 22} ${h.top + 17} L ${h.left + 16} ${h.top + 25} L ${h.left + 10} ${h.top + 17} Z`}
@@ -214,7 +224,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeLinejoin="round"
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("mine") && (
+        {hexes.map((h, i) => hasFeature(h, "mine") && (
           <g key={`mine-${i}`}>
             <path
               d={`M ${h.left + 9} ${h.top + 24} L ${h.left + 22} ${h.top + 11} M ${h.left + 18} ${h.top + 10} Q ${h.left + 23} ${h.top + 10} ${h.left + 25} ${h.top + 15}`}
@@ -233,7 +243,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             />
           </g>
         ))}
-        {hexes.map((h, i) => h.features.includes("oil") && (
+        {hexes.map((h, i) => hasFeature(h, "oil") && (
           <path
             key={`oil-${i}`}
             d={`M ${h.left + 16} ${h.top + 8} C ${h.left + 22} ${h.top + 16} ${h.left + 22} ${h.top + 25} ${h.left + 16} ${h.top + 27} C ${h.left + 10} ${h.top + 25} ${h.left + 10} ${h.top + 16} ${h.left + 16} ${h.top + 8} Z`}
@@ -242,7 +252,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeWidth={1}
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("starport") && (
+        {hexes.map((h, i) => hasFeature(h, "starport") && (
           <g key={`starport-${i}`}>
             <circle
               cx={h.left + 16}
@@ -260,7 +270,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             />
           </g>
         ))}
-        {hexes.map((h, i) => h.features.includes("city") && (
+        {hexes.map((h, i) => hasFeature(h, "city") && (
           <rect
             key={`city-${i}`}
             x={h.left + 10}
@@ -272,7 +282,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeWidth={1}
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("town") && (
+        {hexes.map((h, i) => hasFeature(h, "town") && (
           <circle
             key={`town-${i}`}
             cx={h.left + 16}
@@ -283,7 +293,7 @@ const WorldMap = ({ world }: WorldMapProps) => {
             strokeWidth={0.9}
           />
         ))}
-        {hexes.map((h, i) => h.features.includes("suburb") && (
+        {hexes.map((h, i) => hasFeature(h, "suburb") && (
           <circle
             key={`suburb-${i}`}
             cx={h.left + 16}
@@ -293,6 +303,81 @@ const WorldMap = ({ world }: WorldMapProps) => {
             stroke="#ffffff"
             strokeWidth={1.1}
           />
+        ))}
+        {hexes.map((h, i) => hasFeature(h, "rural") && (
+          <path
+            key={`rural-${i}`}
+            d={`M ${h.left + 9} ${h.top + 23} L ${h.left + 16} ${h.top + 13} L ${h.left + 23} ${h.top + 23} M ${h.left + 12} ${h.top + 23} L ${h.left + 12} ${h.top + 28} L ${h.left + 20} ${h.top + 28} L ${h.left + 20} ${h.top + 23}`}
+            fill="none"
+            stroke="#111111"
+            strokeWidth={1.3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
+        {hexes.map((h, i) => hasFeature(h, "crop") && (
+          <g key={`crop-${i}`}>
+            <path
+              d={`M ${h.left + 9} ${h.top + 13} L ${h.left + 23} ${h.top + 13} M ${h.left + 8} ${h.top + 18} L ${h.left + 24} ${h.top + 18} M ${h.left + 9} ${h.top + 23} L ${h.left + 23} ${h.top + 23}`}
+              stroke="#111111"
+              strokeWidth={1}
+              strokeLinecap="round"
+            />
+            <path
+              d={`M ${h.left + 13} ${h.top + 10} L ${h.left + 10} ${h.top + 26} M ${h.left + 18} ${h.top + 10} L ${h.left + 15} ${h.top + 26} M ${h.left + 23} ${h.top + 10} L ${h.left + 20} ${h.top + 26}`}
+              stroke="#111111"
+              strokeWidth={0.8}
+              strokeLinecap="round"
+            />
+          </g>
+        ))}
+        {hexes.map((h, i) => hasFeature(h, "domedCity") && (
+          <path
+            key={`domed-city-${i}`}
+            d={`M ${h.left + 8} ${h.top + 23} A 8 8 0 0 1 ${h.left + 24} ${h.top + 23} L ${h.left + 24} ${h.top + 25} L ${h.left + 8} ${h.top + 25} Z`}
+            fill="#111111"
+            stroke="#ffffff"
+            strokeWidth={1}
+            strokeLinejoin="round"
+          />
+        ))}
+        {hexes.map((h, i) => hasFeature(h, "arcology") && (
+          <path
+            key={`arcology-${i}`}
+            d={`M ${h.left + 16} ${h.top + 7} L ${h.left + 25} ${h.top + 26} L ${h.left + 7} ${h.top + 26} Z M ${h.left + 16} ${h.top + 12} L ${h.left + 16} ${h.top + 24}`}
+            fill="#111111"
+            stroke="#ffffff"
+            strokeWidth={1}
+            strokeLinejoin="round"
+          />
+        ))}
+        {hexes.map((h, i) => hasFeature(h, "nobleEstate") && (
+          <path
+            key={`noble-estate-${i}`}
+            d={`M ${h.left + 16} ${h.top + 9} L ${h.left + 18.5} ${h.top + 14} L ${h.left + 24} ${h.top + 14.5} L ${h.left + 20} ${h.top + 18.5} L ${h.left + 21.5} ${h.top + 24} L ${h.left + 16} ${h.top + 21} L ${h.left + 10.5} ${h.top + 24} L ${h.left + 12} ${h.top + 18.5} L ${h.left + 8} ${h.top + 14.5} L ${h.left + 13.5} ${h.top + 14} Z`}
+            fill="#ffd166"
+            stroke="#111111"
+            strokeWidth={1}
+            strokeLinejoin="round"
+          />
+        ))}
+        {hexes.map((h, i) => hasFeature(h, "penalSettlement") && (
+          <g key={`penal-settlement-${i}`}>
+            <rect
+              x={h.left + 9}
+              y={h.top + 11}
+              width={14}
+              height={14}
+              fill="none"
+              stroke="#111111"
+              strokeWidth={1.3}
+            />
+            <path
+              d={`M ${h.left + 12} ${h.top + 11} L ${h.left + 12} ${h.top + 25} M ${h.left + 16} ${h.top + 11} L ${h.left + 16} ${h.top + 25} M ${h.left + 20} ${h.top + 11} L ${h.left + 20} ${h.top + 25}`}
+              stroke="#111111"
+              strokeWidth={1}
+            />
+          </g>
         ))}
         {overlays.map((overlay, i) => (
           <polygon

@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Charted Space
 
-## Getting Started
+Traveller RPG companion app for exploring Charted Space, tracking worlds, systems, characters, ships, trade, and travel.
 
-First, run the development server:
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+This repo uses Next.js 16. Before changing Next.js app/router/framework code, read the relevant docs in `node_modules/next/dist/docs/` as noted in `AGENTS.md`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## World Maps
 
-## Learn More
+The world map system is centered in:
 
-To learn more about Next.js, take a look at the following resources:
+- `src/lib/worldMap.ts` — Traveller Worlds-inspired geometry, terrain generation, feature placement, and display-priority helpers.
+- `src/components/world/WorldMap.tsx` — crisp 2D interrupted world map.
+- `src/components/world/PlanetGlobe.tsx` — equirectangular texture generation for 3D globes.
+- `src/components/world/StarSystemView.tsx` — system-detail 3D view; main world uses the same globe texture path.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The 2D map and globe share deterministic terrain data. Display decluttering is handled by `visibleFeatures(hex)`, which preserves generated feature data but renders only the highest-priority visible symbol per hex.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Focused map tests:
 
-## Deploy on Vercel
+```bash
+pnpm test -- --runInBand src/lib/__tests__/worldMap.test.ts
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `PROJECT_CONTEXT.md` for the living project context, implemented systems, map terrain vocabulary, and deferred follow-up work.
+
+## Known Issue
+
+`pnpm exec tsc --noEmit --pretty false` currently reports a pre-existing `NotificationsModal.tsx:69` `never` type error unrelated to the world map work.

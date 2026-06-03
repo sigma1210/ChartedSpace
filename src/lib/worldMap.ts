@@ -36,7 +36,13 @@ export type TerrainFeature =
   | "starport"
   | "town"
   | "city"
-  | "suburb";
+  | "suburb"
+  | "rural"
+  | "crop"
+  | "domedCity"
+  | "arcology"
+  | "nobleEstate"
+  | "penalSettlement";
 
 export interface HexCell {
   left: number;
@@ -57,6 +63,33 @@ export interface Point {
 export interface WorldMapOverlay {
   points: Point[];
 }
+
+export const FEATURE_PRIORITY: TerrainFeature[] = [
+  "starport",
+  "arcology",
+  "domedCity",
+  "city",
+  "town",
+  "suburb",
+  "penalSettlement",
+  "nobleEstate",
+  "mine",
+  "oil",
+  "resource",
+  "volcano",
+  "chasm",
+  "precipice",
+  "crater",
+  "mountain",
+  "rural",
+  "crop",
+  "island",
+];
+
+export const visibleFeatures = (hex: { features: TerrainFeature[] }): TerrainFeature[] => {
+  const selected = FEATURE_PRIORITY.find((feature) => hex.features.includes(feature));
+  return selected ? [selected] : [];
+};
 
 export const LAND_BY_ATMO: Record<number, string> = {
   0: "#111111",
@@ -552,6 +585,103 @@ const placeSettlements = (
   shuffled(remainingForSuburbs, rand)
     .slice(0, Math.min(suburbCount, remainingForSuburbs.length))
     .forEach((hex) => addFeature(hex, "suburb"));
+};
+
+const placeCivilizationLayers = (
+  cells: HexCell[],
+  world: World,
+  rand: () => number,
+  tcs: Set<string>,
+) => {
+  const pop = uwpVal(world.uwp.population);
+  const atmo = uwpVal(world.uwp.atmosphere);
+  const hydro = uwpVal(world.uwp.hydrographics);
+  if (pop <= 0) return;
+
+  const settled = settlementCandidates(cells).filter((hex) =>
+    !hex.features.includes("starport") &&
+    !hex.features.includes("city") &&
+    !hex.features.includes("town") &&
+    !hex.features.includes("suburb") &&
+    !hex.features.includes("mine") &&
+    !hex.features.includes("oil") &&
+    hex.terrain !== "lava" &&
+    hex.terrain !== "ice" &&
+    hex.terrain !== "frozen",
+  );
+
+  if (tcs.has("Ag") || tcs.has("Ga") || (atmo >= 4 && atmo <= 9 && hydro >= 4)) {
+    const cropCandidates = settled.filter((hex) =>
+      hex.terrain === "land" ||
+      hex.terrain === "woods" ||
+      hex.terrain === "marsh" ||
+      hex.terrain === "swamp",
+    );
+    shuffled(cropCandidates, rand)
+      .slice(0, Math.min(Math.max(1, Math.floor((rollD6(rand) + hydro) / 4)), cropCandidates.length))
+      .forEach((hex) => {
+        addFeature(hex, "crop");
+        removeFeature(hex, "resource");
+      });
+  }
+
+  const ruralCandidates = settled.filter((hex) =>
+    !hex.features.includes("crop") &&
+    (hex.terrain === "land" || hex.terrain === "woods" || hex.terrain === "rough" || hex.terrain === "marsh"),
+  );
+  if (pop >= 3 && ruralCandidates.length > 0) {
+    shuffled(ruralCandidates, rand)
+      .slice(0, Math.min(Math.max(1, Math.floor(pop / 2)), ruralCandidates.length))
+      .forEach((hex) => addFeature(hex, "rural"));
+  }
+
+  const hostileSurface = atmo <= 3 || atmo >= 10 || tcs.has("Va") || tcs.has("Fl") || tcs.has("De");
+  if (hostileSurface && pop >= 6) {
+    const protectedCandidates = settlementCandidates(cells).filter((hex) =>
+      !hex.features.includes("starport") &&
+      !hex.features.includes("domedCity") &&
+      !hex.features.includes("arcology") &&
+      hex.terrain !== "lava" &&
+      hex.terrain !== "ice" &&
+      hex.terrain !== "frozen",
+    );
+    const [domed] = shuffled(protectedCandidates, rand);
+    if (domed) {
+      addFeature(domed, "domedCity");
+      removeFeature(domed, "town");
+      removeFeature(domed, "suburb");
+    }
+
+    if (pop >= 9) {
+      const [arcology] = shuffled(protectedCandidates.filter((hex) => hex !== domed), rand);
+      if (arcology) {
+        addFeature(arcology, "arcology");
+        removeFeature(arcology, "city");
+        removeFeature(arcology, "town");
+        removeFeature(arcology, "suburb");
+      }
+    }
+  }
+
+  if ((world.nobility || "").trim().length > 0 || tcs.has("Ri") || tcs.has("Cp")) {
+    const [estate] = shuffled(settled.filter((hex) =>
+      !hex.features.includes("crop") &&
+      !hex.features.includes("rural") &&
+      !hex.features.includes("nobleEstate"),
+    ), rand);
+    if (estate) addFeature(estate, "nobleEstate");
+  }
+
+  if (world.travelZone === "R" || tcs.has("Px") || tcs.has("Pr") || tcs.has("Da")) {
+    const [penal] = shuffled(settlementCandidates(cells).filter((hex) =>
+      !hex.features.includes("starport") &&
+      !hex.features.includes("city") &&
+      !hex.features.includes("town") &&
+      !hex.features.includes("domedCity") &&
+      !hex.features.includes("arcology"),
+    ), rand);
+    if (penal) addFeature(penal, "penalSettlement");
+  }
 };
 
 const getTriangleCenterIndexes = (cells: HexCell[], triangleId: number): number[] => {
@@ -1150,6 +1280,9 @@ export const assignTerrain = (
 
   // ── Starports, cities, and towns ───────────────────────────────────────────
   placeSettlements(cells, world, rand, tcs);
+
+  // ── Remaining civilization layers ──────────────────────────────────────────
+  placeCivilizationLayers(cells, world, rand, tcs);
 
   return cells;
 };

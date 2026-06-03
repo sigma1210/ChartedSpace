@@ -1,6 +1,6 @@
 import type { World } from "../../types";
-import { assignTerrain, buildDisplayHexes, buildHexGrid, buildWorldMapOverlays, svgDimensions } from "../worldMap";
-import type { Terrain } from "../worldMap";
+import { assignTerrain, buildDisplayHexes, buildHexGrid, buildWorldMapOverlays, svgDimensions, visibleFeatures } from "../worldMap";
+import type { Terrain, TerrainFeature } from "../worldMap";
 
 const makeWorld = (overrides: Partial<World> = {}): World => ({
   hex: "1910",
@@ -33,6 +33,23 @@ const makeWorld = (overrides: Partial<World> = {}): World => ({
 });
 
 describe("worldMap geometry", () => {
+  it("resolves visible feature priority without mutating generated features", () => {
+    const hex = {
+      ...buildHexGrid(7, 0, 0)[0],
+      features: ["resource", "crater", "city"] as TerrainFeature[],
+    };
+
+    expect(visibleFeatures(hex)).toEqual(["city"]);
+    expect(hex.features).toEqual(["resource", "crater", "city"]);
+  });
+
+  it("prefers mines over resource markers and preserves islands when alone", () => {
+    const [mineHex, islandHex] = buildHexGrid(7, 0, 0);
+
+    expect(visibleFeatures({ ...mineHex, features: ["resource", "mine"] })).toEqual(["mine"]);
+    expect(visibleFeatures({ ...islandHex, features: ["island"] })).toEqual(["island"]);
+  });
+
   it("matches the source base world map geometry for size 7 worlds", () => {
     const size = 7;
     const baseHexes = buildHexGrid(size, 0, 0);
@@ -326,6 +343,53 @@ describe("worldMap geometry", () => {
     expect(hexes.some((hex) => hex.features.includes("city"))).toBe(true);
     expect(hexes.some((hex) => hex.features.includes("town"))).toBe(true);
     expect(hexes.some((hex) => hex.features.includes("suburb"))).toBe(true);
+  });
+
+  it("adds crop and rural markers to habitable agricultural worlds", () => {
+    const size = 7;
+    const world = makeWorld({ remarks: ["Ag", "Ga"] });
+    const hexes = assignTerrain(buildHexGrid(size, 0, 0), world, svgDimensions(size).svgH);
+
+    expect(hexes.some((hex) => hex.features.includes("crop"))).toBe(true);
+    expect(hexes.some((hex) => hex.features.includes("rural"))).toBe(true);
+  });
+
+  it("adds domed cities and arcologies on hostile high-population worlds", () => {
+    const size = 7;
+    const world = makeWorld({
+      uwp: {
+        raw: "A7B9899-C",
+        starport: "A",
+        size: "7",
+        atmosphere: "B",
+        hydrographics: "9",
+        population: "9",
+        government: "9",
+        lawLevel: "9",
+        techLevel: "C",
+      },
+      remarks: ["Hi"],
+    });
+    const hexes = assignTerrain(buildHexGrid(size, 0, 0), world, svgDimensions(size).svgH);
+
+    expect(hexes.some((hex) => hex.features.includes("domedCity"))).toBe(true);
+    expect(hexes.some((hex) => hex.features.includes("arcology"))).toBe(true);
+  });
+
+  it("adds noble estates on noble or rich worlds", () => {
+    const size = 7;
+    const world = makeWorld({ nobility: "Bc", remarks: ["Ri"] });
+    const hexes = assignTerrain(buildHexGrid(size, 0, 0), world, svgDimensions(size).svgH);
+
+    expect(hexes.some((hex) => hex.features.includes("nobleEstate"))).toBe(true);
+  });
+
+  it("adds penal settlements on red-zone penal worlds", () => {
+    const size = 7;
+    const world = makeWorld({ travelZone: "R", remarks: ["Px"] });
+    const hexes = assignTerrain(buildHexGrid(size, 0, 0), world, svgDimensions(size).svgH);
+
+    expect(hexes.some((hex) => hex.features.includes("penalSettlement"))).toBe(true);
   });
 
   it("adds only town markers for low-population settled worlds", () => {

@@ -7,7 +7,7 @@ import * as THREE from "three";
 import type { World } from "../../types";
 import {
   LAND_BY_ATMO,
-  buildHexGrid, assignTerrain, terrainColor, svgDimensions, uwpVal, isAsteroid,
+  buildHexGrid, assignTerrain, terrainColor, svgDimensions, uwpVal, isAsteroid, visibleFeatures,
 } from "../../lib/worldMap";
 
 // ─── Texture generation ───────────────────────────────────────────────────────
@@ -134,6 +134,8 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
   hexes.forEach((hex) => {
     const row = rows[hex.rowNumber];
     if (!row || row.length === 0 || hex.features.length === 0) return;
+    const features = visibleFeatures(hex);
+    if (features.length === 0) return;
 
     const rowIndex = row.findIndex((rowHex) => rowHex.columnNumber === hex.columnNumber);
     if (rowIndex < 0) return;
@@ -141,7 +143,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
     const x = ((rowIndex + 0.5) / row.length) * TEX_W;
     const y = (hex.rowNumber / Math.max(1, maxRow)) * (TEX_H - 1);
 
-    if (hex.features.includes("island")) {
+    if (features.includes("island")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.arc(wrappedX, y, 3.6, 0, Math.PI * 2);
@@ -153,7 +155,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("mountain")) {
+    if (features.includes("mountain")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.moveTo(wrappedX - 4.2, y + 3.8);
@@ -169,7 +171,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("crater")) {
+    if (features.includes("crater")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.ellipse(wrappedX, y, 4.4, 3.1, 0.15, 0, Math.PI * 2);
@@ -185,7 +187,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("volcano")) {
+    if (features.includes("volcano")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.moveTo(wrappedX - 4.7, y + 4);
@@ -210,7 +212,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("chasm")) {
+    if (features.includes("chasm")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.moveTo(wrappedX - 4, y - 5);
@@ -226,7 +228,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("precipice")) {
+    if (features.includes("precipice")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.moveTo(wrappedX - 4.8, y - 3.6);
@@ -245,7 +247,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("resource")) {
+    if (features.includes("resource")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.moveTo(wrappedX, y - 4.5);
@@ -261,7 +263,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("mine")) {
+    if (features.includes("mine")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.moveTo(wrappedX - 4.2, y + 4.5);
@@ -276,7 +278,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("oil")) {
+    if (features.includes("oil")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.moveTo(wrappedX, y - 5);
@@ -291,7 +293,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("starport")) {
+    if (features.includes("starport")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.arc(wrappedX, y, 4.8, 0, Math.PI * 2);
@@ -313,7 +315,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("city")) {
+    if (features.includes("city")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.fillStyle = "rgba(6,6,6,0.94)";
         ctx.fillRect(wrappedX - 3.8, y - 3.8, 7.6, 7.6);
@@ -323,7 +325,7 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("town")) {
+    if (features.includes("town")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.arc(wrappedX, y, 3.2, 0, Math.PI * 2);
@@ -335,12 +337,108 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
       });
     }
 
-    if (hex.features.includes("suburb")) {
+    if (features.includes("suburb")) {
       drawWrapped(ctx, x, (wrappedX) => {
         ctx.beginPath();
         ctx.arc(wrappedX, y, 3, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255,255,255,0.74)";
         ctx.lineWidth = 0.8;
+        ctx.stroke();
+      });
+    }
+
+    if (features.includes("rural")) {
+      drawWrapped(ctx, x, (wrappedX) => {
+        ctx.beginPath();
+        ctx.moveTo(wrappedX - 4, y + 3.5);
+        ctx.lineTo(wrappedX, y - 3.8);
+        ctx.lineTo(wrappedX + 4, y + 3.5);
+        ctx.moveTo(wrappedX - 2.4, y + 3.5);
+        ctx.lineTo(wrappedX - 2.4, y + 6);
+        ctx.lineTo(wrappedX + 2.4, y + 6);
+        ctx.lineTo(wrappedX + 2.4, y + 3.5);
+        ctx.strokeStyle = "rgba(0,0,0,0.82)";
+        ctx.lineWidth = 0.9;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+      });
+    }
+
+    if (features.includes("crop")) {
+      drawWrapped(ctx, x, (wrappedX) => {
+        ctx.beginPath();
+        for (let line = -3; line <= 3; line += 3) {
+          ctx.moveTo(wrappedX - 4.5, y + line);
+          ctx.lineTo(wrappedX + 4.5, y + line);
+        }
+        ctx.strokeStyle = "rgba(0,0,0,0.72)";
+        ctx.lineWidth = 0.7;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      });
+    }
+
+    if (features.includes("domedCity")) {
+      drawWrapped(ctx, x, (wrappedX) => {
+        ctx.beginPath();
+        ctx.arc(wrappedX, y + 2.8, 4.6, Math.PI, Math.PI * 2);
+        ctx.lineTo(wrappedX + 4.6, y + 4.2);
+        ctx.lineTo(wrappedX - 4.6, y + 4.2);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(6,6,6,0.92)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.78)";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      });
+    }
+
+    if (features.includes("arcology")) {
+      drawWrapped(ctx, x, (wrappedX) => {
+        ctx.beginPath();
+        ctx.moveTo(wrappedX, y - 5.4);
+        ctx.lineTo(wrappedX + 5, y + 5);
+        ctx.lineTo(wrappedX - 5, y + 5);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(6,6,6,0.92)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.78)";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      });
+    }
+
+    if (features.includes("nobleEstate")) {
+      drawWrapped(ctx, x, (wrappedX) => {
+        ctx.beginPath();
+        for (let point = 0; point < 10; point++) {
+          const radius = point % 2 === 0 ? 5 : 2.4;
+          const angle = -Math.PI / 2 + (point * Math.PI) / 5;
+          const px = wrappedX + Math.cos(angle) * radius;
+          const py = y + Math.sin(angle) * radius;
+          if (point === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = "rgba(255,209,102,0.9)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.8)";
+        ctx.lineWidth = 0.75;
+        ctx.stroke();
+      });
+    }
+
+    if (features.includes("penalSettlement")) {
+      drawWrapped(ctx, x, (wrappedX) => {
+        ctx.strokeStyle = "rgba(0,0,0,0.86)";
+        ctx.lineWidth = 0.9;
+        ctx.strokeRect(wrappedX - 4, y - 4, 8, 8);
+        ctx.beginPath();
+        ctx.moveTo(wrappedX - 1.5, y - 4);
+        ctx.lineTo(wrappedX - 1.5, y + 4);
+        ctx.moveTo(wrappedX + 1.5, y - 4);
+        ctx.lineTo(wrappedX + 1.5, y + 4);
         ctx.stroke();
       });
     }
