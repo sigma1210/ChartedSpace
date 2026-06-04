@@ -158,7 +158,7 @@ const WorldDetailModal = () => {
               <PlanetGlobe world={world} />
             </div>
             {stars.map((star, i) => (
-              <div key={star.raw} className="flex-1 min-w-0">
+              <div key={`${star.raw}-${i}`} className="flex-1 min-w-0">
                 <StellarView starStr={star.raw} scale={scales[i]} />
               </div>
             ))}

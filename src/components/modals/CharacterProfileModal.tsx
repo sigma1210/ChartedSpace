@@ -9,10 +9,11 @@ import { fetchCharacters, invalidateCharacters, updateCharacterInList } from "..
 import { fetchShip, invalidateShip } from "../../store/slices/shipSlice";
 import { selectCurrentCharacter } from "../../store/selectors/character.selectors";
 import { selectActiveModal } from "../../store/selectors/ui.selectors";
-import { selectShip } from "../../store/selectors/ship.selectors";
+import { selectShip, selectShipLocation } from "../../store/selectors/ship.selectors";
 
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 const StatBar = ({ label, value }: { label: string; value: number }) => {
   const pct = Math.min(100, (value / STAT_MAX) * 100);
@@ -37,15 +38,20 @@ const CharacterProfileModal = () => {
   const activeModal = useAppSelector(selectActiveModal);
   const char = useAppSelector(selectCurrentCharacter);
   const ship = useAppSelector(selectShip);
+  const shipLocation = useAppSelector(selectShipLocation);
 
-  const [nameInput,  setNameInput]  = useState("");
-  const [saveState,  setSaveState]  = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [nameEdit, setNameEdit] = useState<{
+    characterId: string | null;
+    nameInput: string;
+    saveState: SaveState;
+  }>({ characterId: null, nameInput: "", saveState: "idle" });
   const [playState,  setPlayState]  = useState<"idle" | "playing" | "error">("idle");
 
   useEffect(() => {
-    setNameInput("");
-    setSaveState("idle");
-  }, [char?.id]);
+    if (activeModal !== "characterProfile") return;
+    dispatch(invalidateShip());
+    dispatch(fetchShip());
+  }, [activeModal, dispatch]);
 
   if (activeModal !== "characterProfile") return null;
   if (!char) return null;
@@ -55,6 +61,23 @@ const CharacterProfileModal = () => {
     char.strength, char.dexterity, char.endurance,
     char.intelligence, char.education, char.socialStanding,
   ];
+  const isEditingCurrentCharacter = nameEdit.characterId === char.id;
+  const nameInput = isEditingCurrentCharacter ? nameEdit.nameInput : "";
+  const saveState = isEditingCurrentCharacter ? nameEdit.saveState : "idle";
+  const setNameInput = (value: string) => {
+    setNameEdit((prev) => ({
+      characterId: char.id,
+      nameInput: value,
+      saveState: prev.characterId === char.id ? prev.saveState : "idle",
+    }));
+  };
+  const setSaveState = (saveState: SaveState) => {
+    setNameEdit((prev) => ({
+      characterId: char.id,
+      nameInput: prev.characterId === char.id ? prev.nameInput : "",
+      saveState,
+    }));
+  };
 
   const handleSaveName = async () => {
     const trimmed = nameInput.trim();
@@ -103,6 +126,11 @@ const CharacterProfileModal = () => {
   );
 
   const title = isUnnamed && saveState === "saved" ? nameInput.trim() : char.name;
+  const currentLocation = {
+    worldName: shipLocation?.worldName ?? char.worldName,
+    sectorAbbr: shipLocation?.sectorAbbr ?? char.sectorAbbr,
+    hex: shipLocation?.hex ?? char.hex,
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => dispatch(closeModal())}>
@@ -185,11 +213,11 @@ const CharacterProfileModal = () => {
                 <p className="mb-2 text-[10px] uppercase tracking-wider text-(--hud-text-dim)">
                   Current Location
                 </p>
-                {char.worldName ? (
+                {currentLocation.worldName ? (
                   <>
-                    <p className="font-mono text-sm text-(--hud-text)">◉ {char.worldName}</p>
+                    <p className="font-mono text-sm text-(--hud-text)">◉ {currentLocation.worldName}</p>
                     <p className="text-xs text-(--hud-text-dim) mt-0.5">
-                      {char.sectorAbbr} · Hex {char.hex}
+                      {currentLocation.sectorAbbr} · Hex {currentLocation.hex}
                     </p>
                   </>
                 ) : (

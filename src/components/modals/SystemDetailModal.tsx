@@ -14,7 +14,11 @@ const SystemDetailModal = () => {
   if (activeModal !== "systemDetail" || !world) return null;
 
   const stars = Array.isArray(world.stellar) ? world.stellar : [];
-  const systemType = stars.length === 1 ? "Single Star" : stars.length === 2 ? "Binary System" : stars.length >= 3 ? "Trinary System" : "Unknown";
+  const systemType =
+    stars.length === 1 ? "Single Star"
+    : stars.length === 2 ? "Binary System"
+    : stars.length >= 3 ? "Trinary System"
+    : "Unknown";
 
   return (
     <div
@@ -25,7 +29,6 @@ const SystemDetailModal = () => {
         className="hud-panel flex flex-col w-225 max-w-[92vw] h-165 max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Header ── */}
         <div className="hud-panel-header flex items-center justify-between px-4 py-2 shrink-0">
           <div className="flex items-center gap-3">
             <span className="font-mono text-sm font-bold uppercase tracking-widest text-(--hud-text)">
@@ -48,7 +51,6 @@ const SystemDetailModal = () => {
           </button>
         </div>
 
-        {/* ── 3D view ── */}
         <div className="flex-1 min-h-0">
           <StarSystemView world={world} />
         </div>

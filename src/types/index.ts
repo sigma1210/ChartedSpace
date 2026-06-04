@@ -7,7 +7,6 @@ export type ModalType =
   | "map"
   | "worldDetail"
   | "systemDetail"
-  | "updatedSystemDetail"
   | "userProfile"
   | "jumpRangeSelector"
   | "crewManagement";

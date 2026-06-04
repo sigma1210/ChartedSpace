@@ -12,7 +12,7 @@ const SystemViewButton = () => {
     <button
       onClick={() => world && dispatch(openSystemDetail(world.hex))}
       disabled={!world}
-      className="border border-(--hud-border) px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) transition-colors disabled:opacity-30 disabled:pointer-events-none"
+      className="border border-(--hud-accent) px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) hover:bg-(--hud-accent) hover:text-(--hud-bg) transition-colors disabled:opacity-30 disabled:pointer-events-none"
     >
       System
     </button>

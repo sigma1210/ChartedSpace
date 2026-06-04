@@ -1,0 +1,210 @@
+# Avatar Asset Contract
+
+This document is the current source of truth for the first avatar image system. It captures the decisions needed to build the ComfyUI batching workflow and the later app integration.
+
+## Core Direction
+
+The avatar system will use pre-generated image assets for the first implementation.
+
+The app does not generate avatar images at runtime. It does not store prompts, workflows, or diffusion metadata as part of the character record. The app only needs to resolve a character's semantic avatar attributes into an image path.
+
+This keeps the application simple while still allowing future implementations to replace static files with a CDN, image API, cached generation service, or another backend that serves the same path structure.
+
+## Runtime Contract
+
+Avatar images are addressed by a deterministic semantic path:
+
+```text
+/avatars/{style}/{species}/{attributeSlug}/{variant}.jpg
+```
+
+Example:
+
+```text
+/avatars/classic/human/male-average-civilian-brownhair-blueeyes/01.jpg
+```
+
+The path is the contract. The app should not need a large runtime manifest in the browser.
+
+## Folder Structure
+
+The initial asset root should live under:
+
+```text
+public/avatars/
+```
+
+Expected structure:
+
+```text
+public/avatars/
+  classic/
+    human/
+      male-average-civilian-brownhair-blueeyes/
+        01.jpg
+        02.jpg
+        ...
+        10.jpg
+  anime/
+    human/
+      male-average-civilian-brownhair-blueeyes/
+        01.jpg
+        ...
+        10.jpg
+```
+
+Style is the top-level folder so different styles can later be served from different sources.
+
+## Initial Styles
+
+The first two styles are:
+
+```text
+classic
+anime
+```
+
+Style is a user viewing preference, not part of the character's identity. When a user changes style, the app should resolve the same character attributes and same variant number under the new style root.
+
+## Initial Species
+
+The folder structure should include species from the start, even if the first usable catalog only contains humans.
+
+Initial species:
+
+```text
+human
+```
+
+Future examples:
+
+```text
+vargr
+aslan
+```
+
+## Initial Attribute Categories
+
+The first version should support these semantic avatar attributes:
+
+```text
+gender
+build
+clothing
+hairColor
+eyeColor
+```
+
+These values should be treated as controlled enums. Users should not provide freeform prompt text.
+
+The exact enum values can still be finalized, but the path slug should be stable once batching begins.
+
+## Attribute Slug
+
+The attribute slug should be filename-friendly and deterministic.
+
+Current proposed slug shape:
+
+```text
+{gender}-{build}-{clothing}-{hairColor}hair-{eyeColor}eyes
+```
+
+Example:
+
+```text
+male-average-civilian-brownhair-blueeyes
+```
+
+The app can rebuild this slug from enum values, so folder naming must remain consistent.
+
+## Variants
+
+Each valid semantic combination should initially have 10 image variants:
+
+```text
+01.jpg
+02.jpg
+03.jpg
+04.jpg
+05.jpg
+06.jpg
+07.jpg
+08.jpg
+09.jpg
+10.jpg
+```
+
+Variant numbers should map across styles. For example, a character using variant `03` in `classic` should resolve to variant `03` in `anime` when the user switches style.
+
+The upper bound may grow later, but 10 variants per combination is the starting target.
+
+## Player Characters
+
+Player characters should store:
+
+```text
+species
+gender
+build
+clothing
+hairColor
+eyeColor
+variant
+```
+
+Players choose their variant from a matching gallery.
+
+If a player changes avatar attributes, they choose from the new matching pool.
+
+The character should not store a prompt. The character should not need to store an exact image path unless a future feature requires preserving a historical image.
+
+## NPCs
+
+NPCs use the same semantic attribute system.
+
+NPC variant selection should be deterministic. A stable NPC identifier, name, world seed, or similar stable value should determine the selected variant so the same NPC resolves to the same avatar consistently.
+
+NPCs should not receive random new images every time the UI renders.
+
+## Manifests
+
+A large runtime manifest should not be delivered to the browser for normal avatar lookup.
+
+The app should rely on deterministic path construction.
+
+A manifest, report, or index may still be useful as a build-time validation artifact, but it should not be required for the UI to resolve a known avatar path.
+
+## Validation Tooling
+
+The project should eventually include tooling that validates the generated asset catalog.
+
+Validation should confirm:
+
+- Expected folders exist for every supported style, species, and attribute combination.
+- Expected variants exist for each combination.
+- Variant files use consistent names such as `01.jpg` through `10.jpg`.
+- Image dimensions are acceptable and consistent enough for UI use.
+- Styles expose matching semantic combinations so style switching does not break paths.
+
+## Generation Workflow
+
+The ComfyUI workflow is outside the app runtime.
+
+The app does not care whether images are hand drawn, generated by diffusion models, produced by LoRAs, or created by any other process. It only cares that the final assets exist at the expected semantic paths.
+
+Prompt text, workflow JSON, LoRA configuration, and generation metadata may be useful for the asset-production process, but they are not part of the v1 application data model.
+
+## Future Compatibility
+
+Because the app resolves avatars by semantic path, the static file system can later be replaced by another implementation that serves the same URLs.
+
+Possible future backing systems:
+
+- Static files in `public/avatars`.
+- CDN-hosted images.
+- Server route that serves images from storage.
+- Cached on-demand diffusion generation.
+- Style-specific image services.
+
+The app should keep the path builder isolated so the backing implementation can change without rewriting avatar UI logic.
+

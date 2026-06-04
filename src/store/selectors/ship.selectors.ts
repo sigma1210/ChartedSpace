@@ -10,6 +10,7 @@ export const selectShipLocation = (state: RootState) => {
   const ship = state.ship.ship;
   if (!ship) return null;
   return {
+    worldName:  ship.worldName,
     hex:        ship.hex,
     sectorAbbr: ship.sectorAbbr,
     status:     ship.status,

@@ -6,8 +6,6 @@ import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
   setSearchQuery,
   setSearchFilter,
-  openSystemDetail,
-  openCharacterProfile,
 } from "../../store/slices/uiSlice";
 import { selectSearchQuery, selectSearchFilter } from "../../store/selectors/ui.selectors";
 import { SearchFilter } from "../../types";

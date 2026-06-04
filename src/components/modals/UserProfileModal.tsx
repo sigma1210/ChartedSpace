@@ -1,10 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
 import { ChevronLeft, Plus } from "lucide-react";
 import HudModal from "./HudModal";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { goBack, openCharacterProfile, openCharacterCreate } from "../../store/slices/uiSlice";
-import { selectIsOwnProfile, selectActiveUserId } from "../../store/selectors/ui.selectors";
+import { fetchShip, invalidateShip } from "../../store/slices/shipSlice";
+import { selectIsOwnProfile } from "../../store/selectors/ui.selectors";
+import { selectCharacters } from "../../store/selectors/character.selectors";
+import { selectShipLocation } from "../../store/selectors/ship.selectors";
+
+type ProfileCharacter = {
+  id: string;
+  name: string;
+  worldName: string | null;
+  sectorAbbr: string | null;
+  hex: string | null;
+};
 
 // Placeholder — will be replaced with live data
 const OWN_PLACEHOLDER = {
@@ -12,22 +24,40 @@ const OWN_PLACEHOLDER = {
   email: "",
   memberSince: "2026",
   imageUrl: null as string | null,
-  characters: [] as { id: string; name: string; worldName: string | null; sectorAbbr: string | null; hex: string | null }[],
+  characters: [] as ProfileCharacter[],
 };
 
 const OTHER_PLACEHOLDER = {
   displayName: "Unknown Traveller",
   memberSince: "2026",
   imageUrl: null as string | null,
-  characters: [] as { id: string; name: string; worldName: string | null; sectorAbbr: string | null; hex: string | null }[],
+  characters: [] as ProfileCharacter[],
 };
 
 const UserProfileModal = () => {
   const dispatch = useAppDispatch();
   const isOwn = useAppSelector(selectIsOwnProfile);
-  const userId = useAppSelector(selectActiveUserId);
+  const characters = useAppSelector(selectCharacters);
+  const shipLocation = useAppSelector(selectShipLocation);
 
-  const profile = isOwn ? OWN_PLACEHOLDER : OTHER_PLACEHOLDER;
+  useEffect(() => {
+    if (!isOwn) return;
+    dispatch(invalidateShip());
+    dispatch(fetchShip());
+  }, [dispatch, isOwn]);
+
+  const profile = isOwn
+    ? {
+        ...OWN_PLACEHOLDER,
+        characters: characters.map((c) => ({
+          id: c.id,
+          name: c.name,
+          worldName: shipLocation?.worldName ?? c.worldName,
+          sectorAbbr: shipLocation?.sectorAbbr ?? c.sectorAbbr,
+          hex: shipLocation?.hex ?? c.hex,
+        })),
+      }
+    : OTHER_PLACEHOLDER;
 
   const headerRight = !isOwn && (
     <button
