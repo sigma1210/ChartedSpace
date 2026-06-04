@@ -318,6 +318,10 @@ If two users view the same character feed, should they see the same moments rend
 
 
  
-
+  "gender": "female",
+        "build": "athletic",
+        "clothing": "jacket",
+        "hairColor": "black",
+        "eyeColor": "green"
 
 

@@ -6,12 +6,15 @@ import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { World } from "../../types";
+import { useAppDispatch } from "../../store/hooks";
 import { buildSystemLayout, buildLayoutFromSystemData, type SystemLayout, type StarSlot } from "../../lib/stellarSystem";
-import { buildWorldPlacements, orbitToScene, seededRng, type WorldPlacement, type WorldBodyType } from "../../lib/orbitData";
+import { buildWorldPlacements, orbitToScene, seededRng, type WorldPlacement } from "../../lib/orbitData";
 import { spectralMass, epochAngle, elapsedDaysAtTurn } from "../../lib/orbitalMechanics";
 import { buildTexture, cloudConfig, getCloudTex, PLANET_SPEED, type CloudConfig } from "./PlanetGlobe";
 import { uwpVal } from "../../lib/worldMap";
-import { selectActiveWorldSystem, type SystemData, type WorldBody as SystemWorldBody, type SystemOrbit, type UnplacedBody } from "../../store/selectors/system.selectors";
+import { selectActiveWorldSystem, selectSystemGeneratedTurnByKey, selectSystemStatusByKey } from "../../store/selectors/system.selectors";
+import { getSystemData } from "../../store/slices/systemSlice";
+import type { SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
 
@@ -691,15 +694,37 @@ const cameraZ = (layout: SystemLayout, outermostScene: number): number => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const StarSystemView = ({ world }: { world: World }) => {
+  const dispatch = useAppDispatch();
+  const sectorAbbr = useSelector((s: { galaxy?: { activeWorldSectorAbbr?: string | null } }) => s.galaxy?.activeWorldSectorAbbr ?? null);
   const systemData = useSelector(selectActiveWorldSystem);
-  const useData    = !!(systemData && systemData.hex === world.hex);
+  const systemStatus = useSelector(
+    sectorAbbr
+      ? selectSystemStatusByKey(sectorAbbr, world.hex)
+      : () => "idle",
+  );
+  const generatedTurn = useSelector(
+    sectorAbbr
+      ? selectSystemGeneratedTurnByKey(sectorAbbr, world.hex)
+      : () => null,
+  );
+  const useData = !!(
+    systemData &&
+    systemData.hex === world.hex &&
+    (!sectorAbbr || systemData.sector === sectorAbbr)
+  );
+  const currentTurn = useSelector((s: { turn?: { currentTurn?: number } }) => s.turn?.currentTurn ?? 1);
+
+  useEffect(() => {
+    if (!sectorAbbr) return;
+    if (systemStatus === "loading") return;
+    if (systemStatus === "loaded" && generatedTurn === currentTurn) return;
+    dispatch(getSystemData({ sectorAbbr, hex: world.hex }));
+  }, [currentTurn, dispatch, generatedTurn, sectorAbbr, systemStatus, world.hex]);
 
   const layout = useMemo(
     () => useData ? buildLayoutFromSystemData(systemData!.stars) : buildSystemLayout(world.stellar),
     [useData, systemData, world.stellar],
   );
-
-  const currentTurn = useSelector((s: { turn?: { currentTurn?: number } }) => s.turn?.currentTurn ?? 1);
 
   // Star epoch angles — companions frozen at their calendar position
   const epochAngles = useMemo(() => {

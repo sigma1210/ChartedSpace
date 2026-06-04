@@ -52,7 +52,7 @@ const initialState: UIState = {
 };
 
 const makeRoot = (ui: UIState): RootState => {
-  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, characters: { items: [], status: "idle", error: null }, ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] } };
+  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, characters: { items: [], status: "idle", error: null }, ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} } };
 }
 
 describe("uiSlice reducers", () => {

@@ -1,6 +1,6 @@
 import { parseStar, physicalRadius, type PrimaryStar } from './stellar';
 import { orbitToScene } from './orbitData';
-import type { SystemStar } from '../store/selectors/system.selectors';
+import type { SystemStar } from "./systemTypes";
 
 // ─── Mass estimation (solar masses) ──────────────────────────────────────────
 // Interpolated from subtype 0 to 9 within each class.

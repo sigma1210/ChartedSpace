@@ -38,6 +38,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
     ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" },
     turn: { currentTurn: 1, status: "idle", error: null },
     availableCrew: { poolSize: 20, crew: [] },
+    system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} },
   };
 }
 

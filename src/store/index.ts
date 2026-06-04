@@ -6,6 +6,7 @@ import characterReducer from "./slices/characterSlice";
 import shipReducer from "./slices/shipSlice";
 import turnReducer from "./slices/turnSlice";
 import availableCrewReducer from "./slices/availableCrewSlice";
+import systemReducer from "./slices/systemSlice";
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     ship: shipReducer,
     turn: turnReducer,
     availableCrew: availableCrewReducer,
+    system: systemReducer,
   },
 });
 
