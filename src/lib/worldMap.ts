@@ -86,8 +86,12 @@ export const FEATURE_PRIORITY: TerrainFeature[] = [
   "island",
 ];
 
-export const visibleFeatures = (hex: { features: TerrainFeature[] }): TerrainFeature[] => {
-  const selected = FEATURE_PRIORITY.find((feature) => hex.features.includes(feature));
+export const visibleFeatures = (hex: {
+  features: TerrainFeature[];
+}): TerrainFeature[] => {
+  const selected = FEATURE_PRIORITY.find((feature) =>
+    hex.features.includes(feature),
+  );
   return selected ? [selected] : [];
 };
 
@@ -113,16 +117,16 @@ export const LAND_BY_ATMO: Record<number, string> = {
 export const OCEAN_COLOR = "#1e5a9e";
 export const OCEAN_DEPTH_COLOR = "#123f78";
 export const OCEAN_ABYSS_COLOR = "#08234d";
-export const FLUID_COLOR = "#2a6a40"; // exotic liquid (corrosive/insidious atmo)
+export const FLUID_COLOR = "#2a6a40";
 export const ROUGH_COLOR = "#9c780f";
 export const WOODS_COLOR = "#02a23a";
 export const SWAMP_COLOR = "#97ac20";
 export const MARSH_COLOR = "#7f9b24";
 export const LAKE_COLOR = "#2376d0";
 export const ICE_COLOR = "#c4dde8";
-export const FROZEN_COLOR = "#5f8fa8"; // frozen tundra — darker blue-grey than ice cap
+export const FROZEN_COLOR = "#5f8fa8";
 export const DESERT_COLOR = "#8b6914";
-export const BAKED_COLOR = "#9c5820"; // scorched baked lands (Vh/Mo)
+export const BAKED_COLOR = "#9c5820";
 export const LAVA_COLOR = "#8b1010";
 export const WASTELAND_COLOR = "#4d4638";
 export const EXOTIC_COLOR = "#6d2f7f";
@@ -139,10 +143,10 @@ export const uwpVal = (c: string): number => {
 export const isAsteroid = (world: { uwp: { size: string } }): boolean =>
   uwpVal(world.uwp.size) === 0;
 
-//export const isSatellite = (world: { remarks:[] }): boolean => 
-  //remarks.
+//export const isSatellite = (world: { remarks:[] }): boolean =>
+//remarks.
 
-
+// this should driven by
 
 export const terrainColor = (t: Terrain, landColor: string): string => {
   switch (t) {
@@ -228,7 +232,7 @@ const triangleNumber = (n: number): number => (n * (n + 1)) / 2;
 
 const rollD6 = (rand: () => number): number => Math.floor(rand() * 6) + 1;
 
-const shuffled = <T,>(items: T[], rand: () => number): T[] => {
+const shuffled = <T>(items: T[], rand: () => number): T[] => {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
@@ -246,10 +250,17 @@ const removeFeature = (hex: HexCell, feature: TerrainFeature) => {
 };
 
 const isLiquidTerrain = (terrain: Terrain) =>
-  terrain === "ocean" || terrain === "oceanDepth" || terrain === "oceanAbyss" || terrain === "fluid";
+  terrain === "ocean" ||
+  terrain === "oceanDepth" ||
+  terrain === "oceanAbyss" ||
+  terrain === "fluid";
 
 const isNaturalLandTerrain = (terrain: Terrain) =>
-  terrain === "land" || terrain === "rough" || terrain === "woods" || terrain === "swamp" || terrain === "marsh";
+  terrain === "land" ||
+  terrain === "rough" ||
+  terrain === "woods" ||
+  terrain === "swamp" ||
+  terrain === "marsh";
 
 const isSolidSurfaceTerrain = (terrain: Terrain) =>
   !isLiquidTerrain(terrain) &&
@@ -317,8 +328,13 @@ const neighborIndexes = (cells: HexCell[], index: number): number[] => {
   return neighbors;
 };
 
-const setOceanTerrain = (hex: HexCell, liquidTerrain: Terrain, tcs: Set<string>) => {
-  if (tcs.has("Va") && !(tcs.has("Mo") || tcs.has("Vh") || tcs.has("Fr"))) return;
+const setOceanTerrain = (
+  hex: HexCell,
+  liquidTerrain: Terrain,
+  tcs: Set<string>,
+) => {
+  if (tcs.has("Va") && !(tcs.has("Mo") || tcs.has("Vh") || tcs.has("Fr")))
+    return;
   hex.terrain = liquidTerrain;
   if (hex.features.includes("mountain")) {
     removeFeature(hex, "mountain");
@@ -327,7 +343,10 @@ const setOceanTerrain = (hex: HexCell, liquidTerrain: Terrain, tcs: Set<string>)
 };
 
 const naturalLandHexes = (cells: HexCell[]) =>
-  cells.filter((hex) => isNaturalLandTerrain(hex.terrain) && !hex.features.includes("island"));
+  cells.filter(
+    (hex) =>
+      isNaturalLandTerrain(hex.terrain) && !hex.features.includes("island"),
+  );
 
 const placeNaturalTerrain = (
   cells: HexCell[],
@@ -348,7 +367,10 @@ const placeSurfaceTerrain = (
   terrain: Terrain,
   count: number,
   rand: () => number,
-  candidates = cells.filter((hex) => isSolidSurfaceTerrain(hex.terrain) && !hex.features.includes("island")),
+  candidates = cells.filter(
+    (hex) =>
+      isSolidSurfaceTerrain(hex.terrain) && !hex.features.includes("island"),
+  ),
 ) => {
   shuffled(candidates, rand)
     .slice(0, Math.min(count, candidates.length))
@@ -363,16 +385,13 @@ const placeSurfaceTerrain = (
     });
 };
 
-const placeCraters = (
-  cells: HexCell[],
-  count: number,
-  rand: () => number,
-) => {
-  const candidates = cells.filter((hex) =>
-    !isLiquidTerrain(hex.terrain) &&
-    hex.terrain !== "ice" &&
-    hex.terrain !== "lake" &&
-    !hex.features.includes("island"),
+const placeCraters = (cells: HexCell[], count: number, rand: () => number) => {
+  const candidates = cells.filter(
+    (hex) =>
+      !isLiquidTerrain(hex.terrain) &&
+      hex.terrain !== "ice" &&
+      hex.terrain !== "lake" &&
+      !hex.features.includes("island"),
   );
 
   shuffled(candidates, rand)
@@ -385,20 +404,22 @@ const placeVolcanoes = (
   count: number,
   rand: () => number,
 ) => {
-  const candidates = cells.filter((hex) =>
-    !isLiquidTerrain(hex.terrain) &&
-    hex.terrain !== "ice" &&
-    hex.terrain !== "frozen" &&
-    hex.terrain !== "lake" &&
-    hex.terrain !== "vacuum" &&
-    !hex.features.includes("island"),
+  const candidates = cells.filter(
+    (hex) =>
+      !isLiquidTerrain(hex.terrain) &&
+      hex.terrain !== "ice" &&
+      hex.terrain !== "frozen" &&
+      hex.terrain !== "lake" &&
+      hex.terrain !== "vacuum" &&
+      !hex.features.includes("island"),
   );
-  const preferred = candidates.filter((hex) =>
-    hex.terrain === "lava" ||
-    hex.terrain === "baked" ||
-    hex.terrain === "rough" ||
-    hex.terrain === "desert" ||
-    hex.features.includes("mountain"),
+  const preferred = candidates.filter(
+    (hex) =>
+      hex.terrain === "lava" ||
+      hex.terrain === "baked" ||
+      hex.terrain === "rough" ||
+      hex.terrain === "desert" ||
+      hex.features.includes("mountain"),
   );
   const pool = preferred.length >= count ? preferred : candidates;
 
@@ -411,13 +432,14 @@ const placeVolcanoes = (
 };
 
 const solidFractureCandidates = (cells: HexCell[]) =>
-  cells.filter((hex) =>
-    !isLiquidTerrain(hex.terrain) &&
-    hex.terrain !== "ice" &&
-    hex.terrain !== "frozen" &&
-    hex.terrain !== "lake" &&
-    !hex.features.includes("island") &&
-    !hex.features.includes("volcano"),
+  cells.filter(
+    (hex) =>
+      !isLiquidTerrain(hex.terrain) &&
+      hex.terrain !== "ice" &&
+      hex.terrain !== "frozen" &&
+      hex.terrain !== "lake" &&
+      !hex.features.includes("island") &&
+      !hex.features.includes("volcano"),
   );
 
 const placeFractures = (
@@ -427,18 +449,22 @@ const placeFractures = (
   rand: () => number,
 ) => {
   const candidates = solidFractureCandidates(cells);
-  const preferred = candidates.filter((hex) =>
-    hex.terrain === "vacuum" ||
-    hex.terrain === "rough" ||
-    hex.terrain === "desert" ||
-    hex.terrain === "baked" ||
-    hex.terrain === "lava" ||
-    hex.features.includes("mountain") ||
-    hex.features.includes("crater"),
+  const preferred = candidates.filter(
+    (hex) =>
+      hex.terrain === "vacuum" ||
+      hex.terrain === "rough" ||
+      hex.terrain === "desert" ||
+      hex.terrain === "baked" ||
+      hex.terrain === "lava" ||
+      hex.features.includes("mountain") ||
+      hex.features.includes("crater"),
   );
   const pool = preferred.length > 0 ? preferred : candidates;
 
-  const selectedChasms = shuffled(pool, rand).slice(0, Math.min(chasmCount, pool.length));
+  const selectedChasms = shuffled(pool, rand).slice(
+    0,
+    Math.min(chasmCount, pool.length),
+  );
   selectedChasms.forEach((hex) => addFeature(hex, "chasm"));
 
   const remaining = pool.filter((hex) => !hex.features.includes("chasm"));
@@ -453,50 +479,75 @@ const placeEconomicFeatures = (
   rand: () => number,
   tcs: Set<string>,
 ) => {
-  const solidCandidates = cells.filter((hex) =>
-    (isSolidSurfaceTerrain(hex.terrain) || hex.terrain === "vacuum") &&
-    !hex.features.includes("island") &&
-    !hex.features.includes("volcano"),
+  const solidCandidates = cells.filter(
+    (hex) =>
+      (isSolidSurfaceTerrain(hex.terrain) || hex.terrain === "vacuum") &&
+      !hex.features.includes("island") &&
+      !hex.features.includes("volcano"),
   );
 
-  const resourceCount = Math.max(1, Math.floor((rollD6(rand) + (tcs.has("Ri") ? 1 : 0) + (tcs.has("In") ? 1 : 0)) / 3));
+  const resourceCount = Math.max(
+    1,
+    Math.floor(
+      (rollD6(rand) + (tcs.has("Ri") ? 1 : 0) + (tcs.has("In") ? 1 : 0)) / 3,
+    ),
+  );
   shuffled(solidCandidates, rand)
     .slice(0, Math.min(resourceCount, solidCandidates.length))
     .forEach((hex) => addFeature(hex, "resource"));
 
-  const mineCandidates = solidCandidates.filter((hex) =>
-    hex.terrain === "rough" ||
-    hex.terrain === "desert" ||
-    hex.terrain === "wasteland" ||
-    hex.terrain === "vacuum" ||
-    hex.features.includes("mountain") ||
-    hex.features.includes("crater") ||
-    hex.features.includes("chasm") ||
-    hex.features.includes("precipice"),
+  const mineCandidates = solidCandidates.filter(
+    (hex) =>
+      hex.terrain === "rough" ||
+      hex.terrain === "desert" ||
+      hex.terrain === "wasteland" ||
+      hex.terrain === "vacuum" ||
+      hex.features.includes("mountain") ||
+      hex.features.includes("crater") ||
+      hex.features.includes("chasm") ||
+      hex.features.includes("precipice"),
   );
-  const minePressure = (tcs.has("In") ? 2 : 0) + (tcs.has("Po") ? 1 : 0) + (tcs.has("Ni") ? 1 : 0) + (mineCandidates.length > 0 ? rollD6(rand) : 0);
+  const minePressure =
+    (tcs.has("In") ? 2 : 0) +
+    (tcs.has("Po") ? 1 : 0) +
+    (tcs.has("Ni") ? 1 : 0) +
+    (mineCandidates.length > 0 ? rollD6(rand) : 0);
   shuffled(mineCandidates, rand)
-    .slice(0, Math.min(Math.max(1, Math.floor(minePressure / 4)), mineCandidates.length))
+    .slice(
+      0,
+      Math.min(
+        Math.max(1, Math.floor(minePressure / 4)),
+        mineCandidates.length,
+      ),
+    )
     .forEach((hex) => {
       removeFeature(hex, "resource");
       addFeature(hex, "mine");
     });
 
   const hydro = uwpVal(world.uwp.hydrographics);
-  const oilCandidates = cells.filter((hex) =>
-    (hex.terrain === "swamp" ||
-      hex.terrain === "marsh" ||
-      hex.terrain === "lake" ||
-      hex.terrain === "woods" ||
-      hex.terrain === "land") &&
-    !hex.features.includes("volcano"),
+  const oilCandidates = cells.filter(
+    (hex) =>
+      (hex.terrain === "swamp" ||
+        hex.terrain === "marsh" ||
+        hex.terrain === "lake" ||
+        hex.terrain === "woods" ||
+        hex.terrain === "land") &&
+      !hex.features.includes("volcano"),
   );
-  const oilPressure = hydro > 4 && !tcs.has("Va") && !tcs.has("Mo") && !tcs.has("Vh")
-    ? rollD6(rand) + (tcs.has("Ag") ? 1 : 0) + (tcs.has("Ga") ? 1 : 0)
-    : 0;
+  const oilPressure =
+    hydro > 4 && !tcs.has("Va") && !tcs.has("Mo") && !tcs.has("Vh")
+      ? rollD6(rand) + (tcs.has("Ag") ? 1 : 0) + (tcs.has("Ga") ? 1 : 0)
+      : 0;
   if (oilPressure > 0) {
     shuffled(oilCandidates, rand)
-      .slice(0, Math.min(Math.max(1, Math.floor(oilPressure / 4)), oilCandidates.length))
+      .slice(
+        0,
+        Math.min(
+          Math.max(1, Math.floor(oilPressure / 4)),
+          oilCandidates.length,
+        ),
+      )
       .forEach((hex) => {
         removeFeature(hex, "resource");
         addFeature(hex, "oil");
@@ -505,23 +556,25 @@ const placeEconomicFeatures = (
 };
 
 const settlementCandidates = (cells: HexCell[]) => {
-  const preferred = cells.filter((hex) =>
-    (hex.terrain === "land" ||
-      hex.terrain === "rough" ||
-      hex.terrain === "woods" ||
-      hex.terrain === "marsh" ||
-      hex.terrain === "swamp" ||
-      hex.terrain === "desert" ||
-      hex.terrain === "wasteland" ||
-      hex.terrain === "exotic") &&
-    !hex.features.includes("volcano"),
+  const preferred = cells.filter(
+    (hex) =>
+      (hex.terrain === "land" ||
+        hex.terrain === "rough" ||
+        hex.terrain === "woods" ||
+        hex.terrain === "marsh" ||
+        hex.terrain === "swamp" ||
+        hex.terrain === "desert" ||
+        hex.terrain === "wasteland" ||
+        hex.terrain === "exotic") &&
+      !hex.features.includes("volcano"),
   );
 
   if (preferred.length > 0) return preferred;
 
-  return cells.filter((hex) =>
-    (isSolidSurfaceTerrain(hex.terrain) || hex.features.includes("island")) &&
-    !hex.features.includes("volcano"),
+  return cells.filter(
+    (hex) =>
+      (isSolidSurfaceTerrain(hex.terrain) || hex.features.includes("island")) &&
+      !hex.features.includes("volcano"),
   );
 };
 
@@ -534,8 +587,11 @@ const placeSettlements = (
   const starport = world.uwp.starport?.toUpperCase();
   const pop = uwpVal(world.uwp.population);
   if (starport && starport !== "X" && starport !== "?") {
-    const portCandidates = settlementCandidates(cells).filter((hex) =>
-      hex.terrain !== "lava" && hex.terrain !== "ice" && hex.terrain !== "frozen",
+    const portCandidates = settlementCandidates(cells).filter(
+      (hex) =>
+        hex.terrain !== "lava" &&
+        hex.terrain !== "ice" &&
+        hex.terrain !== "frozen",
     );
     const [portHex] = shuffled(portCandidates, rand);
     if (portHex) {
@@ -548,20 +604,27 @@ const placeSettlements = (
 
   if (pop <= 0) return;
 
-  const baseCandidates = settlementCandidates(cells).filter((hex) =>
-    hex.terrain !== "lava" &&
-    hex.terrain !== "ice" &&
-    hex.terrain !== "frozen" &&
-    !hex.features.includes("starport") &&
-    !hex.features.includes("mine") &&
-    !hex.features.includes("oil"),
+  const baseCandidates = settlementCandidates(cells).filter(
+    (hex) =>
+      hex.terrain !== "lava" &&
+      hex.terrain !== "ice" &&
+      hex.terrain !== "frozen" &&
+      !hex.features.includes("starport") &&
+      !hex.features.includes("mine") &&
+      !hex.features.includes("oil"),
   );
 
-  const cityCount = pop >= 8 ? Math.min(3, Math.max(1, pop - 7)) : pop >= 6 ? 1 : 0;
-  const townCount = pop >= 4 ? Math.min(6, Math.max(1, pop - 3)) : pop >= 2 ? 1 : 0;
-  const suburbCount = pop >= 8 ? Math.min(8, pop - 6 + (tcs.has("Hi") ? 2 : 0)) : 0;
+  const cityCount =
+    pop >= 8 ? Math.min(3, Math.max(1, pop - 7)) : pop >= 6 ? 1 : 0;
+  const townCount =
+    pop >= 4 ? Math.min(6, Math.max(1, pop - 3)) : pop >= 2 ? 1 : 0;
+  const suburbCount =
+    pop >= 8 ? Math.min(8, pop - 6 + (tcs.has("Hi") ? 2 : 0)) : 0;
 
-  const cities = shuffled(baseCandidates, rand).slice(0, Math.min(cityCount, baseCandidates.length));
+  const cities = shuffled(baseCandidates, rand).slice(
+    0,
+    Math.min(cityCount, baseCandidates.length),
+  );
   cities.forEach((hex) => {
     addFeature(hex, "city");
     removeFeature(hex, "resource");
@@ -570,7 +633,9 @@ const placeSettlements = (
     removeFeature(hex, "precipice");
   });
 
-  const remainingForTowns = baseCandidates.filter((hex) => !hex.features.includes("city"));
+  const remainingForTowns = baseCandidates.filter(
+    (hex) => !hex.features.includes("city"),
+  );
   shuffled(remainingForTowns, rand)
     .slice(0, Math.min(townCount, remainingForTowns.length))
     .forEach((hex) => {
@@ -578,9 +643,8 @@ const placeSettlements = (
       removeFeature(hex, "resource");
     });
 
-  const remainingForSuburbs = baseCandidates.filter((hex) =>
-    !hex.features.includes("city") &&
-    !hex.features.includes("town"),
+  const remainingForSuburbs = baseCandidates.filter(
+    (hex) => !hex.features.includes("city") && !hex.features.includes("town"),
   );
   shuffled(remainingForSuburbs, rand)
     .slice(0, Math.min(suburbCount, remainingForSuburbs.length))
@@ -598,52 +662,73 @@ const placeCivilizationLayers = (
   const hydro = uwpVal(world.uwp.hydrographics);
   if (pop <= 0) return;
 
-  const settled = settlementCandidates(cells).filter((hex) =>
-    !hex.features.includes("starport") &&
-    !hex.features.includes("city") &&
-    !hex.features.includes("town") &&
-    !hex.features.includes("suburb") &&
-    !hex.features.includes("mine") &&
-    !hex.features.includes("oil") &&
-    hex.terrain !== "lava" &&
-    hex.terrain !== "ice" &&
-    hex.terrain !== "frozen",
+  const settled = settlementCandidates(cells).filter(
+    (hex) =>
+      !hex.features.includes("starport") &&
+      !hex.features.includes("city") &&
+      !hex.features.includes("town") &&
+      !hex.features.includes("suburb") &&
+      !hex.features.includes("mine") &&
+      !hex.features.includes("oil") &&
+      hex.terrain !== "lava" &&
+      hex.terrain !== "ice" &&
+      hex.terrain !== "frozen",
   );
 
-  if (tcs.has("Ag") || tcs.has("Ga") || (atmo >= 4 && atmo <= 9 && hydro >= 4)) {
-    const cropCandidates = settled.filter((hex) =>
-      hex.terrain === "land" ||
-      hex.terrain === "woods" ||
-      hex.terrain === "marsh" ||
-      hex.terrain === "swamp",
+  if (
+    tcs.has("Ag") ||
+    tcs.has("Ga") ||
+    (atmo >= 4 && atmo <= 9 && hydro >= 4)
+  ) {
+    const cropCandidates = settled.filter(
+      (hex) =>
+        hex.terrain === "land" ||
+        hex.terrain === "woods" ||
+        hex.terrain === "marsh" ||
+        hex.terrain === "swamp",
     );
     shuffled(cropCandidates, rand)
-      .slice(0, Math.min(Math.max(1, Math.floor((rollD6(rand) + hydro) / 4)), cropCandidates.length))
+      .slice(
+        0,
+        Math.min(
+          Math.max(1, Math.floor((rollD6(rand) + hydro) / 4)),
+          cropCandidates.length,
+        ),
+      )
       .forEach((hex) => {
         addFeature(hex, "crop");
         removeFeature(hex, "resource");
       });
   }
 
-  const ruralCandidates = settled.filter((hex) =>
-    !hex.features.includes("crop") &&
-    (hex.terrain === "land" || hex.terrain === "woods" || hex.terrain === "rough" || hex.terrain === "marsh"),
+  const ruralCandidates = settled.filter(
+    (hex) =>
+      !hex.features.includes("crop") &&
+      (hex.terrain === "land" ||
+        hex.terrain === "woods" ||
+        hex.terrain === "rough" ||
+        hex.terrain === "marsh"),
   );
   if (pop >= 3 && ruralCandidates.length > 0) {
     shuffled(ruralCandidates, rand)
-      .slice(0, Math.min(Math.max(1, Math.floor(pop / 2)), ruralCandidates.length))
+      .slice(
+        0,
+        Math.min(Math.max(1, Math.floor(pop / 2)), ruralCandidates.length),
+      )
       .forEach((hex) => addFeature(hex, "rural"));
   }
 
-  const hostileSurface = atmo <= 3 || atmo >= 10 || tcs.has("Va") || tcs.has("Fl") || tcs.has("De");
+  const hostileSurface =
+    atmo <= 3 || atmo >= 10 || tcs.has("Va") || tcs.has("Fl") || tcs.has("De");
   if (hostileSurface && pop >= 6) {
-    const protectedCandidates = settlementCandidates(cells).filter((hex) =>
-      !hex.features.includes("starport") &&
-      !hex.features.includes("domedCity") &&
-      !hex.features.includes("arcology") &&
-      hex.terrain !== "lava" &&
-      hex.terrain !== "ice" &&
-      hex.terrain !== "frozen",
+    const protectedCandidates = settlementCandidates(cells).filter(
+      (hex) =>
+        !hex.features.includes("starport") &&
+        !hex.features.includes("domedCity") &&
+        !hex.features.includes("arcology") &&
+        hex.terrain !== "lava" &&
+        hex.terrain !== "ice" &&
+        hex.terrain !== "frozen",
     );
     const [domed] = shuffled(protectedCandidates, rand);
     if (domed) {
@@ -653,7 +738,10 @@ const placeCivilizationLayers = (
     }
 
     if (pop >= 9) {
-      const [arcology] = shuffled(protectedCandidates.filter((hex) => hex !== domed), rand);
+      const [arcology] = shuffled(
+        protectedCandidates.filter((hex) => hex !== domed),
+        rand,
+      );
       if (arcology) {
         addFeature(arcology, "arcology");
         removeFeature(arcology, "city");
@@ -663,28 +751,48 @@ const placeCivilizationLayers = (
     }
   }
 
-  if ((world.nobility || "").trim().length > 0 || tcs.has("Ri") || tcs.has("Cp")) {
-    const [estate] = shuffled(settled.filter((hex) =>
-      !hex.features.includes("crop") &&
-      !hex.features.includes("rural") &&
-      !hex.features.includes("nobleEstate"),
-    ), rand);
+  if (
+    (world.nobility || "").trim().length > 0 ||
+    tcs.has("Ri") ||
+    tcs.has("Cp")
+  ) {
+    const [estate] = shuffled(
+      settled.filter(
+        (hex) =>
+          !hex.features.includes("crop") &&
+          !hex.features.includes("rural") &&
+          !hex.features.includes("nobleEstate"),
+      ),
+      rand,
+    );
     if (estate) addFeature(estate, "nobleEstate");
   }
 
-  if (world.travelZone === "R" || tcs.has("Px") || tcs.has("Pr") || tcs.has("Da")) {
-    const [penal] = shuffled(settlementCandidates(cells).filter((hex) =>
-      !hex.features.includes("starport") &&
-      !hex.features.includes("city") &&
-      !hex.features.includes("town") &&
-      !hex.features.includes("domedCity") &&
-      !hex.features.includes("arcology"),
-    ), rand);
+  if (
+    world.travelZone === "R" ||
+    tcs.has("Px") ||
+    tcs.has("Pr") ||
+    tcs.has("Da")
+  ) {
+    const [penal] = shuffled(
+      settlementCandidates(cells).filter(
+        (hex) =>
+          !hex.features.includes("starport") &&
+          !hex.features.includes("city") &&
+          !hex.features.includes("town") &&
+          !hex.features.includes("domedCity") &&
+          !hex.features.includes("arcology"),
+      ),
+      rand,
+    );
     if (penal) addFeature(penal, "penalSettlement");
   }
 };
 
-const getTriangleCenterIndexes = (cells: HexCell[], triangleId: number): number[] => {
+const getTriangleCenterIndexes = (
+  cells: HexCell[],
+  triangleId: number,
+): number[] => {
   const triangleIndexes = cells
     .map((hex, index) => ({ hex, index }))
     .filter(({ hex }) => hex.triangleId === triangleId);
@@ -703,7 +811,10 @@ const getTriangleCenterIndexes = (cells: HexCell[], triangleId: number): number[
   return triangleIndexes
     .map(({ hex, index }) => {
       const center = centerOfHex(hex);
-      return { index, distance: Math.hypot(center.x - average.x, center.y - average.y) };
+      return {
+        index,
+        distance: Math.hypot(center.x - average.x, center.y - average.y),
+      };
     })
     .sort((a, b) => a.distance - b.distance)
     .slice(0, 3)
@@ -770,23 +881,27 @@ export const buildHexGrid = (S: number, L: number, T: number): HexCell[] => {
     if (isUp) {
       for (let i = 0; i < hexPerSide; i++) {
         for (let j = 0; j <= i; j++) {
-          hexes.push(makeHex(
-            left + j * HEX_W + (hexPerSide - i) * 16,
-            top + i * ROW_H,
-            id,
-            isSmall,
-          ));
+          hexes.push(
+            makeHex(
+              left + j * HEX_W + (hexPerSide - i) * 16,
+              top + i * ROW_H,
+              id,
+              isSmall,
+            ),
+          );
         }
       }
     } else {
       for (let i = 0; i < hexPerSide; i++) {
         for (let j = 0; j < hexPerSide - i; j++) {
-          hexes.push(makeHex(
-            left + j * HEX_W + i * 16,
-            top + (i + 1) * ROW_H,
-            id,
-            isSmall,
-          ));
+          hexes.push(
+            makeHex(
+              left + j * HEX_W + i * 16,
+              top + (i + 1) * ROW_H,
+              id,
+              isSmall,
+            ),
+          );
         }
       }
     }
@@ -830,7 +945,9 @@ export const buildDisplayHexes = (hexes: HexCell[], S: number): HexCell[] => {
     for (let y = 0; y < S - 1; y++) {
       const selected = getHex(x, y);
       if (selected) {
-        displayHexes.push(copyHex(selected, selected.left + (S - y - 1) * HEX_W));
+        displayHexes.push(
+          copyHex(selected, selected.left + (S - y - 1) * HEX_W),
+        );
       }
       x++;
     }
@@ -843,10 +960,12 @@ export const buildDisplayHexes = (hexes: HexCell[], S: number): HexCell[] => {
       const selected = getHex(x, y);
       if (selected) {
         const edgeOffset = (S - (totalRows - y)) * HEX_W;
-        displayHexes.push(copyHex(
-          selected,
-          selected.left + edgeOffset - (z === 4 ? wrapOffset : 0),
-        ));
+        displayHexes.push(
+          copyHex(
+            selected,
+            selected.left + edgeOffset - (z === 4 ? wrapOffset : 0),
+          ),
+        );
       }
       x++;
     }
@@ -855,13 +974,18 @@ export const buildDisplayHexes = (hexes: HexCell[], S: number): HexCell[] => {
   const triangle18 = hexes.filter((hex) => hex.triangleId === 18);
   const lastTriangle18Hex = triangle18[triangle18.length - 1];
   if (lastTriangle18Hex) {
-    displayHexes.push(copyHex(lastTriangle18Hex, lastTriangle18Hex.left - wrapOffset));
+    displayHexes.push(
+      copyHex(lastTriangle18Hex, lastTriangle18Hex.left - wrapOffset),
+    );
   }
 
   return displayHexes;
 };
 
-const triangleOutlinePoints = (triangleHexes: HexCell[], S: number): Point[] | null => {
+const triangleOutlinePoints = (
+  triangleHexes: HexCell[],
+  S: number,
+): Point[] | null => {
   if (triangleHexes.length === 0) return null;
 
   const triangleId = triangleHexes[0].triangleId;
@@ -873,15 +997,27 @@ const triangleOutlinePoints = (triangleHexes: HexCell[], S: number): Point[] | n
     if (isSmall) {
       return [
         { x: triangleHexes[0].left, y: triangleHexes[0].top - 10 },
-        { x: triangleHexes[triangleHexes.length - 1].left + 32, y: triangleHexes[triangleHexes.length - 1].top + 45 },
-        { x: triangleHexes[triangleHexes.length - S + 1].left - 32, y: triangleHexes[triangleHexes.length - S + 1].top + 45 },
+        {
+          x: triangleHexes[triangleHexes.length - 1].left + 32,
+          y: triangleHexes[triangleHexes.length - 1].top + 45,
+        },
+        {
+          x: triangleHexes[triangleHexes.length - S + 1].left - 32,
+          y: triangleHexes[triangleHexes.length - S + 1].top + 45,
+        },
       ];
     }
 
     return [
       { x: triangleHexes[0].left, y: triangleHexes[0].top - 10 },
-      { x: triangleHexes[triangleHexes.length - 1].left + 16, y: triangleHexes[triangleHexes.length - 1].top + 17 },
-      { x: triangleHexes[triangleHexes.length - S + 1].left - 48, y: triangleHexes[triangleHexes.length - S + 1].top + 17 },
+      {
+        x: triangleHexes[triangleHexes.length - 1].left + 16,
+        y: triangleHexes[triangleHexes.length - 1].top + 17,
+      },
+      {
+        x: triangleHexes[triangleHexes.length - S + 1].left - 48,
+        y: triangleHexes[triangleHexes.length - S + 1].top + 17,
+      },
     ];
   }
 
@@ -889,24 +1025,36 @@ const triangleOutlinePoints = (triangleHexes: HexCell[], S: number): Point[] | n
     return [
       { x: triangleHexes[0].left - 16, y: triangleHexes[0].top + 17 },
       { x: triangleHexes[S - 1].left + 16, y: triangleHexes[S - 1].top + 17 },
-      { x: triangleHexes[triangleHexes.length - 1].left, y: triangleHexes[triangleHexes.length - 1].top + 45 },
+      {
+        x: triangleHexes[triangleHexes.length - 1].left,
+        y: triangleHexes[triangleHexes.length - 1].top + 45,
+      },
     ];
   }
 
   return [
     { x: triangleHexes[0].left - 32, y: triangleHexes[0].top - 10 },
     { x: triangleHexes[S - 2].left + 32, y: triangleHexes[S - 2].top - 10 },
-    { x: triangleHexes[triangleHexes.length - 1].left, y: triangleHexes[triangleHexes.length - 1].top + 45 },
+    {
+      x: triangleHexes[triangleHexes.length - 1].left,
+      y: triangleHexes[triangleHexes.length - 1].top + 45,
+    },
   ];
 };
 
-export const buildWorldTriangleOutlines = (hexes: HexCell[], S: number): Array<Point[] | null> =>
+export const buildWorldTriangleOutlines = (
+  hexes: HexCell[],
+  S: number,
+): Array<Point[] | null> =>
   Array.from({ length: 20 }, (_, triangleId) => {
     const triangleHexes = hexes.filter((hex) => hex.triangleId === triangleId);
     return triangleOutlinePoints(triangleHexes, S);
   });
 
-export const buildWorldMapOverlays = (hexes: HexCell[], S: number): WorldMapOverlay[] => {
+export const buildWorldMapOverlays = (
+  hexes: HexCell[],
+  S: number,
+): WorldMapOverlay[] => {
   if (S <= 1) return [];
 
   const wrapOffset = 5 * S * HEX_W;
@@ -928,7 +1076,8 @@ export const buildWorldMapOverlays = (hexes: HexCell[], S: number): WorldMapOver
     }
     if (verticalPos === 3) {
       bottomCoverTrianglePoints.push(outline[0], outline[2]);
-      if (triangleId === 3 || triangleId === 19) mapCornerPoints.push(outline[2]);
+      if (triangleId === 3 || triangleId === 19)
+        mapCornerPoints.push(outline[2]);
     }
     if (verticalPos === 1 && triangleId === 1) {
       mapCornerPoints.push(outline[2]);
@@ -963,7 +1112,8 @@ export const buildWorldMapOverlays = (hexes: HexCell[], S: number): WorldMapOver
     });
   }
 
-  const [leftTop, leftMid, leftBottom, rightBottom, rightTop, rightMid] = mapCornerPoints;
+  const [leftTop, leftMid, leftBottom, rightBottom, rightTop, rightMid] =
+    mapCornerPoints;
   const { svgW } = svgDimensions(S);
   if (leftTop && leftMid && leftBottom) {
     overlays.push({
@@ -1038,7 +1188,12 @@ export const assignTerrain = (
       h.features = [];
     });
     placeCraters(cells, rollD6(rand) + rollD6(rand) + rollD6(rand), rand);
-    placeFractures(cells, rollD6(rand), Math.max(1, Math.floor(rollD6(rand) / 2)), rand);
+    placeFractures(
+      cells,
+      rollD6(rand),
+      Math.max(1, Math.floor(rollD6(rand) / 2)),
+      rand,
+    );
     return cells;
   }
 
@@ -1075,7 +1230,10 @@ export const assignTerrain = (
       .forEach((hex) => setOceanTerrain(hex, liquidTerrain, tcs));
     skipSeas = true;
   } else if (hydro > 0) {
-    shuffled(Array.from({ length: 20 }, (_, triangleId) => triangleId), rand)
+    shuffled(
+      Array.from({ length: 20 }, (_, triangleId) => triangleId),
+      rand,
+    )
       .slice(0, Math.min(20, hydro * 2))
       .forEach((triangleId) => {
         const ocean = new Set<number>();
@@ -1084,13 +1242,18 @@ export const assignTerrain = (
           if (!isLiquidTerrain(cells[index].terrain)) ocean.add(index);
         });
 
-        const triangleSize = cells.filter((hex) => hex.triangleId === triangleId).length;
+        const triangleSize = cells.filter(
+          (hex) => hex.triangleId === triangleId,
+        ).length;
         while (ocean.size < triangleSize) {
           const edgeIndexes = Array.from(ocean);
           const candidates = new Set<number>();
           edgeIndexes.forEach((index) => {
             neighborIndexes(cells, index).forEach((neighborIndex) => {
-              if (!ocean.has(neighborIndex) && !isLiquidTerrain(cells[neighborIndex].terrain)) {
+              if (
+                !ocean.has(neighborIndex) &&
+                !isLiquidTerrain(cells[neighborIndex].terrain)
+              ) {
                 candidates.add(neighborIndex);
               }
             });
@@ -1101,7 +1264,9 @@ export const assignTerrain = (
           ocean.add(candidateList[Math.floor(rand() * candidateList.length)]);
         }
 
-        ocean.forEach((index) => setOceanTerrain(cells[index], liquidTerrain, tcs));
+        ocean.forEach((index) =>
+          setOceanTerrain(cells[index], liquidTerrain, tcs),
+        );
       });
   }
 
@@ -1156,7 +1321,10 @@ export const assignTerrain = (
     const tundraRows = rollD6(rand);
     cells.forEach((h) => {
       const rowFromSouth = actualTotalRows - h.rowNumber - 1;
-      if (h.terrain !== "ice" && (h.rowNumber < tundraRows || rowFromSouth < tundraRows)) {
+      if (
+        h.terrain !== "ice" &&
+        (h.rowNumber < tundraRows || rowFromSouth < tundraRows)
+      ) {
         freezeHex(h);
       }
     });
@@ -1189,45 +1357,87 @@ export const assignTerrain = (
   if (!isFr && !isVh && !isMo && !isDe) {
     const baseLand = naturalLandHexes(cells);
     if (baseLand.length > 0) {
-      placeNaturalTerrain(cells, "rough", rollD6(rand) + rollD6(rand), rand, baseLand);
+      placeNaturalTerrain(
+        cells,
+        "rough",
+        rollD6(rand) + rollD6(rand),
+        rand,
+        baseLand,
+      );
 
       if (atmo > 2 && atmo < 11 && hydro > 0) {
-        placeNaturalTerrain(cells, "woods", rollD6(rand) + rollD6(rand), rand, naturalLandHexes(cells));
+        placeNaturalTerrain(
+          cells,
+          "woods",
+          rollD6(rand) + rollD6(rand),
+          rand,
+          naturalLandHexes(cells),
+        );
       }
 
       if (hydro > 1) {
         shuffled(naturalLandHexes(cells), rand)
-          .slice(0, Math.min(rollD6(rand) + rollD6(rand), naturalLandHexes(cells).length))
+          .slice(
+            0,
+            Math.min(
+              rollD6(rand) + rollD6(rand),
+              naturalLandHexes(cells).length,
+            ),
+          )
           .forEach((hex) => {
             hex.terrain = hex.terrain === "woods" ? "swamp" : "marsh";
           });
       }
 
       if (hydro > 0) {
-        placeNaturalTerrain(cells, "lake", rollD6(rand), rand, naturalLandHexes(cells));
+        placeNaturalTerrain(
+          cells,
+          "lake",
+          rollD6(rand),
+          rand,
+          naturalLandHexes(cells),
+        );
       }
     }
 
     if (!isFl && hydro > 3) {
-      const oceans = cells.filter((hex) => hex.terrain === "ocean" && !hex.features.includes("island"));
-      placeNaturalTerrain(cells, "oceanDepth", Math.floor(oceans.length * Math.min(0.6, hydro / 16)), rand, oceans);
+      const oceans = cells.filter(
+        (hex) => hex.terrain === "ocean" && !hex.features.includes("island"),
+      );
+      placeNaturalTerrain(
+        cells,
+        "oceanDepth",
+        Math.floor(oceans.length * Math.min(0.6, hydro / 16)),
+        rand,
+        oceans,
+      );
 
       if (hydro > 6) {
-        const depths = cells.filter((hex) => hex.terrain === "oceanDepth" && !hex.features.includes("island"));
-        placeNaturalTerrain(cells, "oceanAbyss", Math.floor(depths.length * Math.min(0.45, (hydro - 5) / 10)), rand, depths);
+        const depths = cells.filter(
+          (hex) =>
+            hex.terrain === "oceanDepth" && !hex.features.includes("island"),
+        );
+        placeNaturalTerrain(
+          cells,
+          "oceanAbyss",
+          Math.floor(depths.length * Math.min(0.45, (hydro - 5) / 10)),
+          rand,
+          depths,
+        );
       }
     }
   }
 
   // ── Wasteland and exotic terrain ───────────────────────────────────────────
   if (!isFr && !isMo) {
-    const wastelandCandidates = cells.filter((hex) =>
-      (hex.terrain === "land" ||
-        hex.terrain === "rough" ||
-        hex.terrain === "desert" ||
-        hex.terrain === "baked" ||
-        hex.terrain === "wasteland") &&
-      !hex.features.includes("island"),
+    const wastelandCandidates = cells.filter(
+      (hex) =>
+        (hex.terrain === "land" ||
+          hex.terrain === "rough" ||
+          hex.terrain === "desert" ||
+          hex.terrain === "baked" ||
+          hex.terrain === "wasteland") &&
+        !hex.features.includes("island"),
     );
     const wastelandPressure =
       (hydro <= 2 ? rollD6(rand) : 0) +
@@ -1237,42 +1447,81 @@ export const assignTerrain = (
       (isIn ? 2 : 0);
 
     if (wastelandPressure > 0) {
-      placeSurfaceTerrain(cells, "wasteland", Math.max(1, Math.floor(wastelandPressure / 2)), rand, wastelandCandidates);
+      placeSurfaceTerrain(
+        cells,
+        "wasteland",
+        Math.max(1, Math.floor(wastelandPressure / 2)),
+        rand,
+        wastelandCandidates,
+      );
     }
   }
 
   if (!isFr && !isMo && !isVh && (isFl || atmo >= 10)) {
-    const exoticCandidates = cells.filter((hex) =>
-      (hex.terrain === "land" ||
-        hex.terrain === "rough" ||
-        hex.terrain === "desert" ||
-        hex.terrain === "swamp" ||
-        hex.terrain === "marsh" ||
-        hex.terrain === "wasteland") &&
-      !hex.features.includes("island"),
+    const exoticCandidates = cells.filter(
+      (hex) =>
+        (hex.terrain === "land" ||
+          hex.terrain === "rough" ||
+          hex.terrain === "desert" ||
+          hex.terrain === "swamp" ||
+          hex.terrain === "marsh" ||
+          hex.terrain === "wasteland") &&
+        !hex.features.includes("island"),
     );
-    const exoticPressure = (isFl ? rollD6(rand) : 0) + (atmo >= 10 ? rollD6(rand) : 0);
-    placeSurfaceTerrain(cells, "exotic", Math.max(1, Math.floor(exoticPressure / 2)), rand, exoticCandidates);
+    const exoticPressure =
+      (isFl ? rollD6(rand) : 0) + (atmo >= 10 ? rollD6(rand) : 0);
+    placeSurfaceTerrain(
+      cells,
+      "exotic",
+      Math.max(1, Math.floor(exoticPressure / 2)),
+      rand,
+      exoticCandidates,
+    );
   }
 
   // ── Craters ────────────────────────────────────────────────────────────────
   if (atmo <= 3 || hydro <= 1 || isVh || isMo || isDe) {
-    const climateBonus = (isVh || isMo || isDe) ? rollD6(rand) : 0;
-    placeCraters(cells, rollD6(rand) + Math.max(0, 4 - atmo) + Math.max(0, 2 - hydro) + climateBonus, rand);
+    const climateBonus = isVh || isMo || isDe ? rollD6(rand) : 0;
+    placeCraters(
+      cells,
+      rollD6(rand) +
+        Math.max(0, 4 - atmo) +
+        Math.max(0, 2 - hydro) +
+        climateBonus,
+      rand,
+    );
   }
 
   // ── Volcanoes ──────────────────────────────────────────────────────────────
-  if (isMo || isVh || atmo >= 10 || cells.some((hex) => hex.terrain === "lava")) {
-    const count = (isMo ? rollD6(rand) + rollD6(rand) : rollD6(rand)) + (isVh ? 2 : 0);
+  if (
+    isMo ||
+    isVh ||
+    atmo >= 10 ||
+    cells.some((hex) => hex.terrain === "lava")
+  ) {
+    const count =
+      (isMo ? rollD6(rand) + rollD6(rand) : rollD6(rand)) + (isVh ? 2 : 0);
     placeVolcanoes(cells, count, rand);
   } else if (cells.some((hex) => hex.terrain === "rough") && rand() < 0.35) {
     placeVolcanoes(cells, 1, rand);
   }
 
   // ── Chasms and precipices ──────────────────────────────────────────────────
-  if (isMo || isVh || isDe || atmo <= 3 || hydro <= 2 || cells.some((hex) => hex.terrain === "rough")) {
-    const climateBonus = (isMo || isVh || isDe) ? 1 : 0;
-    placeFractures(cells, rollD6(rand) + climateBonus, Math.max(1, Math.floor(rollD6(rand) / 2)), rand);
+  if (
+    isMo ||
+    isVh ||
+    isDe ||
+    atmo <= 3 ||
+    hydro <= 2 ||
+    cells.some((hex) => hex.terrain === "rough")
+  ) {
+    const climateBonus = isMo || isVh || isDe ? 1 : 0;
+    placeFractures(
+      cells,
+      rollD6(rand) + climateBonus,
+      Math.max(1, Math.floor(rollD6(rand) / 2)),
+      rand,
+    );
   }
 
   // ── Resources, mines, and oil ──────────────────────────────────────────────

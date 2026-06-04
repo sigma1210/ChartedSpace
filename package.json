@@ -15,7 +15,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "tunnel": "ngrok http 3000",
-    "generate:crew": "tsx scripts/generateCrewLibrary.ts"
+    "generate:crew": "tsx scripts/generateCrewLibrary.ts",
+    "generate:avatar-slugs": "tsx scripts/generateAvatarAttributeSlugs.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
