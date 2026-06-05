@@ -98,14 +98,14 @@ export const visibleFeatures = (hex: {
 export const LAND_BY_ATMO: Record<number, string> = {
   0: "#111111",
   1: "#5a2515",
-  2: "#3a6828",
-  3: "#307020",
-  4: "#286018",
-  5: "#255810",
-  6: "#2a6030",
-  7: "#2d6030",
-  8: "#2a5828",
-  9: "#2d6030",
+  2: "#5f7046",
+  3: "#607448",
+  4: "#596d42",
+  5: "#53653d",
+  6: "#596f50",
+  7: "#5c7052",
+  8: "#586b4c",
+  9: "#5d7053",
   10: "#4a3410",
   11: "#1a1a40",
   12: "#240808",
@@ -118,14 +118,14 @@ export const OCEAN_COLOR = "#1e5a9e";
 export const OCEAN_DEPTH_COLOR = "#123f78";
 export const OCEAN_ABYSS_COLOR = "#08234d";
 export const FLUID_COLOR = "#2a6a40";
-export const ROUGH_COLOR = "#9c780f";
-export const WOODS_COLOR = "#02a23a";
+export const ROUGH_COLOR = "#766747";
+export const WOODS_COLOR = "#1f4429";
 export const SWAMP_COLOR = "#97ac20";
 export const MARSH_COLOR = "#7f9b24";
 export const LAKE_COLOR = "#2376d0";
 export const ICE_COLOR = "#c4dde8";
 export const FROZEN_COLOR = "#5f8fa8";
-export const DESERT_COLOR = "#8b6914";
+export const DESERT_COLOR = "#8a7652";
 export const BAKED_COLOR = "#9c5820";
 export const LAVA_COLOR = "#8b1010";
 export const WASTELAND_COLOR = "#4d4638";

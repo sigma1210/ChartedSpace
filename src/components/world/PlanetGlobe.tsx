@@ -41,6 +41,15 @@ const textureSeed = (world: World): number => {
   return hash >>> 0;
 };
 
+const stringSeed = (key: string): number => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+};
+
 const hexToRgb = (color: string): Rgb => ({
   r: parseInt(color.slice(1, 3), 16),
   g: parseInt(color.slice(3, 5), 16),
@@ -454,29 +463,157 @@ export const buildTexture = (world: World): THREE.CanvasTexture => {
   return tex;
 };
 
-// ─── Cloud layer config by atmosphere code ────────────────────────────────────
-// Returns null for airless/trace worlds, otherwise { opacity, color, speedMult }
+// ─── Cloud layer config by atmosphere/hydrographics code ─────────────────────
+// Returns null for airless/trace worlds, otherwise layered cloud settings.
 
-export interface CloudConfig { opacity: number; color: string; speedMult: number }
+export interface CloudLayerConfig {
+  opacity: number;
+  color: string;
+  speedMult: number;
+  radiusMult: number;
+  thresholdShift: number;
+  scale: number;
+}
 
-export const cloudConfig = (atmo: number): CloudConfig | null => {
-  if (atmo <= 1)  return null;                                              // 0–1: none
-  if (atmo <= 3)  return { opacity: 0.25, color: "#ffffff", speedMult: 1.08 }; // very thin
-  if (atmo <= 5)  return { opacity: 0.45, color: "#ffffff", speedMult: 1.08 }; // thin
-  if (atmo <= 7)  return { opacity: 0.65, color: "#ffffff", speedMult: 1.08 }; // standard
-  if (atmo <= 9)  return { opacity: 0.80, color: "#dde8ee", speedMult: 0.97 }; // dense
-  if (atmo === 10) return { opacity: 0.55, color: "#c8d4e8", speedMult: 1.05 }; // exotic
-  if (atmo === 11) return { opacity: 0.92, color: "#e8e0a0", speedMult: 0.90 }; // corrosive — sulphuric
-  return                 { opacity: 0.96, color: "#c8a870", speedMult: 0.85 };  // insidious
+export interface CloudConfig {
+  opacity: number;
+  color: string;
+  speedMult: number;
+  coverage: number;
+  shadowOpacity: number;
+  layers: CloudLayerConfig[];
+}
+
+export interface AtmosphereGlowConfig {
+  color: string;
+  opacity: number;
+  radiusMult: number;
+}
+
+export const cloudConfig = (atmo: number, hydro = 5): CloudConfig | null => {
+  if (atmo <= 1) return null;
+
+  const hydroV = Math.max(0, Math.min(10, hydro));
+  const hydroCoverage = 0.12 + hydroV * 0.055;
+  const densityBonus = atmo >= 8 ? 0.12 : atmo >= 6 ? 0.06 : 0;
+  const coverage = clamp01(hydroCoverage + densityBonus);
+
+  let base: Pick<CloudConfig, "opacity" | "color" | "speedMult">;
+  if (atmo <= 3)       base = { opacity: 0.22, color: "#ffffff", speedMult: 1.12 };
+  else if (atmo <= 5)  base = { opacity: 0.36, color: "#ffffff", speedMult: 1.09 };
+  else if (atmo <= 7)  base = { opacity: 0.52, color: "#ffffff", speedMult: 1.05 };
+  else if (atmo <= 9)  base = { opacity: 0.66, color: "#dde8ee", speedMult: 0.98 };
+  else if (atmo === 10) base = { opacity: 0.48, color: "#c8d4e8", speedMult: 1.04 };
+  else if (atmo === 11) base = { opacity: 0.74, color: "#e8e0a0", speedMult: 0.92 };
+  else                  base = { opacity: 0.78, color: "#c8a870", speedMult: 0.88 };
+
+  return {
+    ...base,
+    coverage,
+    shadowOpacity: Math.min(0.16, 0.035 + coverage * 0.12),
+    layers: [
+      {
+        opacity: base.opacity,
+        color: base.color,
+        speedMult: base.speedMult,
+        radiusMult: 1.015,
+        thresholdShift: 0,
+        scale: 1,
+      },
+      {
+        opacity: base.opacity * 0.42,
+        color: "#ffffff",
+        speedMult: base.speedMult * 1.22,
+        radiusMult: 1.028,
+        thresholdShift: 0.12,
+        scale: 1.8,
+      },
+    ],
+  };
 };
 
-// ─── Cloud texture (loaded once) ─────────────────────────────────────────────
-
-let _cloudTex: THREE.Texture | null = null;
-export const getCloudTex = () => {
-  if (!_cloudTex) _cloudTex = new THREE.TextureLoader().load('/textures/earth_clouds.png');
-  return _cloudTex;
+export const atmosphereGlowConfig = (atmo: number): AtmosphereGlowConfig | null => {
+  if (atmo <= 1) return null;
+  if (atmo <= 3) return { color: "#b8ddff", opacity: 0.16, radiusMult: 1.045 };
+  if (atmo <= 5) return { color: "#a9d7ff", opacity: 0.22, radiusMult: 1.055 };
+  if (atmo <= 7) return { color: "#8ecbff", opacity: 0.28, radiusMult: 1.065 };
+  if (atmo <= 9) return { color: "#b7d8ee", opacity: 0.34, radiusMult: 1.08 };
+  if (atmo === 10) return { color: "#aab8ff", opacity: 0.28, radiusMult: 1.075 };
+  if (atmo === 11) return { color: "#ffe28a", opacity: 0.38, radiusMult: 1.09 };
+  return { color: "#e0aa66", opacity: 0.42, radiusMult: 1.1 };
 };
+
+const CLOUD_TEX_W = 512;
+const CLOUD_TEX_H = 256;
+
+const smoothstep = (edge0: number, edge1: number, value: number) => {
+  const t = clamp01((value - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
+};
+
+const cloudNoise = (lon: number, lat: number, seed: number, scale: number) => {
+  const a = Math.PI * 2;
+  const band =
+    Math.sin(lon * a * (2.1 * scale) + seed * 6.7 + Math.sin(lat * a * 1.8 + seed) * 1.3) * 0.35 +
+    Math.sin(lon * a * (4.4 * scale) - lat * a * 1.7 + seed * 11.3) * 0.24 +
+    Math.sin(lon * a * (8.2 * scale) + lat * a * 4.5 + seed * 17.1) * 0.15 +
+    Math.sin(lon * a * (15.0 * scale) - lat * a * 7.0 + seed * 23.9) * 0.08;
+  const storm =
+    Math.sin((Math.cos(lon * a + seed) * 2.4 + Math.sin(lat * a * 2.2 - seed)) * Math.PI) * 0.12;
+  return 0.5 + band + storm;
+};
+
+export const buildCloudTextureFromKey = (
+  seedKey: string,
+  config: CloudConfig,
+  layer: CloudLayerConfig,
+): THREE.CanvasTexture => {
+  const seed = stringSeed(seedKey) / 4294967296;
+  const canvas = document.createElement("canvas");
+  canvas.width = CLOUD_TEX_W;
+  canvas.height = CLOUD_TEX_H;
+  const ctx = canvas.getContext("2d")!;
+  const img = ctx.createImageData(CLOUD_TEX_W, CLOUD_TEX_H);
+  const data = img.data;
+  const threshold = 0.74 - config.coverage * 0.34 + layer.thresholdShift;
+
+  for (let py = 0; py < CLOUD_TEX_H; py++) {
+    const lat = py / (CLOUD_TEX_H - 1);
+    const poleFade = Math.pow(Math.sin(Math.PI * lat), 0.33);
+    const polarHaze = smoothstep(0.74, 1, Math.abs(lat - 0.5) * 2) * 0.18 * config.coverage;
+
+    for (let px = 0; px < CLOUD_TEX_W; px++) {
+      const lon = px / CLOUD_TEX_W;
+      const noise = cloudNoise(lon, lat, seed + layer.thresholdShift * 3.1, layer.scale);
+      const largeMask = cloudNoise(lon + 0.17, lat + 0.09, seed + 0.43, 0.48);
+      const alpha = clamp01(
+        smoothstep(threshold, threshold + 0.28, noise + largeMask * 0.2) * poleFade +
+        polarHaze,
+      );
+      const value = Math.round(alpha * 255);
+      const idx = (py * CLOUD_TEX_W + px) * 4;
+      data[idx] = value;
+      data[idx + 1] = value;
+      data[idx + 2] = value;
+      data[idx + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+};
+
+export const buildCloudTexture = (
+  world: World,
+  config: CloudConfig,
+  layer: CloudLayerConfig,
+): THREE.CanvasTexture => buildCloudTextureFromKey(`${world.hex}:${world.name}`, config, layer);
 
 // ─── Spinning planet mesh ─────────────────────────────────────────────────────
 
@@ -496,18 +633,104 @@ const PlanetMesh = ({ texture }: { texture: THREE.Texture | null }) => {
 
 // ─── Cloud layer mesh ─────────────────────────────────────────────────────────
 
-const CloudMesh = ({ config }: { config: CloudConfig }) => {
+const ATMOSPHERE_VERTEX_SHADER = `
+  varying vec3 vNormal;
+  varying vec3 vWorldPosition;
+
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPosition.xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const ATMOSPHERE_FRAGMENT_SHADER = `
+  uniform vec3 glowColor;
+  uniform float opacity;
+  varying vec3 vNormal;
+  varying vec3 vWorldPosition;
+
+  void main() {
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    float rim = 1.0 - max(dot(normalize(vNormal), viewDir), 0.0);
+    float alpha = pow(rim, 2.1) * opacity;
+    gl_FragColor = vec4(glowColor, alpha);
+  }
+`;
+
+export const AtmosphereGlowMesh = ({
+  radius,
+  config,
+}: {
+  radius: number;
+  config: AtmosphereGlowConfig;
+}) => {
+  const uniforms = useMemo(
+    () => ({
+      glowColor: { value: new THREE.Color(config.color) },
+      opacity: { value: config.opacity },
+    }),
+    [config.color, config.opacity],
+  );
+
+  return (
+    <mesh>
+      <sphereGeometry args={[radius * config.radiusMult, 64, 32]} />
+      <shaderMaterial
+        uniforms={uniforms}
+        vertexShader={ATMOSPHERE_VERTEX_SHADER}
+        fragmentShader={ATMOSPHERE_FRAGMENT_SHADER}
+        transparent
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        side={THREE.BackSide}
+      />
+    </mesh>
+  );
+};
+
+export const CloudShadowMesh = ({
+  radius,
+  layer,
+  texture,
+  opacity,
+}: {
+  radius: number;
+  layer: CloudLayerConfig;
+  texture: THREE.Texture;
+  opacity: number;
+}) => {
   const ref = useRef<THREE.Mesh>(null);
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * PLANET_SPEED * config.speedMult; });
+  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * PLANET_SPEED * layer.speedMult; });
   return (
     <mesh ref={ref}>
-      <sphereGeometry args={[1.015, 32, 32]} />
-      <meshStandardMaterial
-        alphaMap={getCloudTex()}
-        color={config.color}
+      <sphereGeometry args={[radius * 1.006, 48, 24]} />
+      <meshBasicMaterial
+        alphaMap={texture}
+        color="#05070a"
         transparent
-        opacity={config.opacity}
+        opacity={opacity}
         depthWrite={false}
+        alphaTest={0.02}
+      />
+    </mesh>
+  );
+};
+
+const CloudMesh = ({ layer, texture }: { layer: CloudLayerConfig; texture: THREE.Texture }) => {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * PLANET_SPEED * layer.speedMult; });
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[layer.radiusMult, 48, 24]} />
+      <meshStandardMaterial
+        alphaMap={texture}
+        color={layer.color}
+        transparent
+        opacity={layer.opacity}
+        depthWrite={false}
+        alphaTest={0.015}
       />
     </mesh>
   );
@@ -519,12 +742,28 @@ interface PlanetGlobeProps { world: World }
 
 const PlanetGlobe = ({ world }: PlanetGlobeProps) => {
   const asteroid = isAsteroid(world);
-  const clouds   = cloudConfig(uwpVal(world.uwp.atmosphere));
+  const atmo = uwpVal(world.uwp.atmosphere);
+  const clouds = useMemo(
+    () => cloudConfig(atmo, uwpVal(world.uwp.hydrographics)),
+    [atmo, world.uwp.hydrographics],
+  );
+  const atmosphereGlow = useMemo(
+    () => atmosphereGlowConfig(atmo),
+    [atmo],
+  );
   const texture = useMemo(
     () => asteroid ? null : buildTexture(world),
     [world, asteroid],
   );
   useEffect(() => () => texture?.dispose(), [texture]);
+  const cloudTextures = useMemo(
+    () => clouds ? clouds.layers.map((layer) => buildCloudTexture(world, clouds, layer)) : [],
+    [world, clouds],
+  );
+  useEffect(
+    () => () => cloudTextures.forEach((cloudTexture) => cloudTexture.dispose()),
+    [cloudTextures],
+  );
 
   return (
     <div className="w-full aspect-square border border-(--hud-border)" style={{ background: "#020c14" }}>
@@ -537,7 +776,22 @@ const PlanetGlobe = ({ world }: PlanetGlobeProps) => {
           <ambientLight intensity={0.35} />
           <directionalLight position={[4, 3, 5]} intensity={1.2} />
           <PlanetMesh texture={texture} />
-          {clouds && <CloudMesh config={clouds} />}
+          {clouds && cloudTextures[0] && (
+            <CloudShadowMesh
+              radius={1}
+              layer={clouds.layers[0]}
+              texture={cloudTextures[0]}
+              opacity={clouds.shadowOpacity}
+            />
+          )}
+          {clouds && clouds.layers.map((layer, index) => (
+            <CloudMesh
+              key={`${layer.radiusMult}-${index}`}
+              layer={layer}
+              texture={cloudTextures[index]}
+            />
+          ))}
+          {atmosphereGlow && <AtmosphereGlowMesh radius={1} config={atmosphereGlow} />}
           <OrbitControls enableZoom minDistance={1.8} maxDistance={6} enablePan={false} />
         </Canvas>
       )}
