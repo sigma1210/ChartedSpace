@@ -805,7 +805,7 @@ const JumpSpaceScene = ({
     const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.32);
     const tubeGeo = new THREE.TubeGeometry(curve, 1400, 1.05, 24, false);
     const wallMat = new THREE.MeshBasicMaterial({
-      color: "#312e81",
+      color: "#0891b2",
       transparent: true,
       opacity: 0.1,
       side: THREE.BackSide,
@@ -815,7 +815,7 @@ const JumpSpaceScene = ({
     const wallMesh = new THREE.Mesh(tubeGeo, wallMat);
     const wireGeo = new THREE.WireframeGeometry(tubeGeo);
     const lineMat = new THREE.LineBasicMaterial({
-      color: "#ff2bd6",
+      color: "#22d3ee",
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
@@ -824,32 +824,83 @@ const JumpSpaceScene = ({
     const tunnelGroup = new THREE.Group();
     tunnelGroup.add(wallMesh, tunnelLines);
 
-    const accentObjects = Array.from({ length: 120 }, (_, index) => {
-      const t = (index + 0.5) / 120;
-      const point = curve.getPointAt(t);
-      const tangent = curve.getTangentAt(t).normalize();
-      const normal = new THREE.Vector3(0, 1, 0).cross(tangent).normalize();
-      if (normal.lengthSq() < 0.01) normal.set(1, 0, 0);
-      const binormal = tangent.clone().cross(normal).normalize();
-      const angle = index * 2.399963;
-      const radius = 1.25 + ((index * 17) % 11) * 0.045;
-      point
-        .addScaledVector(normal, Math.cos(angle) * radius)
-        .addScaledVector(binormal, Math.sin(angle) * radius);
+    const makeParticleStream = ({
+      count,
+      size,
+      opacity,
+      radiusMin,
+      radiusJitter,
+      lightness,
+    }: {
+      count: number;
+      size: number;
+      opacity: number;
+      radiusMin: number;
+      radiusJitter: number;
+      lightness: number;
+    }) => {
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const color = new THREE.Color();
 
-      const color = new THREE.Color().setHSL(THREE.MathUtils.euclideanModulo(0.55 + t * 0.75, 1), 1, 0.58);
-      const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.12, 0.12, 0.12), 0.2);
-      const mat = new THREE.LineBasicMaterial({
-        color,
+      for (let index = 0; index < count; index++) {
+        const t = (index + 0.5) / count;
+        const point = curve.getPointAt(t);
+        const tangent = curve.getTangentAt(t).normalize();
+        const normal = new THREE.Vector3(0, 1, 0).cross(tangent).normalize();
+        if (normal.lengthSq() < 0.01) normal.set(1, 0, 0);
+        const binormal = tangent.clone().cross(normal).normalize();
+        const angle = index * 2.399963 + Math.sin(index * 0.17) * 0.65;
+        const radius = radiusMin + ((index * 17) % 23) * radiusJitter;
+
+        point
+          .addScaledVector(normal, Math.cos(angle) * radius)
+          .addScaledVector(binormal, Math.sin(angle) * radius);
+
+        positions[index * 3] = point.x;
+        positions[index * 3 + 1] = point.y;
+        positions[index * 3 + 2] = point.z;
+
+        color.setHSL(THREE.MathUtils.euclideanModulo(0.54 + t * 0.86 + index * 0.003, 1), 1, lightness);
+        colors[index * 3] = color.r;
+        colors[index * 3 + 1] = color.g;
+        colors[index * 3 + 2] = color.b;
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      const material = new THREE.PointsMaterial({
+        size,
+        map: glowTex(),
+        vertexColors: true,
+        sizeAttenuation: true,
         transparent: true,
-        opacity: 0.62,
+        opacity,
         blending: THREE.AdditiveBlending,
+        depthWrite: false,
       });
-      const box = new THREE.LineSegments(geo, mat);
-      box.position.copy(point);
-      box.rotation.set(index * 0.37, index * 0.19, index * 0.27);
-      return box;
-    });
+      return new THREE.Points(geometry, material);
+    };
+
+    const accentObjects = [
+      makeParticleStream({
+        count: 1100,
+        size: 0.11,
+        opacity: 0.78,
+        radiusMin: 0.92,
+        radiusJitter: 0.018,
+        lightness: 0.64,
+      }),
+      makeParticleStream({
+        count: 260,
+        size: 0.23,
+        opacity: 0.55,
+        radiusMin: 1.18,
+        radiusJitter: 0.035,
+        lightness: 0.72,
+      }),
+    ];
 
     return {
       path: curve,
@@ -917,7 +968,7 @@ const JumpSpaceScene = ({
       {accents.map((accent, index) => (
         <primitive key={index} object={accent} />
       ))}
-      <pointLight color="#ff2bd6" intensity={2.4} distance={12} position={[0, 0, 0]} />
+      <pointLight color="#22d3ee" intensity={2.4} distance={12} position={[0, 0, 0]} />
       <pointLight color="#22d3ee" intensity={1.8} distance={14} position={[3, 2, -8]} />
     </>
   );
