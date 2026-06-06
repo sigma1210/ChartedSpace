@@ -6,23 +6,39 @@ const OUTPUT_PATH = "Prompts/avatars/avatar-attribute-slugs.txt";
 const attributes = [
   {
     key: "gender",
-    values: ["male", "female"],
+    values: ["a human male", "a human female"],
   },
   {
     key: "build",
-    values: ["slim", "average", "athletic", "heavy"],
+    values: ["slim build", "average build", "athletic build", "heavy build"],
   },
   {
     key: "clothing",
-    values: ["civilian", "scout", "naval", "marine", "merchant"],
+    values: [
+      "red clothing",
+      "green clothing",
+      "blue clothing",
+      "yellow clothing",
+      "orange clothing",
+      "purple clothing",
+      "grey clothing",
+      "black clothing",
+      "white clothing",
+    ],
   },
   {
     key: "hairColor",
-    values: ["black", "brown", "blonde", "red", "gray"],
+    values: [
+      "black hair",
+      "brown hair",
+      "blonde hair",
+      "red hair",
+      "gray hair",
+    ],
   },
   {
     key: "eyeColor",
-    values: ["brown", "blue", "green", "hazel"],
+    values: ["brown eyes", "blue eyes", "green eyes", "hazel eyes"],
   },
 ] as const;
 
@@ -32,7 +48,7 @@ const buildCombinations = (
   return groups.reduce<string[]>(
     (prefixes, group) =>
       prefixes.flatMap((prefix) =>
-        group.values.map((value) => (prefix ? `${prefix} ${value}` : value)),
+        group.values.map((value) => (prefix ? `${prefix}, ${value}` : value)),
       ),
     [""],
   );
