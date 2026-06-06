@@ -37,6 +37,16 @@ export const selectActiveWorld = (state: RootState) => {
   );
 };
 
+export const selectWorldByCoord =
+  (sectorAbbr: string | null | undefined, hex: string | null | undefined) =>
+  (state: RootState): World | null => {
+    if (!sectorAbbr || !hex) return null;
+    return (
+      state.galaxy.sectorData[sectorAbbr]?.worlds.find((w) => w.hex === hex) ??
+      null
+    );
+  };
+
 export const selectActiveWorldName = (state: RootState) =>
   selectActiveWorld(state)?.name ?? null;
 

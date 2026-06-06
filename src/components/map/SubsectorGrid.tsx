@@ -8,7 +8,9 @@ import { setActiveWorldHex, setTargetWorldHex, clearTargetWorldHex } from "../..
 import { selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
 import { selectShip, selectShipColor } from "../../store/selectors/ship.selectors";
 import { parseHex } from "../../lib/hex";
-import HexGrid from "./HexGrid";
+import HexGrid, { type HexWorld } from "./HexGrid";
+import type { SectorDetail } from "../../types";
+import type { ShipSummary } from "../../store/slices/shipSlice";
 
 interface SubsectorGridProps {
   sectorAbbr: string;
@@ -18,7 +20,7 @@ interface SubsectorGridProps {
 
 const KEYS = "ABCDEFGHIJKLMNOP";
 
-const getSubsectorBounds = (key: string) => {
+export const getSubsectorBounds = (key: string) => {
   const index = KEYS.indexOf(key.toUpperCase());
   if (index === -1) return null;
   const subCol = index % 4;
@@ -31,18 +33,35 @@ const getSubsectorBounds = (key: string) => {
   };
 };
 
-const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: SubsectorGridProps) => {
-  const dispatch = useAppDispatch();
-  const status = useAppSelector(selectSectorLoadStatus(sectorAbbr));
-  const sector = useAppSelector(selectSectorData(sectorAbbr));
-  const activeWorldHex = useAppSelector(selectActiveWorldHex);
-  const ship      = useAppSelector(selectShip);
-  const shipColor = useAppSelector(selectShipColor);
+interface SubsectorGridViewProps {
+  sectorAbbr: string;
+  subsectorKey: string;
+  sector: SectorDetail | undefined;
+  status: "idle" | "loading" | "loaded" | "error";
+  activeWorldHex?: string | null;
+  ship?: Pick<ShipSummary, "hex" | "sectorAbbr"> | null;
+  shipColor?: string;
+  showHeader?: boolean;
+  scale?: number;
+  onSelectWorld: (id: string) => void;
+  onHoverWorld?: (id: string) => void;
+  onLeaveGrid?: () => void;
+}
 
-  useEffect(() => {
-    dispatch(loadSector(sectorAbbr));
-  }, [sectorAbbr, dispatch]);
-
+export const SubsectorGridView = ({
+  sectorAbbr,
+  subsectorKey,
+  sector,
+  status,
+  activeWorldHex,
+  ship,
+  shipColor = "#9ca3af",
+  showHeader = true,
+  scale = 1,
+  onSelectWorld,
+  onHoverWorld,
+  onLeaveGrid,
+}: SubsectorGridViewProps) => {
   if (status === "idle" || status === "loading") {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -79,7 +98,7 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
   const subsectorName = sector.subsectors[key] ?? key;
   const { hexXStart, hexXEnd, hexYStart, hexYEnd } = bounds;
 
-  const worlds = sector.worlds
+  const worlds: HexWorld[] = sector.worlds
     .filter((w) => w.hexX >= hexXStart && w.hexX <= hexXEnd && w.hexY >= hexYStart && w.hexY <= hexYEnd)
     .map((w) => ({
       id: w.hex,
@@ -93,7 +112,6 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
       allegiance: w.allegiance || null,
     }));
 
-  // Ship position in subsector-local coords, or null if ship is elsewhere
   const shipLocalHex = (() => {
     if (!ship?.hex || ship.sectorAbbr !== sectorAbbr) return undefined;
     const coord = parseHex(ship.hex);
@@ -115,13 +133,43 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
         cols={8}
         rows={10}
         selectedWorldId={activeWorldHex ?? undefined}
-        onSelectWorld={(id) => dispatch(setActiveWorldHex({ sectorAbbr, hex: id }))}
-        onHoverWorld={(id) => dispatch(setTargetWorldHex({ sectorAbbr, hex: id }))}
-        onLeaveGrid={() => dispatch(clearTargetWorldHex())}
+        onSelectWorld={onSelectWorld}
+        onHoverWorld={onHoverWorld}
+        onLeaveGrid={onLeaveGrid}
         shipHex={shipLocalHex}
         shipColor={shipColor}
+        scale={scale}
       />
     </div>
+  );
+};
+
+const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: SubsectorGridProps) => {
+  const dispatch = useAppDispatch();
+  const status = useAppSelector(selectSectorLoadStatus(sectorAbbr));
+  const sector = useAppSelector(selectSectorData(sectorAbbr));
+  const activeWorldHex = useAppSelector(selectActiveWorldHex);
+  const ship      = useAppSelector(selectShip);
+  const shipColor = useAppSelector(selectShipColor);
+
+  useEffect(() => {
+    dispatch(loadSector(sectorAbbr));
+  }, [sectorAbbr, dispatch]);
+
+  return (
+    <SubsectorGridView
+      sectorAbbr={sectorAbbr}
+      subsectorKey={subsectorKey}
+      sector={sector}
+      status={status}
+      activeWorldHex={activeWorldHex}
+      ship={ship}
+      shipColor={shipColor}
+      showHeader={showHeader}
+      onSelectWorld={(id) => dispatch(setActiveWorldHex({ sectorAbbr, hex: id }))}
+      onHoverWorld={(id) => dispatch(setTargetWorldHex({ sectorAbbr, hex: id }))}
+      onLeaveGrid={() => dispatch(clearTargetWorldHex())}
+    />
   );
 };
 export default SubsectorGrid;

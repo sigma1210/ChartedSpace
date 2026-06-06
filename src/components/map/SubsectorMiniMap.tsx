@@ -17,7 +17,7 @@ import SubsectorGrid from "./SubsectorGrid";
 const KEYS = "ABCDEFGHIJKLMNOP";
 const TRANSITION = { duration: 0.35, ease: [0.4, 0, 0.2, 1] } as const;
 
-interface NavTarget {
+export interface NavTarget {
   sectorAbbr:   string;
   subsectorKey: string;
   label:        string;
@@ -25,7 +25,7 @@ interface NavTarget {
 
 const sectorLabel = (s: SectorMeta) => s.Names[0]?.Text ?? s.Abbreviation;
 
-const buildNavTargets = (
+export const buildNavTargets = (
   activeKey:        string,
   activeSectorAbbr: string,
   allSectors:       SectorMeta[],
@@ -82,6 +82,63 @@ const NavButton = ({ target, icon, onNavigate, vertical = false }: NavButtonProp
   </button>
 );
 
+interface SubsectorMiniMapViewProps {
+  visible: boolean;
+  label: string;
+  nav: Record<"up" | "down" | "left" | "right", NavTarget | null>;
+  onToggle: () => void;
+  onNavigate: (t: NavTarget) => void;
+  children: React.ReactNode;
+}
+
+export const SubsectorMiniMapView = ({
+  visible,
+  label,
+  nav,
+  onToggle,
+  onNavigate,
+  children,
+}: SubsectorMiniMapViewProps) => (
+  <motion.div
+    layout
+    animate={{ maxWidth: visible ? 1000 : 32 }}
+    transition={TRANSITION}
+    className="shrink-0 overflow-hidden flex flex-col gap-2 select-none"
+  >
+    <div className="flex items-center gap-2">
+      {visible && (
+        <span className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim) whitespace-nowrap">
+          {label}
+        </span>
+      )}
+      <button
+        onClick={onToggle}
+        className="font-mono text-[9px] text-(--hud-text-dim) hover:text-(--hud-text) transition-colors"
+        title={visible ? "Hide subsector map" : "Show subsector map"}
+      >
+        {visible ? "✕" : "◈"}
+      </button>
+    </div>
+
+    <motion.div
+      initial={false}
+      animate={visible ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
+      transition={TRANSITION}
+      style={{ overflow: "hidden" }}
+    >
+      <div className="flex flex-col items-center gap-1">
+        <NavButton target={nav.up}   icon={<ChevronUp    size={10} />} onNavigate={onNavigate} />
+        <div className="flex items-center gap-1">
+          <NavButton target={nav.left}  icon={<ChevronLeft  size={10} />} onNavigate={onNavigate} vertical />
+          {children}
+          <NavButton target={nav.right} icon={<ChevronRight size={10} />} onNavigate={onNavigate} vertical />
+        </div>
+        <NavButton target={nav.down} icon={<ChevronDown  size={10} />} onNavigate={onNavigate} />
+      </div>
+    </motion.div>
+  </motion.div>
+);
+
 const SubsectorMiniMap = () => {
   const dispatch         = useAppDispatch();
   const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
@@ -98,48 +155,19 @@ const SubsectorMiniMap = () => {
   };
 
   return (
-    <motion.div
-      layout
-      animate={{ maxWidth: visible ? 1000 : 32 }}
-      transition={TRANSITION}
-      className="shrink-0 overflow-hidden flex flex-col gap-2"
+    <SubsectorMiniMapView
+      visible={visible}
+      label={sector?.subsectors[activeKey] ?? activeKey}
+      nav={nav}
+      onToggle={() => dispatch(toggleSubsectorMiniMap())}
+      onNavigate={navigate}
     >
-      <div className="flex items-center gap-2">
-        {visible && (
-          <span className="font-mono text-[9px] uppercase tracking-widest text-(--hud-text-dim) whitespace-nowrap">
-            {sector?.subsectors[activeKey] ?? activeKey}
-          </span>
-        )}
-        <button
-          onClick={() => dispatch(toggleSubsectorMiniMap())}
-          className="font-mono text-[9px] text-(--hud-text-dim) hover:text-(--hud-text) transition-colors"
-          title={visible ? "Hide subsector map" : "Show subsector map"}
-        >
-          {visible ? "✕" : "◈"}
-        </button>
-      </div>
-
-      <motion.div
-        initial={false}
-        animate={visible ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
-        transition={TRANSITION}
-        style={{ overflow: "hidden" }}
-      >
-        <div className="flex flex-col items-center gap-1">
-          <NavButton target={nav.up}   icon={<ChevronUp    size={10} />} onNavigate={navigate} />
-          <div className="flex items-center gap-1">
-            <NavButton target={nav.left}  icon={<ChevronLeft  size={10} />} onNavigate={navigate} vertical />
-            <SubsectorGrid
-              sectorAbbr={activeSectorAbbr}
-              subsectorKey={activeKey}
-              showHeader={false}
-            />
-            <NavButton target={nav.right} icon={<ChevronRight size={10} />} onNavigate={navigate} vertical />
-          </div>
-          <NavButton target={nav.down} icon={<ChevronDown  size={10} />} onNavigate={navigate} />
-        </div>
-      </motion.div>
-    </motion.div>
+      <SubsectorGrid
+        sectorAbbr={activeSectorAbbr}
+        subsectorKey={activeKey}
+        showHeader={false}
+      />
+    </SubsectorMiniMapView>
   );
 };
 

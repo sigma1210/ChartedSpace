@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useCallback, useEffect } from "react";
+import Link from "next/link";
+import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
-import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
+import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
+import { Grip, Pin, X } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch } from "../../store/hooks";
@@ -22,7 +24,7 @@ import {
   type CloudConfig,
 } from "./PlanetGlobe";
 import { uwpVal } from "../../lib/worldMap";
-import { selectActiveWorldSystem, selectSystemGeneratedTurnByKey, selectSystemStatusByKey } from "../../store/selectors/system.selectors";
+import { selectSystemDataByKey, selectSystemGeneratedTurnByKey, selectSystemStatusByKey } from "../../store/selectors/system.selectors";
 import { getSystemData } from "../../store/slices/systemSlice";
 import type { SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
 
@@ -307,8 +309,8 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
           )}
           {atmosphereGlow && <AtmosphereGlowMesh radius={WORLD_R} config={atmosphereGlow} />}
         </group>
-        <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#22d3ee", whiteSpace: "nowrap" }}>
+        <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none", userSelect: "none" }}>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#22d3ee", whiteSpace: "nowrap", userSelect: "none" }}>
             {placement.label}
           </span>
         </Html>
@@ -411,8 +413,8 @@ const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: 
           {atmosphereGlow && <AtmosphereGlowMesh radius={WORLD_R} config={atmosphereGlow} />}
         </group>
         {body.name && (
-          <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none" }}>
-            <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#22d3ee", whiteSpace: "nowrap" }}>{body.name}</span>
+          <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none", userSelect: "none" }}>
+            <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#22d3ee", whiteSpace: "nowrap", userSelect: "none" }}>{body.name}</span>
           </Html>
         )}
       </group>
@@ -607,8 +609,8 @@ const BeltRing = ({ placement }: { placement: WorldPlacement }) => {
     <>
       <primitive object={obj} />
       {placement.label && (
-        <Html position={[placement.sceneRadius + 0.2, 0.15, 0]} style={{ pointerEvents: "none" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#a8a29e", whiteSpace: "nowrap" }}>
+        <Html position={[placement.sceneRadius + 0.2, 0.15, 0]} style={{ pointerEvents: "none", userSelect: "none" }}>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#a8a29e", whiteSpace: "nowrap", userSelect: "none" }}>
             {placement.label}
           </span>
         </Html>
@@ -776,12 +778,590 @@ const cameraZ = (layout: SystemLayout, outermostScene: number): number => {
   return Math.max(starBase, outermostScene * 1.5);
 };
 
+const JumpSpaceScene = ({ onExitReached }: { onExitReached?: () => void }) => {
+  const { camera } = useThree();
+  const exitTriggeredRef = useRef(false);
+  const startTimeRef = useRef<number | null>(null);
+
+  const { path, tunnel, accents } = useMemo(() => {
+    const pointCount = 34;
+    const points = Array.from({ length: pointCount }, (_, index) => {
+      const pct = index / (pointCount - 1);
+      const t = pct * Math.PI * 2;
+      return new THREE.Vector3(
+        Math.sin(t * 1.5) * 3.1 + Math.sin(t * 4.0) * 0.9,
+        Math.cos(t * 1.25) * 2.4 + Math.sin(t * 3.25) * 0.75,
+        8 - pct * 132,
+      );
+    });
+    const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.32);
+    const tubeGeo = new THREE.TubeGeometry(curve, 1400, 1.05, 24, false);
+    const wallMat = new THREE.MeshBasicMaterial({
+      color: "#312e81",
+      transparent: true,
+      opacity: 0.1,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const wallMesh = new THREE.Mesh(tubeGeo, wallMat);
+    const wireGeo = new THREE.WireframeGeometry(tubeGeo);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: "#ff2bd6",
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+    const tunnelLines = new THREE.LineSegments(wireGeo, lineMat);
+    const tunnelGroup = new THREE.Group();
+    tunnelGroup.add(wallMesh, tunnelLines);
+
+    const accentObjects = Array.from({ length: 120 }, (_, index) => {
+      const t = (index + 0.5) / 120;
+      const point = curve.getPointAt(t);
+      const tangent = curve.getTangentAt(t).normalize();
+      const normal = new THREE.Vector3(0, 1, 0).cross(tangent).normalize();
+      if (normal.lengthSq() < 0.01) normal.set(1, 0, 0);
+      const binormal = tangent.clone().cross(normal).normalize();
+      const angle = index * 2.399963;
+      const radius = 1.25 + ((index * 17) % 11) * 0.045;
+      point
+        .addScaledVector(normal, Math.cos(angle) * radius)
+        .addScaledVector(binormal, Math.sin(angle) * radius);
+
+      const color = new THREE.Color().setHSL(THREE.MathUtils.euclideanModulo(0.55 + t * 0.75, 1), 1, 0.58);
+      const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.12, 0.12, 0.12), 0.2);
+      const mat = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.62,
+        blending: THREE.AdditiveBlending,
+      });
+      const box = new THREE.LineSegments(geo, mat);
+      box.position.copy(point);
+      box.rotation.set(index * 0.37, index * 0.19, index * 0.27);
+      return box;
+    });
+
+    return {
+      path: curve,
+      tunnel: tunnelGroup,
+      accents: accentObjects,
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      tunnel.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((material) => material.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      });
+      accents.forEach((accent) => {
+        accent.geometry.dispose();
+        if (Array.isArray(accent.material)) {
+          accent.material.forEach((material) => material.dispose());
+        } else {
+          accent.material.dispose();
+        }
+      });
+    },
+    [accents, tunnel],
+  );
+
+  useFrame((state) => {
+    if (startTimeRef.current === null) startTimeRef.current = state.clock.elapsedTime;
+    const elapsed = state.clock.elapsedTime - startTimeRef.current;
+    const progress = Math.min(0.08 + elapsed * 0.055, 0.9);
+    const lookAhead = Math.min(progress + 0.012, 0.98);
+    const position = path.getPointAt(progress);
+    const lookAt = path.getPointAt(lookAhead);
+
+    camera.position.copy(position);
+    camera.lookAt(lookAt);
+
+    if (!exitTriggeredRef.current && progress >= 0.82) {
+      exitTriggeredRef.current = true;
+      onExitReached?.();
+    }
+  });
+
+  return (
+    <group>
+      <primitive object={tunnel} />
+      {accents.map((accent, index) => (
+        <primitive key={index} object={accent} />
+      ))}
+      <pointLight color="#ff2bd6" intensity={2.4} distance={12} position={[0, 0, 0]} />
+      <pointLight color="#22d3ee" intensity={1.8} distance={14} position={[3, 2, -8]} />
+    </group>
+  );
+};
+
+const SystemCameraReset = ({
+  camZ,
+  controlsRef,
+  pivotTarget,
+  resetKey,
+  sceneMode,
+}: {
+  camZ: number;
+  controlsRef: React.RefObject<ControlsHandle | null>;
+  pivotTarget: React.MutableRefObject<THREE.Vector3>;
+  resetKey: string;
+  sceneMode: "system" | "jump";
+}) => {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (sceneMode !== "system") return;
+    camera.position.set(0, camZ * 0.4, camZ);
+    camera.lookAt(0, 0, 0);
+    pivotTarget.current.set(0, 0, 0);
+    controlsRef.current?.target.set(0, 0, 0);
+    controlsRef.current?.update();
+  }, [camZ, camera, controlsRef, pivotTarget, resetKey, sceneMode]);
+
+  return null;
+};
+
+// ─── Camera-pinned 3D HUD ────────────────────────────────────────────────────
+
+type HudOffset = { x: number; y: number };
+
+const clampHudOffset = (value: HudOffset): HudOffset => ({
+  x: Math.max(-0.78, Math.min(0.78, value.x)),
+  y: Math.max(-0.58, Math.min(0.58, value.y)),
+});
+
+const CameraPinnedSystemHud = ({
+  world,
+  miniMapVisible,
+  onOpenMiniMap,
+  navigationHudVisible,
+  onOpenNavigationHud,
+}: {
+  world: World;
+  miniMapVisible: boolean;
+  onOpenMiniMap: () => void;
+  navigationHudVisible: boolean;
+  onOpenNavigationHud: () => void;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+  const { camera, size } = useThree();
+  const [offset, setOffset] = useState<HudOffset>({ x: -0.58, y: 0.42 });
+  const [visible, setVisible] = useState(true);
+  const [pinned, setPinned] = useState(true);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group) return;
+
+    const distance = 4.5;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, offset.x * width * 0.5)
+      .addScaledVector(up, offset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      setOffset(clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      }));
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [size.height, size.width]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+  };
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.5}>
+        {visible ? (
+          <div
+            className="min-w-48 select-none border border-(--hud-accent)/70 bg-(--hud-bg)/80 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[0_0_24px_rgba(34,211,238,0.18)] backdrop-blur-md"
+            style={{ pointerEvents: "auto" }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <div
+              className={`mb-2 flex items-center justify-between border-b border-(--hud-border) pb-1 ${pinned ? "cursor-default" : "cursor-move"}`}
+              onPointerDown={startDrag}
+            >
+              <span className="text-(--hud-text-dim)">{world.name}</span>
+              <button
+                type="button"
+                onClick={() => setVisible(false)}
+                className="text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
+              >
+                Hide
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/map"
+                className="border border-(--hud-accent) px-2 py-1 text-(--hud-accent) transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg)"
+              >
+                Map
+              </Link>
+              <button
+                type="button"
+                onClick={() => setPinned((value) => !value)}
+                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+              >
+                {pinned ? "Move" : "Pin"}
+              </button>
+              <button
+                type="button"
+                onClick={onOpenMiniMap}
+                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+              >
+                {miniMapVisible ? "Mini Map On" : "Mini Map"}
+              </button>
+              <button
+                type="button"
+                onClick={onOpenNavigationHud}
+                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+              >
+                {navigationHudVisible ? "Nav On" : "Nav"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setVisible(true)}
+            className="select-none border border-(--hud-accent)/70 bg-(--hud-bg)/80 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) shadow-[0_0_18px_rgba(34,211,238,0.18)] backdrop-blur-md transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg)"
+            style={{ pointerEvents: "auto" }}
+          >
+            HUD
+          </button>
+        )}
+      </Html>
+    </group>
+  );
+};
+
+const CameraPinnedNavigationHud = ({
+  visible,
+  navigationHud,
+  onClose,
+}: {
+  visible: boolean;
+  navigationHud: ReactNode;
+  onClose: () => void;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+  const { camera, size } = useThree();
+  const [offset, setOffset] = useState<HudOffset>({ x: -0.48, y: -0.08 });
+  const [pinned, setPinned] = useState(true);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group || !visible) return;
+
+    const distance = 4.8;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, offset.x * width * 0.5)
+      .addScaledVector(up, offset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      setOffset(clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      }));
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [size.height, size.width]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+  };
+
+  if (!visible) return null;
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.8}>
+        <div
+          className="select-none border border-(--hud-accent)/60 bg-(--hud-bg)/82 p-2 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[0_0_24px_rgba(34,211,238,0.16)] backdrop-blur-md"
+          style={{ pointerEvents: "auto" }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div
+            className={`mb-1 flex items-center justify-end gap-1 border-b border-(--hud-border) pb-1 ${pinned ? "cursor-default" : "cursor-move"}`}
+            onPointerDown={startDrag}
+          >
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPinned((value) => !value)}
+                title={pinned ? "Move HUD" : "Pin HUD"}
+                aria-label={pinned ? "Move navigation HUD" : "Pin navigation HUD"}
+                className="grid h-5 w-5 place-items-center text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
+              >
+                {pinned ? <Grip size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                title="Close"
+                aria-label="Close navigation HUD"
+                className="grid h-5 w-5 place-items-center text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          {navigationHud}
+        </div>
+      </Html>
+    </group>
+  );
+};
+
+const CameraPinnedSubsectorMiniMapHud = ({
+  visible,
+  miniMap,
+  onClose,
+}: {
+  visible: boolean;
+  miniMap: ReactNode;
+  onClose: () => void;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+  const { camera, size } = useThree();
+  const [offset, setOffset] = useState<HudOffset>({ x: 0.46, y: 0.12 });
+  const [pinned, setPinned] = useState(true);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group || !visible) return;
+
+    const distance = 4.8;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, offset.x * width * 0.5)
+      .addScaledVector(up, offset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      setOffset(clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      }));
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [size.height, size.width]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+  };
+
+  if (!visible) return null;
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.8}>
+        <div
+          className="select-none border border-(--hud-accent)/60 bg-(--hud-bg)/82 p-2 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[0_0_24px_rgba(34,211,238,0.16)] backdrop-blur-md"
+          style={{ pointerEvents: "auto" }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div
+            className={`mb-2 flex items-center justify-between gap-3 border-b border-(--hud-border) pb-1 ${pinned ? "cursor-default" : "cursor-move"}`}
+            onPointerDown={startDrag}
+          >
+            <span className="text-(--hud-text-dim)">Subsector</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPinned((value) => !value)}
+                className="text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
+              >
+                {pinned ? "Move" : "Pin"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          {miniMap}
+        </div>
+      </Html>
+    </group>
+  );
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const StarSystemView = ({ world }: { world: World }) => {
+const StarSystemView = ({
+  world,
+  sectorAbbr: sectorAbbrProp,
+  showHudControls = false,
+  miniMapVisible = false,
+  onOpenMiniMap = () => {},
+  onCloseMiniMap = () => {},
+  miniMap = null,
+  navigationHudVisible = false,
+  onOpenNavigationHud = () => {},
+  onCloseNavigationHud = () => {},
+  navigationHud = null,
+  sceneMode = "system",
+  onJumpExitReached,
+}: {
+  world: World;
+  sectorAbbr?: string | null;
+  showHudControls?: boolean;
+  miniMapVisible?: boolean;
+  onOpenMiniMap?: () => void;
+  onCloseMiniMap?: () => void;
+  miniMap?: ReactNode;
+  navigationHudVisible?: boolean;
+  onOpenNavigationHud?: () => void;
+  onCloseNavigationHud?: () => void;
+  navigationHud?: ReactNode;
+  sceneMode?: "system" | "jump";
+  onJumpExitReached?: () => void;
+}) => {
   const dispatch = useAppDispatch();
-  const sectorAbbr = useSelector((s: { galaxy?: { activeWorldSectorAbbr?: string | null } }) => s.galaxy?.activeWorldSectorAbbr ?? null);
-  const systemData = useSelector(selectActiveWorldSystem);
+  const activeWorldSectorAbbr = useSelector((s: { galaxy?: { activeWorldSectorAbbr?: string | null } }) => s.galaxy?.activeWorldSectorAbbr ?? null);
+  const sectorAbbr = sectorAbbrProp ?? activeWorldSectorAbbr;
+  const systemData = useSelector(
+    sectorAbbr
+      ? selectSystemDataByKey(sectorAbbr, world.hex)
+      : () => null,
+  );
   const systemStatus = useSelector(
     sectorAbbr
       ? selectSystemStatusByKey(sectorAbbr, world.hex)
@@ -844,18 +1424,59 @@ const StarSystemView = ({ world }: { world: World }) => {
   }, [useData, systemData, world]);
 
   const camZ = cameraZ(layout, outermostScene);
+  const cameraResetKey = `${sectorAbbr ?? ""}:${world.hex}`;
 
   return (
     <div style={{ width: "100%", height: "100%", background: "#020c14" }}>
       <Canvas camera={{ position: [0, camZ * 0.4, camZ] as [number, number, number], fov: 50, far: 200 }}>
+        <SystemCameraReset
+          camZ={camZ}
+          controlsRef={controlsRef}
+          pivotTarget={pivotTarget}
+          resetKey={cameraResetKey}
+          sceneMode={sceneMode}
+        />
         <ambientLight intensity={0.6} />
         <directionalLight position={[2, 3, 4]} intensity={1.4} />
         <Starfield />
-        <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
-        <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
-        <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />
+        {sceneMode === "jump" ? (
+          <JumpSpaceScene onExitReached={onJumpExitReached} />
+        ) : (
+          <>
+            <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
+            <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
+          </>
+        )}
+        {sceneMode === "system" && (
+          <>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
+            <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />
+          </>
+        )}
+        {showHudControls && (
+          <CameraPinnedSystemHud
+            world={world}
+            miniMapVisible={miniMapVisible}
+            onOpenMiniMap={onOpenMiniMap}
+            navigationHudVisible={navigationHudVisible}
+            onOpenNavigationHud={onOpenNavigationHud}
+          />
+        )}
+        {showHudControls && navigationHud && (
+          <CameraPinnedNavigationHud
+            visible={navigationHudVisible}
+            navigationHud={navigationHud}
+            onClose={onCloseNavigationHud}
+          />
+        )}
+        {showHudControls && miniMap && (
+          <CameraPinnedSubsectorMiniMapHud
+            visible={miniMapVisible}
+            miniMap={miniMap}
+            onClose={onCloseMiniMap}
+          />
+        )}
       </Canvas>
     </div>
   );

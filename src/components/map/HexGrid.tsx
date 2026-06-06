@@ -2,7 +2,7 @@
 
 import { HEX_RADIUS, hexSvgWidth, hexSvgHeight, hexCenter } from "./hexGeometry";
 
-interface HexWorld {
+export interface HexWorld {
   id: string;
   hex: string;
   hexX: number;
