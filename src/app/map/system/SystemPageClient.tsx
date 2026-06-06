@@ -6,13 +6,14 @@ import {
   clearTargetWorldHex,
   loadSector,
   setActiveLocation,
+  setActiveSubsector,
   setActiveWorldHex,
   setTargetWorldHex,
 } from "../../../store/slices/galaxySlice";
 import { fetchShip } from "../../../store/slices/shipSlice";
 import { fetchTurn, advanceTurn } from "../../../store/slices/turnSlice";
 import { fetchCharacters, invalidateCharacters } from "../../../store/slices/characterSlice";
-import { setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
+import { setSectorMiniMapVisible, setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
 import {
   selectActiveSectorAbbr,
   selectActiveSubsectorKey,
@@ -28,6 +29,7 @@ import StarSystemView from "../../../components/world/StarSystemView";
 import NavigationHud from "../../../components/world/NavigationHud";
 import { buildNavTargets, SubsectorMiniMapView } from "../../../components/map/SubsectorMiniMap";
 import { SubsectorGridView } from "../../../components/map/SubsectorGrid";
+import StarField from "../../../components/map/StarField";
 import {
   buildJumpRangeCells,
   buildJumpRangeTargets,
@@ -65,6 +67,7 @@ const CurrentSystemPageClient = () => {
   const activeSectorStatus = useAppSelector(selectSectorLoadStatus(activeSectorAbbr));
   const activeWorldHex = useAppSelector(selectActiveWorldHex);
   const miniMapVisible = useAppSelector((state) => state.ui.showSubsectorMiniMap);
+  const sectorMiniMapVisible = useAppSelector((state) => state.ui.showSectorMiniMap);
   const sectorDataAll = useAppSelector((state) => state.galaxy.sectorData);
   const loadingStatus = useAppSelector((state) => state.galaxy.loadingStatus);
   const [navigationHudVisible, setNavigationHudVisible] = useState(false);
@@ -207,6 +210,7 @@ const CurrentSystemPageClient = () => {
     dispatch(fetchTurn());
     dispatch(fetchCharacters());
     dispatch(setSubsectorMiniMapVisible(false));
+    dispatch(setSectorMiniMapVisible(false));
   }, [dispatch]);
 
   useEffect(() => {
@@ -385,6 +389,7 @@ const CurrentSystemPageClient = () => {
       label={activeSector?.subsectors[activeSubsectorKey] ?? activeSubsectorKey}
       nav={nav}
       onToggle={() => dispatch(setSubsectorMiniMapVisible(false))}
+      onOpenSectorMap={() => dispatch(setSectorMiniMapVisible(true))}
       onNavigate={(target) => dispatch(setActiveLocation({
         sectorAbbr: target.sectorAbbr,
         subsectorKey: target.subsectorKey,
@@ -405,6 +410,18 @@ const CurrentSystemPageClient = () => {
         onLeaveGrid={() => dispatch(clearTargetWorldHex())}
       />
     </SubsectorMiniMapView>
+  );
+  const sectorMiniMap = (
+    <div className="flex flex-col gap-1">
+      <StarField
+        sectorAbbr={activeSectorAbbr}
+        activeKey={activeSubsectorKey}
+        onSelectKey={(key) => dispatch(setActiveSubsector(key))}
+      />
+      <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-accent)">
+        {activeSector?.subsectors[activeSubsectorKey] ?? activeSubsectorKey}
+      </span>
+    </div>
   );
   const navigationHud = (
     <NavigationHud
@@ -444,6 +461,9 @@ const CurrentSystemPageClient = () => {
             onOpenMiniMap={() => dispatch(setSubsectorMiniMapVisible(true))}
             onCloseMiniMap={() => dispatch(setSubsectorMiniMapVisible(false))}
             miniMap={miniMap}
+            sectorMiniMapVisible={sectorMiniMapVisible}
+            onCloseSectorMiniMap={() => dispatch(setSectorMiniMapVisible(false))}
+            sectorMiniMap={sectorMiniMap}
             navigationHudVisible={navigationHudVisible}
             onOpenNavigationHud={() => setNavigationHudVisible(true)}
             onCloseNavigationHud={() => setNavigationHudVisible(false)}

@@ -139,6 +139,9 @@ const uiSlice = createSlice({
     setSubsectorMiniMapVisible(state, action: PayloadAction<boolean>) {
       state.showSubsectorMiniMap = action.payload;
     },
+    setSectorMiniMapVisible(state, action: PayloadAction<boolean>) {
+      state.showSectorMiniMap = action.payload;
+    },
   },
 });
 
@@ -170,6 +173,7 @@ export const {
   toggleSectorMiniMap,
   toggleSubsectorMiniMap,
   setSubsectorMiniMapVisible,
+  setSectorMiniMapVisible,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

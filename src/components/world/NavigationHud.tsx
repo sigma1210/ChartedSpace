@@ -3,6 +3,7 @@
 import { AlertTriangle, Check, Circle, LoaderCircle } from "lucide-react";
 import { HEX_RADIUS } from "../map/hexGeometry";
 import type { JumpRangeCell, JumpRangeTarget } from "../../lib/jumpRange";
+import { hudActionButtonClass } from "./HudPrimitives";
 
 const SQRT3 = Math.sqrt(3);
 const COL_STEP = HEX_RADIUS * 1.5;
@@ -188,7 +189,7 @@ const NavigationHud = ({
           type="button"
           onClick={handleAction}
           disabled={actionDisabled}
-          className="flex w-full items-center justify-center gap-1 border border-(--hud-accent) px-1.5 py-0.5 text-[9px] text-(--hud-accent) transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg) disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-(--hud-accent)"
+          className={`${hudActionButtonClass} w-full`}
         >
           <ActionIcon
             size={10}

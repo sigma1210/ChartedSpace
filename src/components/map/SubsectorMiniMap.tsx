@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
   selectAllSectors,
@@ -87,6 +87,7 @@ interface SubsectorMiniMapViewProps {
   label: string;
   nav: Record<"up" | "down" | "left" | "right", NavTarget | null>;
   onToggle: () => void;
+  onOpenSectorMap?: () => void;
   onNavigate: (t: NavTarget) => void;
   children: React.ReactNode;
 }
@@ -96,6 +97,7 @@ export const SubsectorMiniMapView = ({
   label,
   nav,
   onToggle,
+  onOpenSectorMap,
   onNavigate,
   children,
 }: SubsectorMiniMapViewProps) => (
@@ -111,13 +113,24 @@ export const SubsectorMiniMapView = ({
           {label}
         </span>
       )}
-      <button
-        onClick={onToggle}
-        className="font-mono text-[9px] text-(--hud-text-dim) hover:text-(--hud-text) transition-colors"
-        title={visible ? "Hide subsector map" : "Show subsector map"}
-      >
-        {visible ? "✕" : "◈"}
-      </button>
+      {onOpenSectorMap ? (
+        <button
+          onClick={onOpenSectorMap}
+          className="grid h-3 w-3 place-items-center text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
+          title="Open sector map"
+          aria-label="Open sector map"
+        >
+          <Grid3X3 size={8} aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          onClick={onToggle}
+          className="font-mono text-[9px] text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
+          title={visible ? "Hide subsector map" : "Show subsector map"}
+        >
+          {visible ? "✕" : "◈"}
+        </button>
+      )}
     </div>
 
     <motion.div

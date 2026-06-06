@@ -5,7 +5,7 @@ import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } fro
 import { useSelector } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { Grip, Pin, X } from "lucide-react";
+import { Map, Navigation, Radar } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch } from "../../store/hooks";
@@ -27,6 +27,7 @@ import { uwpVal } from "../../lib/worldMap";
 import { selectSystemDataByKey, selectSystemGeneratedTurnByKey, selectSystemStatusByKey } from "../../store/selectors/system.selectors";
 import { getSystemData } from "../../store/slices/systemSlice";
 import type { SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
+import { HudHeader, HudIconButton, HudPanel, hudIconButtonClass } from "./HudPrimitives";
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
 
@@ -72,6 +73,11 @@ const Starfield = () => {
   }, []);
   return <primitive object={obj} />;
 };
+
+const sceneLabelClassName =
+  "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-accent)";
+const sceneSecondaryLabelClassName =
+  "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-text-dim)";
 
 // ─── Orbital ring ─────────────────────────────────────────────────────────────
 
@@ -309,8 +315,8 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
           )}
           {atmosphereGlow && <AtmosphereGlowMesh radius={WORLD_R} config={atmosphereGlow} />}
         </group>
-        <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none", userSelect: "none" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#22d3ee", whiteSpace: "nowrap", userSelect: "none" }}>
+        <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none" }}>
+          <span className={sceneLabelClassName}>
             {placement.label}
           </span>
         </Html>
@@ -413,8 +419,8 @@ const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: 
           {atmosphereGlow && <AtmosphereGlowMesh radius={WORLD_R} config={atmosphereGlow} />}
         </group>
         {body.name && (
-          <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none", userSelect: "none" }}>
-            <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#22d3ee", whiteSpace: "nowrap", userSelect: "none" }}>{body.name}</span>
+          <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none" }}>
+            <span className={sceneLabelClassName}>{body.name}</span>
           </Html>
         )}
       </group>
@@ -609,8 +615,8 @@ const BeltRing = ({ placement }: { placement: WorldPlacement }) => {
     <>
       <primitive object={obj} />
       {placement.label && (
-        <Html position={[placement.sceneRadius + 0.2, 0.15, 0]} style={{ pointerEvents: "none", userSelect: "none" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", color: "#a8a29e", whiteSpace: "nowrap", userSelect: "none" }}>
+        <Html position={[placement.sceneRadius + 0.2, 0.15, 0]} style={{ pointerEvents: "none" }}>
+          <span className={sceneSecondaryLabelClassName}>
             {placement.label}
           </span>
         </Html>
@@ -1096,58 +1102,44 @@ const CameraPinnedSystemHud = ({
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.5}>
         {visible ? (
-          <div
-            className="min-w-48 select-none border border-(--hud-accent)/70 bg-(--hud-bg)/80 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[0_0_24px_rgba(34,211,238,0.18)] backdrop-blur-md"
-            style={{ pointerEvents: "auto" }}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <div
-              className={`mb-2 flex items-center justify-between border-b border-(--hud-border) pb-1 ${pinned ? "cursor-default" : "cursor-move"}`}
-              onPointerDown={startDrag}
-            >
-              <span className="text-(--hud-text-dim)">{world.name}</span>
-              <button
-                type="button"
-                onClick={() => setVisible(false)}
-                className="text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
-              >
-                Hide
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
+          <HudPanel className="min-w-40">
+            <HudHeader
+              title={world.name}
+              pinned={pinned}
+              onTogglePinned={() => setPinned((value) => !value)}
+              onClose={() => setVisible(false)}
+              onDragStart={startDrag}
+              closeTitle="Hide HUD"
+            />
+            <div className="flex items-center gap-1">
               <Link
                 href="/map"
-                className="border border-(--hud-accent) px-2 py-1 text-(--hud-accent) transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg)"
+                title="Open map"
+                aria-label="Open map"
+                className={hudIconButtonClass}
               >
-                Map
+                <Map size={13} aria-hidden="true" />
               </Link>
-              <button
-                type="button"
-                onClick={() => setPinned((value) => !value)}
-                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
-              >
-                {pinned ? "Move" : "Pin"}
-              </button>
-              <button
-                type="button"
+              <HudIconButton
+                title={miniMapVisible ? "Mini map visible" : "Open mini map"}
                 onClick={onOpenMiniMap}
-                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
               >
-                {miniMapVisible ? "Mini Map On" : "Mini Map"}
-              </button>
-              <button
-                type="button"
+                <Radar size={13} aria-hidden="true" />
+              </HudIconButton>
+              <HudIconButton
+                title={navigationHudVisible ? "Navigation visible" : "Open navigation"}
                 onClick={onOpenNavigationHud}
-                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
               >
-                {navigationHudVisible ? "Nav On" : "Nav"}
-              </button>
+                <Navigation size={13} aria-hidden="true" />
+              </HudIconButton>
             </div>
-          </div>
+          </HudPanel>
         ) : (
           <button
             type="button"
             onClick={() => setVisible(true)}
+            title="Show HUD"
+            aria-label="Show HUD"
             className="select-none border border-(--hud-accent)/70 bg-(--hud-bg)/80 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) shadow-[0_0_18px_rgba(34,211,238,0.18)] backdrop-blur-md transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg)"
             style={{ pointerEvents: "auto" }}
           >
@@ -1241,38 +1233,17 @@ const CameraPinnedNavigationHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <div
-          className="select-none border border-(--hud-accent)/60 bg-(--hud-bg)/82 p-2 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[0_0_24px_rgba(34,211,238,0.16)] backdrop-blur-md"
-          style={{ pointerEvents: "auto" }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div
-            className={`mb-1 flex items-center justify-end gap-1 border-b border-(--hud-border) pb-1 ${pinned ? "cursor-default" : "cursor-move"}`}
-            onPointerDown={startDrag}
-          >
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPinned((value) => !value)}
-                title={pinned ? "Move HUD" : "Pin HUD"}
-                aria-label={pinned ? "Move navigation HUD" : "Pin navigation HUD"}
-                className="grid h-5 w-5 place-items-center text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
-              >
-                {pinned ? <Grip size={12} aria-hidden="true" /> : <Pin size={12} aria-hidden="true" />}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                title="Close"
-                aria-label="Close navigation HUD"
-                className="grid h-5 w-5 place-items-center text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
-              >
-                <X size={12} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
+        <HudPanel>
+          <HudHeader
+            title="Nav"
+            pinned={pinned}
+            onTogglePinned={() => setPinned((value) => !value)}
+            onClose={onClose}
+            onDragStart={startDrag}
+            closeTitle="Close navigation HUD"
+          />
           {navigationHud}
-        </div>
+        </HudPanel>
       </Html>
     </group>
   );
@@ -1360,35 +1331,115 @@ const CameraPinnedSubsectorMiniMapHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <div
-          className="select-none border border-(--hud-accent)/60 bg-(--hud-bg)/82 p-2 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[0_0_24px_rgba(34,211,238,0.16)] backdrop-blur-md"
-          style={{ pointerEvents: "auto" }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div
-            className={`mb-2 flex items-center justify-between gap-3 border-b border-(--hud-border) pb-1 ${pinned ? "cursor-default" : "cursor-move"}`}
-            onPointerDown={startDrag}
-          >
-            <span className="text-(--hud-text-dim)">Subsector</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPinned((value) => !value)}
-                className="text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
-              >
-                {pinned ? "Move" : "Pin"}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-(--hud-text-dim) transition-colors hover:text-(--hud-text)"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+        <HudPanel>
+          <HudHeader
+            title="Subsector"
+            pinned={pinned}
+            onTogglePinned={() => setPinned((value) => !value)}
+            onClose={onClose}
+            onDragStart={startDrag}
+            closeTitle="Close subsector HUD"
+          />
           {miniMap}
-        </div>
+        </HudPanel>
+      </Html>
+    </group>
+  );
+};
+
+const CameraPinnedSectorMiniMapHud = ({
+  visible,
+  sectorMiniMap,
+  onClose,
+}: {
+  visible: boolean;
+  sectorMiniMap: ReactNode;
+  onClose: () => void;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+  const { camera, size } = useThree();
+  const [offset, setOffset] = useState<HudOffset>({ x: 0.12, y: 0.26 });
+  const [pinned, setPinned] = useState(true);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group || !visible) return;
+
+    const distance = 4.8;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, offset.x * width * 0.5)
+      .addScaledVector(up, offset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      setOffset(clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      }));
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [size.height, size.width]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+  };
+
+  if (!visible) return null;
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.8}>
+        <HudPanel>
+          <HudHeader
+            title="Sector"
+            pinned={pinned}
+            onTogglePinned={() => setPinned((value) => !value)}
+            onClose={onClose}
+            onDragStart={startDrag}
+            closeTitle="Close sector HUD"
+          />
+          {sectorMiniMap}
+        </HudPanel>
       </Html>
     </group>
   );
@@ -1404,6 +1455,9 @@ const StarSystemView = ({
   onOpenMiniMap = () => {},
   onCloseMiniMap = () => {},
   miniMap = null,
+  sectorMiniMapVisible = false,
+  onCloseSectorMiniMap = () => {},
+  sectorMiniMap = null,
   navigationHudVisible = false,
   onOpenNavigationHud = () => {},
   onCloseNavigationHud = () => {},
@@ -1422,6 +1476,9 @@ const StarSystemView = ({
   onOpenMiniMap?: () => void;
   onCloseMiniMap?: () => void;
   miniMap?: ReactNode;
+  sectorMiniMapVisible?: boolean;
+  onCloseSectorMiniMap?: () => void;
+  sectorMiniMap?: ReactNode;
   navigationHudVisible?: boolean;
   onOpenNavigationHud?: () => void;
   onCloseNavigationHud?: () => void;
@@ -1565,6 +1622,13 @@ const StarSystemView = ({
               visible={miniMapVisible}
               miniMap={miniMap}
               onClose={onCloseMiniMap}
+            />
+          )}
+          {showHudControls && sectorMiniMap && (
+            <CameraPinnedSectorMiniMapHud
+              visible={sectorMiniMapVisible}
+              sectorMiniMap={sectorMiniMap}
+              onClose={onCloseSectorMiniMap}
             />
           )}
         </Canvas>
