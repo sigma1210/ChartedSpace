@@ -778,10 +778,18 @@ const cameraZ = (layout: SystemLayout, outermostScene: number): number => {
   return Math.max(starBase, outermostScene * 1.5);
 };
 
-const JumpSpaceScene = ({ onExitReached }: { onExitReached?: () => void }) => {
+const JumpSpaceScene = ({
+  active,
+  onExitReached,
+}: {
+  active: boolean;
+  onExitReached?: () => void;
+}) => {
   const { camera } = useThree();
   const exitTriggeredRef = useRef(false);
   const startTimeRef = useRef<number | null>(null);
+  const lastFrameTimeRef = useRef<number | null>(null);
+  const travelRef = useRef(0.08);
 
   const { path, tunnel, accents } = useMemo(() => {
     const pointCount = 34;
@@ -875,31 +883,43 @@ const JumpSpaceScene = ({ onExitReached }: { onExitReached?: () => void }) => {
   );
 
   useFrame((state) => {
+    if (!active) return;
     if (startTimeRef.current === null) startTimeRef.current = state.clock.elapsedTime;
-    const elapsed = state.clock.elapsedTime - startTimeRef.current;
-    const progress = Math.min(0.08 + elapsed * 0.055, 0.9);
-    const lookAhead = Math.min(progress + 0.012, 0.98);
+    if (lastFrameTimeRef.current === null) lastFrameTimeRef.current = state.clock.elapsedTime;
+    const delta = Math.min(0.05, state.clock.elapsedTime - lastFrameTimeRef.current);
+    lastFrameTimeRef.current = state.clock.elapsedTime;
+    travelRef.current += delta * 0.055;
+    const travel = travelRef.current;
+    const progress = Math.min(travel, 0.96);
+    const lookAhead = Math.min(progress + 0.012, 0.985);
     const position = path.getPointAt(progress);
     const lookAt = path.getPointAt(lookAhead);
+
+    if (travel > 0.96) {
+      const tangent = path.getTangentAt(0.96).normalize();
+      const overshoot = (travel - 0.96) * 160;
+      position.addScaledVector(tangent, overshoot);
+      lookAt.copy(position).addScaledVector(tangent, 4);
+    }
 
     camera.position.copy(position);
     camera.lookAt(lookAt);
 
-    if (!exitTriggeredRef.current && progress >= 0.82) {
+    if (!exitTriggeredRef.current && travel >= 0.5) {
       exitTriggeredRef.current = true;
       onExitReached?.();
     }
   });
 
   return (
-    <group>
+    <>
       <primitive object={tunnel} />
       {accents.map((accent, index) => (
         <primitive key={index} object={accent} />
       ))}
       <pointLight color="#ff2bd6" intensity={2.4} distance={12} position={[0, 0, 0]} />
       <pointLight color="#22d3ee" intensity={1.8} distance={14} position={[3, 2, -8]} />
-    </group>
+    </>
   );
 };
 
@@ -1338,7 +1358,11 @@ const StarSystemView = ({
   onCloseNavigationHud = () => {},
   navigationHud = null,
   sceneMode = "system",
-  onJumpExitReached,
+  showWarpLayer = false,
+  renderSystemLayer = true,
+  warpLayerOpacity = 0,
+  warpLayerActive = false,
+  onWarpExitReached,
 }: {
   world: World;
   sectorAbbr?: string | null;
@@ -1352,7 +1376,11 @@ const StarSystemView = ({
   onCloseNavigationHud?: () => void;
   navigationHud?: ReactNode;
   sceneMode?: "system" | "jump";
-  onJumpExitReached?: () => void;
+  showWarpLayer?: boolean;
+  renderSystemLayer?: boolean;
+  warpLayerOpacity?: number;
+  warpLayerActive?: boolean;
+  onWarpExitReached?: () => void;
 }) => {
   const dispatch = useAppDispatch();
   const activeWorldSectorAbbr = useSelector((s: { galaxy?: { activeWorldSectorAbbr?: string | null } }) => s.galaxy?.activeWorldSectorAbbr ?? null);
@@ -1425,59 +1453,89 @@ const StarSystemView = ({
 
   const camZ = cameraZ(layout, outermostScene);
   const cameraResetKey = `${sectorAbbr ?? ""}:${world.hex}`;
+  const renderHudLayer = showHudControls;
+  const renderSystemCanvas = renderSystemLayer || renderHudLayer;
 
   return (
-    <div style={{ width: "100%", height: "100%", background: "#020c14" }}>
-      <Canvas camera={{ position: [0, camZ * 0.4, camZ] as [number, number, number], fov: 50, far: 200 }}>
-        <SystemCameraReset
-          camZ={camZ}
-          controlsRef={controlsRef}
-          pivotTarget={pivotTarget}
-          resetKey={cameraResetKey}
-          sceneMode={sceneMode}
-        />
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[2, 3, 4]} intensity={1.4} />
-        <Starfield />
-        {sceneMode === "jump" ? (
-          <JumpSpaceScene onExitReached={onJumpExitReached} />
-        ) : (
-          <>
-            <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
-            <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
-          </>
-        )}
-        {sceneMode === "system" && (
-          <>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
-            <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />
-          </>
-        )}
-        {showHudControls && (
-          <CameraPinnedSystemHud
-            world={world}
-            miniMapVisible={miniMapVisible}
-            onOpenMiniMap={onOpenMiniMap}
-            navigationHudVisible={navigationHudVisible}
-            onOpenNavigationHud={onOpenNavigationHud}
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#020c14" }}>
+      {renderSystemCanvas && (
+        <Canvas
+          key={renderSystemLayer ? "system-layer" : "hud-layer"}
+          camera={{ position: [0, camZ * 0.4, camZ] as [number, number, number], fov: 50, far: 200 }}
+          gl={{ alpha: !renderSystemLayer }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: renderSystemLayer ? 0 : 20,
+            background: renderSystemLayer ? "#020c14" : "transparent",
+          }}
+        >
+          {renderSystemLayer && (
+            <>
+              <SystemCameraReset
+                camZ={camZ}
+                controlsRef={controlsRef}
+                pivotTarget={pivotTarget}
+                resetKey={cameraResetKey}
+                sceneMode={sceneMode}
+              />
+              <ambientLight intensity={0.6} />
+              <directionalLight position={[2, 3, 4]} intensity={1.4} />
+              <Starfield />
+              <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
+              <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
+              {sceneMode === "system" && (
+                <>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
+                  <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />
+                </>
+              )}
+            </>
+          )}
+          {showHudControls && (
+            <CameraPinnedSystemHud
+              world={world}
+              miniMapVisible={miniMapVisible}
+              onOpenMiniMap={onOpenMiniMap}
+              navigationHudVisible={navigationHudVisible}
+              onOpenNavigationHud={onOpenNavigationHud}
+            />
+          )}
+          {showHudControls && navigationHud && (
+            <CameraPinnedNavigationHud
+              visible={navigationHudVisible}
+              navigationHud={navigationHud}
+              onClose={onCloseNavigationHud}
+            />
+          )}
+          {showHudControls && miniMap && (
+            <CameraPinnedSubsectorMiniMapHud
+              visible={miniMapVisible}
+              miniMap={miniMap}
+              onClose={onCloseMiniMap}
+            />
+          )}
+        </Canvas>
+      )}
+      {showWarpLayer && (
+        <Canvas
+          camera={{ position: [0, 0, 0] as [number, number, number], fov: 72, far: 220 }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 10,
+            opacity: warpLayerOpacity,
+            pointerEvents: "none",
+          }}
+        >
+          <ambientLight intensity={0.15} />
+          <JumpSpaceScene
+            active={warpLayerActive}
+            onExitReached={onWarpExitReached}
           />
-        )}
-        {showHudControls && navigationHud && (
-          <CameraPinnedNavigationHud
-            visible={navigationHudVisible}
-            navigationHud={navigationHud}
-            onClose={onCloseNavigationHud}
-          />
-        )}
-        {showHudControls && miniMap && (
-          <CameraPinnedSubsectorMiniMapHud
-            visible={miniMapVisible}
-            miniMap={miniMap}
-            onClose={onCloseMiniMap}
-          />
-        )}
-      </Canvas>
+        </Canvas>
+      )}
     </div>
   );
 };

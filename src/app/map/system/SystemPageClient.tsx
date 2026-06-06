@@ -47,7 +47,6 @@ const subsectorFromHex = (hex: string): string => {
 
 const PLOT_TARGETS = [4, 6, 8] as const;
 const JUMP_DESTINATION_STORAGE_KEY = "charted-space:jump-destination";
-const SCENE_TRANSITION_MS = 700;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type PlotStatus = "idle" | "plotting" | "plotted" | "failed";
@@ -75,10 +74,13 @@ const CurrentSystemPageClient = () => {
     () => typeof window !== "undefined" && !!localStorage.getItem(JUMP_DESTINATION_STORAGE_KEY),
   );
   const [renderedSceneMode, setRenderedSceneMode] = useState<SceneMode>("system");
-  const [sceneTransitionVisible, setSceneTransitionVisible] = useState(false);
-  const [sceneTransitionOpaque, setSceneTransitionOpaque] = useState(false);
+  const [showWarpLayer, setShowWarpLayer] = useState(false);
+  const [warpLayerOpacity, setWarpLayerOpacity] = useState(0);
+  const [warpLayerActive, setWarpLayerActive] = useState(false);
+  const [warpExitBlankActive, setWarpExitBlankActive] = useState(false);
   const resolvingJumpRef = useRef(false);
-  const sceneTransitionRunRef = useRef(0);
+  const warpExitStartedRef = useRef(false);
+  const warpFadeTimerRef = useRef<number | null>(null);
   const lastRenderableLocationRef = useRef<{
     world: World;
     sectorAbbr: string;
@@ -143,58 +145,62 @@ const CurrentSystemPageClient = () => {
     : null;
   const navSkill = navigator?.skills.find((skill) => skill.name === "Navigation")?.level ?? 0;
   const navDM = navSkill + statDM(navigator?.intelligence ?? 7);
-  const holdJumpSceneForArrival = ship?.status !== "in_jump" && renderedSceneMode === "jump" && !world;
-  const desiredSceneMode: SceneMode = ship?.status === "in_jump" || holdJumpSceneForArrival ? "jump" : "system";
 
   useEffect(() => {
     if (!world || !shipLocation?.sectorAbbr) return;
+    if (showWarpLayer) return;
     lastRenderableLocationRef.current = {
       world,
       sectorAbbr: shipLocation.sectorAbbr,
     };
-  }, [shipLocation?.sectorAbbr, world]);
+  }, [shipLocation?.sectorAbbr, showWarpLayer, world]);
 
   useEffect(() => {
-    if (desiredSceneMode === renderedSceneMode) return undefined;
-
-    const transitionRun = sceneTransitionRunRef.current + 1;
-    sceneTransitionRunRef.current = transitionRun;
-
-    if (desiredSceneMode === "jump") {
-      setSceneTransitionVisible(false);
-      setSceneTransitionOpaque(false);
-      setRenderedSceneMode("jump");
-      return undefined;
+    if (warpFadeTimerRef.current !== null) {
+      window.clearTimeout(warpFadeTimerRef.current);
+      warpFadeTimerRef.current = null;
     }
 
-    let animationFrame = 0;
-    let switchTimer = 0;
+    if (warpExitBlankActive) {
+      setRenderedSceneMode("system");
+      setShowWarpLayer(false);
+      setWarpLayerActive(false);
+      setWarpLayerOpacity(0);
+      return;
+    }
 
-    setSceneTransitionVisible(true);
-    setSceneTransitionOpaque(false);
-    animationFrame = window.requestAnimationFrame(() => {
-      if (sceneTransitionRunRef.current !== transitionRun) return;
-      setSceneTransitionOpaque(true);
-    });
+    if (ship?.status === "in_jump") {
+      setRenderedSceneMode("jump");
+      setShowWarpLayer(true);
+      setWarpLayerActive(true);
+      window.requestAnimationFrame(() => setWarpLayerOpacity(1));
+      return;
+    }
 
-    switchTimer = window.setTimeout(() => {
-      if (sceneTransitionRunRef.current !== transitionRun) return;
-      setRenderedSceneMode(desiredSceneMode);
-      animationFrame = window.requestAnimationFrame(() => {
-        if (sceneTransitionRunRef.current !== transitionRun) return;
-        setSceneTransitionOpaque(false);
-      });
-      window.setTimeout(() => {
-        if (sceneTransitionRunRef.current !== transitionRun) return;
-        setSceneTransitionVisible(false);
-      }, SCENE_TRANSITION_MS);
-    }, SCENE_TRANSITION_MS);
+    setRenderedSceneMode("system");
 
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      window.clearTimeout(switchTimer);
-    };
-  }, [desiredSceneMode, renderedSceneMode]);
+    if (showWarpLayer) {
+      setWarpLayerActive(true);
+      setWarpLayerOpacity(1);
+      warpFadeTimerRef.current = window.setTimeout(() => {
+        setShowWarpLayer(false);
+        setWarpLayerActive(false);
+        setWarpLayerOpacity(0);
+        warpFadeTimerRef.current = null;
+      }, 700);
+      return;
+    }
+
+    setWarpLayerActive(false);
+    setWarpLayerOpacity(0);
+  }, [ship?.status, showWarpLayer, warpExitBlankActive]);
+
+  useEffect(
+    () => () => {
+      if (warpFadeTimerRef.current !== null) window.clearTimeout(warpFadeTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     dispatch(fetchShip());
@@ -320,6 +326,26 @@ const CurrentSystemPageClient = () => {
     }
   }, [dispatch, ship?.destinationWorldId]);
 
+  const handleWarpExitReached = useCallback(async () => {
+    if (resolvingJumpRef.current || warpExitStartedRef.current) return;
+    warpExitStartedRef.current = true;
+
+    setWarpExitBlankActive(true);
+    setRenderedSceneMode("system");
+    setShowWarpLayer(false);
+    setWarpLayerActive(false);
+    setWarpLayerOpacity(0);
+
+    try {
+      await delay(120);
+      await handleResolveNormalJump();
+      await delay(240);
+    } finally {
+      warpExitStartedRef.current = false;
+      setWarpExitBlankActive(false);
+    }
+  }, [handleResolveNormalJump]);
+
   const handleResolveFailedJump = useCallback(async () => {
     if (!ship?.currentWorldId || resolvingJumpRef.current) return;
     resolvingJumpRef.current = true;
@@ -393,20 +419,26 @@ const CurrentSystemPageClient = () => {
       onExecuteJump={handleExecuteJump}
     />
   );
-  const renderableLocation = world && shipLocation?.sectorAbbr
-    ? { world, sectorAbbr: shipLocation.sectorAbbr }
-    : renderedSceneMode === "jump"
-      ? lastRenderableLocationRef.current
+  const renderableLocation = showWarpLayer
+    ? lastRenderableLocationRef.current
+    : world && shipLocation?.sectorAbbr
+      ? { world, sectorAbbr: shipLocation.sectorAbbr }
       : null;
 
   return (
     <div className="starfield h-screen w-screen overflow-hidden">
-      {renderableLocation ? (
+      {warpExitBlankActive ? (
+        <div className="h-full w-full bg-black" />
+      ) : renderableLocation ? (
         <div className="relative h-full w-full">
           <StarSystemView
             world={renderableLocation.world}
             sectorAbbr={renderableLocation.sectorAbbr}
             sceneMode={renderedSceneMode}
+            showWarpLayer={showWarpLayer}
+            renderSystemLayer={!showWarpLayer}
+            warpLayerOpacity={warpLayerOpacity}
+            warpLayerActive={warpLayerActive}
             showHudControls
             miniMapVisible={miniMapVisible}
             onOpenMiniMap={() => dispatch(setSubsectorMiniMapVisible(true))}
@@ -416,15 +448,8 @@ const CurrentSystemPageClient = () => {
             onOpenNavigationHud={() => setNavigationHudVisible(true)}
             onCloseNavigationHud={() => setNavigationHudVisible(false)}
             navigationHud={navigationHud}
-            onJumpExitReached={handleResolveNormalJump}
+            onWarpExitReached={handleWarpExitReached}
           />
-          {sceneTransitionVisible && (
-            <div
-              className={`pointer-events-none absolute inset-0 z-20 bg-black transition-opacity duration-700 ease-in-out ${
-                sceneTransitionOpaque ? "opacity-100" : "opacity-0"
-              }`}
-            />
-          )}
           {ship?.status === "in_jump" && (
             <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
               <div className="hud-panel pointer-events-auto flex items-center gap-2 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-(--hud-text)">
