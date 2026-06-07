@@ -573,6 +573,7 @@ const CurrentSystemPageClient = () => {
       targetTradeCodes={targetTradeCodes}
       expectedSalePrice={expectedSalePrice}
       credits={ownerCharacter?.credits ?? null}
+      currentTurn={currentTurn}
       cargo={ship?.cargo ?? []}
       isDocked={ship?.status === "docked"}
       onCargoPurchased={handleCargoPurchased}

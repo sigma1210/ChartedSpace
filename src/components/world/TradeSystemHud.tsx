@@ -441,6 +441,7 @@ export const TradeSystemHud = ({
   targetTradeCodes,
   expectedSalePrice,
   credits,
+  currentTurn,
   cargo,
   isDocked,
   onCargoPurchased,
@@ -457,6 +458,7 @@ export const TradeSystemHud = ({
   targetTradeCodes: string[];
   expectedSalePrice: number | null;
   credits?: number | null;
+  currentTurn: number;
   cargo: CargoLotSummary[];
   isDocked: boolean;
   onCargoPurchased: () => void | Promise<void>;
@@ -466,9 +468,13 @@ export const TradeSystemHud = ({
 
   return (
     <div className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
-      <div className="flex h-4 items-center justify-between border-b border-(--hud-border) px-1.5">
+      <div className="grid grid-cols-2 gap-x-2 border-b border-(--hud-border) px-1.5 py-0.5 leading-none">
+        <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Turn</span>
+        <span className="text-right text-[8px] text-(--hud-accent)">
+          {currentTurn.toLocaleString()}
+        </span>
         <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Owner Credits</span>
-        <span className="text-[8px] text-(--hud-accent)">
+        <span className="text-right text-[8px] text-(--hud-accent)">
           {typeof credits === "number" ? `Cr ${credits.toLocaleString()}` : "Cr --"}
         </span>
       </div>
