@@ -5,7 +5,7 @@ import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } fro
 import { useSelector } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { Map, Navigation, Radar } from "lucide-react";
+import { Grid3X3, Map, Navigation, Radar } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch } from "../../store/hooks";
@@ -1252,10 +1252,12 @@ const CameraPinnedNavigationHud = ({
 const CameraPinnedSubsectorMiniMapHud = ({
   visible,
   miniMap,
+  onOpenSectorMap,
   onClose,
 }: {
   visible: boolean;
   miniMap: ReactNode;
+  onOpenSectorMap: () => void;
   onClose: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -1335,6 +1337,11 @@ const CameraPinnedSubsectorMiniMapHud = ({
           <HudHeader
             title="Subsector"
             pinned={pinned}
+            actions={(
+              <HudIconButton title="Open sector map" onClick={onOpenSectorMap}>
+                <Grid3X3 size={8} aria-hidden="true" />
+              </HudIconButton>
+            )}
             onTogglePinned={() => setPinned((value) => !value)}
             onClose={onClose}
             onDragStart={startDrag}
@@ -1350,10 +1357,12 @@ const CameraPinnedSubsectorMiniMapHud = ({
 const CameraPinnedSectorMiniMapHud = ({
   visible,
   sectorMiniMap,
+  onOpenGalaxyMap,
   onClose,
 }: {
   visible: boolean;
   sectorMiniMap: ReactNode;
+  onOpenGalaxyMap: () => void;
   onClose: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -1433,12 +1442,115 @@ const CameraPinnedSectorMiniMapHud = ({
           <HudHeader
             title="Sector"
             pinned={pinned}
+            actions={(
+              <HudIconButton title="Open galaxy map" onClick={onOpenGalaxyMap}>
+                <Grid3X3 size={8} aria-hidden="true" />
+              </HudIconButton>
+            )}
             onTogglePinned={() => setPinned((value) => !value)}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close sector HUD"
           />
           {sectorMiniMap}
+        </HudPanel>
+      </Html>
+    </group>
+  );
+};
+
+const CameraPinnedGalaxyMiniMapHud = ({
+  visible,
+  galaxyMiniMap,
+  onClose,
+}: {
+  visible: boolean;
+  galaxyMiniMap: ReactNode;
+  onClose: () => void;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+  const { camera, size } = useThree();
+  const [offset, setOffset] = useState<HudOffset>({ x: -0.12, y: -0.06 });
+  const [pinned, setPinned] = useState(true);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group || !visible) return;
+
+    const distance = 4.8;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, offset.x * width * 0.5)
+      .addScaledVector(up, offset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      setOffset(clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      }));
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [size.height, size.width]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+  };
+
+  if (!visible) return null;
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.8}>
+        <HudPanel>
+          <HudHeader
+            title="Galaxy"
+            pinned={pinned}
+            onTogglePinned={() => setPinned((value) => !value)}
+            onClose={onClose}
+            onDragStart={startDrag}
+            closeTitle="Close galaxy HUD"
+          />
+          {galaxyMiniMap}
         </HudPanel>
       </Html>
     </group>
@@ -1456,8 +1568,13 @@ const StarSystemView = ({
   onCloseMiniMap = () => {},
   miniMap = null,
   sectorMiniMapVisible = false,
+  onOpenSectorMiniMap = () => {},
   onCloseSectorMiniMap = () => {},
   sectorMiniMap = null,
+  galaxyMiniMapVisible = false,
+  onOpenGalaxyMiniMap = () => {},
+  onCloseGalaxyMiniMap = () => {},
+  galaxyMiniMap = null,
   navigationHudVisible = false,
   onOpenNavigationHud = () => {},
   onCloseNavigationHud = () => {},
@@ -1477,8 +1594,13 @@ const StarSystemView = ({
   onCloseMiniMap?: () => void;
   miniMap?: ReactNode;
   sectorMiniMapVisible?: boolean;
+  onOpenSectorMiniMap?: () => void;
   onCloseSectorMiniMap?: () => void;
   sectorMiniMap?: ReactNode;
+  galaxyMiniMapVisible?: boolean;
+  onOpenGalaxyMiniMap?: () => void;
+  onCloseGalaxyMiniMap?: () => void;
+  galaxyMiniMap?: ReactNode;
   navigationHudVisible?: boolean;
   onOpenNavigationHud?: () => void;
   onCloseNavigationHud?: () => void;
@@ -1621,6 +1743,7 @@ const StarSystemView = ({
             <CameraPinnedSubsectorMiniMapHud
               visible={miniMapVisible}
               miniMap={miniMap}
+              onOpenSectorMap={onOpenSectorMiniMap}
               onClose={onCloseMiniMap}
             />
           )}
@@ -1628,7 +1751,15 @@ const StarSystemView = ({
             <CameraPinnedSectorMiniMapHud
               visible={sectorMiniMapVisible}
               sectorMiniMap={sectorMiniMap}
+              onOpenGalaxyMap={onOpenGalaxyMiniMap}
               onClose={onCloseSectorMiniMap}
+            />
+          )}
+          {showHudControls && galaxyMiniMap && (
+            <CameraPinnedGalaxyMiniMapHud
+              visible={galaxyMiniMapVisible}
+              galaxyMiniMap={galaxyMiniMap}
+              onClose={onCloseGalaxyMiniMap}
             />
           )}
         </Canvas>

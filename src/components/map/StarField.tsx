@@ -2,11 +2,17 @@
 
 import { useAppSelector } from "../../store/hooks";
 import { selectSectorData, selectWorldDotStyle } from "../../store/selectors/galaxy.selectors";
+import type { MapMode, SectorDetail, WorldCoord, WorldDotStyle } from "../../types";
 
 interface StarFieldProps {
   sectorAbbr: string;
   activeKey: string;
   onSelectKey: (key: string) => void;
+}
+
+interface StarFieldViewProps extends StarFieldProps {
+  sector: SectorDetail | undefined;
+  getStyle: (coord: WorldCoord, mode: MapMode) => WorldDotStyle;
 }
 
 const KEYS = "ABCDEFGHIJKLMNOP";
@@ -18,10 +24,13 @@ const ROWS = 10;
 const SVG_W = hexSvgWidth(COLS);
 const SVG_H = hexSvgHeight(ROWS);
 
-const StarField = ({ sectorAbbr, activeKey, onSelectKey }: StarFieldProps) => {
-  const sector   = useAppSelector(selectSectorData(sectorAbbr));
-  const getStyle = useAppSelector(selectWorldDotStyle);
-
+export const StarFieldView = ({
+  sectorAbbr,
+  activeKey,
+  onSelectKey,
+  sector,
+  getStyle,
+}: StarFieldViewProps) => {
   if (!sector) return null;
 
   return (
@@ -70,6 +79,21 @@ const StarField = ({ sectorAbbr, activeKey, onSelectKey }: StarFieldProps) => {
         );
       })}
     </div>
+  );
+};
+
+const StarField = ({ sectorAbbr, activeKey, onSelectKey }: StarFieldProps) => {
+  const sector = useAppSelector(selectSectorData(sectorAbbr));
+  const getStyle = useAppSelector(selectWorldDotStyle);
+
+  return (
+    <StarFieldView
+      sectorAbbr={sectorAbbr}
+      activeKey={activeKey}
+      onSelectKey={onSelectKey}
+      sector={sector}
+      getStyle={getStyle}
+    />
   );
 };
 export default StarField;

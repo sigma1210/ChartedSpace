@@ -2,11 +2,11 @@
 
 import { motion } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { selectAllSectors, selectActiveSectorAbbr } from "../../store/selectors/galaxy.selectors";
+import { selectAllSectors, selectActiveSectorAbbr, selectWorldDotStyle } from "../../store/selectors/galaxy.selectors";
 import { setActiveSector } from "../../store/slices/galaxySlice";
 import { toggleGalaxyMiniMap } from "../../store/slices/uiSlice";
-import type { SectorMeta } from "../../types";
-import GalaxyStarField from "./GalaxyStarField";
+import type { MapMode, SectorDetail, SectorMeta, WorldCoord, WorldDotStyle } from "../../types";
+import { GalaxyStarFieldView } from "./GalaxyStarField";
 
 const COORD_MIN = -4;
 const GRID_SIZE = 9;
@@ -14,12 +14,25 @@ const TRANSITION = { duration: 0.35, ease: [0.4, 0, 0.2, 1] } as const;
 
 const sectorLabel = (s: SectorMeta) => s.Names[0]?.Text ?? s.Abbreviation;
 
-const GalaxyMiniMap = () => {
-  const dispatch         = useAppDispatch();
-  const allSectors       = useAppSelector(selectAllSectors);
-  const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
-  const visible          = useAppSelector(s => s.ui.showGalaxyMiniMap);
-
+export const GalaxyMiniMapView = ({
+  visible,
+  allSectors,
+  activeSectorAbbr,
+  sectorData,
+  getStyle,
+  scale = 1,
+  onToggle,
+  onSelectSector,
+}: {
+  visible: boolean;
+  allSectors: SectorMeta[];
+  activeSectorAbbr: string;
+  sectorData: Record<string, SectorDetail | undefined>;
+  getStyle: (coord: WorldCoord, mode: MapMode) => WorldDotStyle;
+  scale?: number;
+  onToggle?: () => void;
+  onSelectSector: (sectorAbbr: string) => void;
+}) => {
   const sectorByCoord = new Map(allSectors.map(s => [`${s.X},${s.Y}`, s]));
 
   return (
@@ -35,13 +48,15 @@ const GalaxyMiniMap = () => {
             Charted Space
           </span>
         )}
-        <button
-          onClick={() => dispatch(toggleGalaxyMiniMap())}
-          className="font-mono text-[9px] text-(--hud-text-dim) hover:text-(--hud-text) transition-colors"
-          title={visible ? "Hide galaxy map" : "Show galaxy map"}
-        >
-          {visible ? "✕" : "◈"}
-        </button>
+        {onToggle && (
+          <button
+            onClick={onToggle}
+            className="font-mono text-[9px] text-(--hud-text-dim) hover:text-(--hud-text) transition-colors"
+            title={visible ? "Hide galaxy map" : "Show galaxy map"}
+          >
+            {visible ? "✕" : "◈"}
+          </button>
+        )}
       </div>
 
       <motion.div
@@ -66,17 +81,24 @@ const GalaxyMiniMap = () => {
                   key={`${gx},${gy}`}
                   title={s ? sectorLabel(s) : ""}
                   disabled={!s}
-                  onClick={() => s && dispatch(setActiveSector(s.Abbreviation))}
+                  onClick={() => s && onSelectSector(s.Abbreviation)}
                   className={[
-                    "relative overflow-hidden w-8.25 aspect-258/372 transition-colors",
+                    "relative aspect-258/372 overflow-hidden transition-colors",
                     s
                       ? isActive
                         ? "bg-(--hud-accent)/8 border border-(--hud-accent)"
                         : "bg-(--hud-surface) border border-transparent hover:border-(--hud-border) cursor-pointer"
                       : "bg-(--hud-bg) border border-transparent cursor-default",
                   ].join(" ")}
+                  style={{ width: `${2.0625 * scale}rem` }}
                 >
-                  {s && <GalaxyStarField sectorAbbr={s.Abbreviation} />}
+                  {s && (
+                    <GalaxyStarFieldView
+                      sectorAbbr={s.Abbreviation}
+                      sector={sectorData[s.Abbreviation]}
+                      getStyle={getStyle}
+                    />
+                  )}
                 </button>
               );
             })
@@ -84,6 +106,27 @@ const GalaxyMiniMap = () => {
         </div>
       </motion.div>
     </motion.div>
+  );
+};
+
+const GalaxyMiniMap = () => {
+  const dispatch = useAppDispatch();
+  const allSectors = useAppSelector(selectAllSectors);
+  const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
+  const visible = useAppSelector(s => s.ui.showGalaxyMiniMap);
+  const sectorData = useAppSelector(s => s.galaxy.sectorData);
+  const getStyle = useAppSelector(selectWorldDotStyle);
+
+  return (
+    <GalaxyMiniMapView
+      visible={visible}
+      allSectors={allSectors}
+      activeSectorAbbr={activeSectorAbbr}
+      sectorData={sectorData}
+      getStyle={getStyle}
+      onToggle={() => dispatch(toggleGalaxyMiniMap())}
+      onSelectSector={(sectorAbbr) => dispatch(setActiveSector(sectorAbbr))}
+    />
   );
 };
 

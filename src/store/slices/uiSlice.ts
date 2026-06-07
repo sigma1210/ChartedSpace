@@ -130,6 +130,9 @@ const uiSlice = createSlice({
     toggleGalaxyMiniMap(state) {
       state.showGalaxyMiniMap = !state.showGalaxyMiniMap;
     },
+    setGalaxyMiniMapVisible(state, action: PayloadAction<boolean>) {
+      state.showGalaxyMiniMap = action.payload;
+    },
     toggleSectorMiniMap(state) {
       state.showSectorMiniMap = !state.showSectorMiniMap;
     },
@@ -170,6 +173,7 @@ export const {
   clearJumpDestination,
   openCrewManagement,
   toggleGalaxyMiniMap,
+  setGalaxyMiniMapVisible,
   toggleSectorMiniMap,
   toggleSubsectorMiniMap,
   setSubsectorMiniMapVisible,

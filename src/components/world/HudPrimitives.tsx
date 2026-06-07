@@ -48,6 +48,7 @@ export const HudPanel = ({
 
 export const HudHeader = ({
   title,
+  actions,
   pinned,
   onTogglePinned,
   onClose,
@@ -55,6 +56,7 @@ export const HudHeader = ({
   closeTitle = "Close HUD",
 }: {
   title?: string;
+  actions?: ReactNode;
   pinned: boolean;
   onTogglePinned: () => void;
   onClose?: () => void;
@@ -74,6 +76,7 @@ export const HudHeader = ({
       )}
     </div>
     <div className="flex items-center gap-1">
+      {actions}
       <HudIconButton
         title={pinned ? "Unpin HUD" : "Pin HUD"}
         onClick={onTogglePinned}
