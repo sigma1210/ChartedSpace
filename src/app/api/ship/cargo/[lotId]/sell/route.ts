@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUser } from "@/actions/user";
 import { getClerkId } from "@/lib/devAuth";
-import { deriveTradeClassifications, calculateSalePrice } from "@/lib/trade";
+import { deriveTradeClassifications, calculateSalePrice, filterTradeCodes } from "@/lib/trade";
 import { uwpVal } from "@/lib/worldMap";
 
 const UWP_SELECT = {
@@ -60,12 +60,18 @@ export const POST = async (_req: Request, { params }: Params) => {
     const ownerCharacterId = lot.ship.crew[0]?.characterId ?? null;
     if (!ownerCharacterId) return NextResponse.json({ error: "No owner-operator found" }, { status: 400 });
 
-    const originCodes = deriveTradeClassifications(lot.originWorld);
+    const originCodes = filterTradeCodes([lot.commodity]);
+    const fallbackOriginCodes = deriveTradeClassifications(lot.originWorld);
     const destCodes   = deriveTradeClassifications(lot.ship.currentWorld);
     const originTL    = uwpVal(lot.originWorld.techLevel);
     const destTL      = uwpVal(lot.ship.currentWorld.techLevel);
 
-    const salePricePerTon = calculateSalePrice(originCodes, originTL, destCodes, destTL);
+    const salePricePerTon = calculateSalePrice(
+      originCodes.length > 0 ? originCodes : fallbackOriginCodes,
+      originTL,
+      destCodes,
+      destTL,
+    );
     const saleProceeds    = Math.round(salePricePerTon * lot.tons);
     const profitLoss      = saleProceeds - lot.purchasePrice;
 

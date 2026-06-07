@@ -116,11 +116,9 @@ export const useJumpTurnController = () => {
       if (reason) messages.push(reason);
 
       if (ctx) {
-        const endResults = await fireEndTurn(ctx);
-        const startResults = await fireStartTurn({
-          ...ctx,
-          currentTurn: currentTurn + 1,
-        });
+        const nextCtx = { ...ctx, currentTurn: currentTurn + 1 };
+        const endResults = await fireEndTurn(nextCtx);
+        const startResults = await fireStartTurn(nextCtx);
         [...endResults, ...startResults].forEach((r) =>
           messages.push(r.description),
         );
@@ -159,11 +157,10 @@ export const useJumpTurnController = () => {
     ];
 
     if (ctx) {
-      const results = await fireStartJumpTurn({
-        ...ctx,
-        currentTurn: currentTurn + 1,
-      });
-      results.forEach((r) => messages.push(r.description));
+      const nextCtx = { ...ctx, currentTurn: currentTurn + 1 };
+      const endResults = await fireEndTurn(nextCtx);
+      const results = await fireStartJumpTurn(nextCtx);
+      [...endResults, ...results].forEach((r) => messages.push(r.description));
     }
 
     await dispatch(fetchShip());
@@ -204,11 +201,9 @@ export const useJumpTurnController = () => {
     const messages: string[] = ["Jump complete. Arrived at destination."];
 
     if (ctx) {
-      const endResults = await fireEndTurn(ctx);
-      const startResults = await fireStartTurn({
-        ...ctx,
-        currentTurn: currentTurn + 1,
-      });
+      const nextCtx = { ...ctx, currentTurn: currentTurn + 1 };
+      const endResults = await fireEndTurn(nextCtx);
+      const startResults = await fireStartTurn(nextCtx);
       [...endResults, ...startResults].forEach((r) =>
         messages.push(r.description),
       );

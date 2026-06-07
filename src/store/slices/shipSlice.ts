@@ -21,6 +21,9 @@ export interface CargoLotSummary {
   tons: number;
   purchasePrice: number;
   originWorldName: string | null;
+  salePricePerTon: number | null;
+  saleProceeds: number | null;
+  profitLoss: number | null;
 }
 
 export interface ShipSummary {

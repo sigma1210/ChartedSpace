@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/turns/index";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import {
@@ -14,6 +15,7 @@ import {
 import { fetchShip, invalidateShip } from "../../../store/slices/shipSlice";
 import { fetchTurn, advanceTurn } from "../../../store/slices/turnSlice";
 import { fetchCharacters, invalidateCharacters } from "../../../store/slices/characterSlice";
+import { selectCurrentTurn } from "../../../store/selectors/turn.selectors";
 import { setActiveCharacter, setGalaxyMiniMapVisible, setSectorMiniMapVisible, setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
 import {
   selectActiveSectorAbbr,
@@ -52,6 +54,12 @@ import {
   type JumpRangeTarget,
 } from "../../../lib/jumpRange";
 import { roll2d6, statDM } from "../../../lib/dice";
+import {
+  fireEndTurn,
+  fireStartJumpTurn,
+  fireStartTurn,
+  type TurnEventContext,
+} from "../../../lib/turns/handlers";
 import type { World } from "../../../types";
 
 const subsectorFromHex = (hex: string): string => {
@@ -75,6 +83,7 @@ const CurrentSystemPageClient = () => {
   const ship = useAppSelector(selectShip);
   const characters = useAppSelector(selectCharacters);
   const currentCharacter = useAppSelector(selectCurrentCharacter);
+  const currentTurn = useAppSelector(selectCurrentTurn);
   const shipColor = useAppSelector(selectShipColor);
   const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
   const activeSubsectorKey = useAppSelector(selectActiveSubsectorKey);
@@ -103,6 +112,7 @@ const CurrentSystemPageClient = () => {
   const [tradeHudVisible, setTradeHudVisible] = useState(false);
   const [selectedDestinationKey, setSelectedDestinationKey] = useState<string | null>(null);
   const [plotStatus, setPlotStatus] = useState<PlotStatus>("idle");
+  const [jumpExecuting, setJumpExecuting] = useState(false);
   const [hasStoredJumpDestination, setHasStoredJumpDestination] = useState(
     () => typeof window !== "undefined" && !!localStorage.getItem(JUMP_DESTINATION_STORAGE_KEY),
   );
@@ -184,6 +194,36 @@ const CurrentSystemPageClient = () => {
     : null;
   const fallbackCharacter = characters.find((character) => character.sectorAbbr && character.hex) ?? characters[0] ?? null;
   const hudCharacter = currentCharacter ?? ownerCharacter ?? fallbackCharacter;
+  const buildTurnContext = useCallback(
+    (previousStatus: "docked" | "in_jump"): TurnEventContext | null => {
+      if (!ship) return null;
+      return { currentTurn, previousStatus, ship, ownerCharacter };
+    },
+    [currentTurn, ownerCharacter, ship],
+  );
+  const refreshShipAndCharacters = useCallback(async () => {
+    await dispatch(invalidateShip());
+    await dispatch(fetchShip());
+    await dispatch(invalidateCharacters());
+    await dispatch(fetchCharacters());
+  }, [dispatch]);
+  const runWorldTurnLifecycle = useCallback(
+    async (previousStatus: "docked" | "in_jump") => {
+      const ctx = buildTurnContext(previousStatus);
+      if (!ctx) return;
+      const nextCtx = { ...ctx, currentTurn: currentTurn + 1 };
+      await fireEndTurn(nextCtx);
+      await fireStartTurn(nextCtx);
+    },
+    [buildTurnContext, currentTurn],
+  );
+  const runJumpStartLifecycle = useCallback(async () => {
+    const ctx = buildTurnContext("docked");
+    if (!ctx) return;
+    const nextCtx = { ...ctx, currentTurn: currentTurn + 1 };
+    await fireEndTurn(nextCtx);
+    await fireStartJumpTurn(nextCtx);
+  }, [buildTurnContext, currentTurn]);
 
   useEffect(() => {
     if (!world || !shipLocation?.sectorAbbr) return;
@@ -322,36 +362,41 @@ const CurrentSystemPageClient = () => {
           shipUpdate: { status: "docked", currentWorldId: ship.currentWorldId },
         }),
       );
-      await dispatch(fetchShip());
-      await dispatch(invalidateCharacters());
-      await dispatch(fetchCharacters());
+      await runWorldTurnLifecycle("docked");
+      await refreshShipAndCharacters();
     }
 
     setPlotStatus(plotted ? "plotted" : "failed");
   };
 
   const handleExecuteJump = async () => {
-    if (!effectiveSelectedDestination || !ship) return;
+    if (!effectiveSelectedDestination || !ship || jumpExecuting) return;
+    setJumpExecuting(true);
 
-    localStorage.setItem(
-      JUMP_DESTINATION_STORAGE_KEY,
-      JSON.stringify({
-        sectorAbbr: effectiveSelectedDestination.sectorAbbr,
-        hex: effectiveSelectedDestination.hex,
-      }),
-    );
-    setHasStoredJumpDestination(true);
+    try {
+      localStorage.setItem(
+        JUMP_DESTINATION_STORAGE_KEY,
+        JSON.stringify({
+          sectorAbbr: effectiveSelectedDestination.sectorAbbr,
+          hex: effectiveSelectedDestination.hex,
+        }),
+      );
+      setHasStoredJumpDestination(true);
 
-    await dispatch(
-      advanceTurn({
-        shipUpdate: {
-          status: "in_jump",
-          destinationWorldHex: effectiveSelectedDestination.hex,
-          destinationWorldSectorAbbr: effectiveSelectedDestination.sectorAbbr,
-        },
-      }),
-    );
-    await dispatch(fetchShip());
+      await dispatch(
+        advanceTurn({
+          shipUpdate: {
+            status: "in_jump",
+            destinationWorldHex: effectiveSelectedDestination.hex,
+            destinationWorldSectorAbbr: effectiveSelectedDestination.sectorAbbr,
+          },
+        }),
+      );
+      await runJumpStartLifecycle();
+      await refreshShipAndCharacters();
+    } finally {
+      setJumpExecuting(false);
+    }
   };
 
   const handleResolveNormalJump = useCallback(async () => {
@@ -371,15 +416,14 @@ const CurrentSystemPageClient = () => {
       );
       localStorage.removeItem(JUMP_DESTINATION_STORAGE_KEY);
       setHasStoredJumpDestination(false);
-      await dispatch(fetchShip());
-      await dispatch(invalidateCharacters());
-      await dispatch(fetchCharacters());
+      await runWorldTurnLifecycle("in_jump");
+      await refreshShipAndCharacters();
       setSelectedDestinationKey(null);
       setPlotStatus("idle");
     } finally {
       resolvingJumpRef.current = false;
     }
-  }, [dispatch, ship?.destinationWorldId]);
+  }, [dispatch, refreshShipAndCharacters, runWorldTurnLifecycle, ship?.destinationWorldId]);
 
   const handleWarpExitReached = useCallback(async () => {
     if (resolvingJumpRef.current || warpExitStartedRef.current) return;
@@ -418,20 +462,18 @@ const CurrentSystemPageClient = () => {
       );
       localStorage.removeItem(JUMP_DESTINATION_STORAGE_KEY);
       setHasStoredJumpDestination(false);
-      await dispatch(fetchShip());
+      await runWorldTurnLifecycle("docked");
+      await refreshShipAndCharacters();
       setSelectedDestinationKey(null);
       setPlotStatus("idle");
     } finally {
       resolvingJumpRef.current = false;
     }
-  }, [dispatch, ship?.currentWorldId]);
+  }, [dispatch, refreshShipAndCharacters, runWorldTurnLifecycle, ship?.currentWorldId]);
 
   const handleCargoPurchased = useCallback(async () => {
-    await dispatch(invalidateShip());
-    await dispatch(fetchShip());
-    await dispatch(invalidateCharacters());
-    await dispatch(fetchCharacters());
-  }, [dispatch]);
+    await refreshShipAndCharacters();
+  }, [refreshShipAndCharacters]);
 
   const sectorByCoord = new Map(allSectors.map((sector) => [`${sector.X},${sector.Y}`, sector]));
   const nav = buildNavTargets(
@@ -502,6 +544,7 @@ const CurrentSystemPageClient = () => {
       loading={jumpTargetsLoading}
       error={jumpTargetsError}
       plotStatus={effectivePlotStatus}
+      actionBusy={jumpExecuting}
       onSelect={handleSelectDestination}
       onPlotCourse={handlePlotCourse}
       onExecuteJump={handleExecuteJump}
@@ -529,7 +572,7 @@ const CurrentSystemPageClient = () => {
       targetWorldLocation={targetTradeWorldLocation}
       targetTradeCodes={targetTradeCodes}
       expectedSalePrice={expectedSalePrice}
-      credits={currentCharacter?.credits ?? null}
+      credits={ownerCharacter?.credits ?? null}
       cargo={ship?.cargo ?? []}
       isDocked={ship?.status === "docked"}
       onCargoPurchased={handleCargoPurchased}

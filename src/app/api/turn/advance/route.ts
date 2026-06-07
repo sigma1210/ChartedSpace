@@ -52,53 +52,81 @@ export const POST = async (request: Request) => {
     if (shipUpdate?.jumpArrivesTurn !== undefined) shipData.jumpArrivesTurn = shipUpdate.jumpArrivesTurn;
 
     const hasShipUpdate = Object.keys(shipData).length > 0;
-    const enteringJump  = shipData.status === "in_jump";
+    const requestedEnterJump = shipData.status === "in_jump";
 
     // Resolve fuel cost and owner if we're about to enter jump
-    let fuelCost    = 0;
-    let ownerId: string | null = null;
-
-    if (enteringJump) {
-      const ship = await prisma.ship.findFirst({
-        where: { userId: dbUser.id },
-        select: {
-          type: true,
-          crew: {
-            where:  { isOwnerOperator: true },
-            select: { characterId: true },
+    if (requestedEnterJump) {
+      const currentTurn = await prisma.$transaction(async (tx) => {
+        const ship = await tx.ship.findFirst({
+          where: { userId: dbUser.id },
+          select: {
+            id: true,
+            status: true,
+            type: true,
+            crew: {
+              where: { isOwnerOperator: true },
+              select: { characterId: true },
+            },
           },
-        },
+        });
+
+        if (!ship) throw new Error("No ship found");
+
+        const userTurn = await tx.user.findUnique({
+          where: { id: dbUser.id },
+          select: { currentTurn: true },
+        });
+        const currentTurnValue = userTurn?.currentTurn ?? 1;
+
+        if (ship.status === "in_jump") {
+          return currentTurnValue;
+        }
+
+        const transition = await tx.ship.updateMany({
+          where: { id: ship.id, status: { not: "in_jump" } },
+          data: shipData,
+        });
+        if (transition.count === 0) {
+          return currentTurnValue;
+        }
+
+        const typeData = (shipTypes as Array<{ type: string; fuelCostPerJump?: number }>)
+          .find(s => s.type === ship.type);
+        const fuelCost = typeData?.fuelCostPerJump ?? 0;
+        const ownerId = ship.crew[0]?.characterId ?? null;
+
+        if (fuelCost > 0 && !ownerId) {
+          throw new Error("No owner-operator found for fuel payment.");
+        }
+
+        if (fuelCost > 0 && ownerId) {
+          const owner = await tx.character.findUnique({
+            where: { id: ownerId },
+            select: { credits: true },
+          });
+          if (!owner || owner.credits < fuelCost) {
+            throw new Error(`Insufficient credits for fuel. Need Cr${fuelCost.toLocaleString()}.`);
+          }
+
+          await tx.character.update({
+            where: { id: ownerId },
+            data: { credits: { decrement: fuelCost } },
+          });
+        }
+
+        const updated = await tx.user.update({
+          where: { id: dbUser.id },
+          data: { currentTurn: { increment: 1 } },
+          select: { currentTurn: true },
+        });
+
+        return updated.currentTurn;
       });
 
-      const typeData = (shipTypes as Array<{ type: string; fuelCostPerJump?: number }>)
-        .find(s => s.type === ship?.type);
-      fuelCost = typeData?.fuelCostPerJump ?? 0;
-      ownerId  = ship?.crew[0]?.characterId ?? null;
-
-      // Pre-flight credit check
-      if (fuelCost > 0 && ownerId) {
-        const owner = await prisma.character.findUnique({
-          where:  { id: ownerId },
-          select: { credits: true },
-        });
-        if (!owner || owner.credits < fuelCost) {
-          return NextResponse.json(
-            { error: `Insufficient credits for fuel. Need Cr${fuelCost.toLocaleString()}.` },
-            { status: 402 },
-          );
-        }
-      }
+      return NextResponse.json({ currentTurn });
     }
 
     const currentTurn = await prisma.$transaction(async (tx) => {
-      // Deduct fuel cost atomically with ship state change
-      if (enteringJump && fuelCost > 0 && ownerId) {
-        await tx.character.update({
-          where: { id: ownerId },
-          data:  { credits: { decrement: fuelCost } },
-        });
-      }
-
       const updated = await tx.user.update({
         where:  { id: dbUser.id },
         data:   { currentTurn: { increment: 1 } },
@@ -114,6 +142,17 @@ export const POST = async (request: Request) => {
 
     return NextResponse.json({ currentTurn });
   } catch (err) {
+    if (err instanceof Error) {
+      if (err.message === "No owner-operator found for fuel payment.") {
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
+      if (err.message.startsWith("Insufficient credits for fuel.")) {
+        return NextResponse.json({ error: err.message }, { status: 402 });
+      }
+      if (err.message === "No ship found") {
+        return NextResponse.json({ error: err.message }, { status: 404 });
+      }
+    }
     console.error("[POST /api/turn/advance]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

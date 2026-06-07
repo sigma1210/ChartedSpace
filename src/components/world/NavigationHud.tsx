@@ -30,6 +30,7 @@ interface NavigationHudProps {
   loading: boolean;
   error: boolean;
   plotStatus: "idle" | "plotting" | "plotted" | "failed";
+  actionBusy?: boolean;
   onSelect: (target: JumpRangeTarget) => void;
   onPlotCourse: () => void;
   onExecuteJump: () => void;
@@ -42,6 +43,7 @@ const NavigationHud = ({
   loading,
   error,
   plotStatus,
+  actionBusy = false,
   onSelect,
   onPlotCourse,
   onExecuteJump,
@@ -57,9 +59,10 @@ const NavigationHud = ({
         : plotStatus === "plotted"
           ? Check
           : Circle;
-  const actionDisabled = !selected || plotStatus === "plotting";
+  const actionDisabled = !selected || plotStatus === "plotting" || actionBusy;
   const handleAction = () => {
     if (!selected) return;
+    if (actionBusy) return;
     if (plotStatus === "plotted") {
       onExecuteJump();
       return;
@@ -194,7 +197,7 @@ const NavigationHud = ({
           <ActionIcon
             size={10}
             aria-hidden="true"
-            className={plotStatus === "plotting" ? "animate-spin" : undefined}
+            className={plotStatus === "plotting" || actionBusy ? "animate-spin" : undefined}
           />
           <span className="truncate">{actionLabel}</span>
         </button>

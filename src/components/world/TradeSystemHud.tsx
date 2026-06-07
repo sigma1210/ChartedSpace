@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { World } from "../../types";
 import type { CargoLotSummary } from "../../store/slices/shipSlice";
 import { TRADE_CODE_LABELS, type WorldLocation } from "../../store/selectors/galaxy.selectors";
+import { calculateSalePrice } from "../../lib/trade";
 import { uwpVal } from "../../lib/worldMap";
 
 type TradeTab = "speculation" | "buy" | "sell";
@@ -98,6 +99,94 @@ const TradeWorldPanel = ({
       ) : (
         <p className="font-mono text-[8px] italic text-(--hud-text-dim)">{empty}</p>
       )}
+    </div>
+  );
+};
+
+const SpeculationPanel = ({
+  activeWorld,
+  activeWorldName,
+  activeWorldLocation,
+  activeTradeCodes,
+  activeWorldCost,
+  targetWorld,
+  targetWorldName,
+  targetWorldLocation,
+  targetTradeCodes,
+  expectedSalePrice,
+}: {
+  activeWorld: World | null;
+  activeWorldName: string | null;
+  activeWorldLocation: WorldLocation | null;
+  activeTradeCodes: string[];
+  activeWorldCost: number | null;
+  targetWorld: World | null;
+  targetWorldName: string | null;
+  targetWorldLocation: WorldLocation | null;
+  targetTradeCodes: string[];
+  expectedSalePrice: number | null;
+}) => {
+  const commodityPrices = activeWorld && targetWorld
+    ? activeTradeCodes.map((code) => ({
+        code,
+        price: Math.round(calculateSalePrice(
+          [code],
+          uwpVal(activeWorld.uwp.techLevel),
+          targetTradeCodes,
+          uwpVal(targetWorld.uwp.techLevel),
+        )),
+      }))
+    : [];
+
+  return (
+    <div className="divide-y divide-(--hud-border)">
+      <TradeWorldPanel
+        label="Origin"
+        world={activeWorld}
+        worldName={activeWorldName}
+        location={activeWorldLocation}
+        tradeCodes={activeTradeCodes}
+        price={activeWorldCost}
+        priceLabel="Market"
+        empty="No world selected"
+      />
+      <TradeWorldPanel
+        label="Destination"
+        world={targetWorld}
+        worldName={targetWorldName}
+        location={targetWorldLocation}
+        tradeCodes={targetTradeCodes}
+        price={expectedSalePrice}
+        priceLabel="World Mix"
+        empty="Hover a world"
+      />
+      <div className="p-2">
+        <p className="mb-1 text-[7px] uppercase tracking-widest text-(--hud-text-dim)">
+          Commodity Sale
+        </p>
+        {commodityPrices.length === 0 ? (
+          <p className="font-mono text-[8px] italic uppercase tracking-wider text-(--hud-text-dim)">
+            Select origin and destination
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {commodityPrices.map(({ code, price }) => (
+              <div
+                key={code}
+                className="flex items-center gap-2 border border-(--hud-border) bg-(--hud-bg)/35 px-1.5 py-0.5 font-mono text-[8px]"
+              >
+                <CodeBadge code={code} />
+                <span className="min-w-0 flex-1 truncate text-(--hud-text-dim)">
+                  {TRADE_CODE_LABELS[code] ?? code}
+                </span>
+                <span className="shrink-0 text-(--hud-accent)">
+                  Cr{price.toLocaleString()}/T
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -324,7 +413,7 @@ const SellPanel = ({
                   {lot.tons}T
                 </span>
                 <span className="min-w-0 flex-1 truncate text-(--hud-text-dim)">
-                  Cr{lot.purchasePrice.toLocaleString()}
+                  Buy Cr{lot.purchasePrice.toLocaleString()}
                 </span>
                 <button
                   type="button"
@@ -340,6 +429,34 @@ const SellPanel = ({
                   Origin {lot.originWorldName}
                 </p>
               )}
+              <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 font-mono text-[7px] uppercase tracking-wider">
+                <span className="text-(--hud-text-dim)">Sell</span>
+                <span className="text-right text-(--hud-text)">
+                  {lot.saleProceeds === null ? "Cr --" : `Cr${lot.saleProceeds.toLocaleString()}`}
+                </span>
+                <span className="text-(--hud-text-dim)">Profit</span>
+                <span
+                  className={`text-right ${
+                    lot.profitLoss === null
+                      ? "text-(--hud-text-dim)"
+                      : lot.profitLoss >= 0
+                        ? "text-(--hud-accent)"
+                        : "text-(--hud-error)"
+                  }`}
+                >
+                  {lot.profitLoss === null
+                    ? "Cr --"
+                    : `${lot.profitLoss >= 0 ? "+" : "-"}Cr${Math.abs(lot.profitLoss).toLocaleString()}`}
+                </span>
+                {lot.salePricePerTon !== null && (
+                  <>
+                    <span className="text-(--hud-text-dim)">Rate</span>
+                    <span className="text-right text-(--hud-text-dim)">
+                      Cr{lot.salePricePerTon.toLocaleString()}/T
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           ))}
 
@@ -390,7 +507,7 @@ export const TradeSystemHud = ({
   return (
     <div className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
       <div className="flex h-4 items-center justify-between border-b border-(--hud-border) px-1.5">
-        <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Credits</span>
+        <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Owner Credits</span>
         <span className="text-[8px] text-(--hud-accent)">
           {typeof credits === "number" ? `Cr ${credits.toLocaleString()}` : "Cr --"}
         </span>
@@ -418,28 +535,18 @@ export const TradeSystemHud = ({
 
       <div className="h-40 overflow-y-auto">
         {activeTab === "speculation" && (
-          <div className="divide-y divide-(--hud-border)">
-            <TradeWorldPanel
-              label="Origin"
-              world={activeWorld}
-              worldName={activeWorldName}
-              location={activeWorldLocation}
-              tradeCodes={activeTradeCodes}
-              price={activeWorldCost}
-              priceLabel="Market"
-              empty="No world selected"
-            />
-            <TradeWorldPanel
-              label="Destination"
-              world={targetWorld}
-              worldName={targetWorldName}
-              location={targetWorldLocation}
-              tradeCodes={targetTradeCodes}
-              price={expectedSalePrice}
-              priceLabel="Expected Sale"
-              empty="Hover a world"
-            />
-          </div>
+          <SpeculationPanel
+            activeWorld={activeWorld}
+            activeWorldName={activeWorldName}
+            activeWorldLocation={activeWorldLocation}
+            activeTradeCodes={activeTradeCodes}
+            activeWorldCost={activeWorldCost}
+            targetWorld={targetWorld}
+            targetWorldName={targetWorldName}
+            targetWorldLocation={targetWorldLocation}
+            targetTradeCodes={targetTradeCodes}
+            expectedSalePrice={expectedSalePrice}
+          />
         )}
 
         {activeTab === "buy" && <BuyPanel onCargoPurchased={onCargoPurchased} />}

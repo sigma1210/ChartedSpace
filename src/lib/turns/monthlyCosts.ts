@@ -1,7 +1,7 @@
 import { onEndTurn } from "./handlers";
 
 onEndTurn(async (ctx) => {
-  if (ctx.currentTurn % 2 !== 0) return null;
+  if (ctx.currentTurn % 4 !== 0) return null;
 
   const owner = ctx.ship.crew.find(c => c.isOwnerOperator);
   if (!owner?.characterId) return null;
@@ -38,4 +38,4 @@ onEndTurn(async (ctx) => {
     type: "world_event",
     description: lines.join(" "),
   };
-});
+}, "monthly-costs");

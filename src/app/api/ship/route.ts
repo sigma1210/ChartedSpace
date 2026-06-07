@@ -3,6 +3,18 @@ import { prisma } from "@/lib/prisma";
 import { getUser } from "@/actions/user";
 import { getClerkId } from "@/lib/devAuth";
 import shipTypes from "@/data/classic/ships.json";
+import { calculateSalePrice, deriveTradeClassifications, filterTradeCodes } from "@/lib/trade";
+import { uwpVal } from "@/lib/worldMap";
+
+const UWP_SELECT = {
+  size:          true,
+  atmosphere:    true,
+  hydrographics: true,
+  population:    true,
+  government:    true,
+  lawLevel:      true,
+  techLevel:     true,
+} as const;
 
 const resolveDbUser = async () => {
   const clerkId = await getClerkId();
@@ -37,6 +49,7 @@ export const GET = async () => {
           select: {
             name:   true,
             hex:    true,
+            ...UWP_SELECT,
             sector: { select: { abbreviation: true } },
           },
         },
@@ -59,7 +72,7 @@ export const GET = async () => {
             commodity:    true,
             tons:         true,
             purchasePrice: true,
-            originWorld:  { select: { name: true } },
+            originWorld:  { select: { name: true, ...UWP_SELECT } },
           },
           orderBy: { acquiredAt: "asc" },
         },
@@ -97,13 +110,32 @@ export const GET = async () => {
           keySkillName:    c.keySkillName,
           keySkillLevel:   c.keySkillLevel,
         })),
-        cargo:          ship.cargo.map(lot => ({
-          id:              lot.id,
-          commodity:       lot.commodity,
-          tons:            lot.tons,
-          purchasePrice:   lot.purchasePrice,
-          originWorldName: lot.originWorld?.name ?? null,
-        })),
+        cargo:          ship.cargo.map(lot => {
+          const commodityCodes = filterTradeCodes([lot.commodity]);
+          const fallbackOriginCodes = deriveTradeClassifications(lot.originWorld);
+          const originCodes = commodityCodes.length > 0 ? commodityCodes : fallbackOriginCodes;
+          const salePricePerTon = ship.currentWorld
+            ? Math.round(calculateSalePrice(
+                originCodes,
+                uwpVal(lot.originWorld.techLevel),
+                deriveTradeClassifications(ship.currentWorld),
+                uwpVal(ship.currentWorld.techLevel),
+              ))
+            : null;
+          const saleProceeds = salePricePerTon === null ? null : salePricePerTon * lot.tons;
+          const profitLoss = saleProceeds === null ? null : saleProceeds - lot.purchasePrice;
+
+          return {
+            id:              lot.id,
+            commodity:       lot.commodity,
+            tons:            lot.tons,
+            purchasePrice:   lot.purchasePrice,
+            originWorldName: lot.originWorld?.name ?? null,
+            salePricePerTon,
+            saleProceeds,
+            profitLoss,
+          };
+        }),
       },
     });
   } catch (err) {

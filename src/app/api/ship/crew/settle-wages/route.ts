@@ -5,7 +5,7 @@ import { roll2d6 } from "@/lib/dice";
 import shipTypes from "@/data/classic/ships.json";
 
 // ─── POST /api/ship/crew/settle-wages ────────────────────────────────────────
-// Runs once every 2 turns (caller is responsible for the turn-parity check).
+// Runs once every 4 turns (caller is responsible for the turn cadence check).
 // 1. Calculates total wages + mortgage due.
 // 2. Deducts from owner's credits (may go negative).
 // 3. If owner had enough credits: resets all NPC unpaidTurns to 0.
