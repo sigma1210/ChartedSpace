@@ -42,6 +42,7 @@ import { selectCharacters, selectCurrentCharacter } from "../../../store/selecto
 import StarSystemView from "../../../components/world/StarSystemView";
 import NavigationHud from "../../../components/world/NavigationHud";
 import { CharacterProfileHud } from "../../../components/world/CharacterProfileHud";
+import { MainWorldHud } from "../../../components/world/MainWorldHud";
 import { TradeSystemHud } from "../../../components/world/TradeSystemHud";
 import { buildNavTargets, SubsectorMiniMapView } from "../../../components/map/SubsectorMiniMap";
 import { SubsectorGridView } from "../../../components/map/SubsectorGrid";
@@ -108,6 +109,7 @@ const CurrentSystemPageClient = () => {
   const sectorDataAll = useAppSelector((state) => state.galaxy.sectorData);
   const loadingStatus = useAppSelector((state) => state.galaxy.loadingStatus);
   const [navigationHudVisible, setNavigationHudVisible] = useState(false);
+  const [mainWorldHudVisible, setMainWorldHudVisible] = useState(false);
   const [characterProfileHudVisible, setCharacterProfileHudVisible] = useState(false);
   const [tradeHudVisible, setTradeHudVisible] = useState(false);
   const [selectedDestinationKey, setSelectedDestinationKey] = useState<string | null>(null);
@@ -585,6 +587,7 @@ const CurrentSystemPageClient = () => {
     : world && shipLocation?.sectorAbbr
       ? { world, sectorAbbr: shipLocation.sectorAbbr }
       : null;
+  const mainWorldHud = <MainWorldHud world={renderableLocation?.world ?? null} />;
 
   return (
     <div className="starfield h-screen w-screen overflow-hidden">
@@ -617,6 +620,10 @@ const CurrentSystemPageClient = () => {
             onOpenNavigationHud={() => setNavigationHudVisible(true)}
             onCloseNavigationHud={() => setNavigationHudVisible(false)}
             navigationHud={navigationHud}
+            mainWorldHudVisible={mainWorldHudVisible}
+            onOpenMainWorldHud={() => setMainWorldHudVisible(true)}
+            onCloseMainWorldHud={() => setMainWorldHudVisible(false)}
+            mainWorldHud={mainWorldHud}
             characterProfileHudVisible={characterProfileHudVisible}
             onOpenCharacterProfileHud={() => setCharacterProfileHudVisible(true)}
             onCloseCharacterProfileHud={() => setCharacterProfileHudVisible(false)}

@@ -738,9 +738,13 @@ const CloudMesh = ({ layer, texture }: { layer: CloudLayerConfig; texture: THREE
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface PlanetGlobeProps { world: World }
+interface PlanetGlobeProps {
+  world: World;
+  enableControls?: boolean;
+  className?: string;
+}
 
-const PlanetGlobe = ({ world }: PlanetGlobeProps) => {
+const PlanetGlobe = ({ world, enableControls = true, className = "" }: PlanetGlobeProps) => {
   const asteroid = isAsteroid(world);
   const atmo = uwpVal(world.uwp.atmosphere);
   const clouds = useMemo(
@@ -766,7 +770,7 @@ const PlanetGlobe = ({ world }: PlanetGlobeProps) => {
   );
 
   return (
-    <div className="w-full aspect-square border border-(--hud-border)" style={{ background: "#020c14" }}>
+    <div className={`w-full aspect-square border border-(--hud-border) ${className}`} style={{ background: "#020c14" }}>
       {asteroid ? (
         <div className="flex h-full items-center justify-center">
           <span className="font-mono text-[10px] uppercase tracking-widest text-(--hud-text-dim)">Asteroid Belt</span>
@@ -792,7 +796,9 @@ const PlanetGlobe = ({ world }: PlanetGlobeProps) => {
             />
           ))}
           {atmosphereGlow && <AtmosphereGlowMesh radius={1} config={atmosphereGlow} />}
-          <OrbitControls enableZoom minDistance={1.8} maxDistance={6} enablePan={false} />
+          {enableControls && (
+            <OrbitControls enableZoom minDistance={1.8} maxDistance={6} enablePan={false} />
+          )}
         </Canvas>
       )}
     </div>
