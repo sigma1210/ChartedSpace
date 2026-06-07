@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import type { World } from "../../types";
 import type { CargoLotSummary } from "../../store/slices/shipSlice";
 import { TRADE_CODE_LABELS, type WorldLocation } from "../../store/selectors/galaxy.selectors";
-import { calculateSalePrice } from "../../lib/trade";
 import { uwpVal } from "../../lib/worldMap";
 
 type TradeTab = "speculation" | "buy" | "sell";
@@ -126,18 +125,6 @@ const SpeculationPanel = ({
   targetTradeCodes: string[];
   expectedSalePrice: number | null;
 }) => {
-  const commodityPrices = activeWorld && targetWorld
-    ? activeTradeCodes.map((code) => ({
-        code,
-        price: Math.round(calculateSalePrice(
-          [code],
-          uwpVal(activeWorld.uwp.techLevel),
-          targetTradeCodes,
-          uwpVal(targetWorld.uwp.techLevel),
-        )),
-      }))
-    : [];
-
   return (
     <div className="divide-y divide-(--hud-border)">
       <TradeWorldPanel
@@ -157,36 +144,9 @@ const SpeculationPanel = ({
         location={targetWorldLocation}
         tradeCodes={targetTradeCodes}
         price={expectedSalePrice}
-        priceLabel="World Mix"
+        priceLabel="Expected Sale"
         empty="Hover a world"
       />
-      <div className="p-2">
-        <p className="mb-1 text-[7px] uppercase tracking-widest text-(--hud-text-dim)">
-          Commodity Sale
-        </p>
-        {commodityPrices.length === 0 ? (
-          <p className="font-mono text-[8px] italic uppercase tracking-wider text-(--hud-text-dim)">
-            Select origin and destination
-          </p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {commodityPrices.map(({ code, price }) => (
-              <div
-                key={code}
-                className="flex items-center gap-2 border border-(--hud-border) bg-(--hud-bg)/35 px-1.5 py-0.5 font-mono text-[8px]"
-              >
-                <CodeBadge code={code} />
-                <span className="min-w-0 flex-1 truncate text-(--hud-text-dim)">
-                  {TRADE_CODE_LABELS[code] ?? code}
-                </span>
-                <span className="shrink-0 text-(--hud-accent)">
-                  Cr{price.toLocaleString()}/T
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

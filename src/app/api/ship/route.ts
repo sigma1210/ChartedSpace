@@ -3,8 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getUser } from "@/actions/user";
 import { getClerkId } from "@/lib/devAuth";
 import shipTypes from "@/data/classic/ships.json";
-import { calculateSalePrice, deriveTradeClassifications, filterTradeCodes } from "@/lib/trade";
-import { uwpVal } from "@/lib/worldMap";
+import { calculateWorldPairSalePrice } from "@/lib/trade";
 
 const UWP_SELECT = {
   size:          true,
@@ -111,16 +110,8 @@ export const GET = async () => {
           keySkillLevel:   c.keySkillLevel,
         })),
         cargo:          ship.cargo.map(lot => {
-          const commodityCodes = filterTradeCodes([lot.commodity]);
-          const fallbackOriginCodes = deriveTradeClassifications(lot.originWorld);
-          const originCodes = commodityCodes.length > 0 ? commodityCodes : fallbackOriginCodes;
           const salePricePerTon = ship.currentWorld
-            ? Math.round(calculateSalePrice(
-                originCodes,
-                uwpVal(lot.originWorld.techLevel),
-                deriveTradeClassifications(ship.currentWorld),
-                uwpVal(ship.currentWorld.techLevel),
-              ))
+            ? Math.round(calculateWorldPairSalePrice(lot.originWorld, ship.currentWorld))
             : null;
           const saleProceeds = salePricePerTon === null ? null : salePricePerTon * lot.tons;
           const profitLoss = saleProceeds === null ? null : saleProceeds - lot.purchasePrice;

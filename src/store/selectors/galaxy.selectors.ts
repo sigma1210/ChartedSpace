@@ -2,10 +2,9 @@ import type { RootState } from "../index";
 import type { World, WorldCoord, MapMode, WorldDotStyle } from "../../types";
 import {
   deriveTradeClassifications as deriveTradeCodes,
-  calculateSalePrice,
+  calculateWorldPairSalePrice,
   deriveWorldPricePerTon,
 } from "@/lib/trade";
-import { uwpVal } from "@/lib/worldMap";
 
 // Wrapper so callers using the World shape still work
 export const deriveTradeClassifications = (world: World): string[] =>
@@ -129,11 +128,7 @@ export const deriveExpectedSalePrice = (
   sourceWorld: World,
   targetWorld: World,
 ): number => {
-  const sourceCodes = deriveTradeCodes(sourceWorld.uwp);
-  const targetCodes = deriveTradeCodes(targetWorld.uwp);
-  const sourceTL = uwpVal(sourceWorld.uwp.techLevel);
-  const targetTL = uwpVal(targetWorld.uwp.techLevel);
-  return calculateSalePrice(sourceCodes, sourceTL, targetCodes, targetTL);
+  return calculateWorldPairSalePrice(sourceWorld.uwp, targetWorld.uwp);
 };
 
 export const selectExpectedSalePrice = (state: RootState): number | null => {

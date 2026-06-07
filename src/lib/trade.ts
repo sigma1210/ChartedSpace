@@ -104,6 +104,18 @@ export const calculateSalePrice = (
   return Math.max(0, (demandSum * 1000 + 5000) * (1 + techDelta) + modifier);
 };
 
+export const calculateWorldPairSalePrice = (
+  sourceWorld: TradeUWP,
+  targetWorld: TradeUWP,
+): number => {
+  return calculateSalePrice(
+    deriveTradeClassifications(sourceWorld),
+    hx(sourceWorld.techLevel),
+    deriveTradeClassifications(targetWorld),
+    hx(targetWorld.techLevel),
+  );
+};
+
 // ─── Purchase price helpers (used by cargo buy API) ──────────────────────────
 
 const KNOWN_TRADE_CODES = new Set([
