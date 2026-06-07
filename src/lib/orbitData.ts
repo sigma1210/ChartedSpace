@@ -207,6 +207,7 @@ export interface WorldPlacement {
   sceneRadius: number;
   angle0:      number; // initial angle (radians)
   label?:      string;
+  isMainWorld?: boolean;
   satellite?:  { moonRadius: number }; // gas giant hosting the main world as a moon
 }
 
@@ -241,16 +242,17 @@ export const buildWorldPlacements = (world: World): WorldPlacement[] => {
     sceneRadius: orbitToScene(mainOrbit),
     angle0: rng() * Math.PI * 2,
     label: world.name,
+    isMainWorld: true,
   });
 
   // Inner asteroid belt (if any) — orbit 2 or near fao
   if (beltCount > 0) {
     const bOrbit = place(Math.max(1, Math.min(mainOrbit - 1, 2)));
-    result.push({ type: 'belt', orbitNum: bOrbit, sceneRadius: orbitToScene(bOrbit), angle0: 0 });
+    result.push({ type: 'belt', orbitNum: bOrbit, sceneRadius: orbitToScene(bOrbit), angle0: 0, isMainWorld: false });
   }
   if (beltCount > 1) {
     const bOrbit = place(mainOrbit + 3 + Math.round(rng()));
-    result.push({ type: 'belt', orbitNum: bOrbit, sceneRadius: orbitToScene(bOrbit), angle0: 0 });
+    result.push({ type: 'belt', orbitNum: bOrbit, sceneRadius: orbitToScene(bOrbit), angle0: 0, isMainWorld: false });
   }
 
   // Gas giants — start 2 orbits beyond main world

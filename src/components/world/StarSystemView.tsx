@@ -50,26 +50,160 @@ const glowTex = (): THREE.CanvasTexture => {
 
 // ─── Background starfield ─────────────────────────────────────────────────────
 
+const buildStarLayer = ({
+  count,
+  seed,
+  minRadius,
+  maxRadius,
+  size,
+  opacity,
+  palette,
+}: {
+  count: number;
+  seed: string;
+  minRadius: number;
+  maxRadius: number;
+  size: number;
+  opacity: number;
+  palette: string[];
+}) => {
+  const rng = seededRng(seed);
+  const pos = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i++) {
+    const theta = rng() * Math.PI * 2;
+    const phi = Math.acos(2 * rng() - 1);
+    const r = minRadius + rng() * (maxRadius - minRadius);
+    const color = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
+    const intensity = 0.55 + rng() * 0.45;
+
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    pos[i * 3 + 2] = r * Math.cos(phi);
+    colors[i * 3] = color.r * intensity;
+    colors[i * 3 + 1] = color.g * intensity;
+    colors[i * 3 + 2] = color.b * intensity;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+  const mat = new THREE.PointsMaterial({
+    size,
+    vertexColors: true,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+  });
+
+  return new THREE.Points(geo, mat);
+};
+
+const buildSpaceHaze = () => {
+  const geo = new THREE.SphereGeometry(96, 48, 24);
+  const mat = new THREE.MeshBasicMaterial({
+    color: "#0e7490",
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0.1,
+    depthWrite: false,
+  });
+  return new THREE.Mesh(geo, mat);
+};
+
+const buildBackgroundGlowStars = () => {
+  const rng = seededRng("system-starfield-glow-stars");
+  const group = new THREE.Group();
+  const tex = glowTex();
+  const palette = ["#ffffff", "#7ddcff", "#d9f7ff", "#ffd8a8", "#b8c8ff"];
+
+  for (let i = 0; i < 34; i++) {
+    const theta = rng() * Math.PI * 2;
+    const phi = Math.acos(2 * rng() - 1);
+    const r = 66 + rng() * 34;
+    const scale = 0.55 + rng() * 1.25;
+    const color = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex,
+      color,
+      transparent: true,
+      opacity: 0.2 + rng() * 0.28,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }));
+
+    sprite.position.set(
+      r * Math.sin(phi) * Math.cos(theta),
+      r * Math.sin(phi) * Math.sin(theta),
+      r * Math.cos(phi),
+    );
+    sprite.scale.set(scale, scale, 1);
+    group.add(sprite);
+  }
+
+  return group;
+};
+
 const Starfield = () => {
   const obj = useMemo(() => {
-    const count = 1500;
-    const pos   = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi   = Math.acos(2 * Math.random() - 1);
-      const r     = 45 + Math.random() * 8;
-      pos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = r * Math.cos(phi);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({
-      size: 0.07, color: "#ffffff", sizeAttenuation: true,
-      transparent: true, opacity: 0.75,
-    });
-    return new THREE.Points(geo, mat);
+    const group = new THREE.Group();
+    group.add(buildSpaceHaze());
+    group.add(buildBackgroundGlowStars());
+    group.add(buildStarLayer({
+      count: 4200,
+      seed: "system-starfield-dim",
+      minRadius: 50,
+      maxRadius: 104,
+      size: 0.055,
+      opacity: 0.72,
+      palette: ["#d8f7ff", "#b9d6ff", "#ffffff", "#b8e8ff"],
+    }));
+    group.add(buildStarLayer({
+      count: 1300,
+      seed: "system-starfield-mid",
+      minRadius: 48,
+      maxRadius: 98,
+      size: 0.11,
+      opacity: 0.9,
+      palette: ["#ffffff", "#dff9ff", "#7ddcff", "#ffe3b0"],
+    }));
+    group.add(buildStarLayer({
+      count: 220,
+      seed: "system-starfield-bright",
+      minRadius: 46,
+      maxRadius: 92,
+      size: 0.24,
+      opacity: 1,
+      palette: ["#ffffff", "#67e8f9", "#d7f7ff", "#ffd18a"],
+    }));
+    return group;
   }, []);
+
+  useEffect(() => () => {
+    obj.traverse((child) => {
+      if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((material) => material.dispose());
+        } else {
+          child.material.dispose();
+        }
+      } else if (child instanceof THREE.Sprite) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((material) => material.dispose());
+        } else {
+          child.material.dispose();
+        }
+      } else {
+        return;
+      }
+    });
+  }, [obj]);
+
   return <primitive object={obj} />;
 };
 
@@ -77,6 +211,9 @@ const sceneLabelClassName =
   "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-accent)";
 const sceneSecondaryLabelClassName =
   "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-text-dim)";
+const sceneHoverTagClassName =
+  "select-none whitespace-nowrap border border-(--hud-accent)/60 bg-(--hud-bg)/88 px-1.5 py-0.5 font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-accent) shadow-[0_0_12px_rgba(34,211,238,0.14)] backdrop-blur-sm";
+type FocusBodyHandler = (id: string) => void;
 
 // ─── Orbital ring ─────────────────────────────────────────────────────────────
 
@@ -92,6 +229,32 @@ const OrbitalRing = ({ radius, color = "#155e75", opacity = 0.35 }: { radius: nu
     return new THREE.Line(geo, mat);
   }, [radius, color, opacity]);
   return <primitive object={obj} />;
+};
+
+const orbitPlaneRotation = (seed: string, orbitNum: number, subtle = false): [number, number, number] => {
+  const rng = seededRng(`${seed}:orbit-plane:${orbitNum}`);
+  const maxInclination = subtle ? 0.055 : 0.14;
+  const inclination = (rng() * 2 - 1) * maxInclination;
+  const node = rng() * Math.PI * 2;
+  return [inclination, node, 0];
+};
+
+const OrbitPlane = ({
+  children,
+  seed,
+  orbitNum,
+  subtle = false,
+}: {
+  children: ReactNode;
+  seed: string;
+  orbitNum: number;
+  subtle?: boolean;
+}) => {
+  const rotation = useMemo(
+    () => orbitPlaneRotation(seed, orbitNum, subtle),
+    [orbitNum, seed, subtle],
+  );
+  return <group rotation={rotation}>{children}</group>;
 };
 
 // ─── Pivot smoother ───────────────────────────────────────────────────────────
@@ -229,9 +392,12 @@ type WorldBodyProps = {
   placement: WorldPlacement;
   world: World;
   onPivot: (pos: THREE.Vector3) => void;
+  bodyId?: string;
+  focusedBodyId?: string | null;
+  onFocusBody?: FocusBodyHandler;
 };
 
-const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
+const WorldBody = ({ placement, world, onPivot, bodyId = `main-${placement.orbitNum}-${world.hex}`, focusedBodyId = null, onFocusBody }: WorldBodyProps) => {
   const orbitRef = useRef<THREE.Group>(null);
   const spinRef  = useRef<THREE.Mesh>(null);
   const cloudRefs = useRef<Array<THREE.Mesh | null>>([]);
@@ -272,11 +438,12 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
     e.stopPropagation();
     const pos = new THREE.Vector3();
     e.object.getWorldPosition(pos);
+    onFocusBody?.(bodyId);
     onPivot(pos);
   };
 
   return (
-    <>
+    <OrbitPlane seed={`world:${world.hex}:${bodyId}`} orbitNum={placement.orbitNum} subtle={placement.type === "mainWorld"}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
       <group ref={orbitRef}>
         <group position={[r, 0, 0]}>
@@ -313,6 +480,11 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
             </>
           )}
           {atmosphereGlow && <AtmosphereGlowMesh radius={WORLD_R} config={atmosphereGlow} />}
+          {focusedBodyId === bodyId && (
+            <Html position={[WORLD_R + 0.1, WORLD_R + 0.12, 0]} style={{ pointerEvents: "none" }}>
+              <span className={sceneHoverTagClassName}>Main World</span>
+            </Html>
+          )}
         </group>
         <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none" }}>
           <span className={sceneLabelClassName}>
@@ -320,7 +492,7 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
           </span>
         </Html>
       </group>
-    </>
+    </OrbitPlane>
   );
 };
 
@@ -329,18 +501,37 @@ const WorldBody = ({ placement, world, onPivot }: WorldBodyProps) => {
 // available so no Voronoi texture — a flat material is honest about what we know.
 
 const SURFACE_COLOR: Record<string, string> = {
-  barren: "#6b7280", vacuum: "#4b5563", desert: "#c2750c",
-  arid: "#92644a",   terran: "#2563eb", ocean: "#1d4ed8",
-  ice: "#bae6fd",    exotic: "#7c3aed", corrosive: "#b45309",
-  insidious: "#991b1b", hellworld: "#dc2626",
+  barren: "#78716c", vacuum: "#4b5563", desert: "#a16207",
+  arid: "#8b6f56",   terran: "#256f5a", ocean: "#1d4ed8",
+  ice: "#bfdbfe",    exotic: "#6d5aa8", corrosive: "#8a6a2f",
+  insidious: "#7f1d1d", hellworld: "#991b1b",
 };
 
-const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: THREE.Vector3) => void }) => {
+const worldRadiusFromSizeCode = (sizeCode: string | null | undefined, fallback = WORLD_R) => {
+  const size = sizeCode ? uwpVal(sizeCode) : 5;
+  return THREE.MathUtils.clamp(fallback * (0.72 + size * 0.065), fallback * 0.68, fallback * 1.32);
+};
+
+const PlacedWorldBody = ({
+  orbit,
+  onPivot,
+  bodyId,
+  focusedBodyId = null,
+  onFocusBody,
+}: {
+  orbit: SystemOrbit;
+  onPivot: (p: THREE.Vector3) => void;
+  bodyId: string;
+  focusedBodyId?: string | null;
+  onFocusBody?: FocusBodyHandler;
+}) => {
   const body = orbit.body as SystemWorldBody;
   const orbitRef = useRef<THREE.Group>(null);
   const cloudRefs = useRef<Array<THREE.Mesh | null>>([]);
+  const [hovered, setHovered] = useState(false);
   const r     = orbitToScene(orbit.orbitId);
   const color = SURFACE_COLOR[body.surfaceType ?? "barren"] ?? "#6b7280";
+  const radius = worldRadiusFromSizeCode(body.sizeCode);
   const atmoVal = uwpVal(body.atmosphereCode ?? "0");
   const hydroVal = uwpVal(body.hydrographicsCode ?? "0");
   const clouds = useMemo(() => cloudConfig(atmoVal, hydroVal), [atmoVal, hydroVal]);
@@ -375,21 +566,27 @@ const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: 
     e.stopPropagation();
     const pos = new THREE.Vector3();
     e.object.getWorldPosition(pos);
+    onFocusBody?.(bodyId);
     onPivot(pos);
   };
 
   return (
-    <>
+    <OrbitPlane seed={`placed-world:${bodyId}`} orbitNum={orbit.orbitId}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
       <group ref={orbitRef}>
         <group position={[r, 0, 0]}>
           <mesh onClick={handleClick}>
-            <sphereGeometry args={[WORLD_R, 16, 16]} />
-            <meshStandardMaterial color={color} />
+            <sphereGeometry args={[radius, 24, 16]} />
+            <meshStandardMaterial
+              color={color}
+              roughness={0.84}
+              emissive={body.surfaceType === "hellworld" || body.surfaceType === "exotic" ? color : "#000000"}
+              emissiveIntensity={body.surfaceType === "hellworld" ? 0.18 : body.surfaceType === "exotic" ? 0.1 : 0}
+            />
           </mesh>
           {clouds && cloudTextures[0] && (
             <CloudShadowMesh
-              radius={WORLD_R}
+              radius={radius}
               layer={clouds.layers[0]}
               texture={cloudTextures[0]}
               opacity={clouds.shadowOpacity}
@@ -402,7 +599,7 @@ const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: 
                   key={`${layer.radiusMult}-${index}`}
                   ref={(node) => { cloudRefs.current[index] = node; }}
                 >
-                  <sphereGeometry args={[WORLD_R * layer.radiusMult, 16, 16]} />
+                  <sphereGeometry args={[radius * layer.radiusMult, 24, 16]} />
                   <meshStandardMaterial
                     alphaMap={cloudTextures[index]}
                     color={layer.color}
@@ -415,15 +612,44 @@ const PlacedWorldBody = ({ orbit, onPivot }: { orbit: SystemOrbit; onPivot: (p: 
               ))}
             </>
           )}
-          {atmosphereGlow && <AtmosphereGlowMesh radius={WORLD_R} config={atmosphereGlow} />}
+          {atmosphereGlow && <AtmosphereGlowMesh radius={radius} config={atmosphereGlow} />}
+          {hovered && (
+            <Html position={[radius + 0.08, radius + 0.08, 0]} style={{ pointerEvents: "none" }}>
+              <span className={sceneHoverTagClassName}>
+                {body.surfaceType ?? "world"}
+              </span>
+            </Html>
+          )}
+          {focusedBodyId === bodyId && (
+            <Html position={[radius + 0.1, radius + 0.16, 0]} style={{ pointerEvents: "none" }}>
+              <span className={sceneHoverTagClassName}>
+                {body.name ?? body.surfaceType ?? "World"}
+              </span>
+            </Html>
+          )}
         </group>
+        <mesh
+          position={[r, 0, 0]}
+          onPointerOver={(event) => {
+            event.stopPropagation();
+            setHovered(true);
+          }}
+          onPointerOut={(event) => {
+            event.stopPropagation();
+            setHovered(false);
+          }}
+          onClick={handleClick}
+        >
+          <sphereGeometry args={[Math.max(radius * 1.8, 0.18), 8, 8]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
         {body.name && (
           <Html position={[r + 0.15, 0.15, 0]} style={{ pointerEvents: "none" }}>
             <span className={sceneLabelClassName}>{body.name}</span>
           </Html>
         )}
       </group>
-    </>
+    </OrbitPlane>
   );
 };
 
@@ -452,7 +678,7 @@ const RockyParentBody = ({
   };
 
   return (
-    <>
+    <OrbitPlane seed={`rocky-parent:${world.hex}:${orbit.orbitId}`} orbitNum={orbit.orbitId}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
       <group ref={orbitRef}>
         <group position={[r, 0, 0]}>
@@ -463,7 +689,7 @@ const RockyParentBody = ({
           <WorldBody placement={moonPlacement} world={world} onPivot={onPivot} />
         </group>
       </group>
-    </>
+    </OrbitPlane>
   );
 };
 
@@ -623,12 +849,16 @@ type GasGiantBodyProps = {
   onPivot: (pos: THREE.Vector3) => void;
   world?: World;
   classification?: SystemGasGiantType | null;
+  bodyId?: string;
+  focusedBodyId?: string | null;
+  onFocusBody?: FocusBodyHandler;
 };
 
-const GasGiantBody = ({ placement, idx, onPivot, world, classification = null }: GasGiantBodyProps) => {
+const GasGiantBody = ({ placement, idx, onPivot, world, classification = null, bodyId = `gas-${placement.orbitNum}-${idx}`, focusedBodyId = null, onFocusBody }: GasGiantBodyProps) => {
   const ref   = useRef<THREE.Group>(null);
   const sphereRef = useRef<THREE.Mesh>(null);
   const hazeRef = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
   const r     = placement.sceneRadius;
   const type  = visualGasGiantType(placement.orbitNum, classification);
 
@@ -686,15 +916,27 @@ const GasGiantBody = ({ placement, idx, onPivot, world, classification = null }:
     e.stopPropagation();
     const pos = new THREE.Vector3();
     e.object.getWorldPosition(pos);
+    onFocusBody?.(bodyId);
     onPivot(pos);
   };
 
   return (
-    <>
+    <OrbitPlane seed={`gas-giant:${bodyId}`} orbitNum={placement.orbitNum}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.4} />
       <group ref={ref}>
         <group position={[r, 0, 0]}>
-          <mesh ref={sphereRef} onClick={handleClick}>
+          <mesh
+            ref={sphereRef}
+            onClick={handleClick}
+            onPointerOver={(event) => {
+              event.stopPropagation();
+              setHovered(true);
+            }}
+            onPointerOut={(event) => {
+              event.stopPropagation();
+              setHovered(false);
+            }}
+          >
             <sphereGeometry args={[radius, 48, 32]} />
             <meshStandardMaterial
               map={sphereTex}
@@ -704,6 +946,20 @@ const GasGiantBody = ({ placement, idx, onPivot, world, classification = null }:
               emissiveIntensity={type === 'hot' ? 0.28 : 0.12}
             />
           </mesh>
+          {hovered && (
+            <Html position={[radius + 0.08, radius + 0.08, 0]} style={{ pointerEvents: "none" }}>
+              <span className={sceneHoverTagClassName}>
+                {classification ?? type}
+              </span>
+            </Html>
+          )}
+          {focusedBodyId === bodyId && (
+            <Html position={[radius + 0.1, radius + 0.16, 0]} style={{ pointerEvents: "none" }}>
+              <span className={sceneHoverTagClassName}>
+                {classification ?? type}
+              </span>
+            </Html>
+          )}
           <mesh ref={hazeRef}>
             <sphereGeometry args={[radius * 1.012, 48, 24]} />
             <meshBasicMaterial
@@ -746,42 +1002,215 @@ const GasGiantBody = ({ placement, idx, onPivot, world, classification = null }:
           )}
         </group>
       </group>
-    </>
+    </OrbitPlane>
   );
 };
 
 // ─── Asteroid belt ────────────────────────────────────────────────────────────
 
-const BeltRing = ({ placement }: { placement: WorldPlacement }) => {
-  const obj = useMemo(() => {
-    const r    = placement.sceneRadius;
-    const geo  = new THREE.TorusGeometry(r, 0.12, 2, 128);
-    const mat  = new THREE.MeshBasicMaterial({ color: "#78716c", transparent: true, opacity: 0.3 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI / 2;
-    return mesh;
-  }, [placement.sceneRadius]);
+const AsteroidBeltBody = ({
+  placement,
+  onPivot,
+  bodyId = `belt-${placement.orbitNum}-${placement.isMainWorld ? "main" : "ordinary"}`,
+  focusedBodyId = null,
+  onFocusBody,
+}: {
+  placement: WorldPlacement;
+  onPivot: (pos: THREE.Vector3) => void;
+  bodyId?: string;
+  focusedBodyId?: string | null;
+  onFocusBody?: FocusBodyHandler;
+}) => {
+  const beltRef = useRef<THREE.Group>(null);
+  const rocksRef = useRef<THREE.InstancedMesh>(null);
+  const [hovered, setHovered] = useState(false);
+  const isMainWorldBelt = placement.isMainWorld === true;
+  const clusterPosition = useMemo(
+    () => new THREE.Vector3(placement.sceneRadius, 0.04, 0),
+    [placement.sceneRadius],
+  );
+  const dust = useMemo(() => {
+    const r = placement.sceneRadius;
+    const group = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({
+      color: isMainWorldBelt ? "#a8a29e" : "#78716c",
+      transparent: true,
+      opacity: isMainWorldBelt ? 0.2 : 0.12,
+      depthWrite: false,
+    });
+    const inner = new THREE.Mesh(new THREE.TorusGeometry(r, 0.08, 3, 160), mat);
+    const outer = new THREE.Mesh(new THREE.TorusGeometry(r * 1.035, 0.04, 3, 160), mat.clone());
+    inner.rotation.x = Math.PI / 2;
+    outer.rotation.x = Math.PI / 2;
+    group.add(inner, outer);
+    return group;
+  }, [isMainWorldBelt, placement.sceneRadius]);
+
+  const rockData = useMemo(() => {
+    const rng = seededRng(`${placement.label ?? "belt"}:${placement.orbitNum}:${placement.sceneRadius}:${isMainWorldBelt ? "main" : "ordinary"}`);
+    const count = isMainWorldBelt ? 170 : 110;
+    return Array.from({ length: count }, () => {
+      const angle = rng() * Math.PI * 2;
+      const radialJitter = (rng() - 0.5) * 0.55;
+      const radius = placement.sceneRadius + radialJitter;
+      const y = (rng() - 0.5) * (isMainWorldBelt ? 0.18 : 0.11);
+      const scale = (isMainWorldBelt ? 0.028 : 0.02) * (0.55 + rng() * 1.25);
+      return {
+        position: new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius),
+        rotation: new THREE.Euler(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI),
+        scale,
+      };
+    });
+  }, [isMainWorldBelt, placement.label, placement.orbitNum, placement.sceneRadius]);
+
+  useEffect(() => {
+    const mesh = rocksRef.current;
+    if (!mesh) return;
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+
+    rockData.forEach((rock, index) => {
+      quaternion.setFromEuler(rock.rotation);
+      scale.setScalar(rock.scale);
+      matrix.compose(rock.position, quaternion, scale);
+      mesh.setMatrixAt(index, matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [rockData]);
+
+  useFrame((_, delta) => {
+    if (beltRef.current) beltRef.current.rotation.y += delta * (isMainWorldBelt ? 0.006 : 0.0035);
+  });
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    const pos = new THREE.Vector3();
+    e.object.getWorldPosition(pos);
+    onFocusBody?.(bodyId);
+    onPivot(pos);
+  };
+
+  useEffect(() => () => {
+    dust.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (Array.isArray(obj.material)) obj.material.forEach((material) => material.dispose());
+        else obj.material.dispose();
+      }
+    });
+  }, [dust]);
 
   return (
-    <>
-      <primitive object={obj} />
+    <OrbitPlane seed={`belt:${bodyId}`} orbitNum={placement.orbitNum}>
+      <OrbitalRing radius={placement.sceneRadius} color="#3f3f46" opacity={isMainWorldBelt ? 0.24 : 0.14} />
+      <group
+        ref={beltRef}
+        onClick={handleClick}
+        onPointerOver={(event) => {
+          event.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={(event) => {
+          event.stopPropagation();
+          setHovered(false);
+        }}
+      >
+        <primitive object={dust} />
+        <instancedMesh ref={rocksRef} args={[undefined, undefined, rockData.length]}>
+          <dodecahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial
+            color={isMainWorldBelt ? "#a8a29e" : "#78716c"}
+            roughness={0.92}
+            metalness={0.02}
+            emissive={isMainWorldBelt ? "#1c1917" : "#0c0a09"}
+            emissiveIntensity={0.08}
+          />
+        </instancedMesh>
+        {isMainWorldBelt && (
+          <group position={clusterPosition} onClick={handleClick}>
+            <mesh>
+              <sphereGeometry args={[0.055, 12, 8]} />
+              <meshStandardMaterial
+                color="#d6d3d1"
+                roughness={0.82}
+                emissive="#164e63"
+                emissiveIntensity={0.22}
+              />
+            </mesh>
+            <mesh position={[0.09, 0.015, 0.02]} rotation={[0.35, 0.2, 0.15]}>
+              <boxGeometry args={[0.12, 0.035, 0.045]} />
+              <meshStandardMaterial color="#94a3b8" roughness={0.68} metalness={0.18} emissive="#0f172a" emissiveIntensity={0.18} />
+            </mesh>
+            <mesh position={[-0.08, -0.01, -0.025]} rotation={[0.1, -0.4, -0.25]}>
+              <boxGeometry args={[0.09, 0.03, 0.04]} />
+              <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.16} emissive="#0f172a" emissiveIntensity={0.14} />
+            </mesh>
+            <mesh position={[0.02, 0.065, -0.055]} rotation={[0.4, 0.7, 0.2]}>
+              <dodecahedronGeometry args={[0.045, 0]} />
+              <meshStandardMaterial color="#78716c" roughness={0.9} emissive="#1c1917" emissiveIntensity={0.12} />
+            </mesh>
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.15, 0.004, 4, 48]} />
+              <meshBasicMaterial color="#22d3ee" transparent opacity={0.28} depthWrite={false} />
+            </mesh>
+          </group>
+        )}
+      </group>
+      {hovered && (
+        <Html position={[placement.sceneRadius + 0.08, 0.28, 0]} style={{ pointerEvents: "none" }}>
+          <span className={sceneHoverTagClassName}>
+            {isMainWorldBelt ? "Main Belt" : "Asteroid Belt"}
+          </span>
+        </Html>
+      )}
+      {focusedBodyId === bodyId && (
+        <Html position={[placement.sceneRadius + 0.12, 0.38, 0]} style={{ pointerEvents: "none" }}>
+          <span className={sceneHoverTagClassName}>
+            {placement.label ?? (isMainWorldBelt ? "Main Belt" : "Asteroid Belt")}
+          </span>
+        </Html>
+      )}
       {placement.label && (
-        <Html position={[placement.sceneRadius + 0.2, 0.15, 0]} style={{ pointerEvents: "none" }}>
+        <Html position={isMainWorldBelt ? clusterPosition.clone().add(new THREE.Vector3(0.16, 0.13, 0)) : [placement.sceneRadius + 0.2, 0.15, 0]} style={{ pointerEvents: "none" }}>
           <span className={sceneSecondaryLabelClassName}>
             {placement.label}
           </span>
         </Html>
       )}
-    </>
+    </OrbitPlane>
   );
 };
 
 // ─── Other worlds (small dots) ────────────────────────────────────────────────
 
-const OtherWorld = ({ placement, onPivot }: { placement: WorldPlacement; onPivot: (pos: THREE.Vector3) => void }) => {
+const OtherWorld = ({
+  placement,
+  onPivot,
+  bodyId = `other-${placement.orbitNum}-${placement.sceneRadius}`,
+  focusedBodyId = null,
+  onFocusBody,
+}: {
+  placement: WorldPlacement;
+  onPivot: (pos: THREE.Vector3) => void;
+  bodyId?: string;
+  focusedBodyId?: string | null;
+  onFocusBody?: FocusBodyHandler;
+}) => {
   const ref   = useRef<THREE.Group>(null);
-  const speed = 0.05 / Math.sqrt(Math.max(1, placement.orbitNum));
   const r     = placement.sceneRadius;
+  const [hovered, setHovered] = useState(false);
+  const visual = useMemo(() => {
+    const rng = seededRng(`${placement.orbitNum}:${placement.sceneRadius}:other-world`);
+    const palette = [
+      { color: "#78716c", emissive: "#0c0a09", radius: 0.062 },
+      { color: "#8b6f56", emissive: "#120f0a", radius: 0.068 },
+      { color: "#bfdbfe", emissive: "#082f49", radius: 0.058 },
+      { color: "#1d4ed8", emissive: "#061a3a", radius: 0.064 },
+      { color: "#7f1d1d", emissive: "#1f0505", radius: 0.056 },
+    ];
+    return palette[Math.floor(rng() * palette.length)] ?? palette[0];
+  }, [placement.orbitNum, placement.sceneRadius]);
 
   useEffect(() => { if (ref.current) ref.current.rotation.y = placement.angle0; }, []);
 
@@ -789,19 +1218,46 @@ const OtherWorld = ({ placement, onPivot }: { placement: WorldPlacement; onPivot
     e.stopPropagation();
     const pos = new THREE.Vector3();
     e.object.getWorldPosition(pos);
+    onFocusBody?.(bodyId);
     onPivot(pos);
   };
 
   return (
-    <>
+    <OrbitPlane seed={`other-world:${bodyId}`} orbitNum={placement.orbitNum}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.25} />
       <group ref={ref}>
-        <mesh position={[r, 0, 0]} onClick={handleClick}>
-          <sphereGeometry args={[0.06, 8, 8]} />
-          <meshBasicMaterial color="#6b7280" toneMapped={false} />
+        <mesh
+          position={[r, 0, 0]}
+          onClick={handleClick}
+          onPointerOver={(event) => {
+            event.stopPropagation();
+            setHovered(true);
+          }}
+          onPointerOut={(event) => {
+            event.stopPropagation();
+            setHovered(false);
+          }}
+        >
+          <icosahedronGeometry args={[visual.radius, 1]} />
+          <meshStandardMaterial
+            color={visual.color}
+            roughness={0.88}
+            emissive={visual.emissive}
+            emissiveIntensity={0.08}
+          />
         </mesh>
+        {hovered && (
+          <Html position={[r + 0.11, 0.12, 0]} style={{ pointerEvents: "none" }}>
+            <span className={sceneHoverTagClassName}>World</span>
+          </Html>
+        )}
+        {focusedBodyId === bodyId && (
+          <Html position={[r + 0.13, 0.2, 0]} style={{ pointerEvents: "none" }}>
+            <span className={sceneHoverTagClassName}>World</span>
+          </Html>
+        )}
       </group>
-    </>
+    </OrbitPlane>
   );
 };
 
@@ -810,10 +1266,12 @@ const OtherWorld = ({ placement, onPivot }: { placement: WorldPlacement; onPivot
 // so they move with the companion rather than orbiting the primary.
 
 const CompanionBodies = ({
-  orbits, onPivot,
+  orbits, onPivot, focusedBodyId, onFocusBody,
 }: {
   orbits: SystemOrbit[];
   onPivot: (p: THREE.Vector3) => void;
+  focusedBodyId?: string | null;
+  onFocusBody?: FocusBodyHandler;
 }) => {
   let ggIdx = 0;
   return (
@@ -822,13 +1280,23 @@ const CompanionBodies = ({
         const b = orbit.body;
         if (b.kind === "gasGiant") {
           const p: WorldPlacement = { type: "gasGiant", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 };
-          return <GasGiantBody key={i} placement={p} idx={ggIdx++} onPivot={onPivot} classification={b.classification} />;
+          const bodyId = `companion-gas-${orbit.orbitId}-${i}`;
+          return <GasGiantBody key={i} placement={p} idx={ggIdx++} onPivot={onPivot} classification={b.classification} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
         }
         if (b.kind === "belt") {
-          const p: WorldPlacement = { type: "belt", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: 0 };
-          return <BeltRing key={i} placement={p} />;
+          const p: WorldPlacement = {
+            type: "belt",
+            orbitNum: orbit.orbitId,
+            sceneRadius: orbitToScene(orbit.orbitId),
+            angle0: orbit.angle0,
+            label: b.name,
+            isMainWorld: b.isMainWorld,
+          };
+          const bodyId = `companion-belt-${orbit.orbitId}-${i}`;
+          return <AsteroidBeltBody key={i} placement={p} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
         }
-        return <OtherWorld key={i} placement={{ type: "otherWorld", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 }} onPivot={onPivot} />;
+        const bodyId = `companion-world-${orbit.orbitId}-${i}`;
+        return <OtherWorld key={i} placement={{ type: "otherWorld", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 }} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
       })}
     </>
   );
@@ -842,11 +1310,12 @@ type WorldSystemProps = {
   world: World;
   onPivot: (pos: THREE.Vector3) => void;
   systemData: SystemData | null;
+  focusedBodyId?: string | null;
+  onFocusBody?: FocusBodyHandler;
 };
 
-const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
+const WorldSystem = ({ world, onPivot, systemData, focusedBodyId = null, onFocusBody }: WorldSystemProps) => {
   const useData = !!(systemData && systemData.hex === world.hex);
-  const rng     = useMemo(() => seededRng(world.hex), [world.hex]);
 
   // ── Placed bodies (data-driven) ────────────────────────────────────────────
   const placedElements = useMemo(() => {
@@ -861,29 +1330,41 @@ const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
           sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0,
           ...(hasMainMoon ? { satellite: { moonRadius: 0.5 } } : {}),
         };
-        return <GasGiantBody key={i} placement={placement} idx={ggIdx++} onPivot={onPivot} world={hasMainMoon ? world : undefined} classification={b.classification} />;
+        const bodyId = `gas-${orbit.orbitId}-${i}`;
+        return <GasGiantBody key={i} placement={placement} idx={ggIdx++} onPivot={onPivot} world={hasMainMoon ? world : undefined} classification={b.classification} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
       }
       if (b.kind === "belt") {
-        const placement: WorldPlacement = { type: "belt", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 };
-        return <BeltRing key={i} placement={placement} />;
+        const placement: WorldPlacement = {
+          type: "belt",
+          orbitNum: orbit.orbitId,
+          sceneRadius: orbitToScene(orbit.orbitId),
+          angle0: orbit.angle0,
+          label: b.name,
+          isMainWorld: b.isMainWorld,
+        };
+        const bodyId = `belt-${orbit.orbitId}-${i}`;
+        return <AsteroidBeltBody key={i} placement={placement} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
       }
       if (b.kind === "world" && b.isMainWorld) {
         const placement: WorldPlacement = { type: "mainWorld", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0, label: world.name };
-        return <WorldBody key={i} placement={placement} world={world} onPivot={onPivot} />;
+        const bodyId = `main-${orbit.orbitId}-${world.hex}`;
+        return <WorldBody key={i} placement={placement} world={world} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
       }
       // Rocky parent (bigworld) hosting main world as a moon — isSatellite + no gas giants
       if (b.kind === "world" && b.isParent) {
         return <RockyParentBody key={i} orbit={orbit} world={world} onPivot={onPivot} />;
       }
       // Non-main placed world — render from body data
-      return <PlacedWorldBody key={i} orbit={orbit} onPivot={onPivot} />;
+      const bodyId = `world-${orbit.orbitId}-${i}`;
+      return <PlacedWorldBody key={i} orbit={orbit} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useData, systemData, world, onPivot]);
+  }, [focusedBodyId, onFocusBody, useData, systemData, world, onPivot]);
 
   // ── Unplaced bodies (procedural scatter) ───────────────────────────────────
   const unplacedElements = useMemo(() => {
     if (!useData || !systemData) return null;
+    const rng        = seededRng(`${world.hex}:unplaced`);
     const used       = new Set(systemData.orbits.map(o => o.orbitId));
     const mainOrbit  = systemData.orbits[0]?.orbitId ?? 3;
     const place      = (c: number) => { let o = Math.max(1, c); while (used.has(o)) o++; used.add(o); return o; };
@@ -893,24 +1374,27 @@ const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
       if (body.kind === "gasGiant") {
         const orbitNum = place(mainOrbit + ggOffset++);
         const p: WorldPlacement = { type: "gasGiant", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: rng() * Math.PI * 2 };
-        return <GasGiantBody key={`u${i}`} placement={p} idx={ggIdx++} onPivot={onPivot} classification={body.classification} />;
+        const bodyId = `unplaced-gas-${orbitNum}-${i}`;
+        return <GasGiantBody key={`u${i}`} placement={p} idx={ggIdx++} onPivot={onPivot} classification={body.classification} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
       }
       if (body.kind === "belt") {
         const orbitNum = place(mainOrbit - 1);
-        const p: WorldPlacement = { type: "belt", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: 0 };
-        return <BeltRing key={`u${i}`} placement={p} />;
+        const p: WorldPlacement = { type: "belt", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: 0, isMainWorld: false };
+        const bodyId = `unplaced-belt-${orbitNum}-${i}`;
+        return <AsteroidBeltBody key={`u${i}`} placement={p} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
       }
       if (body.kind === "world") {
         const candidate = mainOrbit - otherOffset++;
         if (candidate < 1) return null;
         const orbitNum = place(candidate);
         const p: WorldPlacement = { type: "otherWorld", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: rng() * Math.PI * 2 };
-        return <OtherWorld key={`u${i}`} placement={p} onPivot={onPivot} />;
+        const bodyId = `unplaced-world-${orbitNum}-${i}`;
+        return <OtherWorld key={`u${i}`} placement={p} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
       }
       return null;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useData, systemData, onPivot]);
+  }, [focusedBodyId, onFocusBody, useData, systemData, world.hex, onPivot]);
 
   // ── Procedural fallback (no system data) ──────────────────────────────────
   const proceduralElements = useMemo(() => {
@@ -918,12 +1402,12 @@ const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
     const placements = buildWorldPlacements(world);
     let ggCount = 0;
     return placements.map((p, i) => {
-      if (p.type === "mainWorld") return <WorldBody    key={i} placement={p} world={world} onPivot={onPivot} />;
-      if (p.type === "gasGiant")  return <GasGiantBody key={i} placement={p} idx={ggCount++} onPivot={onPivot} />;
-      if (p.type === "belt")      return <BeltRing     key={i} placement={p} />;
-      return                             <OtherWorld   key={i} placement={p} onPivot={onPivot} />;
+      if (p.type === "mainWorld") return <WorldBody key={i} placement={p} world={world} onPivot={onPivot} bodyId={`fallback-main-${i}`} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
+      if (p.type === "gasGiant")  return <GasGiantBody key={i} placement={p} idx={ggCount++} onPivot={onPivot} bodyId={`fallback-gas-${i}`} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
+      if (p.type === "belt")      return <AsteroidBeltBody key={i} placement={p} onPivot={onPivot} bodyId={`fallback-belt-${i}`} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
+      return                             <OtherWorld key={i} placement={p} onPivot={onPivot} bodyId={`fallback-world-${i}`} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
     });
-  }, [useData, world, onPivot]);
+  }, [focusedBodyId, onFocusBody, useData, world, onPivot]);
 
   return <>{placedElements}{unplacedElements}{proceduralElements}</>;
 };
@@ -2192,10 +2676,18 @@ const StarSystemView = ({
 
   const controlsRef = useRef<ControlsHandle>(null);
   const pivotTarget = useRef(new THREE.Vector3());
+  const [focusedBodyId, setFocusedBodyId] = useState<string | null>(null);
   const onPivot = useCallback((pos: THREE.Vector3) => { pivotTarget.current.copy(pos); }, []);
 
   const companionChildren = useData && systemData && systemData.companionOrbits.length > 0
-    ? <CompanionBodies orbits={systemData.companionOrbits} onPivot={onPivot} />
+    ? (
+      <CompanionBodies
+        orbits={systemData.companionOrbits}
+        onPivot={onPivot}
+        focusedBodyId={focusedBodyId}
+        onFocusBody={setFocusedBodyId}
+      />
+    )
     : undefined;
 
   const outermostScene = useMemo(() => {
@@ -2239,7 +2731,13 @@ const StarSystemView = ({
               <Starfield />
               <AutoRotatingSystemGroup enabled={autoRotateSystem}>
                 <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
-                <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
+                <WorldSystem
+                  world={world}
+                  onPivot={onPivot}
+                  systemData={systemData}
+                  focusedBodyId={focusedBodyId}
+                  onFocusBody={setFocusedBodyId}
+                />
               </AutoRotatingSystemGroup>
               {sceneMode === "system" && (
                 <>
