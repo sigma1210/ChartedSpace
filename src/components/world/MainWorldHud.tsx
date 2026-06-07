@@ -7,11 +7,42 @@ import { buildCloudTexture, buildTexture, cloudConfig, PLANET_SPEED } from "./Pl
 
 const wrap01 = (value: number) => ((value % 1) + 1) % 1;
 const textureTurnsPerSecond = PLANET_SPEED / (Math.PI * 2);
+const PREVIEW_CANVAS_SIZE = 352;
 const hexToRgb = (color: string) => ({
   r: parseInt(color.slice(1, 3), 16),
   g: parseInt(color.slice(3, 5), 16),
   b: parseInt(color.slice(5, 7), 16),
 });
+
+const sampleBilinear = (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  lon: number,
+  lat: number,
+) => {
+  const px = wrap01(lon) * width;
+  const py = Math.max(0, Math.min(1, lat)) * (height - 1);
+  const x0 = Math.floor(px) % width;
+  const x1 = (x0 + 1) % width;
+  const y0 = Math.max(0, Math.min(height - 1, Math.floor(py)));
+  const y1 = Math.max(0, Math.min(height - 1, y0 + 1));
+  const tx = px - Math.floor(px);
+  const ty = py - y0;
+  const i00 = (y0 * width + x0) * 4;
+  const i10 = (y0 * width + x1) * 4;
+  const i01 = (y1 * width + x0) * 4;
+  const i11 = (y1 * width + x1) * 4;
+  const top = 1 - ty;
+  const left = 1 - tx;
+
+  return {
+    r: (data[i00] * left + data[i10] * tx) * top + (data[i01] * left + data[i11] * tx) * ty,
+    g: (data[i00 + 1] * left + data[i10 + 1] * tx) * top + (data[i01 + 1] * left + data[i11 + 1] * tx) * ty,
+    b: (data[i00 + 2] * left + data[i10 + 2] * tx) * top + (data[i01 + 2] * left + data[i11 + 2] * tx) * ty,
+    a: (data[i00 + 3] * left + data[i10 + 3] * tx) * top + (data[i01 + 3] * left + data[i11 + 3] * tx) * ty,
+  };
+};
 
 const MainWorldGlobePreview = ({ world }: { world: World }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,24 +104,20 @@ const MainWorldGlobePreview = ({ world }: { world: World }) => {
           const nz = Math.sqrt(1 - rr);
           const lon = wrap01(Math.atan2(nx, nz) / (Math.PI * 2) + 0.5 + rotation);
           const lat = Math.max(0, Math.min(1, 0.5 - Math.asin(ny) / Math.PI));
-          const sx = Math.min(source.width - 1, Math.floor(lon * source.width));
-          const sy = Math.min(source.height - 1, Math.floor(lat * source.height));
-          const sample = (sy * source.width + sx) * 4;
+          const surfaceSample = sampleBilinear(sourceData, source.width, source.height, lon, lat);
           const rim = Math.max(0, Math.min(1, (1 - rr) * 4));
           const light = Math.max(0.28, Math.min(1.08, 0.42 + nz * 0.55 - nx * 0.12 - ny * 0.08));
-          let red = sourceData[sample] * light;
-          let green = sourceData[sample + 1] * light;
-          let blue = sourceData[sample + 2] * light;
+          let red = surfaceSample.r * light;
+          let green = surfaceSample.g * light;
+          let blue = surfaceSample.b * light;
 
           cloudTextures.forEach(({ layer, color }, index) => {
             const cloud = cloudData[index];
             if (!cloud.data) return;
 
             const cloudLon = wrap01(lon - elapsed * textureTurnsPerSecond * layer.speedMult);
-            const cx = Math.min(cloud.width - 1, Math.floor(cloudLon * cloud.width));
-            const cy = Math.min(cloud.height - 1, Math.floor(lat * cloud.height));
-            const cloudSample = (cy * cloud.width + cx) * 4;
-            const density = (cloud.data[cloudSample] / 255) * layer.opacity * 0.95 * nz;
+            const cloudSample = sampleBilinear(cloud.data, cloud.width, cloud.height, cloudLon, lat);
+            const density = (cloudSample.r / 255) * layer.opacity * 0.95 * nz;
 
             red = red * (1 - density) + color.r * density;
             green = green * (1 - density) + color.g * density;
@@ -129,8 +156,8 @@ const MainWorldGlobePreview = ({ world }: { world: World }) => {
   return (
     <canvas
       ref={canvasRef}
-      width={176}
-      height={176}
+      width={PREVIEW_CANVAS_SIZE}
+      height={PREVIEW_CANVAS_SIZE}
       className="aspect-square w-44 border border-(--hud-border) bg-[#020c14]"
     />
   );
