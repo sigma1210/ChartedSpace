@@ -5,7 +5,7 @@ import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } fro
 import { useSelector } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
+import { Coins, Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch } from "../../store/hooks";
@@ -1024,6 +1024,8 @@ const CameraPinnedSystemHud = ({
   onOpenNavigationHud,
   characterProfileHudVisible,
   onOpenCharacterProfileHud,
+  tradeHudVisible,
+  onOpenTradeHud,
 }: {
   world: World;
   miniMapVisible: boolean;
@@ -1032,6 +1034,8 @@ const CameraPinnedSystemHud = ({
   onOpenNavigationHud: () => void;
   characterProfileHudVisible: boolean;
   onOpenCharacterProfileHud: () => void;
+  tradeHudVisible: boolean;
+  onOpenTradeHud: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
@@ -1142,6 +1146,12 @@ const CameraPinnedSystemHud = ({
               >
                 <User size={13} aria-hidden="true" />
               </HudIconButton>
+              <HudIconButton
+                title={tradeHudVisible ? "Trade HUD visible" : "Open trade HUD"}
+                onClick={onOpenTradeHud}
+              >
+                <Coins size={13} aria-hidden="true" />
+              </HudIconButton>
             </div>
           </HudPanel>
         ) : (
@@ -1156,6 +1166,104 @@ const CameraPinnedSystemHud = ({
             HUD
           </button>
         )}
+      </Html>
+    </group>
+  );
+};
+
+const CameraPinnedTradeHud = ({
+  visible,
+  tradeHud,
+  onClose,
+}: {
+  visible: boolean;
+  tradeHud: ReactNode;
+  onClose: () => void;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+  const { camera, size } = useThree();
+  const [offset, setOffset] = useState<HudOffset>({ x: 0.2, y: -0.1 });
+  const [pinned, setPinned] = useState(true);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group || !visible) return;
+
+    const distance = 4.8;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, offset.x * width * 0.5)
+      .addScaledVector(up, offset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      setOffset(clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      }));
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [size.height, size.width]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+  };
+
+  if (!visible) return null;
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.8}>
+        <HudPanel>
+          <HudHeader
+            title="Trade"
+            pinned={pinned}
+            onTogglePinned={() => setPinned((value) => !value)}
+            onClose={onClose}
+            onDragStart={startDrag}
+            closeTitle="Close trade HUD"
+          />
+          {tradeHud}
+        </HudPanel>
       </Html>
     </group>
   );
@@ -1687,6 +1795,10 @@ const StarSystemView = ({
   onOpenCharacterProfileHud = () => {},
   onCloseCharacterProfileHud = () => {},
   characterProfileHud = null,
+  tradeHudVisible = false,
+  onOpenTradeHud = () => {},
+  onCloseTradeHud = () => {},
+  tradeHud = null,
   navigationHudVisible = false,
   onOpenNavigationHud = () => {},
   onCloseNavigationHud = () => {},
@@ -1717,6 +1829,10 @@ const StarSystemView = ({
   onOpenCharacterProfileHud?: () => void;
   onCloseCharacterProfileHud?: () => void;
   characterProfileHud?: ReactNode;
+  tradeHudVisible?: boolean;
+  onOpenTradeHud?: () => void;
+  onCloseTradeHud?: () => void;
+  tradeHud?: ReactNode;
   navigationHudVisible?: boolean;
   onOpenNavigationHud?: () => void;
   onCloseNavigationHud?: () => void;
@@ -1848,6 +1964,8 @@ const StarSystemView = ({
             onOpenNavigationHud={onOpenNavigationHud}
             characterProfileHudVisible={characterProfileHudVisible}
             onOpenCharacterProfileHud={onOpenCharacterProfileHud}
+            tradeHudVisible={tradeHudVisible}
+            onOpenTradeHud={onOpenTradeHud}
           />
         )}
           {showHudControls && navigationHud && (
@@ -1862,6 +1980,13 @@ const StarSystemView = ({
               visible={characterProfileHudVisible}
               characterProfileHud={characterProfileHud}
               onClose={onCloseCharacterProfileHud}
+            />
+          )}
+          {showHudControls && tradeHud && (
+            <CameraPinnedTradeHud
+              visible={tradeHudVisible}
+              tradeHud={tradeHud}
+              onClose={onCloseTradeHud}
             />
           )}
           {showHudControls && miniMap && (

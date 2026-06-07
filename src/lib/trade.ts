@@ -1,6 +1,6 @@
 // ─── Skill price modifier (stub) ─────────────────────────────────────────────
-// Returns an additive credit modifier to apply to a sale price.
-// Currently returns 0. Future: broker skill + 2D6 roll → ± modifier.
+// Returns a multiplier to apply to a purchase price.
+// Currently returns 1. Future: broker skill + 2D6 roll → adjusted multiplier.
 
 export interface TradeSkills {
   broker:     number;
@@ -11,7 +11,7 @@ export interface TradeSkills {
 
 export const deriveSkillPriceModifier = (skills: TradeSkills): number => {
   void skills;
-  return 0;
+  return 1;
 };
 
 // ─── UWP field shape (matches both World.uwp client type and Prisma fields) ──

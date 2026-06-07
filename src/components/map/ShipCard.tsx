@@ -58,7 +58,7 @@ const ShipCard = () => {
       .then(r => r.json())
       .then((d: MarketData) => {
         setMarketData(d);
-        setCommodity(d.tradeCodes[0] ?? "General");
+        setCommodity(d.tradeCodes[0] ?? "");
       })
       .catch(() => setMarketData(null))
       .finally(() => setMarketLoading(false));
@@ -308,7 +308,7 @@ const ShipCard = () => {
 
                           {/* Commodity selector */}
                           <div className="flex flex-wrap gap-1">
-                            {[...marketData.tradeCodes, "General"].map(code => (
+                            {marketData.tradeCodes.map(code => (
                               <button
                                 key={code}
                                 onClick={() => setCommodity(code)}

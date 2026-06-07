@@ -11,17 +11,27 @@ import {
   setActiveWorldHex,
   setTargetWorldHex,
 } from "../../../store/slices/galaxySlice";
-import { fetchShip } from "../../../store/slices/shipSlice";
+import { fetchShip, invalidateShip } from "../../../store/slices/shipSlice";
 import { fetchTurn, advanceTurn } from "../../../store/slices/turnSlice";
 import { fetchCharacters, invalidateCharacters } from "../../../store/slices/characterSlice";
 import { setActiveCharacter, setGalaxyMiniMapVisible, setSectorMiniMapVisible, setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
 import {
   selectActiveSectorAbbr,
   selectActiveSubsectorKey,
+  selectActiveWorld,
   selectActiveWorldHex,
+  selectActiveWorldCost,
+  selectActiveWorldLocation,
+  selectActiveWorldName,
+  selectActiveWorldTradeCodes,
   selectAllSectors,
+  selectExpectedSalePrice,
   selectSectorData,
   selectSectorLoadStatus,
+  selectTargetWorld,
+  selectTargetWorldLocation,
+  selectTargetWorldName,
+  selectTargetWorldTradeCodes,
   selectWorldDotStyle,
   selectWorldByCoord,
 } from "../../../store/selectors/galaxy.selectors";
@@ -30,6 +40,7 @@ import { selectCharacters, selectCurrentCharacter } from "../../../store/selecto
 import StarSystemView from "../../../components/world/StarSystemView";
 import NavigationHud from "../../../components/world/NavigationHud";
 import { CharacterProfileHud } from "../../../components/world/CharacterProfileHud";
+import { TradeSystemHud } from "../../../components/world/TradeSystemHud";
 import { buildNavTargets, SubsectorMiniMapView } from "../../../components/map/SubsectorMiniMap";
 import { SubsectorGridView } from "../../../components/map/SubsectorGrid";
 import { StarFieldView } from "../../../components/map/StarField";
@@ -67,6 +78,16 @@ const CurrentSystemPageClient = () => {
   const shipColor = useAppSelector(selectShipColor);
   const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
   const activeSubsectorKey = useAppSelector(selectActiveSubsectorKey);
+  const activeTradeWorld = useAppSelector(selectActiveWorld);
+  const activeTradeWorldName = useAppSelector(selectActiveWorldName);
+  const activeTradeWorldCost = useAppSelector(selectActiveWorldCost);
+  const activeTradeWorldLocation = useAppSelector(selectActiveWorldLocation);
+  const activeTradeCodes = useAppSelector(selectActiveWorldTradeCodes);
+  const targetTradeWorld = useAppSelector(selectTargetWorld);
+  const targetTradeWorldName = useAppSelector(selectTargetWorldName);
+  const targetTradeWorldLocation = useAppSelector(selectTargetWorldLocation);
+  const targetTradeCodes = useAppSelector(selectTargetWorldTradeCodes);
+  const expectedSalePrice = useAppSelector(selectExpectedSalePrice);
   const allSectors = useAppSelector(selectAllSectors);
   const activeSector = useAppSelector(selectSectorData(activeSectorAbbr));
   const activeSectorStatus = useAppSelector(selectSectorLoadStatus(activeSectorAbbr));
@@ -79,6 +100,7 @@ const CurrentSystemPageClient = () => {
   const loadingStatus = useAppSelector((state) => state.galaxy.loadingStatus);
   const [navigationHudVisible, setNavigationHudVisible] = useState(false);
   const [characterProfileHudVisible, setCharacterProfileHudVisible] = useState(false);
+  const [tradeHudVisible, setTradeHudVisible] = useState(false);
   const [selectedDestinationKey, setSelectedDestinationKey] = useState<string | null>(null);
   const [plotStatus, setPlotStatus] = useState<PlotStatus>("idle");
   const [hasStoredJumpDestination, setHasStoredJumpDestination] = useState(
@@ -404,6 +426,13 @@ const CurrentSystemPageClient = () => {
     }
   }, [dispatch, ship?.currentWorldId]);
 
+  const handleCargoPurchased = useCallback(async () => {
+    await dispatch(invalidateShip());
+    await dispatch(fetchShip());
+    await dispatch(invalidateCharacters());
+    await dispatch(fetchCharacters());
+  }, [dispatch]);
+
   const sectorByCoord = new Map(allSectors.map((sector) => [`${sector.X},${sector.Y}`, sector]));
   const nav = buildNavTargets(
     activeSubsectorKey,
@@ -488,6 +517,25 @@ const CurrentSystemPageClient = () => {
       }}
     />
   );
+  const tradeHud = (
+    <TradeSystemHud
+      activeWorld={activeTradeWorld}
+      activeWorldName={activeTradeWorldName}
+      activeWorldLocation={activeTradeWorldLocation}
+      activeTradeCodes={activeTradeCodes}
+      activeWorldCost={activeTradeWorldCost}
+      targetWorld={targetTradeWorld}
+      targetWorldName={targetTradeWorldName}
+      targetWorldLocation={targetTradeWorldLocation}
+      targetTradeCodes={targetTradeCodes}
+      expectedSalePrice={expectedSalePrice}
+      credits={currentCharacter?.credits ?? null}
+      cargo={ship?.cargo ?? []}
+      isDocked={ship?.status === "docked"}
+      onCargoPurchased={handleCargoPurchased}
+      onCargoSold={handleCargoPurchased}
+    />
+  );
   const renderableLocation = showWarpLayer
     ? lastRenderableLocationRef.current
     : world && shipLocation?.sectorAbbr
@@ -529,6 +577,10 @@ const CurrentSystemPageClient = () => {
             onOpenCharacterProfileHud={() => setCharacterProfileHudVisible(true)}
             onCloseCharacterProfileHud={() => setCharacterProfileHudVisible(false)}
             characterProfileHud={characterProfileHud}
+            tradeHudVisible={tradeHudVisible}
+            onOpenTradeHud={() => setTradeHudVisible(true)}
+            onCloseTradeHud={() => setTradeHudVisible(false)}
+            tradeHud={tradeHud}
             onWarpExitReached={handleWarpExitReached}
           />
           {ship?.status === "in_jump" && (
