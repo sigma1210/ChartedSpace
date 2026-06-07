@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { Coins, Globe2, Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
+import { Coins, Globe2, Grid3X3, Navigation, Radar, User } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch } from "../../store/hooks";
@@ -27,7 +26,7 @@ import { uwpVal } from "../../lib/worldMap";
 import { selectSystemDataByKey, selectSystemGeneratedTurnByKey, selectSystemStatusByKey } from "../../store/selectors/system.selectors";
 import { getSystemData } from "../../store/slices/systemSlice";
 import type { SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
-import { HudHeader, HudIconButton, HudPanel, hudIconButtonClass } from "./HudPrimitives";
+import { HudHeader, HudIconButton, HudPanel } from "./HudPrimitives";
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
 
@@ -1007,6 +1006,23 @@ const SystemCameraReset = ({
   return null;
 };
 
+const AutoRotatingSystemGroup = ({
+  enabled,
+  children,
+}: {
+  enabled: boolean;
+  children: ReactNode;
+}) => {
+  const ref = useRef<THREE.Group>(null);
+
+  useFrame((_, delta) => {
+    if (!enabled || !ref.current) return;
+    ref.current.rotation.y += delta * 0.035;
+  });
+
+  return <group ref={ref}>{children}</group>;
+};
+
 // ─── Camera-pinned 3D HUD ────────────────────────────────────────────────────
 
 type HudOffset = { x: number; y: number };
@@ -1020,6 +1036,8 @@ const CameraPinnedSystemHud = ({
   world,
   miniMapVisible,
   onOpenMiniMap,
+  selectedSystemDetailAvailable,
+  onOpenSelectedSystemDetail,
   navigationHudVisible,
   onOpenNavigationHud,
   mainWorldHudVisible,
@@ -1032,6 +1050,8 @@ const CameraPinnedSystemHud = ({
   world: World;
   miniMapVisible: boolean;
   onOpenMiniMap: () => void;
+  selectedSystemDetailAvailable: boolean;
+  onOpenSelectedSystemDetail: () => void;
   navigationHudVisible: boolean;
   onOpenNavigationHud: () => void;
   mainWorldHudVisible: boolean;
@@ -1124,19 +1144,18 @@ const CameraPinnedSystemHud = ({
               closeTitle="Hide HUD"
             />
             <div className="flex items-center gap-1">
-              <Link
-                href="/map"
-                title="Open map"
-                aria-label="Open map"
-                className={hudIconButtonClass}
-              >
-                <Map size={13} aria-hidden="true" />
-              </Link>
               <HudIconButton
                 title={miniMapVisible ? "Mini map visible" : "Open mini map"}
                 onClick={onOpenMiniMap}
               >
                 <Radar size={13} aria-hidden="true" />
+              </HudIconButton>
+              <HudIconButton
+                title={selectedSystemDetailAvailable ? "Open selected system" : "Select a world on the mini map"}
+                onClick={onOpenSelectedSystemDetail}
+                disabled={!selectedSystemDetailAvailable}
+              >
+                <Grid3X3 size={13} aria-hidden="true" />
               </HudIconButton>
               <HudIconButton
                 title={navigationHudVisible ? "Navigation visible" : "Open navigation"}
@@ -1891,6 +1910,8 @@ const StarSystemView = ({
   onOpenMiniMap = () => {},
   onCloseMiniMap = () => {},
   miniMap = null,
+  selectedSystemDetailAvailable = false,
+  onOpenSelectedSystemDetail = () => {},
   sectorMiniMapVisible = false,
   onOpenSectorMiniMap = () => {},
   onCloseSectorMiniMap = () => {},
@@ -1920,6 +1941,7 @@ const StarSystemView = ({
   renderSystemLayer = true,
   warpLayerOpacity = 0,
   warpLayerActive = false,
+  autoRotateSystem = false,
   onWarpExitReached,
 }: {
   world: World;
@@ -1929,6 +1951,8 @@ const StarSystemView = ({
   onOpenMiniMap?: () => void;
   onCloseMiniMap?: () => void;
   miniMap?: ReactNode;
+  selectedSystemDetailAvailable?: boolean;
+  onOpenSelectedSystemDetail?: () => void;
   sectorMiniMapVisible?: boolean;
   onOpenSectorMiniMap?: () => void;
   onCloseSectorMiniMap?: () => void;
@@ -1958,6 +1982,7 @@ const StarSystemView = ({
   renderSystemLayer?: boolean;
   warpLayerOpacity?: number;
   warpLayerActive?: boolean;
+  autoRotateSystem?: boolean;
   onWarpExitReached?: () => void;
 }) => {
   const dispatch = useAppDispatch();
@@ -2060,8 +2085,10 @@ const StarSystemView = ({
               <ambientLight intensity={0.6} />
               <directionalLight position={[2, 3, 4]} intensity={1.4} />
               <Starfield />
-              <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
-              <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
+              <AutoRotatingSystemGroup enabled={autoRotateSystem}>
+                <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
+                <WorldSystem world={world} onPivot={onPivot} systemData={systemData} />
+              </AutoRotatingSystemGroup>
               {sceneMode === "system" && (
                 <>
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -2076,6 +2103,8 @@ const StarSystemView = ({
               world={world}
               miniMapVisible={miniMapVisible}
               onOpenMiniMap={onOpenMiniMap}
+              selectedSystemDetailAvailable={selectedSystemDetailAvailable}
+              onOpenSelectedSystemDetail={onOpenSelectedSystemDetail}
               navigationHudVisible={navigationHudVisible}
               onOpenNavigationHud={onOpenNavigationHud}
               mainWorldHudVisible={mainWorldHudVisible}

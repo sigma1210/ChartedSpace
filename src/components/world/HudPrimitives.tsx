@@ -2,7 +2,7 @@ import type { PointerEventHandler, ReactNode } from "react";
 import { Grip, Pin, PinOff, X } from "lucide-react";
 
 export const hudIconButtonClass =
-  "grid h-3 w-3 shrink-0 place-items-center border border-transparent bg-transparent text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:bg-(--hud-bg)/50 hover:text-(--hud-text) focus-visible:border-(--hud-accent) focus-visible:bg-(--hud-bg)/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-transparent disabled:hover:bg-transparent disabled:hover:text-(--hud-text-dim)";
+  "group relative grid h-3 w-3 shrink-0 place-items-center border border-transparent bg-transparent text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:bg-(--hud-bg)/50 hover:text-(--hud-text) focus-visible:border-(--hud-accent) focus-visible:bg-(--hud-bg)/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-transparent disabled:hover:bg-transparent disabled:hover:text-(--hud-text-dim)";
 
 export const hudActionButtonClass =
   "flex h-7 min-w-24 items-center justify-center gap-1.5 border border-(--hud-accent) bg-(--hud-bg)/45 px-2 font-mono text-[9px] uppercase tracking-wider text-(--hud-accent) transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg) disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-(--hud-bg)/45 disabled:hover:text-(--hud-accent)";
@@ -20,13 +20,15 @@ export const HudIconButton = ({
 }) => (
   <button
     type="button"
-    title={title}
     aria-label={title}
     onClick={onClick}
     disabled={disabled}
     className={hudIconButtonClass}
   >
     {children}
+    <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 whitespace-nowrap border border-(--hud-accent)/70 bg-(--hud-bg)/95 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-accent) shadow-[0_0_12px_rgba(34,211,238,0.18)] group-hover:block group-focus-visible:block">
+      {title}
+    </span>
   </button>
 );
 

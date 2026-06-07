@@ -16,7 +16,7 @@ import { fetchShip, invalidateShip } from "../../../store/slices/shipSlice";
 import { fetchTurn, advanceTurn } from "../../../store/slices/turnSlice";
 import { fetchCharacters, invalidateCharacters } from "../../../store/slices/characterSlice";
 import { selectCurrentTurn } from "../../../store/selectors/turn.selectors";
-import { setActiveCharacter, setGalaxyMiniMapVisible, setSectorMiniMapVisible, setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
+import { openSystemDetail, setActiveCharacter, setGalaxyMiniMapVisible, setSectorMiniMapVisible, setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
 import {
   selectActiveSectorAbbr,
   selectActiveSubsectorKey,
@@ -477,6 +477,12 @@ const CurrentSystemPageClient = () => {
     await refreshShipAndCharacters();
   }, [refreshShipAndCharacters]);
 
+  const handleOpenSelectedSystemDetail = useCallback(() => {
+    if (!activeTradeWorld || !activeSectorAbbr) return;
+    dispatch(setActiveWorldHex({ sectorAbbr: activeSectorAbbr, hex: activeTradeWorld.hex }));
+    dispatch(openSystemDetail(activeTradeWorld.hex));
+  }, [activeSectorAbbr, activeTradeWorld, dispatch]);
+
   const sectorByCoord = new Map(allSectors.map((sector) => [`${sector.X},${sector.Y}`, sector]));
   const nav = buildNavTargets(
     activeSubsectorKey,
@@ -608,6 +614,8 @@ const CurrentSystemPageClient = () => {
             onOpenMiniMap={() => dispatch(setSubsectorMiniMapVisible(true))}
             onCloseMiniMap={() => dispatch(setSubsectorMiniMapVisible(false))}
             miniMap={miniMap}
+            selectedSystemDetailAvailable={!!activeTradeWorld}
+            onOpenSelectedSystemDetail={handleOpenSelectedSystemDetail}
             sectorMiniMapVisible={sectorMiniMapVisible}
             onOpenSectorMiniMap={() => dispatch(setSectorMiniMapVisible(true))}
             onCloseSectorMiniMap={() => dispatch(setSectorMiniMapVisible(false))}
