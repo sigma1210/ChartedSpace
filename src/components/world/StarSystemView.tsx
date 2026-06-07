@@ -25,7 +25,7 @@ import {
 import { uwpVal } from "../../lib/worldMap";
 import { selectSystemDataByKey, selectSystemGeneratedTurnByKey, selectSystemStatusByKey } from "../../store/selectors/system.selectors";
 import { getSystemData } from "../../store/slices/systemSlice";
-import type { SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
+import type { GasGiantType as SystemGasGiantType, SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
 import { HudHeader, HudIconButton, HudPanel } from "./HudPrimitives";
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
@@ -469,49 +469,133 @@ const RockyParentBody = ({
 
 // ─── Gas giant classification ─────────────────────────────────────────────────
 
-type GasGiantType = 'hot' | 'jovian' | 'ice';
+type GasGiantVisualType = 'hot' | 'jovian' | 'saturn' | 'ice';
 
-const ggType = (orbitNum: number): GasGiantType => {
+const ggType = (orbitNum: number): GasGiantVisualType => {
   if (orbitNum <= 3) return 'hot';
   if (orbitNum <= 7) return 'jovian';
   return 'ice';
 };
 
-// ─── Reference textures (loaded once, client-side) ───────────────────────────
-
-const _loader = new THREE.TextureLoader();
-let _jupiterTex: THREE.Texture | null = null;
-let _saturnTex:  THREE.Texture | null = null;
-let _ringTex:    THREE.Texture | null = null;
-
-const jupiterTex = () => { if (!_jupiterTex) _jupiterTex = _loader.load('/textures/jupiter.jpg'); return _jupiterTex; };
-const saturnTex  = () => { if (!_saturnTex)  _saturnTex  = _loader.load('/textures/saturn.jpg');  return _saturnTex; };
-const ringTex    = () => { if (!_ringTex)    _ringTex    = _loader.load('/textures/saturn_ring.png'); return _ringTex; };
+const visualGasGiantType = (
+  orbitNum: number,
+  classification?: SystemGasGiantType | null,
+): GasGiantVisualType => {
+  if (classification === "IG") return "ice";
+  if (classification === "SGG") return "saturn";
+  if (classification === "LGG") return orbitNum <= 3 ? "hot" : "jovian";
+  return ggType(orbitNum);
+};
 
 // ─── Procedural banded texture (hot Jupiters / ice giants) ───────────────────
 
-const HOT_BANDS  = ['#c2770c','#1e3a5f','#b45309','#2563eb','#78350f','#1d4ed8'];
-const ICE_BANDS  = ['#164e63','#0891b2','#083344','#67e8f9','#0e7490','#155e75'];
+const HOT_BANDS  = ['#7c2d12', '#b45309', '#d97706', '#1e3a8a', '#0f172a', '#f59e0b'];
+const JOVIAN_BANDS = ['#8a5b35', '#d8b384', '#6f4a2e', '#ead4aa', '#a66b39', '#f2dfc1'];
+const SATURN_BANDS = ['#8b7350', '#d8c298', '#6f6044', '#efe1bd', '#b69a6a', '#f5e9cd'];
+const ICE_BANDS  = ['#0f3b4a', '#155e75', '#0891b2', '#67e8f9', '#164e63', '#a5f3fc'];
+const JOVIAN_RING_BANDS = ['#2f2419', '#8a7356', '#d7c19a', '#f1e2c3', '#9d825d', '#443322'];
+const ICE_RING_BANDS = ['#071b24', '#1f6f86', '#8de8f7', '#d6fbff', '#2d91a8', '#092f3d'];
 
-const buildBandedTex = (colors: string[], seed: number): THREE.CanvasTexture => {
-  const W = 256, H = 128;
+const colorToRgb = (color: string) => new THREE.Color(color);
+
+const mixBandColor = (colors: string[], value: number) => {
+  const scaled = THREE.MathUtils.clamp(value, 0, 0.999) * (colors.length - 1);
+  const index = Math.floor(scaled);
+  const mix = scaled - index;
+  const a = colorToRgb(colors[index]);
+  const b = colorToRgb(colors[Math.min(colors.length - 1, index + 1)]);
+  return a.lerp(b, mix);
+};
+
+const buildGasGiantTex = (colors: string[], seed: number): THREE.CanvasTexture => {
+  const W = 768, H = 384;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d')!;
-  const n = colors.length;
+  const image = ctx.createImageData(W, H);
+  const data = image.data;
+  const seedA = seed * 1.73 + 0.31;
+  const seedB = seed * 2.41 + 1.19;
+
   for (let y = 0; y < H; y++) {
-    const t    = y / H;
-    const wave = Math.sin(t * Math.PI * 9 + seed * 2.3) * 0.5
-               + Math.sin(t * Math.PI * 3 + seed * 0.7) * 0.25;
-    const i = Math.min(n - 1, Math.max(0, Math.floor((wave * 0.5 + 0.5) * (n - 1))));
-    ctx.fillStyle = colors[i];
-    ctx.fillRect(0, y, W, 1);
+    const lat = y / (H - 1);
+    const band =
+      Math.sin(lat * Math.PI * 18 + seedA) * 0.18 +
+      Math.sin(lat * Math.PI * 7 + seedB) * 0.16 +
+      Math.sin(lat * Math.PI * 35 + seed * 0.77) * 0.06;
+
+    for (let x = 0; x < W; x++) {
+      const lon = x / W;
+      const shear = Math.sin(lat * Math.PI * 12 + seed) * 0.035;
+      const turbulence =
+        Math.sin((lon + shear) * Math.PI * 20 + lat * Math.PI * 5 + seedA) * 0.055 +
+        Math.sin((lon - shear) * Math.PI * 43 - lat * Math.PI * 9 + seedB) * 0.035 +
+        Math.sin((lon + lat * 0.35) * Math.PI * 82 + seed * 4.1) * 0.015;
+      const storm =
+        Math.sin((lon * 2.4 + seed * 0.17) * Math.PI * 2) *
+        Math.exp(-Math.pow((lat - (0.38 + Math.sin(seed) * 0.08)) * 16, 2)) * 0.07;
+      const value = THREE.MathUtils.clamp(0.5 + band + turbulence + storm, 0, 1);
+      const shade = 0.9 + Math.sin(lat * Math.PI * 46 + turbulence * 12) * 0.045;
+      const color = mixBandColor(colors, value);
+      const i = (y * W + x) * 4;
+
+      data[i] = Math.round(color.r * 255 * shade);
+      data[i + 1] = Math.round(color.g * 255 * shade);
+      data[i + 2] = Math.round(color.b * 255 * shade);
+      data[i + 3] = 255;
+    }
   }
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(0, Math.abs(Math.sin((seed + i) * 4.7)) * H, W, 2 + (i % 3));
+
+  ctx.putImageData(image, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+};
+
+const buildGasGiantRingTex = (colors: string[], seed: number): THREE.CanvasTexture => {
+  const W = 768, H = 96;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const image = ctx.createImageData(W, H);
+  const data = image.data;
+
+  for (let x = 0; x < W; x++) {
+    const radial = x / (W - 1);
+    const band =
+      Math.sin(radial * Math.PI * 18 + seed * 1.7) * 0.2 +
+      Math.sin(radial * Math.PI * 51 + seed * 0.6) * 0.08 +
+      Math.sin(radial * Math.PI * 127 + seed * 2.2) * 0.035;
+    const gapA = Math.exp(-Math.pow((radial - (0.36 + Math.sin(seed) * 0.06)) * 48, 2));
+    const gapB = Math.exp(-Math.pow((radial - (0.67 + Math.cos(seed) * 0.04)) * 70, 2));
+    const edgeFade = Math.sin(Math.PI * radial);
+    const alpha = THREE.MathUtils.clamp((0.42 + band) * edgeFade - gapA * 0.34 - gapB * 0.22, 0, 0.72);
+    const color = mixBandColor(colors, THREE.MathUtils.clamp(0.52 + band * 1.8, 0, 1));
+
+    for (let y = 0; y < H; y++) {
+      const grain = 0.93 + Math.sin((x * 13.1 + y * 7.7 + seed * 31) * 0.08) * 0.035;
+      const i = (y * W + x) * 4;
+      data[i] = Math.round(color.r * 255 * grain);
+      data[i + 1] = Math.round(color.g * 255 * grain);
+      data[i + 2] = Math.round(color.b * 255 * grain);
+      data[i + 3] = Math.round(alpha * 255);
+    }
   }
-  return new THREE.CanvasTexture(canvas);
+
+  ctx.putImageData(image, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
 };
 
 // ─── Saturn ring geometry with correct UVs ────────────────────────────────────
@@ -519,7 +603,7 @@ const buildBandedTex = (colors: string[], seed: number): THREE.CanvasTexture => 
 // texture maps from inner edge (u=0) to outer edge (u=1).
 
 const buildRingGeo = (inner: number, outer: number): THREE.BufferGeometry => {
-  const geo = new THREE.RingGeometry(inner, outer, 64);
+  const geo = new THREE.RingGeometry(inner, outer, 128);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const uv  = geo.attributes.uv as THREE.BufferAttribute;
   const v   = new THREE.Vector3();
@@ -538,29 +622,59 @@ type GasGiantBodyProps = {
   idx: number;
   onPivot: (pos: THREE.Vector3) => void;
   world?: World;
+  classification?: SystemGasGiantType | null;
 };
 
-const GasGiantBody = ({ placement, idx, onPivot, world }: GasGiantBodyProps) => {
+const GasGiantBody = ({ placement, idx, onPivot, world, classification = null }: GasGiantBodyProps) => {
   const ref   = useRef<THREE.Group>(null);
-  const speed = 0.018 / Math.sqrt(Math.max(1, placement.orbitNum));
+  const sphereRef = useRef<THREE.Mesh>(null);
+  const hazeRef = useRef<THREE.Mesh>(null);
   const r     = placement.sceneRadius;
-  const type  = ggType(placement.orbitNum);
+  const type  = visualGasGiantType(placement.orbitNum, classification);
 
   useEffect(() => { if (ref.current) ref.current.rotation.y = placement.angle0; }, []);
+  useFrame((_, delta) => {
+    if (sphereRef.current) sphereRef.current.rotation.y += delta * (type === 'hot' ? 0.16 : type === 'ice' ? 0.08 : 0.11);
+    if (hazeRef.current) hazeRef.current.rotation.y -= delta * (type === 'hot' ? 0.08 : 0.045);
+  });
 
-  // Ringed: jovian every 4th, ice every other — use Saturn texture + ring image
-  const hasRing = (type === 'jovian' && idx % 4 === 0) || (type === 'ice' && idx % 2 === 0);
-  const radius  = type === 'hot' ? 0.22 : type === 'jovian' ? 0.20 : 0.17;
+  // Ringed giants are common, but not universal; the pattern stays deterministic per system.
+  const hasRing = type !== 'hot' && (type === 'saturn' || (type === 'jovian' && idx % 3 === 0) || (type === 'ice' && idx % 2 === 0));
+  const radius  = type === 'hot' ? 0.22 : type === 'jovian' ? 0.22 : type === 'saturn' ? 0.19 : 0.17;
+  const seed = idx + placement.orbitNum * 0.27;
 
   const sphereTex = useMemo(() => {
-    if (hasRing)          return saturnTex();
-    if (type === 'jovian') return jupiterTex();
-    return buildBandedTex(type === 'hot' ? HOT_BANDS : ICE_BANDS, idx);
-  }, [type, hasRing, idx]);
+    if (hasRing)          return buildGasGiantTex(SATURN_BANDS, seed);
+    if (type === 'jovian') return buildGasGiantTex(JOVIAN_BANDS, seed);
+    return buildGasGiantTex(type === 'hot' ? HOT_BANDS : ICE_BANDS, seed);
+  }, [type, hasRing, seed]);
+  useEffect(() => () => sphereTex.dispose(), [sphereTex]);
 
   const ringGeo = useMemo(
-    () => hasRing ? buildRingGeo(radius * 1.3, radius * 2.2) : null,
+    () => hasRing ? buildRingGeo(radius * 1.35, radius * (type === 'ice' ? 2.35 : type === 'saturn' ? 2.85 : 2.55)) : null,
+    [hasRing, radius, type],
+  );
+  useEffect(() => () => ringGeo?.dispose(), [ringGeo]);
+
+  const ringShadowGeo = useMemo(
+    () => hasRing ? new THREE.TorusGeometry(radius * 1.018, radius * 0.012, 6, 96) : null,
     [hasRing, radius],
+  );
+  useEffect(() => () => ringShadowGeo?.dispose(), [ringShadowGeo]);
+
+  const ringTexture = useMemo(
+    () => hasRing ? buildGasGiantRingTex(type === 'ice' ? ICE_RING_BANDS : JOVIAN_RING_BANDS, seed) : null,
+    [hasRing, seed, type],
+  );
+  useEffect(() => () => ringTexture?.dispose(), [ringTexture]);
+
+  const ringRotation = useMemo(
+    (): [number, number, number] => [
+      Math.PI / (2.55 + Math.sin(seed * 1.7) * 0.32),
+      Math.sin(seed * 2.3) * 0.18,
+      Math.cos(seed * 1.9) * 0.7,
+    ],
+    [seed],
   );
 
   const moonPlacement = useMemo((): WorldPlacement | null => {
@@ -580,14 +694,52 @@ const GasGiantBody = ({ placement, idx, onPivot, world }: GasGiantBodyProps) => 
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.4} />
       <group ref={ref}>
         <group position={[r, 0, 0]}>
-          <mesh onClick={handleClick}>
-            <sphereGeometry args={[radius, 32, 32]} />
-            <meshBasicMaterial map={sphereTex} toneMapped={false} />
+          <mesh ref={sphereRef} onClick={handleClick}>
+            <sphereGeometry args={[radius, 48, 32]} />
+            <meshStandardMaterial
+              map={sphereTex}
+              roughness={0.78}
+              metalness={0}
+              emissive={type === 'hot' ? "#2a0f12" : type === 'ice' ? "#062f3b" : "#1f160e"}
+              emissiveIntensity={type === 'hot' ? 0.28 : 0.12}
+            />
           </mesh>
-          {hasRing && ringGeo && (
-            <mesh geometry={ringGeo} rotation={[Math.PI / 2.3, 0, 0]}>
-              <meshBasicMaterial map={ringTex()} side={THREE.DoubleSide} transparent />
-            </mesh>
+          <mesh ref={hazeRef}>
+            <sphereGeometry args={[radius * 1.012, 48, 24]} />
+            <meshBasicMaterial
+              color={type === 'hot' ? "#f59e0b" : type === 'ice' ? "#67e8f9" : "#f5deb3"}
+              transparent
+              opacity={type === 'hot' ? 0.16 : 0.1}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+          {hasRing && ringGeo && ringTexture && (
+            <>
+              <mesh geometry={ringGeo} rotation={ringRotation}>
+                <meshStandardMaterial
+                  map={ringTexture}
+                  side={THREE.DoubleSide}
+                  transparent
+                  opacity={0.9}
+                  roughness={0.86}
+                  metalness={0}
+                  emissive={type === 'ice' ? "#164e63" : "#6b5a3d"}
+                  emissiveIntensity={0.09}
+                  depthWrite={false}
+                />
+              </mesh>
+              {ringShadowGeo && (
+                <mesh geometry={ringShadowGeo} rotation={ringRotation}>
+                  <meshBasicMaterial
+                    color="#02040a"
+                    transparent
+                    opacity={0.22}
+                    depthWrite={false}
+                  />
+                </mesh>
+              )}
+            </>
           )}
           {moonPlacement && world && (
             <WorldBody placement={moonPlacement} world={world} onPivot={onPivot} />
@@ -670,7 +822,7 @@ const CompanionBodies = ({
         const b = orbit.body;
         if (b.kind === "gasGiant") {
           const p: WorldPlacement = { type: "gasGiant", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 };
-          return <GasGiantBody key={i} placement={p} idx={ggIdx++} onPivot={onPivot} />;
+          return <GasGiantBody key={i} placement={p} idx={ggIdx++} onPivot={onPivot} classification={b.classification} />;
         }
         if (b.kind === "belt") {
           const p: WorldPlacement = { type: "belt", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: 0 };
@@ -709,7 +861,7 @@ const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
           sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0,
           ...(hasMainMoon ? { satellite: { moonRadius: 0.5 } } : {}),
         };
-        return <GasGiantBody key={i} placement={placement} idx={ggIdx++} onPivot={onPivot} world={hasMainMoon ? world : undefined} />;
+        return <GasGiantBody key={i} placement={placement} idx={ggIdx++} onPivot={onPivot} world={hasMainMoon ? world : undefined} classification={b.classification} />;
       }
       if (b.kind === "belt") {
         const placement: WorldPlacement = { type: "belt", orbitNum: orbit.orbitId, sceneRadius: orbitToScene(orbit.orbitId), angle0: orbit.angle0 };
@@ -741,7 +893,7 @@ const WorldSystem = ({ world, onPivot, systemData }: WorldSystemProps) => {
       if (body.kind === "gasGiant") {
         const orbitNum = place(mainOrbit + ggOffset++);
         const p: WorldPlacement = { type: "gasGiant", orbitNum, sceneRadius: orbitToScene(orbitNum), angle0: rng() * Math.PI * 2 };
-        return <GasGiantBody key={`u${i}`} placement={p} idx={ggIdx++} onPivot={onPivot} />;
+        return <GasGiantBody key={`u${i}`} placement={p} idx={ggIdx++} onPivot={onPivot} classification={body.classification} />;
       }
       if (body.kind === "belt") {
         const orbitNum = place(mainOrbit - 1);
