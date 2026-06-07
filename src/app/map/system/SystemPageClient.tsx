@@ -14,7 +14,7 @@ import {
 import { fetchShip } from "../../../store/slices/shipSlice";
 import { fetchTurn, advanceTurn } from "../../../store/slices/turnSlice";
 import { fetchCharacters, invalidateCharacters } from "../../../store/slices/characterSlice";
-import { setGalaxyMiniMapVisible, setSectorMiniMapVisible, setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
+import { setActiveCharacter, setGalaxyMiniMapVisible, setSectorMiniMapVisible, setSubsectorMiniMapVisible } from "../../../store/slices/uiSlice";
 import {
   selectActiveSectorAbbr,
   selectActiveSubsectorKey,
@@ -26,9 +26,10 @@ import {
   selectWorldByCoord,
 } from "../../../store/selectors/galaxy.selectors";
 import { selectShip, selectShipColor, selectShipLocation, selectShipStatus } from "../../../store/selectors/ship.selectors";
-import { selectCharacters } from "../../../store/selectors/character.selectors";
+import { selectCharacters, selectCurrentCharacter } from "../../../store/selectors/character.selectors";
 import StarSystemView from "../../../components/world/StarSystemView";
 import NavigationHud from "../../../components/world/NavigationHud";
+import { CharacterProfileHud } from "../../../components/world/CharacterProfileHud";
 import { buildNavTargets, SubsectorMiniMapView } from "../../../components/map/SubsectorMiniMap";
 import { SubsectorGridView } from "../../../components/map/SubsectorGrid";
 import { StarFieldView } from "../../../components/map/StarField";
@@ -62,6 +63,7 @@ const CurrentSystemPageClient = () => {
   const shipLocation = useAppSelector(selectShipLocation);
   const ship = useAppSelector(selectShip);
   const characters = useAppSelector(selectCharacters);
+  const currentCharacter = useAppSelector(selectCurrentCharacter);
   const shipColor = useAppSelector(selectShipColor);
   const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
   const activeSubsectorKey = useAppSelector(selectActiveSubsectorKey);
@@ -76,6 +78,7 @@ const CurrentSystemPageClient = () => {
   const sectorDataAll = useAppSelector((state) => state.galaxy.sectorData);
   const loadingStatus = useAppSelector((state) => state.galaxy.loadingStatus);
   const [navigationHudVisible, setNavigationHudVisible] = useState(false);
+  const [characterProfileHudVisible, setCharacterProfileHudVisible] = useState(false);
   const [selectedDestinationKey, setSelectedDestinationKey] = useState<string | null>(null);
   const [plotStatus, setPlotStatus] = useState<PlotStatus>("idle");
   const [hasStoredJumpDestination, setHasStoredJumpDestination] = useState(
@@ -153,6 +156,12 @@ const CurrentSystemPageClient = () => {
     : null;
   const navSkill = navigator?.skills.find((skill) => skill.name === "Navigation")?.level ?? 0;
   const navDM = navSkill + statDM(navigator?.intelligence ?? 7);
+  const ownerCharacterId = ship?.crew.find((member) => member.isOwnerOperator)?.characterId ?? null;
+  const ownerCharacter = ownerCharacterId
+    ? characters.find((character) => character.id === ownerCharacterId) ?? null
+    : null;
+  const fallbackCharacter = characters.find((character) => character.sectorAbbr && character.hex) ?? characters[0] ?? null;
+  const hudCharacter = currentCharacter ?? ownerCharacter ?? fallbackCharacter;
 
   useEffect(() => {
     if (!world || !shipLocation?.sectorAbbr) return;
@@ -218,6 +227,11 @@ const CurrentSystemPageClient = () => {
     dispatch(setSectorMiniMapVisible(false));
     dispatch(setGalaxyMiniMapVisible(false));
   }, [dispatch]);
+
+  useEffect(() => {
+    if (currentCharacter || !hudCharacter) return;
+    dispatch(setActiveCharacter(hudCharacter.id));
+  }, [currentCharacter, dispatch, hudCharacter]);
 
   useEffect(() => {
     if (!shipLocation?.sectorAbbr) return;
@@ -464,6 +478,16 @@ const CurrentSystemPageClient = () => {
       onExecuteJump={handleExecuteJump}
     />
   );
+  const characterProfileHud = (
+    <CharacterProfileHud
+      character={hudCharacter}
+      currentLocation={{
+        worldName: shipLocation?.worldName ?? hudCharacter?.worldName ?? null,
+        sectorAbbr: shipLocation?.sectorAbbr ?? hudCharacter?.sectorAbbr ?? null,
+        hex: shipLocation?.hex ?? hudCharacter?.hex ?? null,
+      }}
+    />
+  );
   const renderableLocation = showWarpLayer
     ? lastRenderableLocationRef.current
     : world && shipLocation?.sectorAbbr
@@ -501,6 +525,10 @@ const CurrentSystemPageClient = () => {
             onOpenNavigationHud={() => setNavigationHudVisible(true)}
             onCloseNavigationHud={() => setNavigationHudVisible(false)}
             navigationHud={navigationHud}
+            characterProfileHudVisible={characterProfileHudVisible}
+            onOpenCharacterProfileHud={() => setCharacterProfileHudVisible(true)}
+            onCloseCharacterProfileHud={() => setCharacterProfileHudVisible(false)}
+            characterProfileHud={characterProfileHud}
             onWarpExitReached={handleWarpExitReached}
           />
           {ship?.status === "in_jump" && (
