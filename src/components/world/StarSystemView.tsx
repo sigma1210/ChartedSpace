@@ -274,7 +274,7 @@ const OrbitalRing = ({ radius, color = "#155e75", opacity = 0.35 }: { radius: nu
 
 const orbitPlaneRotation = (seed: string, orbitNum: number, subtle = false): [number, number, number] => {
   const rng = seededRng(`${seed}:orbit-plane:${orbitNum}`);
-  const maxInclination = subtle ? 0.055 : 0.14;
+  const maxInclination = subtle ? 0.055 : THREE.MathUtils.degToRad(13);
   const inclination = (rng() * 2 - 1) * maxInclination;
   const node = rng() * Math.PI * 2;
   return [inclination, node, 0];
