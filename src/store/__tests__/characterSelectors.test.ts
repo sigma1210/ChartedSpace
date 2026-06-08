@@ -5,6 +5,7 @@ import {
   selectEffectiveCharacterProfileLocation,
   selectFallbackCharacter,
   selectOwnerOperatorCharacter,
+  selectOwnerOperatorCredits,
 } from "../selectors/character.selectors";
 import { selectOwnerOperatorCharacterId } from "../selectors/ship.selectors";
 
@@ -128,6 +129,7 @@ describe("character profile selectors", () => {
 
     expect(selectOwnerOperatorCharacterId(root)).toBe(owner.id);
     expect(selectOwnerOperatorCharacter(root)).toBe(owner);
+    expect(selectOwnerOperatorCredits(root)).toBe(owner.credits);
     expect(selectEffectiveCharacterProfile(root)).toBe(owner);
   });
 

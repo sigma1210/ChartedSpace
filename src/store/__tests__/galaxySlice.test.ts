@@ -6,8 +6,10 @@ import {
   selectSectorLoadStatus,
   selectShipSectorLoadStatus,
   selectIsSectorLoaded,
+  selectActiveWorldTechLevel,
+  selectTargetWorldTechLevel,
 } from "../selectors/galaxy.selectors";
-import type { GalaxyState, SectorDetail } from "../../types";
+import type { GalaxyState, SectorDetail, World } from "../../types";
 import type { RootState } from "../index";
 
 jest.mock("../../../Galaxy/sectors.json", () => ({
@@ -27,6 +29,24 @@ const mockCoreData: SectorDetail = {
   allegiances: { ImDc: "Third Imperium" },
   worlds: [],
 };
+
+const mockWorld = (hex: string, techLevel: string): World => ({
+  hex,
+  hexX: Number(hex.slice(0, 2)),
+  hexY: Number(hex.slice(2, 4)),
+  name: `World ${hex}`,
+  uwp: {
+    starport: "A",
+    size: "7",
+    atmosphere: "7",
+    hydrographics: "7",
+    population: "7",
+    government: "7",
+    lawLevel: "7",
+    techLevel,
+  },
+  stellar: [],
+} as unknown as World);
 
 const makeStore = (preloaded?: Partial<GalaxyState>) =>
   configureStore({
@@ -185,5 +205,24 @@ describe("galaxy selectors", () => {
     expect(selectIsSectorLoaded("Core")(root)).toBe(true);
     expect(selectIsSectorLoaded("Spin")(root)).toBe(false);
     expect(selectIsSectorLoaded("Unkn")(root)).toBe(false);
+  });
+
+  it("selects active and target world tech levels", () => {
+    const rootWithWorlds = makeRoot({
+      ...galaxyState,
+      sectorData: {
+        Core: {
+          ...mockCoreData,
+          worlds: [mockWorld("0101", "A"), mockWorld("0102", "C")],
+        },
+      },
+      activeWorldSectorAbbr: "Core",
+      activeWorldHex: "0101",
+      targetWorldSectorAbbr: "Core",
+      targetWorldHex: "0102",
+    });
+
+    expect(selectActiveWorldTechLevel(rootWithWorlds)).toBe(10);
+    expect(selectTargetWorldTechLevel(rootWithWorlds)).toBe(12);
   });
 });

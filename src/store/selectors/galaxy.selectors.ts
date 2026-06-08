@@ -5,6 +5,7 @@ import {
   calculateWorldPairSalePrice,
   deriveWorldPricePerTon,
 } from "@/lib/trade";
+import { uwpVal } from "../../lib/worldMap";
 
 // Wrapper so callers using the World shape still work
 export const deriveTradeClassifications = (world: World): string[] =>
@@ -57,6 +58,12 @@ export const selectActiveWorldTradeCodes = (state: RootState): string[] => {
   const world = selectActiveWorld(state);
   return world ? deriveTradeCodes(world.uwp) : [];
 };
+
+export const deriveWorldTechLevel = (world: World | null): number | null =>
+  world ? uwpVal(world.uwp.techLevel) : null;
+
+export const selectActiveWorldTechLevel = (state: RootState): number | null =>
+  deriveWorldTechLevel(selectActiveWorld(state));
 
 export const TRADE_CODE_LABELS: Record<string, string> = {
   Ag: "Agricultural",
@@ -117,6 +124,9 @@ export const selectTargetWorldTradeCodes = (state: RootState): string[] => {
   const world = selectTargetWorld(state);
   return world ? deriveTradeCodes(world.uwp) : [];
 };
+
+export const selectTargetWorldTechLevel = (state: RootState): number | null =>
+  deriveWorldTechLevel(selectTargetWorld(state));
 
 export const selectTargetWorldTradeLabels = (state: RootState): string[] =>
   selectTargetWorldTradeCodes(state).map(

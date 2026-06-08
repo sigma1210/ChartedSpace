@@ -26,6 +26,9 @@ export const selectOwnerOperatorCharacter = (state: RootState): CharacterSummary
   return state.characters.items.find((character) => character.id === id) ?? null;
 };
 
+export const selectOwnerOperatorCredits = (state: RootState): number | null =>
+  selectOwnerOperatorCharacter(state)?.credits ?? null;
+
 export const selectFallbackCharacter = (state: RootState): CharacterSummary | null =>
   state.characters.items.find((character) => character.sectorAbbr && character.hex) ??
   state.characters.items[0] ??

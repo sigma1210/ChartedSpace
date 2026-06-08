@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
 import { AlertTriangle, Check, Circle, LoaderCircle } from "lucide-react";
 import { HEX_RADIUS } from "../map/hexGeometry";
 import type { JumpRangeCell, JumpRangeTarget } from "../../lib/jumpRange";
 import { hudActionButtonClass } from "./HudPrimitives";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { loadSector } from "../../store/slices/galaxySlice";
 import {
   executePlottedJump,
   plotJumpCourse,
@@ -20,7 +18,6 @@ import {
   selectJumpRangeTargets,
   selectJumpTargetsError,
   selectJumpTargetsLoading,
-  selectNeededJumpSectorAbbrs,
 } from "../../store/selectors/jumpNavigation.selectors";
 
 const SQRT3 = Math.sqrt(3);
@@ -236,15 +233,6 @@ export const NavigationHudContent = () => {
   const error = useAppSelector(selectJumpTargetsError);
   const plotStatus = useAppSelector(selectEffectivePlotStatus);
   const actionBusy = useAppSelector((state) => state.jumpNavigation.actionBusy);
-  const neededSectors = useAppSelector(selectNeededJumpSectorAbbrs);
-  const loadingStatus = useAppSelector((state) => state.galaxy.loadingStatus);
-
-  useEffect(() => {
-    for (const abbr of neededSectors) {
-      if (loadingStatus[abbr] === "loaded" || loadingStatus[abbr] === "loading") continue;
-      dispatch(loadSector(abbr));
-    }
-  }, [dispatch, loadingStatus, neededSectors]);
 
   return (
     <NavigationHud

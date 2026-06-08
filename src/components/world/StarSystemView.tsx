@@ -12,17 +12,15 @@ import { buildSystemLayout, buildLayoutFromSystemData, type SystemLayout, type S
 import { buildWorldPlacements, orbitToScene, seededRng, type WorldPlacement } from "../../lib/orbitData";
 import { spectralMass, epochAngle, elapsedDaysAtTurn } from "../../lib/orbitalMechanics";
 import {
-  buildTexture,
-  buildCloudTexture,
   buildCloudTextureFromKey,
   AtmosphereGlowMesh,
   CloudShadowMesh,
+  WorldGlobeVisual,
   atmosphereGlowConfig,
   cloudConfig,
   PLANET_SPEED,
-  type CloudConfig,
 } from "./PlanetGlobe";
-import { uwpVal } from "../../lib/worldMap";
+import { isAsteroid, uwpVal } from "../../lib/worldMap";
 import { selectSystemDataByKey, selectSystemGeneratedTurnByKey, selectSystemStatusByKey } from "../../store/selectors/system.selectors";
 import { getSystemData } from "../../store/slices/systemSlice";
 import type { GasGiantType as SystemGasGiantType, SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
@@ -445,40 +443,9 @@ type WorldBodyProps = {
 
 const WorldBody = ({ placement, world, onPivot, bodyId = `main-${placement.orbitNum}-${world.hex}`, focusedBodyId = null, onFocusBody }: WorldBodyProps) => {
   const orbitRef = useRef<THREE.Group>(null);
-  const spinRef  = useRef<THREE.Mesh>(null);
-  const cloudRefs = useRef<Array<THREE.Mesh | null>>([]);
-  const speed    = 0.03 / Math.sqrt(Math.max(1, placement.orbitNum));
   const r        = placement.sceneRadius;
 
   useEffect(() => { if (orbitRef.current) orbitRef.current.rotation.y = placement.angle0; }, []);
-
-  const texture = useMemo(() => buildTexture(world), [world]);
-  useEffect(() => () => texture.dispose(), [texture]);
-
-  const atmo = uwpVal(world.uwp.atmosphere);
-  const clouds = useMemo(
-    (): CloudConfig | null => cloudConfig(atmo, uwpVal(world.uwp.hydrographics)),
-    [atmo, world.uwp.hydrographics],
-  );
-  const atmosphereGlow = useMemo(() => atmosphereGlowConfig(atmo), [atmo]);
-  const cloudTextures = useMemo(
-    () => clouds ? clouds.layers.map((layer) => buildCloudTexture(world, clouds, layer)) : [],
-    [world, clouds],
-  );
-  useEffect(
-    () => () => cloudTextures.forEach((cloudTexture) => cloudTexture.dispose()),
-    [cloudTextures],
-  );
-
-  useFrame((_, dt) => {
-    if (spinRef.current)  spinRef.current.rotation.y  += dt * PLANET_SPEED;
-    if (clouds) {
-      clouds.layers.forEach((layer, index) => {
-        const cloudRef = cloudRefs.current[index];
-        if (cloudRef) cloudRef.rotation.y += dt * PLANET_SPEED * layer.speedMult;
-      });
-    }
-  });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -493,39 +460,12 @@ const WorldBody = ({ placement, world, onPivot, bodyId = `main-${placement.orbit
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
       <group ref={orbitRef}>
         <group position={[r, 0, 0]}>
-          <mesh ref={spinRef} onClick={handleClick}>
-            <sphereGeometry args={[WORLD_R, ...WORLD_SEGMENTS]} />
-            <meshStandardMaterial map={texture} />
-          </mesh>
-          {clouds && cloudTextures[0] && (
-            <CloudShadowMesh
-              radius={WORLD_R}
-              layer={clouds.layers[0]}
-              texture={cloudTextures[0]}
-              opacity={clouds.shadowOpacity}
-            />
-          )}
-          {clouds && (
-            <>
-              {clouds.layers.map((layer, index) => (
-                <mesh
-                  key={`${layer.radiusMult}-${index}`}
-                  ref={(node) => { cloudRefs.current[index] = node; }}
-                >
-                  <sphereGeometry args={[WORLD_R * layer.radiusMult, ...WORLD_SEGMENTS]} />
-                  <meshStandardMaterial
-                    alphaMap={cloudTextures[index]}
-                    color={layer.color}
-                    transparent
-                    opacity={layer.opacity}
-                    depthWrite={false}
-                    alphaTest={0.015}
-                  />
-                </mesh>
-              ))}
-            </>
-          )}
-          {atmosphereGlow && <AtmosphereGlowMesh radius={WORLD_R} config={atmosphereGlow} />}
+          <WorldGlobeVisual
+            world={world}
+            radius={WORLD_R}
+            segments={WORLD_SEGMENTS}
+            onSurfaceClick={handleClick}
+          />
           {focusedBodyId === bodyId && (
             <Html position={[WORLD_R + 0.1, WORLD_R + 0.12, 0]} style={{ pointerEvents: "none" }}>
               <span className={sceneHoverTagClassName}>Main World</span>
@@ -1987,10 +1927,14 @@ const CameraPinnedTradeHud = ({
 const CameraPinnedMainWorldHud = ({
   visible,
   mainWorldHud,
+  world,
+  inJump,
   onClose,
 }: {
   visible: boolean;
   mainWorldHud: ReactNode;
+  world: World | null;
+  inJump: boolean;
   onClose: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -2065,8 +2009,13 @@ const CameraPinnedMainWorldHud = ({
 
   return (
     <group ref={groupRef}>
+      {!inJump && world && !isAsteroid(world) && (
+        <group position={[0, -0.48, 0.08]}>
+          <WorldGlobeVisual world={world} radius={0.34} />
+        </group>
+      )}
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
+        <HudPanel className="[background:linear-gradient(to_bottom,var(--hud-bg)_0_18px,rgba(2,12,20,0.2)_18px_100%)]">
           <HudHeader
             title="Main World"
             pinned={pinned}
@@ -2630,6 +2579,7 @@ type StarSystemViewSceneProps = {
   onOpenMainWorldHud?: () => void;
   onCloseMainWorldHud?: () => void;
   mainWorldHud?: ReactNode;
+  mainWorldHudInJump?: boolean;
   characterProfileHudVisible?: boolean;
   onOpenCharacterProfileHud?: () => void;
   onCloseCharacterProfileHud?: () => void;
@@ -2673,6 +2623,7 @@ export const StarSystemViewScene = ({
   onOpenMainWorldHud = () => {},
   onCloseMainWorldHud = () => {},
   mainWorldHud = null,
+  mainWorldHudInJump = false,
   characterProfileHudVisible = false,
   onOpenCharacterProfileHud = () => {},
   onCloseCharacterProfileHud = () => {},
@@ -2843,6 +2794,8 @@ export const StarSystemViewScene = ({
             <CameraPinnedMainWorldHud
               visible={mainWorldHudVisible}
               mainWorldHud={mainWorldHud}
+              world={world}
+              inJump={mainWorldHudInJump}
               onClose={onCloseMainWorldHud}
             />
           )}
@@ -2954,7 +2907,8 @@ const StarSystemView = () => {
     dispatch(openSelectedWorldSystemDetail());
   }, [dispatch]);
 
-  const mainWorldHud = <MainWorldHud world={renderableLocation?.world ?? null} />;
+  const inJump = ship?.status === "in_jump";
+  const mainWorldHud = <MainWorldHud world={renderableLocation?.world ?? null} inJump={inJump} />;
 
   if (warpExitBlankActive) {
     return <div className="h-full w-full bg-black" />;
@@ -3005,6 +2959,7 @@ const StarSystemView = () => {
         onOpenMainWorldHud={() => dispatch(setMainWorldHudVisible(true))}
         onCloseMainWorldHud={() => dispatch(setMainWorldHudVisible(false))}
         mainWorldHud={mainWorldHud}
+        mainWorldHudInJump={inJump}
         characterProfileHudVisible={characterProfileHudVisible}
         onOpenCharacterProfileHud={() => dispatch(setCharacterProfileHudVisible(true))}
         onCloseCharacterProfileHud={() => dispatch(setCharacterProfileHudVisible(false))}

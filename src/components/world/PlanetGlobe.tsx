@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { World } from "../../types";
@@ -619,18 +619,6 @@ export const buildCloudTexture = (
 
 export const PLANET_SPEED = 0.18;
 
-const PlanetMesh = ({ texture }: { texture: THREE.Texture | null }) => {
-  const ref = useRef<THREE.Mesh>(null);
-
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * PLANET_SPEED; });
-  return (
-    <mesh ref={ref}>
-      <sphereGeometry args={[1, 64, 32]} />
-      <meshStandardMaterial map={texture ?? undefined} color={texture ? undefined : "#1a3a2a"} />
-    </mesh>
-  );
-};
-
 // ─── Cloud layer mesh ─────────────────────────────────────────────────────────
 
 const ATMOSPHERE_VERTEX_SHADER = `
@@ -718,21 +706,98 @@ export const CloudShadowMesh = ({
   );
 };
 
-const CloudMesh = ({ layer, texture }: { layer: CloudLayerConfig; texture: THREE.Texture }) => {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * PLANET_SPEED * layer.speedMult; });
+export interface WorldGlobeVisualProps {
+  world: World;
+  radius?: number;
+  segments?: [number, number];
+  onSurfaceClick?: (event: ThreeEvent<MouseEvent>) => void;
+}
+
+export const WorldGlobeVisual = ({
+  world,
+  radius = 1,
+  segments = [64, 32],
+  onSurfaceClick,
+}: WorldGlobeVisualProps) => {
+  const asteroid = isAsteroid(world);
+  const atmo = uwpVal(world.uwp.atmosphere);
+  const clouds = useMemo(
+    () => asteroid ? null : cloudConfig(atmo, uwpVal(world.uwp.hydrographics)),
+    [asteroid, atmo, world.uwp.hydrographics],
+  );
+  const atmosphereGlow = useMemo(
+    () => asteroid ? null : atmosphereGlowConfig(atmo),
+    [asteroid, atmo],
+  );
+  const texture = useMemo(
+    () => asteroid ? null : buildTexture(world),
+    [world, asteroid],
+  );
+  const cloudRefs = useRef<Array<THREE.Mesh | null>>([]);
+  const spinRef = useRef<THREE.Mesh | null>(null);
+
+  useEffect(() => () => texture?.dispose(), [texture]);
+
+  const cloudTextures = useMemo(
+    () => clouds ? clouds.layers.map((layer) => buildCloudTexture(world, clouds, layer)) : [],
+    [world, clouds],
+  );
+  useEffect(
+    () => () => cloudTextures.forEach((cloudTexture) => cloudTexture.dispose()),
+    [cloudTextures],
+  );
+
+  useFrame((_, dt) => {
+    if (spinRef.current) spinRef.current.rotation.y += dt * PLANET_SPEED;
+    if (clouds) {
+      clouds.layers.forEach((layer, index) => {
+        const cloudRef = cloudRefs.current[index];
+        if (cloudRef) cloudRef.rotation.y += dt * PLANET_SPEED * layer.speedMult;
+      });
+    }
+  });
+
+  if (asteroid || !texture) return null;
+
   return (
-    <mesh ref={ref}>
-      <sphereGeometry args={[layer.radiusMult, 48, 24]} />
-      <meshStandardMaterial
-        alphaMap={texture}
-        color={layer.color}
-        transparent
-        opacity={layer.opacity}
-        depthWrite={false}
-        alphaTest={0.015}
-      />
-    </mesh>
+    <>
+      <mesh
+        ref={spinRef}
+        onClick={onSurfaceClick}
+      >
+        <sphereGeometry args={[radius, ...segments]} />
+        <meshStandardMaterial map={texture} />
+      </mesh>
+      {clouds && cloudTextures[0] && (
+        <CloudShadowMesh
+          radius={radius}
+          layer={clouds.layers[0]}
+          texture={cloudTextures[0]}
+          opacity={clouds.shadowOpacity}
+        />
+      )}
+      {clouds && (
+        <>
+          {clouds.layers.map((layer, index) => (
+            <mesh
+              key={`${layer.radiusMult}-${index}`}
+              ref={(node) => { cloudRefs.current[index] = node; }}
+            >
+              <sphereGeometry args={[radius * layer.radiusMult, ...segments]} />
+              <meshStandardMaterial
+                alphaMap={cloudTextures[index]}
+                color={layer.color}
+                transparent
+                opacity={layer.opacity}
+                depthWrite={false}
+                alphaTest={0.015}
+              />
+            </mesh>
+          ))}
+        </>
+      )}
+      {atmosphereGlow && <AtmosphereGlowMesh radius={radius} config={atmosphereGlow} />}
+    </>
   );
 };
 
@@ -746,28 +811,6 @@ interface PlanetGlobeProps {
 
 const PlanetGlobe = ({ world, enableControls = true, className = "" }: PlanetGlobeProps) => {
   const asteroid = isAsteroid(world);
-  const atmo = uwpVal(world.uwp.atmosphere);
-  const clouds = useMemo(
-    () => cloudConfig(atmo, uwpVal(world.uwp.hydrographics)),
-    [atmo, world.uwp.hydrographics],
-  );
-  const atmosphereGlow = useMemo(
-    () => atmosphereGlowConfig(atmo),
-    [atmo],
-  );
-  const texture = useMemo(
-    () => asteroid ? null : buildTexture(world),
-    [world, asteroid],
-  );
-  useEffect(() => () => texture?.dispose(), [texture]);
-  const cloudTextures = useMemo(
-    () => clouds ? clouds.layers.map((layer) => buildCloudTexture(world, clouds, layer)) : [],
-    [world, clouds],
-  );
-  useEffect(
-    () => () => cloudTextures.forEach((cloudTexture) => cloudTexture.dispose()),
-    [cloudTextures],
-  );
 
   return (
     <div className={`w-full aspect-square border border-(--hud-border) ${className}`} style={{ background: "#020c14" }}>
@@ -779,23 +822,7 @@ const PlanetGlobe = ({ world, enableControls = true, className = "" }: PlanetGlo
         <Canvas camera={{ position: [0, 0, 4.17], fov: 45 }}>
           <ambientLight intensity={0.35} />
           <directionalLight position={[4, 3, 5]} intensity={1.2} />
-          <PlanetMesh texture={texture} />
-          {clouds && cloudTextures[0] && (
-            <CloudShadowMesh
-              radius={1}
-              layer={clouds.layers[0]}
-              texture={cloudTextures[0]}
-              opacity={clouds.shadowOpacity}
-            />
-          )}
-          {clouds && clouds.layers.map((layer, index) => (
-            <CloudMesh
-              key={`${layer.radiusMult}-${index}`}
-              layer={layer}
-              texture={cloudTextures[index]}
-            />
-          ))}
-          {atmosphereGlow && <AtmosphereGlowMesh radius={1} config={atmosphereGlow} />}
+          <WorldGlobeVisual world={world} />
           {enableControls && (
             <OrbitControls enableZoom minDistance={1.8} maxDistance={6} enablePan={false} />
           )}
