@@ -51,6 +51,10 @@ const makeRoot = (ship: RootState["ship"]["ship"]): RootState => ({
     warpLayerActive: false,
     warpExitBlankActive: false,
     renderableLocation: null,
+    transitionPhase: "idle",
+    transitionReason: null,
+    transitionSceneKey: null,
+    sceneReady: true,
   },
   jumpNavigation: {
     selectedDestinationKey: null,

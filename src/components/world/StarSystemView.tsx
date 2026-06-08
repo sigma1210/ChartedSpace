@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } from "react";
+import { useMemo, useRef, useCallback, useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useSelector, useStore } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
@@ -43,12 +43,24 @@ import {
 import { selectShip, selectShipStatus } from "../../store/selectors/ship.selectors";
 import {
   selectShowWarpLayer,
+  selectSystemSceneReady,
   selectSystemSceneMode,
   selectSystemSceneRenderableLocation,
+  selectSystemSceneTransitionPhase,
+  selectSystemSceneTransitionSceneKey,
   selectWarpExitBlankActive,
   selectWarpLayerActive,
   selectWarpLayerOpacity,
 } from "../../store/selectors/systemScene.selectors";
+import {
+  beginSceneReveal,
+  beginSceneTransition,
+  completeSceneTransition,
+  markSceneReady,
+  markSceneTransitionCovered,
+  type SystemSceneTransitionPhase,
+  type SystemSceneTransitionReason,
+} from "../../store/slices/systemSceneSlice";
 import { NavigationHudContent } from "./NavigationHud";
 import { CharacterProfileHudContent } from "./CharacterProfileHud";
 import { MainWorldHud } from "./MainWorldHud";
@@ -292,15 +304,15 @@ const OrbitPlane = ({
 interface ControlsHandle { target: THREE.Vector3; update: () => void }
 
 type PivotSmootherProps = {
-  target: THREE.Vector3;
+  targetRef: React.MutableRefObject<THREE.Vector3>;
   controlsRef: React.RefObject<ControlsHandle | null>;
 };
 
-const PivotSmoother = ({ target, controlsRef }: PivotSmootherProps) => {
+const PivotSmoother = ({ targetRef, controlsRef }: PivotSmootherProps) => {
   useFrame(() => {
     const ctrl = controlsRef.current;
     if (!ctrl) return;
-    ctrl.target.lerp(target, 0.1);
+    ctrl.target.lerp(targetRef.current, 0.1);
     ctrl.update();
   });
   return null;
@@ -1601,7 +1613,7 @@ const SystemCameraReset = ({
 }) => {
   const { camera } = useThree();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (sceneMode !== "system") return;
     camera.position.set(0, camZ * 0.4, camZ);
     camera.lookAt(0, 0, 0);
@@ -2697,6 +2709,8 @@ type StarSystemViewSceneProps = {
   warpLayerActive?: boolean;
   autoRotateSystem?: boolean;
   onWarpExitReached?: () => void;
+  sceneKey?: string;
+  onSceneReady?: (sceneKey: string) => void;
 };
 
 export const StarSystemViewScene = ({
@@ -2742,6 +2756,8 @@ export const StarSystemViewScene = ({
   warpLayerActive = false,
   autoRotateSystem = false,
   onWarpExitReached,
+  sceneKey,
+  onSceneReady,
 }: StarSystemViewSceneProps) => {
   const dispatch = useAppDispatch();
   const reduxStore = useStore() as AppStore;
@@ -2826,6 +2842,21 @@ export const StarSystemViewScene = ({
   const renderHudLayer = showHudControls;
   const renderSystemCanvas = renderSystemLayer || renderHudLayer;
 
+  useEffect(() => {
+    if (!sceneKey || !onSceneReady) return;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        onSceneReady(sceneKey);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [onSceneReady, sceneKey]);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#020c14" }}>
       {renderSystemCanvas && (
@@ -2867,7 +2898,7 @@ export const StarSystemViewScene = ({
                   <>
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
-                    <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />
+                    <PivotSmoother targetRef={pivotTarget} controlsRef={controlsRef} />
                   </>
                 )}
               </>
@@ -2974,6 +3005,156 @@ export const StarSystemViewScene = ({
   );
 };
 
+type RenderableSystemLocation = {
+  world: World;
+  sectorAbbr: string;
+};
+
+type DisplayedSceneSnapshot = {
+  key: string;
+  renderableLocation: RenderableSystemLocation | null;
+  renderedSceneMode: "system" | "jump";
+  showWarpLayer: boolean;
+  warpLayerOpacity: number;
+  warpLayerActive: boolean;
+};
+
+const TRANSITION_COVER_MS = 240;
+const TRANSITION_REVEAL_MS = 420;
+const TRANSITION_STATIC_IMAGE =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='4' seed='13'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 .06 0 0 0 0 .68 0 0 0 0 .76 0 0 0 .38 0'/%3E%3C/filter%3E%3Crect width='160' height='160' fill='%2306161d'/%3E%3Crect width='160' height='160' filter='url(%23noise)' opacity='.95'/%3E%3C/svg%3E\")";
+
+const sceneSnapshotKey = (
+  renderableLocation: RenderableSystemLocation | null,
+  renderedSceneMode: "system" | "jump",
+  showWarpLayer: boolean,
+) => [
+  renderableLocation?.sectorAbbr ?? "none",
+  renderableLocation?.world.hex ?? "none",
+  renderedSceneMode,
+  showWarpLayer ? "warp" : "system",
+].join(":");
+
+const buildDisplayedSceneSnapshot = ({
+  renderableLocation,
+  renderedSceneMode,
+  showWarpLayer,
+  warpLayerOpacity,
+  warpLayerActive,
+}: Omit<DisplayedSceneSnapshot, "key">): DisplayedSceneSnapshot => ({
+  key: sceneSnapshotKey(renderableLocation, renderedSceneMode, showWarpLayer),
+  renderableLocation,
+  renderedSceneMode,
+  showWarpLayer,
+  warpLayerOpacity,
+  warpLayerActive,
+});
+
+const sceneTransitionReason = (
+  currentScene: DisplayedSceneSnapshot,
+  nextScene: DisplayedSceneSnapshot,
+): Exclude<SystemSceneTransitionReason, null> => {
+  if (!currentScene.showWarpLayer && nextScene.showWarpLayer) return "jump-enter";
+  if (currentScene.showWarpLayer && !nextScene.showWarpLayer) return "jump-exit";
+  return "system-change";
+};
+
+const sceneTransitionClass = (
+  phase: SystemSceneTransitionPhase,
+  forceCovered: boolean,
+) => {
+  const visible = forceCovered || phase !== "idle";
+  const opaque = forceCovered || phase === "covering" || phase === "covered";
+  return [
+    "pointer-events-none absolute inset-0 z-50 bg-[#242832] transition-opacity duration-300 ease-in-out",
+    visible ? "block" : "hidden",
+    opaque ? "opacity-100" : "opacity-0",
+  ].join(" ");
+};
+
+const sceneTransitionStyle: CSSProperties = {
+  backgroundColor: "#06161d",
+  backgroundImage: [
+    "radial-gradient(circle at 50% 45%, rgba(63, 221, 230, 0.18), rgba(6, 22, 29, 0.12) 34%, rgba(6, 22, 29, 0.88) 74%)",
+    "linear-gradient(rgba(81, 221, 226, 0.12) 1px, transparent 1px)",
+    TRANSITION_STATIC_IMAGE,
+  ].join(", "),
+  backgroundSize: "100% 100%, 100% 4px, 160px 160px",
+  boxShadow: "inset 0 0 80px rgba(0, 229, 255, 0.16)",
+};
+
+const terminalInstructionLines = [
+  "> initializing navigation buffer",
+  "> aligning jump-space telemetry",
+  "> acquiring signal",
+  "> resolving stellar mass profile",
+  "> calibrating optical parallax",
+  "> synchronizing orbital ephemeris",
+  "> restoring local system reference",
+  "> confirming gravitic horizon",
+  "> rebuilding sensor composite",
+  "> signal lock pending",
+];
+
+const SceneTransitionOverlay = ({
+  phase,
+  forceCovered,
+}: {
+  phase: SystemSceneTransitionPhase;
+  forceCovered: boolean;
+}) => (
+  <div
+    className={sceneTransitionClass(phase, forceCovered)}
+    style={sceneTransitionStyle}
+  >
+    <style>
+      {`
+        @keyframes charted-space-terminal-scroll {
+          0% { transform: translateY(-34%); opacity: 0; }
+          12% { opacity: 1; }
+          100% { transform: translateY(42%); opacity: 0.9; }
+        }
+      `}
+    </style>
+    <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-x-[10%] top-0 font-mono text-[10px] uppercase leading-7 tracking-[0.2em] text-cyan-100/80 [animation:charted-space-terminal-scroll_2.4s_linear_infinite] sm:inset-x-[18%] sm:text-[11px]">
+        {[0, 1, 2].map((group) => (
+          <div key={group} className="mb-5">
+            {terminalInstructionLines.map((line) => (
+              <div
+                key={`${group}-${line}`}
+                className={line.includes("acquiring signal") ? "text-cyan-50" : ""}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+    <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
+      <div className="border border-cyan-300/35 bg-[#06161d]/75 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.3em] text-cyan-50 shadow-[0_0_28px_rgba(34,211,238,0.28)]">
+        Acquiring Signal
+      </div>
+    </div>
+  </div>
+);
+
+const sceneFocusStyle = (
+  phase: SystemSceneTransitionPhase,
+  forceCovered: boolean,
+): CSSProperties => {
+  const focusHidden = forceCovered || phase === "covering" || phase === "covered";
+  return {
+    filter: focusHidden
+      ? "blur(10px) brightness(0.55) saturate(0.8)"
+      : "blur(0) brightness(1) saturate(1)",
+    transform: focusHidden ? "scale(1.018)" : "scale(1)",
+    transition: `filter ${TRANSITION_REVEAL_MS}ms ease-out, transform ${TRANSITION_REVEAL_MS}ms ease-out`,
+    willChange: phase === "idle" && !forceCovered ? "auto" : "filter, transform",
+  };
+};
+
 const StarSystemView = () => {
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -2994,7 +3175,103 @@ const StarSystemView = () => {
   const warpLayerActive = useAppSelector(selectWarpLayerActive);
   const warpExitBlankActive = useAppSelector(selectWarpExitBlankActive);
   const renderableLocation = useAppSelector(selectSystemSceneRenderableLocation);
+  const transitionPhase = useAppSelector(selectSystemSceneTransitionPhase);
+  const transitionSceneKey = useAppSelector(selectSystemSceneTransitionSceneKey);
+  const sceneReady = useAppSelector(selectSystemSceneReady);
   const sectorStatus = useAppSelector(selectShipSectorLoadStatus);
+  const desiredScene = useMemo(
+    () => buildDisplayedSceneSnapshot({
+      renderableLocation,
+      renderedSceneMode,
+      showWarpLayer,
+      warpLayerOpacity,
+      warpLayerActive,
+    }),
+    [
+      renderableLocation,
+      renderedSceneMode,
+      showWarpLayer,
+      warpLayerActive,
+      warpLayerOpacity,
+    ],
+  );
+  const [displayedScene, setDisplayedScene] = useState(desiredScene);
+  const displayedSceneRef = useRef(displayedScene);
+  const desiredSceneRef = useRef(desiredScene);
+  const transitionCoverTimerRef = useRef<number | null>(null);
+  const transitionRevealTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    desiredSceneRef.current = desiredScene;
+  }, [desiredScene]);
+
+  useEffect(() => {
+    displayedSceneRef.current = displayedScene;
+  }, [displayedScene]);
+
+  useEffect(() => {
+    const currentDesiredScene = desiredSceneRef.current;
+    if (currentDesiredScene.key === displayedSceneRef.current.key) {
+      setDisplayedScene((current) => ({
+        ...current,
+        warpLayerOpacity: currentDesiredScene.warpLayerOpacity,
+        warpLayerActive: currentDesiredScene.warpLayerActive,
+      }));
+      return;
+    }
+
+    if (transitionCoverTimerRef.current !== null) {
+      window.clearTimeout(transitionCoverTimerRef.current);
+      transitionCoverTimerRef.current = null;
+    }
+    if (transitionRevealTimerRef.current !== null) {
+      window.clearTimeout(transitionRevealTimerRef.current);
+      transitionRevealTimerRef.current = null;
+    }
+
+    const nextSceneKey = currentDesiredScene.key;
+    dispatch(beginSceneTransition({
+      reason: sceneTransitionReason(displayedSceneRef.current, currentDesiredScene),
+      sceneKey: nextSceneKey,
+    }));
+    transitionCoverTimerRef.current = window.setTimeout(() => {
+      const nextScene = desiredSceneRef.current;
+      setDisplayedScene(nextScene);
+      displayedSceneRef.current = nextScene;
+      dispatch(markSceneTransitionCovered(nextScene.key));
+
+      transitionCoverTimerRef.current = null;
+    }, TRANSITION_COVER_MS);
+  }, [
+    dispatch,
+    desiredScene.key,
+    desiredScene.warpLayerActive,
+    desiredScene.warpLayerOpacity,
+  ]);
+
+  useEffect(() => {
+    if (transitionPhase !== "covered" || !sceneReady || !transitionSceneKey) return;
+    dispatch(beginSceneReveal(transitionSceneKey));
+    if (transitionRevealTimerRef.current !== null) {
+      window.clearTimeout(transitionRevealTimerRef.current);
+    }
+    transitionRevealTimerRef.current = window.setTimeout(() => {
+      dispatch(completeSceneTransition(transitionSceneKey));
+      transitionRevealTimerRef.current = null;
+    }, TRANSITION_REVEAL_MS);
+  }, [dispatch, sceneReady, transitionPhase, transitionSceneKey]);
+
+  useEffect(
+    () => () => {
+      if (transitionCoverTimerRef.current !== null) {
+        window.clearTimeout(transitionCoverTimerRef.current);
+      }
+      if (transitionRevealTimerRef.current !== null) {
+        window.clearTimeout(transitionRevealTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const handleWarpExitReached = useCallback(() => {
     dispatch(runWarpExitSequence());
@@ -3008,69 +3285,86 @@ const StarSystemView = () => {
     dispatch(openSelectedWorldSystemDetail());
   }, [dispatch]);
 
+  const handleSceneReady = useCallback((readySceneKey: string) => {
+    dispatch(markSceneReady(readySceneKey));
+  }, [dispatch]);
+
   const inJump = ship?.status === "in_jump";
-  const mainWorldHud = <MainWorldHud world={renderableLocation?.world ?? null} inJump={inJump} />;
+  const visibleRenderableLocation = displayedScene.renderableLocation;
+  const mainWorldHud = <MainWorldHud world={visibleRenderableLocation?.world ?? null} inJump={inJump} />;
 
-  if (warpExitBlankActive) {
-    return <div className="h-full w-full bg-black" />;
-  }
-
-  if (!renderableLocation) {
+  if (!visibleRenderableLocation) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="relative flex h-full items-center justify-center">
         <span className="font-mono text-xs uppercase tracking-widest text-(--hud-text-dim)">
           {shipStatus === "loading" || sectorStatus === "loading"
             ? "Loading current system"
             : "Current ship system unavailable"}
         </span>
+        <SceneTransitionOverlay
+          phase={transitionPhase}
+          forceCovered={warpExitBlankActive}
+        />
       </div>
     );
   }
 
   return (
     <div className="relative h-full w-full">
-      <StarSystemViewScene
-        world={renderableLocation.world}
-        sectorAbbr={renderableLocation.sectorAbbr}
-        sceneMode={renderedSceneMode}
-        showWarpLayer={showWarpLayer}
-        renderSystemLayer={!showWarpLayer}
-        warpLayerOpacity={warpLayerOpacity}
-        warpLayerActive={warpLayerActive}
-        showHudControls
-        miniMapVisible={miniMapVisible}
-        onOpenMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: true }))}
-        onOpenMapPage={() => router.push("/map")}
-        onCloseMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: false }))}
-        miniMap={<SubsectorMiniMapHudContent />}
-        selectedSystemDetailAvailable={!!activeTradeWorld}
-        onOpenSelectedSystemDetail={handleOpenSelectedSystemDetail}
-        sectorMiniMapVisible={sectorMiniMapVisible}
-        onOpenSectorMiniMap={() => dispatch(setHudVisible({ id: "sectorMap", visible: true }))}
-        onCloseSectorMiniMap={() => dispatch(setHudVisible({ id: "sectorMap", visible: false }))}
-        sectorMiniMap={<SectorMiniMapHudContent />}
-        galaxyMiniMapVisible={galaxyMiniMapVisible}
-        onOpenGalaxyMiniMap={() => dispatch(setHudVisible({ id: "galaxyMap", visible: true }))}
-        onCloseGalaxyMiniMap={() => dispatch(setHudVisible({ id: "galaxyMap", visible: false }))}
-        galaxyMiniMap={<GalaxyMiniMapHudContent />}
-        navigationHudVisible={navigationHudVisible}
-        onOpenNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: true }))}
-        onCloseNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: false }))}
-        navigationHud={<NavigationHudContent />}
-        mainWorldHudVisible={mainWorldHudVisible}
-        onOpenMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: true }))}
-        onCloseMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: false }))}
-        mainWorldHud={mainWorldHud}
-        mainWorldHudInJump={inJump}
-        characterProfileHudVisible={characterProfileHudVisible}
-        onOpenCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: true }))}
-        onCloseCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: false }))}
-        characterProfileHud={<CharacterProfileHudContent />}
-        tradeHudVisible={tradeHudVisible}
-        onOpenTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: true }))}
-        onCloseTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: false }))}
-        tradeHud={<TradeSystemHudContent />}
-        onWarpExitReached={handleWarpExitReached}
+      <div
+        className="absolute inset-0 origin-center overflow-hidden"
+        style={sceneFocusStyle(transitionPhase, warpExitBlankActive)}
+      >
+        <StarSystemViewScene
+          key={displayedScene.key}
+          sceneKey={displayedScene.key}
+          onSceneReady={handleSceneReady}
+          world={visibleRenderableLocation.world}
+          sectorAbbr={visibleRenderableLocation.sectorAbbr}
+          sceneMode={displayedScene.renderedSceneMode}
+          showWarpLayer={displayedScene.showWarpLayer}
+          renderSystemLayer={!displayedScene.showWarpLayer}
+          warpLayerOpacity={displayedScene.warpLayerOpacity}
+          warpLayerActive={displayedScene.warpLayerActive}
+          showHudControls
+          miniMapVisible={miniMapVisible}
+          onOpenMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: true }))}
+          onOpenMapPage={() => router.push("/map")}
+          onCloseMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: false }))}
+          miniMap={<SubsectorMiniMapHudContent />}
+          selectedSystemDetailAvailable={!!activeTradeWorld}
+          onOpenSelectedSystemDetail={handleOpenSelectedSystemDetail}
+          sectorMiniMapVisible={sectorMiniMapVisible}
+          onOpenSectorMiniMap={() => dispatch(setHudVisible({ id: "sectorMap", visible: true }))}
+          onCloseSectorMiniMap={() => dispatch(setHudVisible({ id: "sectorMap", visible: false }))}
+          sectorMiniMap={<SectorMiniMapHudContent />}
+          galaxyMiniMapVisible={galaxyMiniMapVisible}
+          onOpenGalaxyMiniMap={() => dispatch(setHudVisible({ id: "galaxyMap", visible: true }))}
+          onCloseGalaxyMiniMap={() => dispatch(setHudVisible({ id: "galaxyMap", visible: false }))}
+          galaxyMiniMap={<GalaxyMiniMapHudContent />}
+          navigationHudVisible={navigationHudVisible}
+          onOpenNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: true }))}
+          onCloseNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: false }))}
+          navigationHud={<NavigationHudContent />}
+          mainWorldHudVisible={mainWorldHudVisible}
+          onOpenMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: true }))}
+          onCloseMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: false }))}
+          mainWorldHud={mainWorldHud}
+          mainWorldHudInJump={inJump}
+          characterProfileHudVisible={characterProfileHudVisible}
+          onOpenCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: true }))}
+          onCloseCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: false }))}
+          characterProfileHud={<CharacterProfileHudContent />}
+          tradeHudVisible={tradeHudVisible}
+          onOpenTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: true }))}
+          onCloseTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: false }))}
+          tradeHud={<TradeSystemHudContent />}
+          onWarpExitReached={handleWarpExitReached}
+        />
+      </div>
+      <SceneTransitionOverlay
+        phase={transitionPhase}
+        forceCovered={warpExitBlankActive}
       />
       {ship?.status === "in_jump" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
