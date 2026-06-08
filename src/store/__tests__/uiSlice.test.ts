@@ -104,13 +104,13 @@ describe("uiSlice reducers", () => {
   });
 
   describe("openCharacterList", () => {
-    it("opens characterList modal and clears activeCharacterId", () => {
+    it("opens characterList modal and preserves activeCharacterId", () => {
       const state = uiReducer(
         { ...initialState, activeCharacterId: "abc123" },
         openCharacterList()
       );
       expect(state.activeModal).toBe("characterList");
-      expect(state.activeCharacterId).toBeNull();
+      expect(state.activeCharacterId).toBe("abc123");
     });
   });
 
@@ -134,13 +134,13 @@ describe("uiSlice reducers", () => {
   });
 
   describe("openMap", () => {
-    it("opens map modal and keeps current mapView when no argument", () => {
+    it("sets activeModal to map and keeps current mapView when no argument", () => {
       const state = uiReducer({ ...initialState, mapView: "sector" }, openMap(undefined));
       expect(state.activeModal).toBe("map");
       expect(state.mapView).toBe("sector");
     });
 
-    it("opens map modal and sets mapView when argument provided", () => {
+    it("sets activeModal to map and sets mapView when argument provided", () => {
       const state = uiReducer(initialState, openMap("subsector"));
       expect(state.activeModal).toBe("map");
       expect(state.mapView).toBe("subsector");
