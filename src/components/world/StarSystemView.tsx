@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useStore } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import { Coins, Globe2, Grid3X3, Navigation, Radar, User } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
-import { useAppDispatch } from "../../store/hooks";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { buildSystemLayout, buildLayoutFromSystemData, type SystemLayout, type StarSlot } from "../../lib/stellarSystem";
 import { buildWorldPlacements, orbitToScene, seededRng, type WorldPlacement } from "../../lib/orbitData";
 import { spectralMass, epochAngle, elapsedDaysAtTurn } from "../../lib/orbitalMechanics";
@@ -27,6 +27,52 @@ import { selectSystemDataByKey, selectSystemGeneratedTurnByKey, selectSystemStat
 import { getSystemData } from "../../store/slices/systemSlice";
 import type { GasGiantType as SystemGasGiantType, SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
 import { HudHeader, HudIconButton, HudPanel } from "./HudPrimitives";
+import StoreBridge from "../StoreBridge";
+import type { AppStore } from "../../store";
+import {
+  openSelectedWorldSystemDetail,
+  setCharacterProfileHudVisible,
+  setGalaxyMiniMapVisible,
+  setMainWorldHudVisible,
+  setNavigationHudVisible,
+  setSectorMiniMapVisible,
+  setSubsectorMiniMapVisible,
+  setTradeHudVisible,
+} from "../../store/slices/uiSlice";
+import {
+  resolveFailedJump,
+  runWarpExitSequence,
+} from "../../store/slices/jumpNavigationSlice";
+import { selectHasStoredJumpDestination } from "../../store/selectors/jumpNavigation.selectors";
+import {
+  selectActiveWorld,
+  selectShipSectorLoadStatus,
+} from "../../store/selectors/galaxy.selectors";
+import { selectShip, selectShipStatus } from "../../store/selectors/ship.selectors";
+import {
+  selectShowCharacterProfileHud,
+  selectShowGalaxyMiniMap,
+  selectShowMainWorldHud,
+  selectShowNavigationHud,
+  selectShowSectorMiniMap,
+  selectShowSubsectorMiniMap,
+  selectShowTradeHud,
+} from "../../store/selectors/ui.selectors";
+import {
+  selectShowWarpLayer,
+  selectSystemSceneMode,
+  selectSystemSceneRenderableLocation,
+  selectWarpExitBlankActive,
+  selectWarpLayerActive,
+  selectWarpLayerOpacity,
+} from "../../store/selectors/systemScene.selectors";
+import { NavigationHudContent } from "./NavigationHud";
+import { CharacterProfileHudContent } from "./CharacterProfileHud";
+import { MainWorldHud } from "./MainWorldHud";
+import { TradeSystemHudContent } from "./TradeSystemHud";
+import { SubsectorMiniMapHudContent } from "../map/SubsectorMiniMap";
+import { SectorMiniMapHudContent } from "../map/SectorMiniMap";
+import { GalaxyMiniMapHudContent } from "../map/GalaxyMiniMap";
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
 
@@ -1839,10 +1885,12 @@ const CameraPinnedSystemHud = ({
 const CameraPinnedTradeHud = ({
   visible,
   tradeHud,
+  store,
   onClose,
 }: {
   visible: boolean;
   tradeHud: ReactNode;
+  store: AppStore;
   onClose: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -1927,7 +1975,9 @@ const CameraPinnedTradeHud = ({
             onDragStart={startDrag}
             closeTitle="Close trade HUD"
           />
-          {tradeHud}
+          <StoreBridge store={store}>
+            {tradeHud}
+          </StoreBridge>
         </HudPanel>
       </Html>
     </group>
@@ -2035,10 +2085,12 @@ const CameraPinnedMainWorldHud = ({
 const CameraPinnedCharacterProfileHud = ({
   visible,
   characterProfileHud,
+  store,
   onClose,
 }: {
   visible: boolean;
   characterProfileHud: ReactNode;
+  store: AppStore;
   onClose: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -2123,7 +2175,9 @@ const CameraPinnedCharacterProfileHud = ({
             onDragStart={startDrag}
             closeTitle="Close character profile HUD"
           />
-          {characterProfileHud}
+          <StoreBridge store={store}>
+            {characterProfileHud}
+          </StoreBridge>
         </HudPanel>
       </Html>
     </group>
@@ -2133,10 +2187,12 @@ const CameraPinnedCharacterProfileHud = ({
 const CameraPinnedNavigationHud = ({
   visible,
   navigationHud,
+  store,
   onClose,
 }: {
   visible: boolean;
   navigationHud: ReactNode;
+  store: AppStore;
   onClose: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -2221,7 +2277,9 @@ const CameraPinnedNavigationHud = ({
             onDragStart={startDrag}
             closeTitle="Close navigation HUD"
           />
-          {navigationHud}
+          <StoreBridge store={store}>
+            {navigationHud}
+          </StoreBridge>
         </HudPanel>
       </Html>
     </group>
@@ -2231,11 +2289,13 @@ const CameraPinnedNavigationHud = ({
 const CameraPinnedSubsectorMiniMapHud = ({
   visible,
   miniMap,
+  store,
   onOpenSectorMap,
   onClose,
 }: {
   visible: boolean;
   miniMap: ReactNode;
+  store: AppStore;
   onOpenSectorMap: () => void;
   onClose: () => void;
 }) => {
@@ -2326,7 +2386,9 @@ const CameraPinnedSubsectorMiniMapHud = ({
             onDragStart={startDrag}
             closeTitle="Close subsector HUD"
           />
-          {miniMap}
+          <StoreBridge store={store}>
+            {miniMap}
+          </StoreBridge>
         </HudPanel>
       </Html>
     </group>
@@ -2336,11 +2398,13 @@ const CameraPinnedSubsectorMiniMapHud = ({
 const CameraPinnedSectorMiniMapHud = ({
   visible,
   sectorMiniMap,
+  store,
   onOpenGalaxyMap,
   onClose,
 }: {
   visible: boolean;
   sectorMiniMap: ReactNode;
+  store: AppStore;
   onOpenGalaxyMap: () => void;
   onClose: () => void;
 }) => {
@@ -2431,7 +2495,9 @@ const CameraPinnedSectorMiniMapHud = ({
             onDragStart={startDrag}
             closeTitle="Close sector HUD"
           />
-          {sectorMiniMap}
+          <StoreBridge store={store}>
+            {sectorMiniMap}
+          </StoreBridge>
         </HudPanel>
       </Html>
     </group>
@@ -2441,10 +2507,12 @@ const CameraPinnedSectorMiniMapHud = ({
 const CameraPinnedGalaxyMiniMapHud = ({
   visible,
   galaxyMiniMap,
+  store,
   onClose,
 }: {
   visible: boolean;
   galaxyMiniMap: ReactNode;
+  store: AppStore;
   onClose: () => void;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -2529,7 +2597,9 @@ const CameraPinnedGalaxyMiniMapHud = ({
             onDragStart={startDrag}
             closeTitle="Close galaxy HUD"
           />
-          {galaxyMiniMap}
+          <StoreBridge store={store}>
+            {galaxyMiniMap}
+          </StoreBridge>
         </HudPanel>
       </Html>
     </group>
@@ -2538,48 +2608,7 @@ const CameraPinnedGalaxyMiniMapHud = ({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const StarSystemView = ({
-  world,
-  sectorAbbr: sectorAbbrProp,
-  showHudControls = false,
-  miniMapVisible = false,
-  onOpenMiniMap = () => {},
-  onCloseMiniMap = () => {},
-  miniMap = null,
-  selectedSystemDetailAvailable = false,
-  onOpenSelectedSystemDetail = () => {},
-  sectorMiniMapVisible = false,
-  onOpenSectorMiniMap = () => {},
-  onCloseSectorMiniMap = () => {},
-  sectorMiniMap = null,
-  galaxyMiniMapVisible = false,
-  onOpenGalaxyMiniMap = () => {},
-  onCloseGalaxyMiniMap = () => {},
-  galaxyMiniMap = null,
-  mainWorldHudVisible = false,
-  onOpenMainWorldHud = () => {},
-  onCloseMainWorldHud = () => {},
-  mainWorldHud = null,
-  characterProfileHudVisible = false,
-  onOpenCharacterProfileHud = () => {},
-  onCloseCharacterProfileHud = () => {},
-  characterProfileHud = null,
-  tradeHudVisible = false,
-  onOpenTradeHud = () => {},
-  onCloseTradeHud = () => {},
-  tradeHud = null,
-  navigationHudVisible = false,
-  onOpenNavigationHud = () => {},
-  onCloseNavigationHud = () => {},
-  navigationHud = null,
-  sceneMode = "system",
-  showWarpLayer = false,
-  renderSystemLayer = true,
-  warpLayerOpacity = 0,
-  warpLayerActive = false,
-  autoRotateSystem = false,
-  onWarpExitReached,
-}: {
+type StarSystemViewSceneProps = {
   world: World;
   sectorAbbr?: string | null;
   showHudControls?: boolean;
@@ -2620,8 +2649,52 @@ const StarSystemView = ({
   warpLayerActive?: boolean;
   autoRotateSystem?: boolean;
   onWarpExitReached?: () => void;
-}) => {
+};
+
+export const StarSystemViewScene = ({
+  world,
+  sectorAbbr: sectorAbbrProp,
+  showHudControls = false,
+  miniMapVisible = false,
+  onOpenMiniMap = () => {},
+  onCloseMiniMap = () => {},
+  miniMap = null,
+  selectedSystemDetailAvailable = false,
+  onOpenSelectedSystemDetail = () => {},
+  sectorMiniMapVisible = false,
+  onOpenSectorMiniMap = () => {},
+  onCloseSectorMiniMap = () => {},
+  sectorMiniMap = null,
+  galaxyMiniMapVisible = false,
+  onOpenGalaxyMiniMap = () => {},
+  onCloseGalaxyMiniMap = () => {},
+  galaxyMiniMap = null,
+  mainWorldHudVisible = false,
+  onOpenMainWorldHud = () => {},
+  onCloseMainWorldHud = () => {},
+  mainWorldHud = null,
+  characterProfileHudVisible = false,
+  onOpenCharacterProfileHud = () => {},
+  onCloseCharacterProfileHud = () => {},
+  characterProfileHud = null,
+  tradeHudVisible = false,
+  onOpenTradeHud = () => {},
+  onCloseTradeHud = () => {},
+  tradeHud = null,
+  navigationHudVisible = false,
+  onOpenNavigationHud = () => {},
+  onCloseNavigationHud = () => {},
+  navigationHud = null,
+  sceneMode = "system",
+  showWarpLayer = false,
+  renderSystemLayer = true,
+  warpLayerOpacity = 0,
+  warpLayerActive = false,
+  autoRotateSystem = false,
+  onWarpExitReached,
+}: StarSystemViewSceneProps) => {
   const dispatch = useAppDispatch();
+  const reduxStore = useStore() as AppStore;
   const activeWorldSectorAbbr = useSelector((s: { galaxy?: { activeWorldSectorAbbr?: string | null } }) => s.galaxy?.activeWorldSectorAbbr ?? null);
   const sectorAbbr = sectorAbbrProp ?? activeWorldSectorAbbr;
   const systemData = useSelector(
@@ -2717,54 +2790,55 @@ const StarSystemView = ({
             background: renderSystemLayer ? "#020c14" : "transparent",
           }}
         >
-          {renderSystemLayer && (
-            <>
-              <SystemCameraReset
-                camZ={camZ}
-                controlsRef={controlsRef}
-                pivotTarget={pivotTarget}
-                resetKey={cameraResetKey}
-                sceneMode={sceneMode}
-              />
-              <ambientLight intensity={0.6} />
-              <directionalLight position={[2, 3, 4]} intensity={1.4} />
-              <Starfield />
-              <AutoRotatingSystemGroup enabled={autoRotateSystem}>
-                <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
-                <WorldSystem
-                  world={world}
-                  onPivot={onPivot}
-                  systemData={systemData}
-                  focusedBodyId={focusedBodyId}
-                  onFocusBody={setFocusedBodyId}
+          <StoreBridge store={reduxStore}>
+            {renderSystemLayer && (
+              <>
+                <SystemCameraReset
+                  camZ={camZ}
+                  controlsRef={controlsRef}
+                  pivotTarget={pivotTarget}
+                  resetKey={cameraResetKey}
+                  sceneMode={sceneMode}
                 />
-              </AutoRotatingSystemGroup>
-              {sceneMode === "system" && (
-                <>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
-                  <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />
-                </>
-              )}
-            </>
-          )}
-          {showHudControls && (
-            <CameraPinnedSystemHud
-              world={world}
-              miniMapVisible={miniMapVisible}
-              onOpenMiniMap={onOpenMiniMap}
-              selectedSystemDetailAvailable={selectedSystemDetailAvailable}
-              onOpenSelectedSystemDetail={onOpenSelectedSystemDetail}
-              navigationHudVisible={navigationHudVisible}
-              onOpenNavigationHud={onOpenNavigationHud}
-              mainWorldHudVisible={mainWorldHudVisible}
-              onOpenMainWorldHud={onOpenMainWorldHud}
-            characterProfileHudVisible={characterProfileHudVisible}
-            onOpenCharacterProfileHud={onOpenCharacterProfileHud}
-            tradeHudVisible={tradeHudVisible}
-            onOpenTradeHud={onOpenTradeHud}
-          />
-        )}
+                <ambientLight intensity={0.6} />
+                <directionalLight position={[2, 3, 4]} intensity={1.4} />
+                <Starfield />
+                <AutoRotatingSystemGroup enabled={autoRotateSystem}>
+                  <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
+                  <WorldSystem
+                    world={world}
+                    onPivot={onPivot}
+                    systemData={systemData}
+                    focusedBodyId={focusedBodyId}
+                    onFocusBody={setFocusedBodyId}
+                  />
+                </AutoRotatingSystemGroup>
+                {sceneMode === "system" && (
+                  <>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
+                    <PivotSmoother target={pivotTarget.current} controlsRef={controlsRef} />
+                  </>
+                )}
+              </>
+            )}
+            {showHudControls && (
+              <CameraPinnedSystemHud
+                world={world}
+                miniMapVisible={miniMapVisible}
+                onOpenMiniMap={onOpenMiniMap}
+                selectedSystemDetailAvailable={selectedSystemDetailAvailable}
+                onOpenSelectedSystemDetail={onOpenSelectedSystemDetail}
+                navigationHudVisible={navigationHudVisible}
+                onOpenNavigationHud={onOpenNavigationHud}
+                mainWorldHudVisible={mainWorldHudVisible}
+                onOpenMainWorldHud={onOpenMainWorldHud}
+                characterProfileHudVisible={characterProfileHudVisible}
+                onOpenCharacterProfileHud={onOpenCharacterProfileHud}
+                tradeHudVisible={tradeHudVisible}
+                onOpenTradeHud={onOpenTradeHud}
+              />
+            )}
           {showHudControls && mainWorldHud && (
             <CameraPinnedMainWorldHud
               visible={mainWorldHudVisible}
@@ -2776,6 +2850,7 @@ const StarSystemView = ({
             <CameraPinnedNavigationHud
               visible={navigationHudVisible}
               navigationHud={navigationHud}
+              store={reduxStore}
               onClose={onCloseNavigationHud}
             />
           )}
@@ -2783,6 +2858,7 @@ const StarSystemView = ({
             <CameraPinnedCharacterProfileHud
               visible={characterProfileHudVisible}
               characterProfileHud={characterProfileHud}
+              store={reduxStore}
               onClose={onCloseCharacterProfileHud}
             />
           )}
@@ -2790,6 +2866,7 @@ const StarSystemView = ({
             <CameraPinnedTradeHud
               visible={tradeHudVisible}
               tradeHud={tradeHud}
+              store={reduxStore}
               onClose={onCloseTradeHud}
             />
           )}
@@ -2797,6 +2874,7 @@ const StarSystemView = ({
             <CameraPinnedSubsectorMiniMapHud
               visible={miniMapVisible}
               miniMap={miniMap}
+              store={reduxStore}
               onOpenSectorMap={onOpenSectorMiniMap}
               onClose={onCloseMiniMap}
             />
@@ -2805,6 +2883,7 @@ const StarSystemView = ({
             <CameraPinnedSectorMiniMapHud
               visible={sectorMiniMapVisible}
               sectorMiniMap={sectorMiniMap}
+              store={reduxStore}
               onOpenGalaxyMap={onOpenGalaxyMiniMap}
               onClose={onCloseSectorMiniMap}
             />
@@ -2813,9 +2892,11 @@ const StarSystemView = ({
             <CameraPinnedGalaxyMiniMapHud
               visible={galaxyMiniMapVisible}
               galaxyMiniMap={galaxyMiniMap}
+              store={reduxStore}
               onClose={onCloseGalaxyMiniMap}
             />
           )}
+          </StoreBridge>
         </Canvas>
       )}
       {showWarpLayer && (
@@ -2835,6 +2916,120 @@ const StarSystemView = ({
             onExitReached={onWarpExitReached}
           />
         </Canvas>
+      )}
+    </div>
+  );
+};
+
+const StarSystemView = () => {
+  const dispatch = useAppDispatch();
+  const shipStatus = useAppSelector(selectShipStatus);
+  const ship = useAppSelector(selectShip);
+  const activeTradeWorld = useAppSelector(selectActiveWorld);
+  const miniMapVisible = useAppSelector(selectShowSubsectorMiniMap);
+  const sectorMiniMapVisible = useAppSelector(selectShowSectorMiniMap);
+  const galaxyMiniMapVisible = useAppSelector(selectShowGalaxyMiniMap);
+  const navigationHudVisible = useAppSelector(selectShowNavigationHud);
+  const mainWorldHudVisible = useAppSelector(selectShowMainWorldHud);
+  const characterProfileHudVisible = useAppSelector(selectShowCharacterProfileHud);
+  const tradeHudVisible = useAppSelector(selectShowTradeHud);
+  const hasStoredJumpDestination = useAppSelector(selectHasStoredJumpDestination);
+  const renderedSceneMode = useAppSelector(selectSystemSceneMode);
+  const showWarpLayer = useAppSelector(selectShowWarpLayer);
+  const warpLayerOpacity = useAppSelector(selectWarpLayerOpacity);
+  const warpLayerActive = useAppSelector(selectWarpLayerActive);
+  const warpExitBlankActive = useAppSelector(selectWarpExitBlankActive);
+  const renderableLocation = useAppSelector(selectSystemSceneRenderableLocation);
+  const sectorStatus = useAppSelector(selectShipSectorLoadStatus);
+
+  const handleWarpExitReached = useCallback(() => {
+    dispatch(runWarpExitSequence());
+  }, [dispatch]);
+
+  const handleResolveFailedJump = useCallback(() => {
+    dispatch(resolveFailedJump());
+  }, [dispatch]);
+
+  const handleOpenSelectedSystemDetail = useCallback(() => {
+    dispatch(openSelectedWorldSystemDetail());
+  }, [dispatch]);
+
+  const mainWorldHud = <MainWorldHud world={renderableLocation?.world ?? null} />;
+
+  if (warpExitBlankActive) {
+    return <div className="h-full w-full bg-black" />;
+  }
+
+  if (!renderableLocation) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <span className="font-mono text-xs uppercase tracking-widest text-(--hud-text-dim)">
+          {shipStatus === "loading" || sectorStatus === "loading"
+            ? "Loading current system"
+            : "Current ship system unavailable"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      <StarSystemViewScene
+        world={renderableLocation.world}
+        sectorAbbr={renderableLocation.sectorAbbr}
+        sceneMode={renderedSceneMode}
+        showWarpLayer={showWarpLayer}
+        renderSystemLayer={!showWarpLayer}
+        warpLayerOpacity={warpLayerOpacity}
+        warpLayerActive={warpLayerActive}
+        showHudControls
+        miniMapVisible={miniMapVisible}
+        onOpenMiniMap={() => dispatch(setSubsectorMiniMapVisible(true))}
+        onCloseMiniMap={() => dispatch(setSubsectorMiniMapVisible(false))}
+        miniMap={<SubsectorMiniMapHudContent />}
+        selectedSystemDetailAvailable={!!activeTradeWorld}
+        onOpenSelectedSystemDetail={handleOpenSelectedSystemDetail}
+        sectorMiniMapVisible={sectorMiniMapVisible}
+        onOpenSectorMiniMap={() => dispatch(setSectorMiniMapVisible(true))}
+        onCloseSectorMiniMap={() => dispatch(setSectorMiniMapVisible(false))}
+        sectorMiniMap={<SectorMiniMapHudContent />}
+        galaxyMiniMapVisible={galaxyMiniMapVisible}
+        onOpenGalaxyMiniMap={() => dispatch(setGalaxyMiniMapVisible(true))}
+        onCloseGalaxyMiniMap={() => dispatch(setGalaxyMiniMapVisible(false))}
+        galaxyMiniMap={<GalaxyMiniMapHudContent />}
+        navigationHudVisible={navigationHudVisible}
+        onOpenNavigationHud={() => dispatch(setNavigationHudVisible(true))}
+        onCloseNavigationHud={() => dispatch(setNavigationHudVisible(false))}
+        navigationHud={<NavigationHudContent />}
+        mainWorldHudVisible={mainWorldHudVisible}
+        onOpenMainWorldHud={() => dispatch(setMainWorldHudVisible(true))}
+        onCloseMainWorldHud={() => dispatch(setMainWorldHudVisible(false))}
+        mainWorldHud={mainWorldHud}
+        characterProfileHudVisible={characterProfileHudVisible}
+        onOpenCharacterProfileHud={() => dispatch(setCharacterProfileHudVisible(true))}
+        onCloseCharacterProfileHud={() => dispatch(setCharacterProfileHudVisible(false))}
+        characterProfileHud={<CharacterProfileHudContent />}
+        tradeHudVisible={tradeHudVisible}
+        onOpenTradeHud={() => dispatch(setTradeHudVisible(true))}
+        onCloseTradeHud={() => dispatch(setTradeHudVisible(false))}
+        tradeHud={<TradeSystemHudContent />}
+        onWarpExitReached={handleWarpExitReached}
+      />
+      {ship?.status === "in_jump" && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
+          <div className="hud-panel pointer-events-auto flex items-center gap-2 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-(--hud-text)">
+            <span className="text-(--hud-accent)">Jump Space</span>
+            {!hasStoredJumpDestination && (
+              <button
+                type="button"
+                onClick={handleResolveFailedJump}
+                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+              >
+                Return
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

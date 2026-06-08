@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { closeModal } from "../../store/slices/uiSlice";
 import { selectActiveModal } from "../../store/selectors/ui.selectors";
 import { selectActiveWorld } from "../../store/selectors/galaxy.selectors";
-import StarSystemView from "../world/StarSystemView";
+import { StarSystemViewScene } from "../world/StarSystemView";
 
 const SystemDetailModal = () => {
   const dispatch    = useAppDispatch();
@@ -52,7 +52,7 @@ const SystemDetailModal = () => {
         </div>
 
         <div className="flex-1 min-h-0">
-          <StarSystemView world={world} autoRotateSystem />
+          <StarSystemViewScene world={world} autoRotateSystem />
         </div>
       </div>
     </div>

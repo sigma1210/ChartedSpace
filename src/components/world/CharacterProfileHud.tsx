@@ -1,4 +1,9 @@
 import type { CharacterSummary } from "../../store/slices/characterSlice";
+import { useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { selectCharacters, selectCurrentCharacter } from "../../store/selectors/character.selectors";
+import { selectShip, selectShipLocation } from "../../store/selectors/ship.selectors";
+import { setActiveCharacter } from "../../store/slices/uiSlice";
 
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
@@ -110,5 +115,35 @@ export const CharacterProfileHud = ({
         )}
       </div>
     </div>
+  );
+};
+
+export const CharacterProfileHudContent = () => {
+  const dispatch = useAppDispatch();
+  const ship = useAppSelector(selectShip);
+  const shipLocation = useAppSelector(selectShipLocation);
+  const characters = useAppSelector(selectCharacters);
+  const currentCharacter = useAppSelector(selectCurrentCharacter);
+  const ownerCharacterId = ship?.crew.find((member) => member.isOwnerOperator)?.characterId ?? null;
+  const ownerCharacter = ownerCharacterId
+    ? characters.find((character) => character.id === ownerCharacterId) ?? null
+    : null;
+  const fallbackCharacter = characters.find((character) => character.sectorAbbr && character.hex) ?? characters[0] ?? null;
+  const character = currentCharacter ?? ownerCharacter ?? fallbackCharacter;
+
+  useEffect(() => {
+    if (currentCharacter || !character) return;
+    dispatch(setActiveCharacter(character.id));
+  }, [character, currentCharacter, dispatch]);
+
+  return (
+    <CharacterProfileHud
+      character={character}
+      currentLocation={{
+        worldName: shipLocation?.worldName ?? character?.worldName ?? null,
+        sectorAbbr: shipLocation?.sectorAbbr ?? character?.sectorAbbr ?? null,
+        hex: shipLocation?.hex ?? character?.hex ?? null,
+      }}
+    />
   );
 };

@@ -34,6 +34,16 @@ export const loadSector = createAsyncThunk<SectorDetail, string, { rejectValue: 
   }
 );
 
+export const preloadGalaxySectors = createAsyncThunk(
+  "galaxy/preloadGalaxySectors",
+  async (_, { dispatch, getState }) => {
+    const { galaxy } = getState() as { galaxy: GalaxyState };
+    await Promise.all(
+      galaxy.sectors.map((sector) => dispatch(loadSector(sector.Abbreviation))),
+    );
+  },
+);
+
 const galaxySlice = createSlice({
   name: "galaxy",
   initialState,

@@ -4,6 +4,7 @@ import {
   selectAllSectors,
   selectSectorData,
   selectSectorLoadStatus,
+  selectShipSectorLoadStatus,
   selectIsSectorLoaded,
 } from "../selectors/galaxy.selectors";
 import type { GalaxyState, SectorDetail } from "../../types";
@@ -36,7 +37,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   });
 
 const makeRoot = (galaxy: GalaxyState): RootState =>
-  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], ship: {} as RootState["ship"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"] });
+  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], ship: {} as RootState["ship"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], jumpNavigation: {} as RootState["jumpNavigation"] });
 
 describe("galaxySlice reducers", () => {
   it("populates sectors from the index on initialization", () => {
@@ -166,6 +167,18 @@ describe("galaxy selectors", () => {
 
   it("selectSectorLoadStatus returns idle for an unknown sector", () => {
     expect(selectSectorLoadStatus("Unkn")(root)).toBe("idle");
+  });
+
+  it("selectShipSectorLoadStatus returns the current ship sector status", () => {
+    const rootWithShip = {
+      ...root,
+      ship: { ship: { sectorAbbr: "Spin" } },
+    } as RootState;
+    expect(selectShipSectorLoadStatus(rootWithShip)).toBe("loading");
+  });
+
+  it("selectShipSectorLoadStatus returns idle without a ship sector", () => {
+    expect(selectShipSectorLoadStatus(root)).toBe("idle");
   });
 
   it("selectIsSectorLoaded is true only when status is loaded", () => {

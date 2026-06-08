@@ -16,6 +16,7 @@ interface SubsectorGridProps {
   sectorAbbr: string;
   subsectorKey: string;
   showHeader?: boolean;
+  scale?: number;
 }
 
 const KEYS = "ABCDEFGHIJKLMNOP";
@@ -144,7 +145,7 @@ export const SubsectorGridView = ({
   );
 };
 
-const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: SubsectorGridProps) => {
+const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true, scale = 1 }: SubsectorGridProps) => {
   const dispatch = useAppDispatch();
   const status = useAppSelector(selectSectorLoadStatus(sectorAbbr));
   const sector = useAppSelector(selectSectorData(sectorAbbr));
@@ -166,6 +167,7 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true }: Subsecto
       ship={ship}
       shipColor={shipColor}
       showHeader={showHeader}
+      scale={scale}
       onSelectWorld={(id) => dispatch(setActiveWorldHex({ sectorAbbr, hex: id }))}
       onHoverWorld={(id) => dispatch(setTargetWorldHex({ sectorAbbr, hex: id }))}
       onLeaveGrid={() => dispatch(clearTargetWorldHex())}

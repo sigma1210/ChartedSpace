@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { selectAllSectors, selectActiveSectorAbbr, selectWorldDotStyle } from "../../store/selectors/galaxy.selectors";
-import { setActiveSector } from "../../store/slices/galaxySlice";
+import { loadSector, setActiveSector } from "../../store/slices/galaxySlice";
 import { toggleGalaxyMiniMap } from "../../store/slices/uiSlice";
 import type { MapMode, SectorDetail, SectorMeta, WorldCoord, WorldDotStyle } from "../../types";
 import { GalaxyStarFieldView } from "./GalaxyStarField";
@@ -125,6 +126,35 @@ const GalaxyMiniMap = () => {
       sectorData={sectorData}
       getStyle={getStyle}
       onToggle={() => dispatch(toggleGalaxyMiniMap())}
+      onSelectSector={(sectorAbbr) => dispatch(setActiveSector(sectorAbbr))}
+    />
+  );
+};
+
+export const GalaxyMiniMapHudContent = () => {
+  const dispatch = useAppDispatch();
+  const allSectors = useAppSelector(selectAllSectors);
+  const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
+  const sectorData = useAppSelector(s => s.galaxy.sectorData);
+  const loadingStatus = useAppSelector(s => s.galaxy.loadingStatus);
+  const getStyle = useAppSelector(selectWorldDotStyle);
+
+  useEffect(() => {
+    for (const sector of allSectors) {
+      const status = loadingStatus[sector.Abbreviation];
+      if (status === "loaded" || status === "loading") continue;
+      dispatch(loadSector(sector.Abbreviation));
+    }
+  }, [allSectors, dispatch, loadingStatus]);
+
+  return (
+    <GalaxyMiniMapView
+      visible
+      allSectors={allSectors}
+      activeSectorAbbr={activeSectorAbbr}
+      sectorData={sectorData}
+      getStyle={getStyle}
+      scale={0.5}
       onSelectSector={(sectorAbbr) => dispatch(setActiveSector(sectorAbbr))}
     />
   );

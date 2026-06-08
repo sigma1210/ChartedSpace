@@ -15,6 +15,10 @@ export const selectSectorData = (abbr: string) => (state: RootState) =>
   state.galaxy.sectorData[abbr];
 export const selectSectorLoadStatus = (abbr: string) => (state: RootState) =>
   state.galaxy.loadingStatus[abbr] ?? "idle";
+export const selectShipSectorLoadStatus = (state: RootState) => {
+  const sectorAbbr = state.ship.ship?.sectorAbbr;
+  return sectorAbbr ? state.galaxy.loadingStatus[sectorAbbr] ?? "idle" : "idle";
+};
 export const selectIsSectorLoaded = (abbr: string) => (state: RootState) =>
   state.galaxy.loadingStatus[abbr] === "loaded";
 

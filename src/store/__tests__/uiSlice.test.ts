@@ -16,6 +16,7 @@ import uiReducer, {
   openNotifications,
   openOwnProfile,
   openUserProfile,
+  openSelectedWorldSystemDetail,
 } from "../slices/uiSlice";
 import {
   selectActiveModal,
@@ -29,6 +30,13 @@ import {
   selectSearchQuery,
   selectSearchFilter,
   selectPreviousModal,
+  selectShowCharacterProfileHud,
+  selectShowGalaxyMiniMap,
+  selectShowMainWorldHud,
+  selectShowNavigationHud,
+  selectShowSectorMiniMap,
+  selectShowSubsectorMiniMap,
+  selectShowTradeHud,
 } from "../selectors/ui.selectors";
 import type { UIState } from "../../types";
 import type { RootState } from "../index";
@@ -49,10 +57,14 @@ const initialState: UIState = {
   showGalaxyMiniMap: true,
   showSectorMiniMap: true,
   showSubsectorMiniMap: true,
+  showNavigationHud: false,
+  showMainWorldHud: false,
+  showCharacterProfileHud: false,
+  showTradeHud: false,
 };
 
 const makeRoot = (ui: UIState): RootState => {
-  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, characters: { items: [], status: "idle", error: null }, ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} } };
+  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, characters: { items: [], status: "idle", error: null }, ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} }, systemScene: { sceneMode: "system", showWarpLayer: false, warpLayerOpacity: 0, warpLayerActive: false, warpExitBlankActive: false, renderableLocation: null }, jumpNavigation: { selectedDestinationKey: null, plotStatus: "idle", actionBusy: false, hasStoredJumpDestination: false, warpExitInProgress: false, jumpResolveInProgress: false } };
 }
 
 describe("uiSlice reducers", () => {
@@ -227,6 +239,13 @@ describe("ui selectors", () => {
     searchFilter: "worlds",
     searchQuery: "Regina",
     previousModal: "characterList",
+    showGalaxyMiniMap: false,
+    showSectorMiniMap: true,
+    showSubsectorMiniMap: false,
+    showNavigationHud: true,
+    showMainWorldHud: true,
+    showCharacterProfileHud: false,
+    showTradeHud: true,
   });
 
   it("selectActiveModal", () => expect(selectActiveModal(root)).toBe("search"));
@@ -240,4 +259,36 @@ describe("ui selectors", () => {
   it("selectSearchFilter", () => expect(selectSearchFilter(root)).toBe("worlds"));
   it("selectSearchQuery", () => expect(selectSearchQuery(root)).toBe("Regina"));
   it("selectPreviousModal", () => expect(selectPreviousModal(root)).toBe("characterList"));
+  it("selectShowGalaxyMiniMap", () => expect(selectShowGalaxyMiniMap(root)).toBe(false));
+  it("selectShowSectorMiniMap", () => expect(selectShowSectorMiniMap(root)).toBe(true));
+  it("selectShowSubsectorMiniMap", () => expect(selectShowSubsectorMiniMap(root)).toBe(false));
+  it("selectShowNavigationHud", () => expect(selectShowNavigationHud(root)).toBe(true));
+  it("selectShowMainWorldHud", () => expect(selectShowMainWorldHud(root)).toBe(true));
+  it("selectShowCharacterProfileHud", () => expect(selectShowCharacterProfileHud(root)).toBe(false));
+  it("selectShowTradeHud", () => expect(selectShowTradeHud(root)).toBe(true));
+});
+
+describe("ui workflow thunks", () => {
+  it("openSelectedWorldSystemDetail opens the active world system detail", async () => {
+    const root = makeRoot(initialState);
+    root.galaxy.activeWorldSectorAbbr = "Spin";
+    root.galaxy.activeWorldHex = "1910";
+
+    const dispatch = jest.fn();
+    const getState = jest.fn(() => root);
+
+    await openSelectedWorldSystemDetail()(dispatch, getState, undefined);
+
+    expect(dispatch).toHaveBeenCalledWith(openSystemDetail("1910"));
+  });
+
+  it("openSelectedWorldSystemDetail is a no-op without an active world", async () => {
+    const root = makeRoot(initialState);
+    const dispatch = jest.fn();
+    const getState = jest.fn(() => root);
+
+    await openSelectedWorldSystemDetail()(dispatch, getState, undefined);
+
+    expect(dispatch).not.toHaveBeenCalledWith(openSystemDetail(expect.any(String)));
+  });
 });

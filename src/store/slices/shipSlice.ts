@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "../index";
+import { fetchCharacters, invalidateCharacters } from "./characterSlice";
 
 export const DEFAULT_SHIP_COLOR = "#9ca3af";
 
@@ -73,6 +74,44 @@ export const fetchShip = createAsyncThunk(
       return status === "idle";
     },
   }
+);
+
+export const buyCargoAndRefresh = createAsyncThunk(
+  "ship/buyCargoAndRefresh",
+  async ({ commodity, tons }: { commodity: string; tons: number }, { dispatch }) => {
+    const response = await fetch("/api/ship/cargo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commodity, tons }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(error.error ?? "Purchase failed");
+    }
+
+    dispatch(invalidateShip());
+    await dispatch(fetchShip());
+    dispatch(invalidateCharacters());
+    await dispatch(fetchCharacters());
+  },
+);
+
+export const sellCargoAndRefresh = createAsyncThunk(
+  "ship/sellCargoAndRefresh",
+  async ({ lotId }: { lotId: string }, { dispatch }) => {
+    const response = await fetch(`/api/ship/cargo/${lotId}/sell`, { method: "POST" });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(error.error ?? "Sale failed");
+    }
+
+    dispatch(invalidateShip());
+    await dispatch(fetchShip());
+    dispatch(invalidateCharacters());
+    await dispatch(fetchCharacters());
+  },
 );
 
 const shipSlice = createSlice({

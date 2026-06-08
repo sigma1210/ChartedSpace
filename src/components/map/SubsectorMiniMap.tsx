@@ -175,4 +175,39 @@ const SubsectorMiniMap = () => {
   );
 };
 
+export const SubsectorMiniMapHudContent = () => {
+  const dispatch         = useAppDispatch();
+  const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
+  const activeKey        = useAppSelector(selectActiveSubsectorKey);
+  const allSectors       = useAppSelector(selectAllSectors);
+  const sector           = useAppSelector(selectSectorData(activeSectorAbbr));
+
+  const sectorByCoord = new Map(allSectors.map(s => [`${s.X},${s.Y}`, s]));
+  const nav           = buildNavTargets(activeKey, activeSectorAbbr, allSectors, sector, sectorByCoord);
+
+  const navigate = (target: NavTarget) => {
+    dispatch(setActiveLocation({ sectorAbbr: target.sectorAbbr, subsectorKey: target.subsectorKey }));
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1 select-none">
+      <span className="font-mono text-[8px] uppercase tracking-widest text-(--hud-text-dim) whitespace-nowrap">
+        {sector?.subsectors[activeKey] ?? activeKey}
+      </span>
+      <NavButton target={nav.up} icon={<ChevronUp size={10} />} onNavigate={navigate} />
+      <div className="flex items-center gap-1">
+        <NavButton target={nav.left} icon={<ChevronLeft size={10} />} onNavigate={navigate} vertical />
+        <SubsectorGrid
+          sectorAbbr={activeSectorAbbr}
+          subsectorKey={activeKey}
+          showHeader={false}
+          scale={0.5}
+        />
+        <NavButton target={nav.right} icon={<ChevronRight size={10} />} onNavigate={navigate} vertical />
+      </div>
+      <NavButton target={nav.down} icon={<ChevronDown size={10} />} onNavigate={navigate} />
+    </div>
+  );
+};
+
 export default SubsectorMiniMap;

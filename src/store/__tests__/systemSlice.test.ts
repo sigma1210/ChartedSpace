@@ -10,6 +10,8 @@ import notificationsReducer from "../slices/notificationsSlice";
 import characterReducer from "../slices/characterSlice";
 import shipReducer from "../slices/shipSlice";
 import availableCrewReducer from "../slices/availableCrewSlice";
+import systemSceneReducer from "../slices/systemSceneSlice";
+import jumpNavigationReducer from "../slices/jumpNavigationSlice";
 import {
   selectActiveWorldSystem,
   selectSystemDataByKey,
@@ -38,6 +40,8 @@ const makeStore = () =>
       turn: turnReducer,
       availableCrew: availableCrewReducer,
       system: systemReducer,
+      systemScene: systemSceneReducer,
+      jumpNavigation: jumpNavigationReducer,
     },
     preloadedState: {
       galaxy: {

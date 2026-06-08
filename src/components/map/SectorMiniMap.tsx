@@ -63,4 +63,24 @@ const SectorMiniMap = () => {
   );
 };
 
+export const SectorMiniMapHudContent = () => {
+  const dispatch         = useAppDispatch();
+  const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
+  const activeKey        = useAppSelector(selectActiveSubsectorKey);
+  const sector           = useAppSelector(selectSectorData(activeSectorAbbr));
+
+  return (
+    <div className="flex flex-col gap-1 select-none">
+      <StarField
+        sectorAbbr={activeSectorAbbr}
+        activeKey={activeKey}
+        onSelectKey={(key) => dispatch(setActiveSubsector(key))}
+      />
+      <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-accent)">
+        {sector?.subsectors[activeKey] ?? activeKey}
+      </span>
+    </div>
+  );
+};
+
 export default SectorMiniMap;

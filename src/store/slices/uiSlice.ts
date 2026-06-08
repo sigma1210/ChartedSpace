@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import {
   JumpDestination,
   MapView,
@@ -6,6 +6,7 @@ import {
   SearchFilter,
   UIState,
 } from "../../types";
+import type { RootState } from "../index";
 
 const initialState: UIState = {
   activeModal: null,
@@ -23,6 +24,10 @@ const initialState: UIState = {
   showGalaxyMiniMap: true,
   showSectorMiniMap: true,
   showSubsectorMiniMap: true,
+  showNavigationHud: false,
+  showMainWorldHud: false,
+  showCharacterProfileHud: false,
+  showTradeHud: false,
 };
 
 const uiSlice = createSlice({
@@ -145,6 +150,18 @@ const uiSlice = createSlice({
     setSectorMiniMapVisible(state, action: PayloadAction<boolean>) {
       state.showSectorMiniMap = action.payload;
     },
+    setNavigationHudVisible(state, action: PayloadAction<boolean>) {
+      state.showNavigationHud = action.payload;
+    },
+    setMainWorldHudVisible(state, action: PayloadAction<boolean>) {
+      state.showMainWorldHud = action.payload;
+    },
+    setCharacterProfileHudVisible(state, action: PayloadAction<boolean>) {
+      state.showCharacterProfileHud = action.payload;
+    },
+    setTradeHudVisible(state, action: PayloadAction<boolean>) {
+      state.showTradeHud = action.payload;
+    },
   },
 });
 
@@ -178,6 +195,23 @@ export const {
   toggleSubsectorMiniMap,
   setSubsectorMiniMapVisible,
   setSectorMiniMapVisible,
+  setNavigationHudVisible,
+  setMainWorldHudVisible,
+  setCharacterProfileHudVisible,
+  setTradeHudVisible,
 } = uiSlice.actions;
+
+export const openSelectedWorldSystemDetail = createAsyncThunk(
+  "ui/openSelectedWorldSystemDetail",
+  async (_, { dispatch, getState }) => {
+    const state = getState() as RootState;
+    const sectorAbbr = state.galaxy.activeWorldSectorAbbr;
+    const hex = state.galaxy.activeWorldHex;
+    if (!sectorAbbr || !hex) return false;
+
+    dispatch(openSystemDetail(hex));
+    return true;
+  },
+);
 
 export default uiSlice.reducer;

@@ -2,8 +2,26 @@
 
 import { useEffect, useState } from "react";
 import type { World } from "../../types";
-import type { CargoLotSummary } from "../../store/slices/shipSlice";
-import { TRADE_CODE_LABELS, type WorldLocation } from "../../store/selectors/galaxy.selectors";
+import { buyCargoAndRefresh, sellCargoAndRefresh, type CargoLotSummary } from "../../store/slices/shipSlice";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import {
+  selectActiveWorld,
+  selectActiveWorldCost,
+  selectActiveWorldLocation,
+  selectActiveWorldName,
+  selectActiveWorldTradeCodes,
+  selectExpectedSalePrice,
+  selectTargetWorld,
+  selectTargetWorldLocation,
+  selectTargetWorldName,
+  selectTargetWorldTradeCodes,
+  TRADE_CODE_LABELS,
+  type WorldLocation,
+} from "../../store/selectors/galaxy.selectors";
+import { selectShip } from "../../store/selectors/ship.selectors";
+import { selectCurrentTurn } from "../../store/selectors/turn.selectors";
+import { selectCharacters } from "../../store/selectors/character.selectors";
+import { selectCurrentMarketData, type CurrentMarketData } from "../../store/selectors/trade.selectors";
 import { uwpVal } from "../../lib/worldMap";
 
 type TradeTab = "speculation" | "buy" | "sell";
@@ -13,15 +31,6 @@ const TRADE_TABS: Array<{ id: TradeTab; label: string }> = [
   { id: "buy", label: "Buy" },
   { id: "sell", label: "Sell" },
 ];
-
-interface MarketData {
-  worldName: string;
-  tradeCodes: string[];
-  basePricePerTon: number;
-  skillModifier: number;
-  pricePerTon: number;
-  remainingCapacity: number;
-}
 
 const Sep = () => <span className="mx-0.5 text-(--hud-border)">›</span>;
 
@@ -151,38 +160,22 @@ const SpeculationPanel = ({
   );
 };
 
-const BuyPanel = ({ onCargoPurchased }: { onCargoPurchased: () => void | Promise<void> }) => {
-  const [marketData, setMarketData] = useState<MarketData | null>(null);
-  const [marketLoading, setMarketLoading] = useState(false);
+const BuyPanel = ({
+  marketData,
+  onBuyCargo,
+}: {
+  marketData: CurrentMarketData | null;
+  onBuyCargo: (commodity: string, tons: number) => Promise<void>;
+}) => {
   const [commodity, setCommodity] = useState("");
   const [tons, setTons] = useState("1");
   const [buyState, setBuyState] = useState<"idle" | "buying" | "error">("idle");
   const [buyError, setBuyError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    setMarketLoading(true);
-    setMarketData(null);
     setBuyError(null);
-
-    fetch("/api/ship/market")
-      .then((response) => response.ok ? response.json() : null)
-      .then((data: MarketData | null) => {
-        if (cancelled) return;
-        setMarketData(data);
-        setCommodity(data?.tradeCodes[0] ?? "");
-      })
-      .catch(() => {
-        if (!cancelled) setMarketData(null);
-      })
-      .finally(() => {
-        if (!cancelled) setMarketLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    setCommodity(marketData?.tradeCodes[0] ?? "");
+  }, [marketData]);
 
   const remainingCapacity = marketData?.remainingCapacity ?? 0;
   const tonsNum = parseInt(tons, 10);
@@ -201,37 +194,18 @@ const BuyPanel = ({ onCargoPurchased }: { onCargoPurchased: () => void | Promise
     setBuyError(null);
 
     try {
-      const response = await fetch("/api/ship/cargo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commodity, tons: tonsNum }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({})) as { error?: string };
-        setBuyError(error.error ?? "Purchase failed");
-        setBuyState("error");
-        return;
-      }
-
+      await onBuyCargo(commodity, tonsNum);
       setBuyState("idle");
       setTons("1");
-      await onCargoPurchased();
-    } catch {
-      setBuyError("Purchase failed");
+    } catch (error) {
+      setBuyError(error instanceof Error ? error.message : "Purchase failed");
       setBuyState("error");
     }
   };
 
   return (
     <div className="p-2">
-      {marketLoading && (
-        <p className="font-mono text-[8px] italic uppercase tracking-wider text-(--hud-text-dim) animate-pulse">
-          Loading market...
-        </p>
-      )}
-
-      {!marketLoading && !marketData && (
+      {!marketData && (
         <p className="font-mono text-[8px] italic uppercase tracking-wider text-(--hud-text-dim)">
           Market unavailable
         </p>
@@ -314,11 +288,11 @@ const BuyPanel = ({ onCargoPurchased }: { onCargoPurchased: () => void | Promise
 const SellPanel = ({
   cargo,
   isDocked,
-  onCargoSold,
+  onSellCargo,
 }: {
   cargo: CargoLotSummary[];
   isDocked: boolean;
-  onCargoSold: () => void | Promise<void>;
+  onSellCargo: (lotId: string) => Promise<void>;
 }) => {
   const [sellingLotId, setSellingLotId] = useState<string | null>(null);
   const [sellError, setSellError] = useState<string | null>(null);
@@ -328,17 +302,9 @@ const SellPanel = ({
     setSellError(null);
 
     try {
-      const response = await fetch(`/api/ship/cargo/${lotId}/sell`, { method: "POST" });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({})) as { error?: string };
-        setSellError(error.error ?? "Sale failed");
-        return;
-      }
-
-      await onCargoSold();
-    } catch {
-      setSellError("Sale failed");
+      await onSellCargo(lotId);
+    } catch (error) {
+      setSellError(error instanceof Error ? error.message : "Sale failed");
     } finally {
       setSellingLotId(null);
     }
@@ -444,8 +410,9 @@ export const TradeSystemHud = ({
   currentTurn,
   cargo,
   isDocked,
-  onCargoPurchased,
-  onCargoSold,
+  marketData,
+  onBuyCargo,
+  onSellCargo,
 }: {
   activeWorld: World | null;
   activeWorldName: string | null;
@@ -461,8 +428,9 @@ export const TradeSystemHud = ({
   currentTurn: number;
   cargo: CargoLotSummary[];
   isDocked: boolean;
-  onCargoPurchased: () => void | Promise<void>;
-  onCargoSold: () => void | Promise<void>;
+  marketData: CurrentMarketData | null;
+  onBuyCargo: (commodity: string, tons: number) => Promise<void>;
+  onSellCargo: (lotId: string) => Promise<void>;
 }) => {
   const [activeTab, setActiveTab] = useState<TradeTab>("speculation");
 
@@ -515,15 +483,67 @@ export const TradeSystemHud = ({
           />
         )}
 
-        {activeTab === "buy" && <BuyPanel onCargoPurchased={onCargoPurchased} />}
+        {activeTab === "buy" && <BuyPanel marketData={marketData} onBuyCargo={onBuyCargo} />}
         {activeTab === "sell" && (
           <SellPanel
             cargo={cargo}
             isDocked={isDocked}
-            onCargoSold={onCargoSold}
+            onSellCargo={onSellCargo}
           />
         )}
       </div>
     </div>
+  );
+};
+
+export const TradeSystemHudContent = () => {
+  const dispatch = useAppDispatch();
+  const activeWorld = useAppSelector(selectActiveWorld);
+  const activeWorldName = useAppSelector(selectActiveWorldName);
+  const activeWorldLocation = useAppSelector(selectActiveWorldLocation);
+  const activeTradeCodes = useAppSelector(selectActiveWorldTradeCodes);
+  const activeWorldCost = useAppSelector(selectActiveWorldCost);
+  const targetWorld = useAppSelector(selectTargetWorld);
+  const targetWorldName = useAppSelector(selectTargetWorldName);
+  const targetWorldLocation = useAppSelector(selectTargetWorldLocation);
+  const targetTradeCodes = useAppSelector(selectTargetWorldTradeCodes);
+  const expectedSalePrice = useAppSelector(selectExpectedSalePrice);
+  const currentTurn = useAppSelector(selectCurrentTurn);
+  const ship = useAppSelector(selectShip);
+  const characters = useAppSelector(selectCharacters);
+  const marketData = useAppSelector(selectCurrentMarketData);
+  const ownerCharacterId = ship?.crew.find((member) => member.isOwnerOperator)?.characterId ?? null;
+  const ownerCharacter = ownerCharacterId
+    ? characters.find((character) => character.id === ownerCharacterId) ?? null
+    : null;
+
+  const handleBuyCargo = async (commodity: string, tons: number) => {
+    await dispatch(buyCargoAndRefresh({ commodity, tons })).unwrap();
+  };
+
+  const handleSellCargo = async (lotId: string) => {
+    await dispatch(sellCargoAndRefresh({ lotId })).unwrap();
+  };
+
+  return (
+    <TradeSystemHud
+      activeWorld={activeWorld}
+      activeWorldName={activeWorldName}
+      activeWorldLocation={activeWorldLocation}
+      activeTradeCodes={activeTradeCodes}
+      activeWorldCost={activeWorldCost}
+      targetWorld={targetWorld}
+      targetWorldName={targetWorldName}
+      targetWorldLocation={targetWorldLocation}
+      targetTradeCodes={targetTradeCodes}
+      expectedSalePrice={expectedSalePrice}
+      credits={ownerCharacter?.credits ?? null}
+      currentTurn={currentTurn}
+      cargo={ship?.cargo ?? []}
+      isDocked={ship?.status === "docked"}
+      marketData={marketData}
+      onBuyCargo={handleBuyCargo}
+      onSellCargo={handleSellCargo}
+    />
   );
 };

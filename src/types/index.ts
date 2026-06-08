@@ -46,6 +46,10 @@ export interface UIState {
   showGalaxyMiniMap: boolean;
   showSectorMiniMap: boolean;
   showSubsectorMiniMap: boolean;
+  showNavigationHud: boolean;
+  showMainWorldHud: boolean;
+  showCharacterProfileHud: boolean;
+  showTradeHud: boolean;
 }
 
 export interface NotificationsState {

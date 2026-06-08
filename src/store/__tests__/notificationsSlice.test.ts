@@ -31,6 +31,10 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       showGalaxyMiniMap: true,
       showSectorMiniMap: true,
       showSubsectorMiniMap: true,
+      showNavigationHud: false,
+      showMainWorldHud: false,
+      showCharacterProfileHud: false,
+      showTradeHud: false,
     },
     notifications,
     galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null },
@@ -39,6 +43,22 @@ const makeRoot = (notifications: NotificationsState): RootState => {
     turn: { currentTurn: 1, status: "idle", error: null },
     availableCrew: { poolSize: 20, crew: [] },
     system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} },
+    systemScene: {
+      sceneMode: "system",
+      showWarpLayer: false,
+      warpLayerOpacity: 0,
+      warpLayerActive: false,
+      warpExitBlankActive: false,
+      renderableLocation: null,
+    },
+    jumpNavigation: {
+      selectedDestinationKey: null,
+      plotStatus: "idle",
+      actionBusy: false,
+      hasStoredJumpDestination: false,
+      warpExitInProgress: false,
+      jumpResolveInProgress: false,
+    },
   };
 }
 
