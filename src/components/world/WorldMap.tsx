@@ -4,24 +4,61 @@ import { useMemo, useRef } from "react";
 import type { World } from "../../types";
 import {
   LAND_BY_ATMO,
-  buildDisplayHexes, buildHexGrid, buildWorldMapOverlays, assignTerrain, terrainColor, hexPts, svgDimensions, uwpVal,
+  assignTerrain,
+  buildDisplayHexes,
+  buildHexGrid,
+  buildWorldMapOverlays,
+  hexPts,
+  svgDimensions,
+  terrainColor,
+  uwpVal,
   visibleFeatures,
+  type Terrain,
+  type TerrainFeature,
 } from "../../lib/worldMap";
-import type { Terrain, TerrainFeature } from "../../lib/worldMap";
 
 const MAP_BG = "#020c14";
 
 const TERRAIN_LABELS: Record<Terrain, string> = {
-  vacuum: "Vacuum", land: "Land", rough: "Rough", woods: "Woods", swamp: "Swamp",
-  marsh: "Marsh", lake: "Lake", ocean: "Ocean", oceanDepth: "Ocean Depth",
-  oceanAbyss: "Ocean Abyss", fluid: "Fluid Ocean",
-  ice: "Ice", frozen: "Frozen", desert: "Desert", baked: "Baked Lands", lava: "Lava",
-  wasteland: "Wasteland", exotic: "Exotic",
+  vacuum: "Vacuum",
+  land: "Land",
+  rough: "Rough",
+  woods: "Woods",
+  swamp: "Swamp",
+  marsh: "Marsh",
+  lake: "Lake",
+  ocean: "Ocean",
+  oceanDepth: "Ocean Depth",
+  oceanAbyss: "Ocean Abyss",
+  fluid: "Fluid Ocean",
+  ice: "Ice",
+  frozen: "Frozen",
+  desert: "Desert",
+  baked: "Baked Lands",
+  lava: "Lava",
+  wasteland: "Wasteland",
+  exotic: "Exotic",
 };
 
 const TERRAIN_ORDER: Terrain[] = [
-  "vacuum", "land", "rough", "woods", "swamp", "marsh", "lake", "ocean", "oceanDepth",
-  "oceanAbyss", "fluid", "ice", "frozen", "desert", "wasteland", "exotic", "baked", "lava",
+  "vacuum",
+  "land",
+  "rough",
+  "woods",
+  "swamp",
+  "marsh",
+  "lake",
+  "ocean",
+  "oceanDepth",
+  "oceanAbyss",
+  "fluid",
+  "ice",
+  "frozen",
+  "desert",
+  "wasteland",
+  "exotic",
+  "baked",
+  "lava",
 ];
 
 const FEATURE_LABELS: Record<TerrainFeature, string> = {
@@ -47,366 +84,235 @@ const FEATURE_LABELS: Record<TerrainFeature, string> = {
 };
 
 const FEATURE_ORDER: TerrainFeature[] = [
-  "mountain", "island", "crater", "volcano", "chasm", "precipice", "resource", "mine", "oil",
-  "starport", "city", "town", "suburb", "rural", "crop", "domedCity", "arcology", "nobleEstate", "penalSettlement",
+  "starport",
+  "city",
+  "town",
+  "suburb",
+  "rural",
+  "crop",
+  "domedCity",
+  "arcology",
+  "nobleEstate",
+  "penalSettlement",
+  "mine",
+  "oil",
+  "resource",
+  "volcano",
+  "chasm",
+  "precipice",
+  "crater",
+  "mountain",
+  "island",
 ];
 
-interface WorldMapProps { world: World }
+const filenameFor = (world: World, extension: string) =>
+  `${world.name.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "world"}_map.${extension}`;
 
-const WorldMap = ({ world }: WorldMapProps) => {
-  const svgRef  = useRef<SVGSVGElement>(null);
-  const realSize = uwpVal(world.uwp.size);
-  const S = realSize;
-  const { svgW, svgH } = svgDimensions(S);
+const triggerDownload = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
-  const baseHexes = useMemo(() => buildHexGrid(S, 0, 0), [S]);
+const FeatureMark = ({
+  feature,
+  left,
+  top,
+}: {
+  feature: TerrainFeature;
+  left: number;
+  top: number;
+}) => {
+  const cx = left + 16;
+  const cy = top + 17;
+
+  switch (feature) {
+    case "starport":
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={7} fill="#020c14" stroke="#ffffff" strokeWidth={1.5} />
+          <path d={`M ${cx} ${cy - 7} L ${cx} ${cy + 7} M ${cx - 7} ${cy} L ${cx + 7} ${cy}`} stroke="#ffffff" strokeWidth={1.4} strokeLinecap="round" />
+        </g>
+      );
+    case "city":
+      return <rect x={cx - 6} y={cy - 6} width={12} height={12} fill="#111111" stroke="#ffffff" strokeWidth={1} />;
+    case "town":
+      return <circle cx={cx} cy={cy} r={4.8} fill="#111111" stroke="#ffffff" strokeWidth={1} />;
+    case "suburb":
+      return <circle cx={cx} cy={cy} r={4.8} fill="none" stroke="#ffffff" strokeWidth={1.2} />;
+    case "mountain":
+      return <path d={`M ${left + 6} ${top + 25} L ${left + 15} ${top + 9} L ${left + 22} ${top + 25} M ${left + 13} ${top + 17} L ${left + 18} ${top + 25}`} fill="none" stroke="#000000" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />;
+    case "island":
+      return <circle cx={cx} cy={cy} r={4.5} fill="#5c7052" stroke="#001018" strokeWidth={1} />;
+    case "crater":
+      return <ellipse cx={cx} cy={cy} rx={7} ry={4.8} fill="none" stroke="#000000" strokeWidth={1.4} />;
+    case "volcano":
+      return <path d={`M ${left + 7} ${top + 25} L ${cx} ${top + 8} L ${left + 25} ${top + 25} Z`} fill="#1a0804" stroke="#ff5a1f" strokeWidth={1.2} strokeLinejoin="round" />;
+    case "chasm":
+      return <path d={`M ${left + 8} ${top + 9} L ${left + 13} ${top + 15} L ${left + 11} ${top + 20} L ${left + 18} ${top + 25} L ${left + 16} ${top + 31} L ${left + 23} ${top + 35}`} fill="none" stroke="#000000" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />;
+    case "precipice":
+      return <path d={`M ${left + 8} ${top + 12} L ${left + 24} ${top + 12} M ${left + 11} ${top + 12} L ${left + 8} ${top + 19} M ${cx} ${top + 12} L ${left + 13} ${top + 22} M ${left + 21} ${top + 12} L ${left + 18} ${top + 19}`} fill="none" stroke="#000000" strokeWidth={1.5} strokeLinecap="round" />;
+    case "resource":
+      return <path d={`M ${cx} ${top + 9} L ${left + 22} ${cy} L ${cx} ${top + 25} L ${left + 10} ${cy} Z`} fill="#ffd166" stroke="#000000" strokeWidth={1.1} strokeLinejoin="round" />;
+    case "mine":
+      return <path d={`M ${left + 9} ${top + 24} L ${left + 22} ${top + 11} M ${left + 18} ${top + 10} Q ${left + 23} ${top + 10} ${left + 25} ${top + 15}`} fill="none" stroke="#000000" strokeWidth={1.6} strokeLinecap="round" />;
+    case "oil":
+      return <path d={`M ${cx} ${top + 8} C ${left + 22} ${top + 16} ${left + 22} ${top + 25} ${cx} ${top + 27} C ${left + 10} ${top + 25} ${left + 10} ${top + 16} ${cx} ${top + 8} Z`} fill="#050505" stroke="#1f9bd1" strokeWidth={1} />;
+    default:
+      return <text x={cx} y={cy + 3} textAnchor="middle" className="fill-white font-mono text-[10px]">{FEATURE_LABELS[feature].slice(0, 1)}</text>;
+  }
+};
+
+const WorldMap = ({ world }: { world: World }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const size = uwpVal(world.uwp.size);
+  const { svgW, svgH } = svgDimensions(size);
+
+  const baseHexes = useMemo(() => buildHexGrid(size, 0, 0), [size]);
   const assignedHexes = useMemo(() => {
-    if (realSize === 0) return [];
+    if (size === 0) return [];
     return assignTerrain(baseHexes, world, svgH);
-  }, [baseHexes, world, realSize, svgH]);
-  const hexes = useMemo(() => buildDisplayHexes(assignedHexes, S), [assignedHexes, S]);
-  const overlays = useMemo(() => buildWorldMapOverlays(assignedHexes, S), [assignedHexes, S]);
+  }, [baseHexes, size, svgH, world]);
+  const hexes = useMemo(() => buildDisplayHexes(assignedHexes, size), [assignedHexes, size]);
+  const overlays = useMemo(() => buildWorldMapOverlays(assignedHexes, size), [assignedHexes, size]);
 
-  const atmoV    = uwpVal(world.uwp.atmosphere);
-  const landColor = LAND_BY_ATMO[atmoV] ?? "#2a5818";
-  const tColor    = (t: Terrain) => terrainColor(t, landColor);
+  const atmo = uwpVal(world.uwp.atmosphere);
+  const landColor = LAND_BY_ATMO[atmo] ?? "#2a5818";
+  const colorForTerrain = (terrain: Terrain) => terrainColor(terrain, landColor);
 
   const presentTerrains = useMemo(() => {
     const seen = new Set<Terrain>();
-    hexes.forEach(h => seen.add(h.terrain));
-    return TERRAIN_ORDER.filter(t => seen.has(t));
+    hexes.forEach((hex) => seen.add(hex.terrain));
+    return TERRAIN_ORDER.filter((terrain) => seen.has(terrain));
   }, [hexes]);
 
   const presentFeatures = useMemo(() => {
     const seen = new Set<TerrainFeature>();
-    hexes.forEach(h => visibleFeatures(h).forEach((feature) => seen.add(feature)));
+    hexes.forEach((hex) => visibleFeatures(hex).forEach((feature) => seen.add(feature)));
     return FEATURE_ORDER.filter((feature) => seen.has(feature));
   }, [hexes]);
-
-  const hasFeature = (hex: { features: TerrainFeature[] }, feature: TerrainFeature) =>
-    visibleFeatures(hex).includes(feature);
-
-  const triggerDownload = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const a   = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const downloadSVG = () => {
     const el = svgRef.current;
     if (!el) return;
     const data = new XMLSerializer().serializeToString(el);
-    triggerDownload(new Blob([data], { type: "image/svg+xml" }), `${world.name.replace(/\s+/g, "_")}.svg`);
+    triggerDownload(new Blob([data], { type: "image/svg+xml" }), filenameFor(world, "svg"));
   };
 
   const downloadPNG = () => {
     const el = svgRef.current;
     if (!el) return;
+
     const data = new XMLSerializer().serializeToString(el);
-    const url  = URL.createObjectURL(new Blob([data], { type: "image/svg+xml" }));
-    const img  = new Image();
+    const url = URL.createObjectURL(new Blob([data], { type: "image/svg+xml" }));
+    const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = svgW * 3; canvas.height = svgH * 3;
-      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const scale = 3;
+      canvas.width = svgW * scale;
+      canvas.height = svgH * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
-      canvas.toBlob(b => { if (b) triggerDownload(b, `${world.name.replace(/\s+/g, "_")}.png`); }, "image/png");
+      canvas.toBlob((blob) => {
+        if (blob) triggerDownload(blob, filenameFor(world, "png"));
+      }, "image/png");
     };
+    img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
   };
 
-  if (realSize === 0) {
-    return <div className="font-mono text-xs text-(--hud-text-dim) py-2">No world map — asteroid / planetoid belt</div>;
+  if (size === 0) {
+    return (
+      <div className="border border-(--hud-border) bg-(--hud-bg)/45 p-4 font-mono text-xs uppercase tracking-wider text-(--hud-text-dim)">
+        No 2D world map for asteroid or planetoid belts
+      </div>
+    );
   }
 
   return (
-    <div className="w-full flex flex-col gap-1.5">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${svgW} ${svgH}`}
-        className="w-full border border-(--hud-border)"
-        style={{ display: "block", background: MAP_BG }}
-      >
-        {hexes.map((h, i) => (
-          <polygon key={i} points={hexPts(h.left, h.top)} fill={tColor(h.terrain)} stroke="#000" strokeWidth={0.8} />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "island") && (
-          <circle
-            key={`island-${i}`}
-            cx={h.left + 16}
-            cy={h.top + 17}
-            r={4.5}
-            fill={LAND_BY_ATMO[atmoV] ?? "#2a5818"}
-            stroke="#001018"
-            strokeWidth={1}
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "mountain") && (
-          <path
-            key={`mountain-${i}`}
-            d={`M ${h.left + 6} ${h.top + 25} L ${h.left + 15} ${h.top + 9} L ${h.left + 22} ${h.top + 25} M ${h.left + 13} ${h.top + 17} L ${h.left + 18} ${h.top + 25}`}
-            fill="none"
-            stroke="#000000"
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "crater") && (
-          <g key={`crater-${i}`}>
-            <ellipse
-              cx={h.left + 16}
-              cy={h.top + 17}
-              rx={7}
-              ry={4.8}
-              fill="none"
-              stroke="#000000"
-              strokeWidth={1.4}
-            />
-            <path
-              d={`M ${h.left + 10.5} ${h.top + 16.5} Q ${h.left + 16} ${h.top + 20.5} ${h.left + 21.5} ${h.top + 16.5}`}
-              fill="none"
-              stroke="#000000"
-              strokeWidth={0.9}
-              strokeLinecap="round"
-            />
-          </g>
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "volcano") && (
-          <g key={`volcano-${i}`}>
-            <path
-              d={`M ${h.left + 7} ${h.top + 25} L ${h.left + 16} ${h.top + 8} L ${h.left + 25} ${h.top + 25} Z`}
-              fill="#1a0804"
-              stroke="#000000"
-              strokeWidth={1.1}
-              strokeLinejoin="round"
-            />
-            <path
-              d={`M ${h.left + 13} ${h.top + 13} L ${h.left + 16} ${h.top + 8} L ${h.left + 19} ${h.top + 13}`}
-              fill="none"
-              stroke="#ff5a1f"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </g>
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "chasm") && (
-          <path
-            key={`chasm-${i}`}
-            d={`M ${h.left + 8} ${h.top + 9} L ${h.left + 13} ${h.top + 15} L ${h.left + 11} ${h.top + 20} L ${h.left + 18} ${h.top + 25} L ${h.left + 16} ${h.top + 31} L ${h.left + 23} ${h.top + 35}`}
-            fill="none"
-            stroke="#000000"
-            strokeWidth={1.7}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "precipice") && (
-          <path
-            key={`precipice-${i}`}
-            d={`M ${h.left + 8} ${h.top + 12} L ${h.left + 24} ${h.top + 12} M ${h.left + 11} ${h.top + 12} L ${h.left + 8} ${h.top + 19} M ${h.left + 16} ${h.top + 12} L ${h.left + 13} ${h.top + 22} M ${h.left + 21} ${h.top + 12} L ${h.left + 18} ${h.top + 19}`}
-            fill="none"
-            stroke="#000000"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "resource") && (
-          <path
-            key={`resource-${i}`}
-            d={`M ${h.left + 16} ${h.top + 9} L ${h.left + 22} ${h.top + 17} L ${h.left + 16} ${h.top + 25} L ${h.left + 10} ${h.top + 17} Z`}
-            fill="#ffd166"
-            stroke="#000000"
-            strokeWidth={1.1}
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "mine") && (
-          <g key={`mine-${i}`}>
-            <path
-              d={`M ${h.left + 9} ${h.top + 24} L ${h.left + 22} ${h.top + 11} M ${h.left + 18} ${h.top + 10} Q ${h.left + 23} ${h.top + 10} ${h.left + 25} ${h.top + 15}`}
-              fill="none"
-              stroke="#000000"
-              strokeWidth={1.6}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d={`M ${h.left + 12} ${h.top + 12} L ${h.left + 23} ${h.top + 23}`}
-              fill="none"
-              stroke="#000000"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-            />
-          </g>
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "oil") && (
-          <path
-            key={`oil-${i}`}
-            d={`M ${h.left + 16} ${h.top + 8} C ${h.left + 22} ${h.top + 16} ${h.left + 22} ${h.top + 25} ${h.left + 16} ${h.top + 27} C ${h.left + 10} ${h.top + 25} ${h.left + 10} ${h.top + 16} ${h.left + 16} ${h.top + 8} Z`}
-            fill="#050505"
-            stroke="#1f9bd1"
-            strokeWidth={1}
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "starport") && (
-          <g key={`starport-${i}`}>
-            <circle
-              cx={h.left + 16}
-              cy={h.top + 17}
-              r={7}
-              fill="#020c14"
-              stroke="#ffffff"
-              strokeWidth={1.5}
-            />
-            <path
-              d={`M ${h.left + 16} ${h.top + 10} L ${h.left + 16} ${h.top + 24} M ${h.left + 9} ${h.top + 17} L ${h.left + 23} ${h.top + 17}`}
-              stroke="#ffffff"
-              strokeWidth={1.4}
-              strokeLinecap="round"
-            />
-          </g>
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "city") && (
-          <rect
-            key={`city-${i}`}
-            x={h.left + 10}
-            y={h.top + 11}
-            width={12}
-            height={12}
-            fill="#111111"
-            stroke="#ffffff"
-            strokeWidth={1}
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "town") && (
-          <circle
-            key={`town-${i}`}
-            cx={h.left + 16}
-            cy={h.top + 17}
-            r={4.5}
-            fill="#111111"
-            stroke="#ffffff"
-            strokeWidth={0.9}
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "suburb") && (
-          <circle
-            key={`suburb-${i}`}
-            cx={h.left + 16}
-            cy={h.top + 17}
-            r={4}
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth={1.1}
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "rural") && (
-          <path
-            key={`rural-${i}`}
-            d={`M ${h.left + 9} ${h.top + 23} L ${h.left + 16} ${h.top + 13} L ${h.left + 23} ${h.top + 23} M ${h.left + 12} ${h.top + 23} L ${h.left + 12} ${h.top + 28} L ${h.left + 20} ${h.top + 28} L ${h.left + 20} ${h.top + 23}`}
-            fill="none"
-            stroke="#111111"
-            strokeWidth={1.3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "crop") && (
-          <g key={`crop-${i}`}>
-            <path
-              d={`M ${h.left + 9} ${h.top + 13} L ${h.left + 23} ${h.top + 13} M ${h.left + 8} ${h.top + 18} L ${h.left + 24} ${h.top + 18} M ${h.left + 9} ${h.top + 23} L ${h.left + 23} ${h.top + 23}`}
-              stroke="#111111"
-              strokeWidth={1}
-              strokeLinecap="round"
-            />
-            <path
-              d={`M ${h.left + 13} ${h.top + 10} L ${h.left + 10} ${h.top + 26} M ${h.left + 18} ${h.top + 10} L ${h.left + 15} ${h.top + 26} M ${h.left + 23} ${h.top + 10} L ${h.left + 20} ${h.top + 26}`}
-              stroke="#111111"
-              strokeWidth={0.8}
-              strokeLinecap="round"
-            />
-          </g>
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "domedCity") && (
-          <path
-            key={`domed-city-${i}`}
-            d={`M ${h.left + 8} ${h.top + 23} A 8 8 0 0 1 ${h.left + 24} ${h.top + 23} L ${h.left + 24} ${h.top + 25} L ${h.left + 8} ${h.top + 25} Z`}
-            fill="#111111"
-            stroke="#ffffff"
-            strokeWidth={1}
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "arcology") && (
-          <path
-            key={`arcology-${i}`}
-            d={`M ${h.left + 16} ${h.top + 7} L ${h.left + 25} ${h.top + 26} L ${h.left + 7} ${h.top + 26} Z M ${h.left + 16} ${h.top + 12} L ${h.left + 16} ${h.top + 24}`}
-            fill="#111111"
-            stroke="#ffffff"
-            strokeWidth={1}
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "nobleEstate") && (
-          <path
-            key={`noble-estate-${i}`}
-            d={`M ${h.left + 16} ${h.top + 9} L ${h.left + 18.5} ${h.top + 14} L ${h.left + 24} ${h.top + 14.5} L ${h.left + 20} ${h.top + 18.5} L ${h.left + 21.5} ${h.top + 24} L ${h.left + 16} ${h.top + 21} L ${h.left + 10.5} ${h.top + 24} L ${h.left + 12} ${h.top + 18.5} L ${h.left + 8} ${h.top + 14.5} L ${h.left + 13.5} ${h.top + 14} Z`}
-            fill="#ffd166"
-            stroke="#111111"
-            strokeWidth={1}
-            strokeLinejoin="round"
-          />
-        ))}
-        {hexes.map((h, i) => hasFeature(h, "penalSettlement") && (
-          <g key={`penal-settlement-${i}`}>
-            <rect
-              x={h.left + 9}
-              y={h.top + 11}
-              width={14}
-              height={14}
-              fill="none"
-              stroke="#111111"
-              strokeWidth={1.3}
-            />
-            <path
-              d={`M ${h.left + 12} ${h.top + 11} L ${h.left + 12} ${h.top + 25} M ${h.left + 16} ${h.top + 11} L ${h.left + 16} ${h.top + 25} M ${h.left + 20} ${h.top + 11} L ${h.left + 20} ${h.top + 25}`}
-              stroke="#111111"
-              strokeWidth={1}
-            />
-          </g>
-        ))}
-        {overlays.map((overlay, i) => (
-          <polygon
-            key={`overlay-${i}`}
-            points={overlay.points.map((p) => `${p.x},${p.y}`).join(" ")}
-            fill={MAP_BG}
-            stroke="none"
-          />
-        ))}
-      </svg>
+    <div className="flex h-full min-h-0 w-full flex-col gap-2">
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+        <div
+          className="h-full max-h-full max-w-full border border-(--hud-border)"
+          style={{ aspectRatio: `${svgW} / ${svgH}` }}
+        >
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${svgW} ${svgH}`}
+            className="block h-full w-full"
+            style={{ background: MAP_BG }}
+            role="img"
+            aria-label={`${world.name} 2D world map`}
+          >
+            {hexes.map((hex, index) => (
+              <polygon
+                key={`hex-${index}`}
+                points={hexPts(hex.left, hex.top)}
+                fill={colorForTerrain(hex.terrain)}
+                stroke="#000000"
+                strokeWidth={0.8}
+              />
+            ))}
+            {hexes.map((hex, index) =>
+              visibleFeatures(hex).map((feature) => (
+                <FeatureMark key={`feature-${index}-${feature}`} feature={feature} left={hex.left} top={hex.top} />
+              )),
+            )}
+            {overlays.map((overlay, index) => (
+              <polygon
+                key={`overlay-${index}`}
+                points={overlay.points.map((point) => `${point.x},${point.y}`).join(" ")}
+                fill={MAP_BG}
+                stroke="none"
+              />
+            ))}
+          </svg>
+        </div>
+      </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
-          {presentTerrains.map(t => (
-            <div key={t} className="flex items-center gap-1">
-              <span className="inline-block w-2.5 h-2.5 shrink-0 border border-black/40" style={{ background: tColor(t) }} />
-              <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim)">{TERRAIN_LABELS[t]}</span>
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
+        <div className="flex max-h-20 flex-wrap gap-x-3 gap-y-1 overflow-auto">
+          {presentTerrains.map((terrain) => (
+            <div key={terrain} className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 shrink-0 border border-black/40" style={{ background: colorForTerrain(terrain) }} />
+              <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim)">
+                {TERRAIN_LABELS[terrain]}
+              </span>
             </div>
           ))}
           {presentFeatures.map((feature) => (
             <div key={feature} className="flex items-center gap-1">
-              <span className="inline-block w-2.5 h-2.5 shrink-0 border border-(--hud-border) bg-(--hud-text-dim)" />
-              <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim)">{FEATURE_LABELS[feature]}</span>
+              <span className="inline-block h-2.5 w-2.5 shrink-0 border border-(--hud-border) bg-(--hud-text-dim)" />
+              <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim)">
+                {FEATURE_LABELS[feature]}
+              </span>
             </div>
           ))}
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button onClick={downloadSVG} className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim) hover:text-(--hud-accent) transition-colors">SVG</button>
-          <button onClick={downloadPNG} className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim) hover:text-(--hud-accent) transition-colors">PNG</button>
+
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={downloadSVG}
+            className="border border-(--hud-border) px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
+          >
+            SVG
+          </button>
+          <button
+            type="button"
+            onClick={downloadPNG}
+            className="border border-(--hud-border) px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
+          >
+            PNG
+          </button>
         </div>
       </div>
     </div>

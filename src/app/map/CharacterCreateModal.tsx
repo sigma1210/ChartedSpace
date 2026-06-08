@@ -5,7 +5,7 @@ import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { selectActiveModal } from "../../store/selectors/ui.selectors";
 import { closeModal } from "../../store/slices/uiSlice";
 import { invalidateCharacters, fetchCharacters } from "../../store/slices/characterSlice";
-import { selectCharacters, selectCharactersStatus } from "../../store/selectors/character.selectors";
+import { selectCharacters } from "../../store/selectors/character.selectors";
 import { generateCharacter, CharacterDeathError } from "../../lib/characters/engine";
 import { RandomDecisionProvider } from "../../lib/characters/providers/random";
 import {
@@ -198,7 +198,6 @@ const CharacterCreateModal = () => {
   const dispatch = useAppDispatch();
   const activeModal = useAppSelector(selectActiveModal);
   const characters    = useAppSelector(selectCharacters);
-  const charStatus    = useAppSelector(selectCharactersStatus);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);

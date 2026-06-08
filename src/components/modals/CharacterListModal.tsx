@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { Plus, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import HudModal from "./HudModal";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { closeModal, openCharacterCreate, openCharacterProfile } from "../../store/slices/uiSlice";
+import { closeModal, openCharacterCreate } from "../../store/slices/uiSlice";
 import { fetchCharacters } from "../../store/slices/characterSlice";
 import {
   selectCharacters,
@@ -14,18 +14,12 @@ import { selectActiveModal } from "../../store/selectors/ui.selectors";
 import type { CharacterSummary } from "../../store/slices/characterSlice";
 
 const CharacterCard = ({ character }: { character: CharacterSummary }) => {
-  const dispatch = useAppDispatch();
-
   return (
-    <button
-      onClick={() => dispatch(openCharacterProfile(character.id))}
-      className="w-full border border-(--hud-border-subtle) bg-(--hud-surface-2) p-3 text-left hover:border-(--hud-border) hover:bg-(--hud-surface) transition-colors"
-    >
+    <div className="w-full border border-(--hud-border-subtle) bg-(--hud-surface-2) p-3 text-left">
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-sm font-semibold text-(--hud-text)">
           {character.name}
         </span>
-        <ChevronRight size={14} strokeWidth={1.5} className="text-(--hud-text-dim) shrink-0" />
       </div>
       {character.worldName && (
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-(--hud-text-dim)">
@@ -41,7 +35,7 @@ const CharacterCard = ({ character }: { character: CharacterSummary }) => {
         <span>Cr {character.credits.toLocaleString()}</span>
         <span>Skills: {character.skills.length}</span>
       </div>
-    </button>
+    </div>
   );
 };
 

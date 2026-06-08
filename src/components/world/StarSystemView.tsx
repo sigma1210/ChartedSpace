@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useRef, useCallback, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { useSelector, useStore } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { Coins, Globe2, Grid3X3, Navigation, Radar, User } from "lucide-react";
+import { Coins, Globe2, Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
@@ -1642,6 +1643,7 @@ const CameraPinnedSystemHud = ({
   world,
   miniMapVisible,
   onOpenMiniMap,
+  onOpenMapPage,
   selectedSystemDetailAvailable,
   onOpenSelectedSystemDetail,
   navigationHudVisible,
@@ -1656,6 +1658,7 @@ const CameraPinnedSystemHud = ({
   world: World;
   miniMapVisible: boolean;
   onOpenMiniMap: () => void;
+  onOpenMapPage: () => void;
   selectedSystemDetailAvailable: boolean;
   onOpenSelectedSystemDetail: () => void;
   navigationHudVisible: boolean;
@@ -1768,6 +1771,12 @@ const CameraPinnedSystemHud = ({
                 onClick={onOpenMiniMap}
               >
                 <Radar size={13} aria-hidden="true" />
+              </HudIconButton>
+              <HudIconButton
+                title="Open 2D map"
+                onClick={onOpenMapPage}
+              >
+                <Map size={13} aria-hidden="true" />
               </HudIconButton>
               <HudIconButton
                 title={selectedSystemDetailAvailable ? "Open selected system" : "Select a world on the mini map"}
@@ -2651,6 +2660,7 @@ type StarSystemViewSceneProps = {
   showHudControls?: boolean;
   miniMapVisible?: boolean;
   onOpenMiniMap?: () => void;
+  onOpenMapPage?: () => void;
   onCloseMiniMap?: () => void;
   miniMap?: ReactNode;
   selectedSystemDetailAvailable?: boolean;
@@ -2695,6 +2705,7 @@ export const StarSystemViewScene = ({
   showHudControls = false,
   miniMapVisible = false,
   onOpenMiniMap = () => {},
+  onOpenMapPage = () => {},
   onCloseMiniMap = () => {},
   miniMap = null,
   selectedSystemDetailAvailable = false,
@@ -2866,6 +2877,7 @@ export const StarSystemViewScene = ({
                 world={world}
                 miniMapVisible={miniMapVisible}
                 onOpenMiniMap={onOpenMiniMap}
+                onOpenMapPage={onOpenMapPage}
                 selectedSystemDetailAvailable={selectedSystemDetailAvailable}
                 onOpenSelectedSystemDetail={onOpenSelectedSystemDetail}
                 navigationHudVisible={navigationHudVisible}
@@ -2964,6 +2976,7 @@ export const StarSystemViewScene = ({
 
 const StarSystemView = () => {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const shipStatus = useAppSelector(selectShipStatus);
   const ship = useAppSelector(selectShip);
   const activeTradeWorld = useAppSelector(selectActiveWorld);
@@ -3027,6 +3040,7 @@ const StarSystemView = () => {
         showHudControls
         miniMapVisible={miniMapVisible}
         onOpenMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: true }))}
+        onOpenMapPage={() => router.push("/map")}
         onCloseMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: false }))}
         miniMap={<SubsectorMiniMapHudContent />}
         selectedSystemDetailAvailable={!!activeTradeWorld}
