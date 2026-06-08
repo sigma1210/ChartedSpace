@@ -27,16 +27,9 @@ import type { GasGiantType as SystemGasGiantType, SystemData, WorldBody as Syste
 import { HudHeader, HudIconButton, HudPanel } from "./HudPrimitives";
 import StoreBridge from "../StoreBridge";
 import type { AppStore } from "../../store";
-import {
-  openSelectedWorldSystemDetail,
-  setCharacterProfileHudVisible,
-  setGalaxyMiniMapVisible,
-  setMainWorldHudVisible,
-  setNavigationHudVisible,
-  setSectorMiniMapVisible,
-  setSubsectorMiniMapVisible,
-  setTradeHudVisible,
-} from "../../store/slices/uiSlice";
+import { openSelectedWorldSystemDetail } from "../../store/slices/uiSlice";
+import { setHudOffset, setHudPinned, setHudVisible } from "../../store/slices/hudSlice";
+import { selectHudLayout, selectHudVisible } from "../../store/selectors/hud.selectors";
 import {
   resolveFailedJump,
   runWarpExitSequence,
@@ -47,15 +40,6 @@ import {
   selectShipSectorLoadStatus,
 } from "../../store/selectors/galaxy.selectors";
 import { selectShip, selectShipStatus } from "../../store/selectors/ship.selectors";
-import {
-  selectShowCharacterProfileHud,
-  selectShowGalaxyMiniMap,
-  selectShowMainWorldHud,
-  selectShowNavigationHud,
-  selectShowSectorMiniMap,
-  selectShowSubsectorMiniMap,
-  selectShowTradeHud,
-} from "../../store/selectors/ui.selectors";
 import {
   selectShowWarpLayer,
   selectSystemSceneMode,
@@ -1683,6 +1667,13 @@ const CameraPinnedSystemHud = ({
   tradeHudVisible: boolean;
   onOpenTradeHud: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("hudControls"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const visible = layout.visible;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -1690,9 +1681,6 @@ const CameraPinnedSystemHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: -0.58, y: 0.42 });
-  const [visible, setVisible] = useState(true);
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -1710,12 +1698,13 @@ const CameraPinnedSystemHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -1724,12 +1713,19 @@ const CameraPinnedSystemHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "hudControls", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -1739,7 +1735,7 @@ const CameraPinnedSystemHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1750,6 +1746,7 @@ const CameraPinnedSystemHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   return (
@@ -1760,8 +1757,8 @@ const CameraPinnedSystemHud = ({
             <HudHeader
               title={world.name}
               pinned={pinned}
-              onTogglePinned={() => setPinned((value) => !value)}
-              onClose={() => setVisible(false)}
+              onTogglePinned={() => dispatch(setHudPinned({ id: "hudControls", pinned: !pinned }))}
+              onClose={() => dispatch(setHudVisible({ id: "hudControls", visible: false }))}
               onDragStart={startDrag}
               closeTitle="Hide HUD"
             />
@@ -1808,7 +1805,7 @@ const CameraPinnedSystemHud = ({
         ) : (
           <button
             type="button"
-            onClick={() => setVisible(true)}
+            onClick={() => dispatch(setHudVisible({ id: "hudControls", visible: true }))}
             title="Show HUD"
             aria-label="Show HUD"
             className="select-none border border-(--hud-accent)/70 bg-(--hud-bg)/80 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) shadow-[0_0_18px_rgba(34,211,238,0.18)] backdrop-blur-md transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg)"
@@ -1833,6 +1830,12 @@ const CameraPinnedTradeHud = ({
   store: AppStore;
   onClose: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("trade"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -1840,8 +1843,6 @@ const CameraPinnedTradeHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: 0.2, y: -0.1 });
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -1859,12 +1860,13 @@ const CameraPinnedTradeHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -1873,12 +1875,19 @@ const CameraPinnedTradeHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "trade", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -1888,7 +1897,7 @@ const CameraPinnedTradeHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1899,6 +1908,7 @@ const CameraPinnedTradeHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   if (!visible) return null;
@@ -1910,7 +1920,7 @@ const CameraPinnedTradeHud = ({
           <HudHeader
             title="Trade"
             pinned={pinned}
-            onTogglePinned={() => setPinned((value) => !value)}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "trade", pinned: !pinned }))}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close trade HUD"
@@ -1937,6 +1947,12 @@ const CameraPinnedMainWorldHud = ({
   inJump: boolean;
   onClose: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("mainWorld"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -1944,8 +1960,6 @@ const CameraPinnedMainWorldHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: -0.02, y: 0.08 });
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -1963,12 +1977,13 @@ const CameraPinnedMainWorldHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -1977,12 +1992,19 @@ const CameraPinnedMainWorldHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "mainWorld", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -1992,7 +2014,7 @@ const CameraPinnedMainWorldHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -2003,6 +2025,7 @@ const CameraPinnedMainWorldHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   if (!visible) return null;
@@ -2019,7 +2042,7 @@ const CameraPinnedMainWorldHud = ({
           <HudHeader
             title="Main World"
             pinned={pinned}
-            onTogglePinned={() => setPinned((value) => !value)}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "mainWorld", pinned: !pinned }))}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close main world HUD"
@@ -2042,6 +2065,12 @@ const CameraPinnedCharacterProfileHud = ({
   store: AppStore;
   onClose: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("characterProfile"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -2049,8 +2078,6 @@ const CameraPinnedCharacterProfileHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: -0.18, y: 0.1 });
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2068,12 +2095,13 @@ const CameraPinnedCharacterProfileHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -2082,12 +2110,19 @@ const CameraPinnedCharacterProfileHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "characterProfile", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -2097,7 +2132,7 @@ const CameraPinnedCharacterProfileHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -2108,6 +2143,7 @@ const CameraPinnedCharacterProfileHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   if (!visible) return null;
@@ -2119,7 +2155,7 @@ const CameraPinnedCharacterProfileHud = ({
           <HudHeader
             title="Character"
             pinned={pinned}
-            onTogglePinned={() => setPinned((value) => !value)}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "characterProfile", pinned: !pinned }))}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close character profile HUD"
@@ -2144,6 +2180,12 @@ const CameraPinnedNavigationHud = ({
   store: AppStore;
   onClose: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("navigation"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -2151,8 +2193,6 @@ const CameraPinnedNavigationHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: -0.48, y: -0.08 });
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2170,12 +2210,13 @@ const CameraPinnedNavigationHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -2184,12 +2225,19 @@ const CameraPinnedNavigationHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "navigation", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -2199,7 +2247,7 @@ const CameraPinnedNavigationHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -2210,6 +2258,7 @@ const CameraPinnedNavigationHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   if (!visible) return null;
@@ -2221,7 +2270,7 @@ const CameraPinnedNavigationHud = ({
           <HudHeader
             title="Nav"
             pinned={pinned}
-            onTogglePinned={() => setPinned((value) => !value)}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "navigation", pinned: !pinned }))}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close navigation HUD"
@@ -2248,6 +2297,12 @@ const CameraPinnedSubsectorMiniMapHud = ({
   onOpenSectorMap: () => void;
   onClose: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("subsectorMap"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -2255,8 +2310,6 @@ const CameraPinnedSubsectorMiniMapHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: 0.46, y: 0.12 });
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2274,12 +2327,13 @@ const CameraPinnedSubsectorMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -2288,12 +2342,19 @@ const CameraPinnedSubsectorMiniMapHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "subsectorMap", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -2303,7 +2364,7 @@ const CameraPinnedSubsectorMiniMapHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -2314,6 +2375,7 @@ const CameraPinnedSubsectorMiniMapHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   if (!visible) return null;
@@ -2330,7 +2392,7 @@ const CameraPinnedSubsectorMiniMapHud = ({
                 <Grid3X3 size={8} aria-hidden="true" />
               </HudIconButton>
             )}
-            onTogglePinned={() => setPinned((value) => !value)}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "subsectorMap", pinned: !pinned }))}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close subsector HUD"
@@ -2357,6 +2419,12 @@ const CameraPinnedSectorMiniMapHud = ({
   onOpenGalaxyMap: () => void;
   onClose: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("sectorMap"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -2364,8 +2432,6 @@ const CameraPinnedSectorMiniMapHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: 0.12, y: 0.26 });
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2383,12 +2449,13 @@ const CameraPinnedSectorMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -2397,12 +2464,19 @@ const CameraPinnedSectorMiniMapHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "sectorMap", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -2412,7 +2486,7 @@ const CameraPinnedSectorMiniMapHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -2423,6 +2497,7 @@ const CameraPinnedSectorMiniMapHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   if (!visible) return null;
@@ -2439,7 +2514,7 @@ const CameraPinnedSectorMiniMapHud = ({
                 <Grid3X3 size={8} aria-hidden="true" />
               </HudIconButton>
             )}
-            onTogglePinned={() => setPinned((value) => !value)}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "sectorMap", pinned: !pinned }))}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close sector HUD"
@@ -2464,6 +2539,12 @@ const CameraPinnedGalaxyMiniMapHud = ({
   store: AppStore;
   onClose: () => void;
 }) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("galaxyMap"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<{
     startX: number;
@@ -2471,8 +2552,6 @@ const CameraPinnedGalaxyMiniMapHud = ({
     origin: HudOffset;
   } | null>(null);
   const { camera, size } = useThree();
-  const [offset, setOffset] = useState<HudOffset>({ x: -0.12, y: -0.06 });
-  const [pinned, setPinned] = useState(true);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2490,12 +2569,13 @@ const CameraPinnedGalaxyMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
 
     group.position
       .copy(camera.position)
       .addScaledVector(forward, distance)
-      .addScaledVector(right, offset.x * width * 0.5)
-      .addScaledVector(up, offset.y * height * 0.5);
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
 
@@ -2504,12 +2584,19 @@ const CameraPinnedGalaxyMiniMapHud = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      setOffset(clampHudOffset({
+      const nextOffset = clampHudOffset({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      }));
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
     };
     const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: "galaxyMap", offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -2519,7 +2606,7 @@ const CameraPinnedGalaxyMiniMapHud = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [size.height, size.width]);
+  }, [dispatch, size.height, size.width]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -2530,6 +2617,7 @@ const CameraPinnedGalaxyMiniMapHud = ({
       startY: event.clientY,
       origin: offset,
     };
+    pendingOffsetRef.current = offset;
   };
 
   if (!visible) return null;
@@ -2541,7 +2629,7 @@ const CameraPinnedGalaxyMiniMapHud = ({
           <HudHeader
             title="Galaxy"
             pinned={pinned}
-            onTogglePinned={() => setPinned((value) => !value)}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "galaxyMap", pinned: !pinned }))}
             onClose={onClose}
             onDragStart={startDrag}
             closeTitle="Close galaxy HUD"
@@ -2879,13 +2967,13 @@ const StarSystemView = () => {
   const shipStatus = useAppSelector(selectShipStatus);
   const ship = useAppSelector(selectShip);
   const activeTradeWorld = useAppSelector(selectActiveWorld);
-  const miniMapVisible = useAppSelector(selectShowSubsectorMiniMap);
-  const sectorMiniMapVisible = useAppSelector(selectShowSectorMiniMap);
-  const galaxyMiniMapVisible = useAppSelector(selectShowGalaxyMiniMap);
-  const navigationHudVisible = useAppSelector(selectShowNavigationHud);
-  const mainWorldHudVisible = useAppSelector(selectShowMainWorldHud);
-  const characterProfileHudVisible = useAppSelector(selectShowCharacterProfileHud);
-  const tradeHudVisible = useAppSelector(selectShowTradeHud);
+  const miniMapVisible = useAppSelector(selectHudVisible("subsectorMap"));
+  const sectorMiniMapVisible = useAppSelector(selectHudVisible("sectorMap"));
+  const galaxyMiniMapVisible = useAppSelector(selectHudVisible("galaxyMap"));
+  const navigationHudVisible = useAppSelector(selectHudVisible("navigation"));
+  const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
+  const characterProfileHudVisible = useAppSelector(selectHudVisible("characterProfile"));
+  const tradeHudVisible = useAppSelector(selectHudVisible("trade"));
   const hasStoredJumpDestination = useAppSelector(selectHasStoredJumpDestination);
   const renderedSceneMode = useAppSelector(selectSystemSceneMode);
   const showWarpLayer = useAppSelector(selectShowWarpLayer);
@@ -2938,35 +3026,35 @@ const StarSystemView = () => {
         warpLayerActive={warpLayerActive}
         showHudControls
         miniMapVisible={miniMapVisible}
-        onOpenMiniMap={() => dispatch(setSubsectorMiniMapVisible(true))}
-        onCloseMiniMap={() => dispatch(setSubsectorMiniMapVisible(false))}
+        onOpenMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: true }))}
+        onCloseMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: false }))}
         miniMap={<SubsectorMiniMapHudContent />}
         selectedSystemDetailAvailable={!!activeTradeWorld}
         onOpenSelectedSystemDetail={handleOpenSelectedSystemDetail}
         sectorMiniMapVisible={sectorMiniMapVisible}
-        onOpenSectorMiniMap={() => dispatch(setSectorMiniMapVisible(true))}
-        onCloseSectorMiniMap={() => dispatch(setSectorMiniMapVisible(false))}
+        onOpenSectorMiniMap={() => dispatch(setHudVisible({ id: "sectorMap", visible: true }))}
+        onCloseSectorMiniMap={() => dispatch(setHudVisible({ id: "sectorMap", visible: false }))}
         sectorMiniMap={<SectorMiniMapHudContent />}
         galaxyMiniMapVisible={galaxyMiniMapVisible}
-        onOpenGalaxyMiniMap={() => dispatch(setGalaxyMiniMapVisible(true))}
-        onCloseGalaxyMiniMap={() => dispatch(setGalaxyMiniMapVisible(false))}
+        onOpenGalaxyMiniMap={() => dispatch(setHudVisible({ id: "galaxyMap", visible: true }))}
+        onCloseGalaxyMiniMap={() => dispatch(setHudVisible({ id: "galaxyMap", visible: false }))}
         galaxyMiniMap={<GalaxyMiniMapHudContent />}
         navigationHudVisible={navigationHudVisible}
-        onOpenNavigationHud={() => dispatch(setNavigationHudVisible(true))}
-        onCloseNavigationHud={() => dispatch(setNavigationHudVisible(false))}
+        onOpenNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: true }))}
+        onCloseNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: false }))}
         navigationHud={<NavigationHudContent />}
         mainWorldHudVisible={mainWorldHudVisible}
-        onOpenMainWorldHud={() => dispatch(setMainWorldHudVisible(true))}
-        onCloseMainWorldHud={() => dispatch(setMainWorldHudVisible(false))}
+        onOpenMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: true }))}
+        onCloseMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: false }))}
         mainWorldHud={mainWorldHud}
         mainWorldHudInJump={inJump}
         characterProfileHudVisible={characterProfileHudVisible}
-        onOpenCharacterProfileHud={() => dispatch(setCharacterProfileHudVisible(true))}
-        onCloseCharacterProfileHud={() => dispatch(setCharacterProfileHudVisible(false))}
+        onOpenCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: true }))}
+        onCloseCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: false }))}
         characterProfileHud={<CharacterProfileHudContent />}
         tradeHudVisible={tradeHudVisible}
-        onOpenTradeHud={() => dispatch(setTradeHudVisible(true))}
-        onCloseTradeHud={() => dispatch(setTradeHudVisible(false))}
+        onOpenTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: true }))}
+        onCloseTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: false }))}
         tradeHud={<TradeSystemHudContent />}
         onWarpExitReached={handleWarpExitReached}
       />

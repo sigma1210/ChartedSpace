@@ -3,6 +3,7 @@ import {
   selectIsShipDocked,
   selectShipCargo,
 } from "../selectors/ship.selectors";
+import { initialHudState } from "../slices/hudSlice";
 
 const makeRoot = (ship: RootState["ship"]["ship"]): RootState => ({
   ui: {
@@ -59,6 +60,7 @@ const makeRoot = (ship: RootState["ship"]["ship"]): RootState => ({
     warpExitInProgress: false,
     jumpResolveInProgress: false,
   },
+  hud: initialHudState,
 });
 
 describe("ship selectors", () => {

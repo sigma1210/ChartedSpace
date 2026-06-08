@@ -8,6 +8,7 @@ import {
   selectOwnerOperatorCredits,
 } from "../selectors/character.selectors";
 import { selectOwnerOperatorCharacterId } from "../selectors/ship.selectors";
+import { initialHudState } from "../slices/hudSlice";
 
 const makeCharacter = (
   id: string,
@@ -85,6 +86,7 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     warpExitInProgress: false,
     jumpResolveInProgress: false,
   },
+  hud: initialHudState,
   ...overrides,
 });
 

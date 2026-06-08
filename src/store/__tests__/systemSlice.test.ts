@@ -12,6 +12,7 @@ import shipReducer from "../slices/shipSlice";
 import availableCrewReducer from "../slices/availableCrewSlice";
 import systemSceneReducer from "../slices/systemSceneSlice";
 import jumpNavigationReducer from "../slices/jumpNavigationSlice";
+import hudReducer from "../slices/hudSlice";
 import {
   selectActiveWorldSystem,
   selectSystemDataByKey,
@@ -42,6 +43,7 @@ const makeStore = () =>
       system: systemReducer,
       systemScene: systemSceneReducer,
       jumpNavigation: jumpNavigationReducer,
+      hud: hudReducer,
     },
     preloadedState: {
       galaxy: {

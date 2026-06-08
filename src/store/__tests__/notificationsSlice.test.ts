@@ -10,6 +10,7 @@ import {
 } from "../selectors/notifications.selectors";
 import type { NotificationsState } from "../../types";
 import type { RootState } from "../index";
+import { initialHudState } from "../slices/hudSlice";
 
 const initialState: NotificationsState = { items: [] };
 
@@ -59,6 +60,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       warpExitInProgress: false,
       jumpResolveInProgress: false,
     },
+    hud: initialHudState,
   };
 }
 

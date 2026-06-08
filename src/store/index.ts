@@ -9,6 +9,7 @@ import availableCrewReducer from "./slices/availableCrewSlice";
 import systemReducer from "./slices/systemSlice";
 import systemSceneReducer from "./slices/systemSceneSlice";
 import jumpNavigationReducer from "./slices/jumpNavigationSlice";
+import hudReducer from "./slices/hudSlice";
 
 export const store = configureStore({
   reducer: {
@@ -22,6 +23,7 @@ export const store = configureStore({
     system: systemReducer,
     systemScene: systemSceneReducer,
     jumpNavigation: jumpNavigationReducer,
+    hud: hudReducer,
   },
 });
 
