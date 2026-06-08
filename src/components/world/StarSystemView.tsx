@@ -3084,17 +3084,33 @@ const sceneTransitionStyle: CSSProperties = {
 };
 
 const terminalInstructionLines = [
-  "> initializing navigation buffer",
-  "> aligning jump-space telemetry",
+  "> 03",
+  "",
+  "> //44.8:09:771??",
+  "> 7",
+  "> 9914-22++//00:881:441.07/%/::",
   "> acquiring signal",
-  "> resolving stellar mass profile",
-  "> calibrating optical parallax",
-  "> synchronizing orbital ephemeris",
-  "> restoring local system reference",
-  "> confirming gravitic horizon",
-  "> rebuilding sensor composite",
-  "> signal lock pending",
+  "",
+  "> [07]",
+  "> 6.283//000-14//42-42-42//117.009",
+  "> ++",
+  "> {00} / 72-18-44",
+  "",
+  "> 4|9|16|25|36|49|64|81|100|121|144",
+  "> ...",
+  "> < 00:00:19 >",
+  "> ::",
+  "> 11803::7/55090.1138//0000//A9",
 ];
+
+const terminalStaticLines = [
+  "diffeomorphic boot sequencing ....",
+  "mapping warp tensors .....",
+  "acquiring topology....",
+];
+
+const TERMINAL_TYPE_MS = 180;
+const TERMINAL_LINE_GAP_MS = 60;
 
 const SceneTransitionOverlay = ({
   phase,
@@ -3114,27 +3130,46 @@ const SceneTransitionOverlay = ({
           12% { opacity: 1; }
           100% { transform: translateY(42%); opacity: 0.9; }
         }
+        @keyframes charted-space-terminal-type {
+          0% { clip-path: inset(0 100% 0 0); opacity: 1; }
+          100% { clip-path: inset(0 0 0 0); opacity: 1; }
+        }
       `}
     </style>
     <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-x-[10%] top-8 z-10 font-mono text-[10px] uppercase leading-7 tracking-[0.2em] text-cyan-50/90 sm:inset-x-[18%] sm:text-[11px]">
+        {terminalStaticLines.map((line) => (
+          <div key={line} className="h-7">
+            {line}
+          </div>
+        ))}
+      </div>
       <div className="absolute inset-x-[10%] top-0 font-mono text-[10px] uppercase leading-7 tracking-[0.2em] text-cyan-100/80 [animation:charted-space-terminal-scroll_2.4s_linear_infinite] sm:inset-x-[18%] sm:text-[11px]">
         {[0, 1, 2].map((group) => (
           <div key={group} className="mb-5">
-            {terminalInstructionLines.map((line) => (
+            {terminalInstructionLines.map((line, index) => (
               <div
-                key={`${group}-${line}`}
-                className={line.includes("acquiring signal") ? "text-cyan-50" : ""}
+                key={`${group}-${index}-${line}`}
+                className="h-7"
               >
-                {line}
+                <span
+                  className={[
+                    "inline-block max-w-full overflow-hidden whitespace-nowrap opacity-0",
+                    line.includes("acquiring signal") ? "text-cyan-50" : "",
+                  ].join(" ")}
+                  style={{
+                    animation: `charted-space-terminal-type ${TERMINAL_TYPE_MS}ms steps(${line.length}, end) ${
+                      ((group * terminalInstructionLines.length) + index) *
+                      (TERMINAL_TYPE_MS + TERMINAL_LINE_GAP_MS)
+                    }ms both`,
+                  }}
+                >
+                  {line}
+                </span>
               </div>
             ))}
           </div>
         ))}
-      </div>
-    </div>
-    <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
-      <div className="border border-cyan-300/35 bg-[#06161d]/75 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.3em] text-cyan-50 shadow-[0_0_28px_rgba(34,211,238,0.28)]">
-        Acquiring Signal
       </div>
     </div>
   </div>
