@@ -8,3 +8,6 @@ export {
   type AdvanceTurnWorkflowPluginEvent,
   type AdvanceTurnWorkflowResult,
 } from "../lib/workflows/turnWorkflow";
+export type {
+  LegacyMonthlyExpenseObservation,
+} from "../lib/turns/handlers";

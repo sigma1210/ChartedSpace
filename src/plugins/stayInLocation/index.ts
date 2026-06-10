@@ -16,6 +16,7 @@ export const stayInLocationPlugin = {
   ],
   actions: stayInLocationActions,
   handlers: stayInLocationHandlers,
+  effectResolvers: [],
 } satisfies PluginManifest<StayInLocationState>;
 
 export {

@@ -37,5 +37,13 @@ onEndTurn(async (ctx) => {
   return {
     type: "world_event",
     description: lines.join(" "),
+    metadata: {
+      legacyMonthlyExpenses: {
+        turn: ctx.currentTurn,
+        total: data.total,
+        newCredits: data.newCredits,
+        source: "legacy.monthlyCosts",
+      },
+    },
   };
 }, "monthly-costs");

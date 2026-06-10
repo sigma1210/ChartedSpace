@@ -366,6 +366,91 @@ These effects are not committed yet. No reducer, persistence call, credit update
 
 The next effect step is to define allowed effect types and a resolver/commit phase. Expenses should wait for that resolver model rather than mutating character credits directly from a handler.
 
+## Effect Ownership And Economy
+
+Resource domains should be plugin-owned, not core-owned.
+
+Core should not know the business rules for credits, cargo, fuel, maintenance, trade goods, or other resources unless they become true engine primitives. Core owns workflow orchestration and routing. Domain plugins own resource validation and eventual commits.
+
+The first resource owner is `core.economy`.
+
+The economy plugin is being shaped as a simple general ledger owner. Its first effect namespace is:
+
+```ts
+economy.ledger.post
+```
+
+The ledger post effect uses balanced account changes:
+
+```ts
+{
+  type: "economy.ledger.post",
+  source: "core.expenses",
+  payload: {
+    memo: "Monthly ship expenses",
+    entries: [
+      { accountId: "character:owner:credits", change: -10000 },
+      { accountId: "sink:monthly-expenses", change: 10000 }
+    ]
+  }
+}
+```
+
+The economy resolver validates:
+
+- at least two entries
+- non-empty account ids
+- finite nonzero changes
+- sum of changes equals zero
+
+For now, the resolver is trace-only. It accepts or rejects proposed ledger effects and reports the resolution to the workflow trace. It does not mutate account balances, character credits, or ledger state yet.
+
+This proves the ownership model:
+
+```text
+handler proposes effect
+  -> workflow collects effect
+  -> core routes effect by type
+  -> owning plugin resolver validates it
+  -> workflow trace records accepted/rejected/unresolved
+```
+
+The next economy step is a commit phase where accepted ledger posts are written into economy plugin state and, later, mirrored to the current character/ship credit data through an explicit bridge.
+
+## Current Economy Logging Pass
+
+The economy plugin now has a HUD and records resolver-approved ledger requests in plugin-private state.
+
+Current behavior:
+
+- the old monthly-cost handler still performs the real credit deduction
+- the economy plugin listens to `afterTurnAdvance`
+- on turns divisible by 4, it calculates monthly expenses from:
+  - active ship mortgage, using the same ship type mortgage data as the existing API
+  - active ship crew monthly salaries
+- it proposes a balanced `economy.ledger.post` effect
+- the economy resolver validates the ledger post
+- the resolver returns a follow-up log action
+- the workflow dispatches that action after tracing the resolution
+- the Economy Ledger HUD displays the accepted/rejected/unresolved ledger request log
+
+This means the economy plugin is currently an audit/comparison system, not the source of truth for credit mutation.
+
+The workflow now supports a small legacy comparison bridge for monthly expenses:
+
+```text
+legacy monthly-cost handler commits the current deduction
+  -> handler returns structured monthly expense metadata
+  -> workflow keeps that observation
+  -> economy plugin proposes and resolves its ledger post
+  -> workflow asks the economy plugin to record the legacy observation
+  -> economy plugin marks the ledger request as match, mismatch, or pending
+```
+
+This keeps the old deduction path from importing or knowing about the economy plugin. The legacy code only reports what happened. The economy plugin owns the comparison state and the Ledger HUD display.
+
+The next economy step is to continue comparing logged requests against the old deduction path until the ledger output is trusted. After that, the economy plugin can become the commit authority for these expenses.
+
 ## Workflow Debug Trace
 
 The stay-in-location plugin now includes the first workflow debugging surface.

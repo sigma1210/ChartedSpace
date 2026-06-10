@@ -1,4 +1,6 @@
 import type { RootState } from "../store";
+import { initialEconomyState } from "../plugins/economy";
+import { initialExpenseScenarioState } from "../plugins/expenseScenario";
 import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLocationSlice";
 
 export interface PluginTestRootStateOptions {
@@ -73,6 +75,8 @@ export const createPluginTestRootState = ({
   jumpNavigation: {} as RootState["jumpNavigation"],
   hud: {} as RootState["hud"],
   plugins: {
+    economy: initialEconomyState,
+    expenseScenario: initialExpenseScenarioState,
     stayInLocation: initialStayInLocationState,
     ...pluginState,
   },

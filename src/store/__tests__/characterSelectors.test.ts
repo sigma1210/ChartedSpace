@@ -9,6 +9,8 @@ import {
 } from "../selectors/character.selectors";
 import { selectOwnerOperatorCharacterId } from "../selectors/ship.selectors";
 import { initialHudState } from "../slices/hudSlice";
+import { initialEconomyState } from "../../plugins/economy";
+import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 
 const makeCharacter = (
@@ -92,7 +94,7 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     jumpResolveInProgress: false,
   },
   hud: initialHudState,
-  plugins: { stayInLocation: initialStayInLocationState },
+  plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, stayInLocation: initialStayInLocationState },
   ...overrides,
 });
 

@@ -6,6 +6,7 @@ import hudReducer, {
   toggleHudVisible,
 } from "../slices/hudSlice";
 import { stayInLocationNextTurnHudId } from "../../plugins/stayInLocation/hudMetadata";
+import { expenseScenarioHudId } from "../../plugins/expenseScenario/hudMetadata";
 
 describe("hudSlice reducers", () => {
   it("returns initial HUD layout state", () => {
@@ -48,6 +49,11 @@ describe("hudSlice reducers", () => {
       visible: false,
       pinned: true,
       offset: { x: 0.34, y: 0.34 },
+    });
+    expect(initialHudState.layouts[expenseScenarioHudId]).toEqual({
+      visible: false,
+      pinned: true,
+      offset: { x: 0.5, y: 0.08 },
     });
     expect(initialHudState.layouts.hudControls).toEqual({
       visible: true,

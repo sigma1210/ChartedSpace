@@ -75,7 +75,7 @@ import type {
   PluginRenderableHudRegistration,
 } from "../../plugins/types";
 
-const pluginHudRenderersById = new globalThis.Map(
+const pluginHudRenderersById = new globalThis.Map<string, PluginHudRendererRegistration>(
   registeredPluginHudRenderers.map((renderer) => [renderer.id, renderer]),
 );
 

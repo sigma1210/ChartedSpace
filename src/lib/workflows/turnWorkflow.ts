@@ -6,6 +6,7 @@ import type {
   PluginWorkflowContext,
   PluginWorkflowPhase,
   PluginWorkflowResult,
+  PluginEffectResolution,
 } from "../../plugins/types";
 import type { RootState } from "../../store";
 import { fetchCharacters, invalidateCharacters } from "../../store/slices/characterSlice";
@@ -15,6 +16,7 @@ import {
   fireEndTurn,
   fireStartJumpTurn,
   fireStartTurn,
+  type LegacyMonthlyExpenseObservation,
   type TurnEventContext,
 } from "../turns/handlers";
 
@@ -29,6 +31,7 @@ export type AdvanceTurnWorkflowDebugPhase =
   | "pluginHandlerCompleted"
   | "pluginHandlerStoppedWorkflow"
   | "pluginEffectsProposed"
+  | "pluginEffectResolved"
   | "turnCommitted"
   | "legacyLifecycleComplete"
   | "afterTurnAdvance"
@@ -67,6 +70,8 @@ export interface AdvanceTurnWorkflowPluginEvent {
   previousTurn: number;
   currentTurn: number;
   metadata?: Record<string, unknown>;
+  ship?: TurnEventContext["ship"];
+  ownerCharacter?: TurnEventContext["ownerCharacter"];
 }
 
 export interface AdvanceTurnWorkflowResult {
@@ -77,6 +82,7 @@ export interface AdvanceTurnWorkflowResult {
   stoppedByHandlerId?: string;
   stoppedReason?: string;
   proposedEffects: PluginWorkflowEffect[];
+  effectResolutions: PluginEffectResolution[];
 }
 
 interface PluginWorkflowPhaseRunnerInput {
@@ -103,6 +109,16 @@ type PluginWorkflowPhaseRunner = (
   input: PluginWorkflowPhaseRunnerInput,
 ) => Promise<PluginWorkflowPhaseRunnerResult>;
 
+type PluginWorkflowEffectResolver = (
+  effects: readonly PluginWorkflowEffect[],
+  context: PluginWorkflowContext,
+) => Promise<PluginEffectResolution[]>;
+
+type PluginLegacyMonthlyExpenseRecorder = (
+  observations: readonly LegacyMonthlyExpenseObservation[],
+  context: PluginWorkflowContext,
+) => Promise<readonly { type: string; payload?: unknown }[]>;
+
 let pluginWorkflowPhaseRunner: PluginWorkflowPhaseRunner = async ({ onHandlersDiscovered }) => {
   onHandlersDiscovered?.(0);
   return {
@@ -111,6 +127,14 @@ let pluginWorkflowPhaseRunner: PluginWorkflowPhaseRunner = async ({ onHandlersDi
     effects: [],
   };
 };
+
+let pluginWorkflowEffectResolver: PluginWorkflowEffectResolver = async (effects) =>
+  effects.map((effect) => ({
+    status: "unresolved",
+    reason: `No resolver installed for ${effect.type}`,
+  }));
+
+let pluginLegacyMonthlyExpenseRecorder: PluginLegacyMonthlyExpenseRecorder = async () => [];
 
 export const resetPluginWorkflowPhaseRunner = () => {
   pluginWorkflowPhaseRunner = async ({ onHandlersDiscovered }) => {
@@ -126,6 +150,40 @@ export const resetPluginWorkflowPhaseRunner = () => {
 export const setPluginWorkflowPhaseRunner = (runner: PluginWorkflowPhaseRunner) => {
   pluginWorkflowPhaseRunner = runner;
 };
+
+export const resetPluginWorkflowEffectResolver = () => {
+  pluginWorkflowEffectResolver = async (effects) =>
+    effects.map((effect) => ({
+      status: "unresolved",
+      reason: `No resolver installed for ${effect.type}`,
+    }));
+};
+
+export const setPluginWorkflowEffectResolver = (
+  resolver: PluginWorkflowEffectResolver,
+) => {
+  pluginWorkflowEffectResolver = resolver;
+};
+
+export const resetPluginLegacyMonthlyExpenseRecorder = () => {
+  pluginLegacyMonthlyExpenseRecorder = async () => [];
+};
+
+export const setPluginLegacyMonthlyExpenseRecorder = (
+  recorder: PluginLegacyMonthlyExpenseRecorder,
+) => {
+  pluginLegacyMonthlyExpenseRecorder = recorder;
+};
+
+const isLegacyMonthlyExpenseObservation = (
+  value: unknown,
+): value is LegacyMonthlyExpenseObservation =>
+  typeof value === "object" &&
+  value !== null &&
+  (value as LegacyMonthlyExpenseObservation).source === "legacy.monthlyCosts" &&
+  typeof (value as LegacyMonthlyExpenseObservation).turn === "number" &&
+  typeof (value as LegacyMonthlyExpenseObservation).total === "number" &&
+  typeof (value as LegacyMonthlyExpenseObservation).newCredits === "number";
 
 const buildTurnContext = (state: RootState): TurnEventContext | null => {
   const ship = state.ship.ship;
@@ -251,6 +309,41 @@ const runWorkflowPluginPhase = async ({
   return result;
 };
 
+const resolveWorkflowEffects = async ({
+  effects,
+  context,
+  checkpoint,
+  currentTurn,
+  dispatch,
+}: {
+  effects: readonly PluginWorkflowEffect[];
+  context: PluginWorkflowContext;
+  checkpoint: ReturnType<typeof createCheckpointEmitter>;
+  currentTurn: number;
+  dispatch: (action: unknown) => unknown;
+}) => {
+  if (effects.length === 0) return [];
+
+  const resolutions = await pluginWorkflowEffectResolver(effects, context);
+  for (const [index, resolution] of resolutions.entries()) {
+    const effect = effects[index];
+    checkpoint(
+      "pluginEffectResolved",
+      `${effect.type} ${resolution.status}`,
+      resolution.reason ??
+        (resolution.resolverId
+          ? `${resolution.pluginId}/${resolution.resolverId}`
+          : undefined),
+      currentTurn,
+    );
+    for (const action of resolution.actions ?? []) {
+      dispatch(action);
+    }
+  }
+
+  return resolutions;
+};
+
 export const advanceTurnWorkflow = createAsyncThunk(
   "coreWorkflow/advanceTurn",
   async (input: AdvanceTurnWorkflowInput, { dispatch, getState }): Promise<AdvanceTurnWorkflowResult> => {
@@ -277,6 +370,8 @@ export const advanceTurnWorkflow = createAsyncThunk(
       previousTurn: state.turn.currentTurn,
       currentTurn: state.turn.currentTurn,
       metadata: input.metadata,
+      ship: ctx?.ship,
+      ownerCharacter: ctx?.ownerCharacter,
     } satisfies AdvanceTurnWorkflowPluginEvent;
     const pluginContext = {
       source: input.source,
@@ -305,6 +400,13 @@ export const advanceTurnWorkflow = createAsyncThunk(
         stoppedByHandlerId: beforeTurnResult.stoppedByHandlerId,
         stoppedReason: beforeTurnResult.reason,
         proposedEffects: beforeTurnResult.effects,
+        effectResolutions: await resolveWorkflowEffects({
+          effects: beforeTurnResult.effects,
+          context: pluginContext,
+          checkpoint,
+          currentTurn: state.turn.currentTurn,
+          dispatch,
+        }),
       };
     }
 
@@ -316,9 +418,16 @@ export const advanceTurnWorkflow = createAsyncThunk(
       state.turn.currentTurn + 1,
     );
 
+    const legacyMonthlyExpenseObservations: LegacyMonthlyExpenseObservation[] = [];
+
     if (ctx && lifecycle !== "none") {
       const nextCtx = { ...ctx, currentTurn: ctx.currentTurn + 1 };
-      await fireEndTurn(nextCtx);
+      const endTurnResults = await fireEndTurn(nextCtx);
+      legacyMonthlyExpenseObservations.push(
+        ...endTurnResults
+          .map((result) => result.metadata?.legacyMonthlyExpenses)
+          .filter(isLegacyMonthlyExpenseObservation),
+      );
 
       if (lifecycle === "jump-start") {
         await fireStartJumpTurn(nextCtx);
@@ -340,6 +449,8 @@ export const advanceTurnWorkflow = createAsyncThunk(
       previousTurn: state.turn.currentTurn,
       currentTurn: state.turn.currentTurn + 1,
       metadata: input.metadata,
+      ship: ctx?.ship,
+      ownerCharacter: ctx?.ownerCharacter,
     } satisfies AdvanceTurnWorkflowPluginEvent;
     const afterTurnResult = await runWorkflowPluginPhase({
       phase: "afterTurnAdvance",
@@ -350,6 +461,31 @@ export const advanceTurnWorkflow = createAsyncThunk(
       },
       checkpoint,
     });
+
+    const proposedEffects = [
+      ...beforeTurnResult.effects,
+      ...afterTurnResult.effects,
+    ];
+    const effectResolutions = await resolveWorkflowEffects({
+      effects: proposedEffects,
+      context: {
+        ...pluginContext,
+        currentTurn: state.turn.currentTurn + 1,
+      },
+      checkpoint,
+      currentTurn: state.turn.currentTurn + 1,
+      dispatch,
+    });
+    const legacyMonthlyExpenseActions = await pluginLegacyMonthlyExpenseRecorder(
+      legacyMonthlyExpenseObservations,
+      {
+        ...pluginContext,
+        currentTurn: state.turn.currentTurn + 1,
+      },
+    );
+    for (const action of legacyMonthlyExpenseActions) {
+      dispatch(action);
+    }
 
     await refreshShipAndCharacters(dispatch);
     checkpoint(
@@ -370,10 +506,8 @@ export const advanceTurnWorkflow = createAsyncThunk(
       previousTurn: state.turn.currentTurn,
       currentTurn: state.turn.currentTurn + 1,
       stopped: false,
-      proposedEffects: [
-        ...beforeTurnResult.effects,
-        ...afterTurnResult.effects,
-      ],
+      proposedEffects,
+      effectResolutions,
     };
   },
 );

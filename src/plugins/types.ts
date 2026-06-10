@@ -58,6 +58,33 @@ export interface PluginWorkflowEffect {
   payload?: Record<string, unknown>;
 }
 
+export type PluginEffectResolutionStatus =
+  | "accepted"
+  | "rejected"
+  | "unresolved";
+
+export interface PluginEffectResolution {
+  status: PluginEffectResolutionStatus;
+  resolverId?: string;
+  pluginId?: string;
+  reason?: string;
+  actions?: readonly {
+    type: string;
+    payload?: unknown;
+  }[];
+}
+
+export interface PluginEffectResolver<Effect extends PluginWorkflowEffect = PluginWorkflowEffect> {
+  id: string;
+  pluginId: string;
+  effectType: string;
+  order: number;
+  resolve: (
+    effect: Effect,
+    context: PluginWorkflowContext,
+  ) => PluginEffectResolution | Promise<PluginEffectResolution>;
+}
+
 export interface PluginWorkflowResult {
   disposition: PluginWorkflowDisposition;
   reason?: string;
@@ -83,6 +110,7 @@ export interface PluginManifest<State = unknown> {
   huds: readonly PluginHudLayoutRegistration[];
   actions: readonly PluginActionRegistration[];
   handlers: readonly PluginEventHandler[];
+  effectResolvers: readonly PluginEffectResolver[];
 }
 
 export type PluginStateRoot<Key extends string, State> = {

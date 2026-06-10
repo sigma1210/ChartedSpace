@@ -4,6 +4,8 @@ import {
   selectShipCargo,
 } from "../selectors/ship.selectors";
 import { initialHudState } from "../slices/hudSlice";
+import { initialEconomyState } from "../../plugins/economy";
+import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 
 const makeRoot = (ship: RootState["ship"]["ship"]): RootState => ({
@@ -66,7 +68,7 @@ const makeRoot = (ship: RootState["ship"]["ship"]): RootState => ({
     jumpResolveInProgress: false,
   },
   hud: initialHudState,
-  plugins: { stayInLocation: initialStayInLocationState },
+  plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, stayInLocation: initialStayInLocationState },
 });
 
 describe("ship selectors", () => {

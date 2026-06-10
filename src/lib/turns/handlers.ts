@@ -8,9 +8,21 @@ export interface TurnEventContext {
   ownerCharacter: CharacterSummary | null;
 }
 
+export interface LegacyMonthlyExpenseObservation {
+  turn: number;
+  total: number;
+  newCredits: number;
+  source: "legacy.monthlyCosts";
+}
+
+export interface TurnEventResultMetadata {
+  legacyMonthlyExpenses?: LegacyMonthlyExpenseObservation;
+}
+
 export interface TurnEventResult {
   type: "world_event" | "space_event";
   description: string;
+  metadata?: TurnEventResultMetadata;
 }
 
 export type TurnEventHandler = (ctx: TurnEventContext) => Promise<TurnEventResult | null>;

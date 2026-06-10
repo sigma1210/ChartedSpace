@@ -39,7 +39,6 @@ describe("stayInLocation action registration", () => {
     expect(pluginReducers[stayInLocationStateKey]).toBe(stayInLocationPlugin.state.reducer);
     expect(registeredPluginHandlers).toContain(stayInLocationBlockBeforeTurnAdvanceHandler);
     expect(getPluginHandlersForPhase("beforeTurnAdvance")).toContain(stayInLocationBlockBeforeTurnAdvanceHandler);
-    expect(getPluginHandlersForPhase("afterTurnAdvance")).toEqual([]);
   });
 
   it("registers a debug handler that can block stay-in-location turn advance", async () => {

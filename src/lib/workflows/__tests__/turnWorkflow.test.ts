@@ -1,12 +1,15 @@
 import { createPluginTestRootState } from "@/plugin-api/testing";
 import {
   advanceTurnWorkflow,
+  resetPluginLegacyMonthlyExpenseRecorder,
   resetPluginWorkflowPhaseRunner,
+  setPluginLegacyMonthlyExpenseRecorder,
   setPluginWorkflowPhaseRunner,
 } from "../turnWorkflow";
 
 afterEach(() => {
   resetPluginWorkflowPhaseRunner();
+  resetPluginLegacyMonthlyExpenseRecorder();
 });
 
 describe("turn workflow bridge", () => {
@@ -90,6 +93,7 @@ describe("turn workflow bridge", () => {
       stoppedByHandlerId: "test.blocker",
       stoppedReason: "Blocked by test",
       proposedEffects: [],
+      effectResolutions: [],
     });
     expect(dispatch.mock.calls.some(([action]) => action?.type === "turn/advanceTurn")).toBe(false);
   });
@@ -135,12 +139,48 @@ describe("turn workflow bridge", () => {
     expect(result.payload).toMatchObject({
       stopped: false,
       proposedEffects: [proposedEffect],
+      effectResolutions: [{
+        status: "unresolved",
+        reason: "No resolver installed for debug.note",
+      }],
     });
     expect(checkpoints).toContainEqual(expect.objectContaining({
       phase: "pluginEffectsProposed",
       label: "afterTurnAdvance effects proposed",
       summary: "test.handler:debug.note",
     }));
+
+    fetchMock.mockRestore();
+  });
+
+  it("passes legacy monthly expense observations to the installed recorder", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ total: 1000, newCredits: 99000, quit: [], unpaidCrew: [] }),
+    } as Response);
+    const dispatch = jest.fn();
+
+    setPluginLegacyMonthlyExpenseRecorder(async (observations) => [
+      {
+        type: "test/legacyMonthlyExpensesObserved",
+        payload: observations,
+      },
+    ]);
+
+    await advanceTurnWorkflow({
+      source: "test.workflow",
+      lifecycle: "world",
+    })(dispatch, createPluginTestRootState, undefined);
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "test/legacyMonthlyExpensesObserved",
+      payload: [{
+        turn: 4,
+        total: 1000,
+        newCredits: 99000,
+        source: "legacy.monthlyCosts",
+      }],
+    });
 
     fetchMock.mockRestore();
   });
