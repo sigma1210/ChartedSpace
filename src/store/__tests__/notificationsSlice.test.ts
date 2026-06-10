@@ -11,6 +11,7 @@ import {
 import type { NotificationsState } from "../../types";
 import type { RootState } from "../index";
 import { initialHudState } from "../slices/hudSlice";
+import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 
 const initialState: NotificationsState = { items: [] };
 
@@ -65,6 +66,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       jumpResolveInProgress: false,
     },
     hud: initialHudState,
+    plugins: { stayInLocation: initialStayInLocationState },
   };
 }
 

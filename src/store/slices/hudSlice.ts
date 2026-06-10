@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { registeredPluginHudLayouts } from "../../plugins/hudLayouts";
 
-export type HudId =
+export type CoreHudId =
   | "mainWorld"
   | "sectorMap"
   | "navigation"
@@ -9,6 +10,8 @@ export type HudId =
   | "trade"
   | "characterProfile"
   | "hudControls";
+
+export type HudId = CoreHudId | string;
 
 export interface HudOffset {
   x: number;
@@ -24,6 +27,10 @@ export interface HudLayout {
 export interface HudState {
   layouts: Record<HudId, HudLayout>;
 }
+
+const pluginHudLayouts = Object.fromEntries(
+  registeredPluginHudLayouts.map((hud) => [hud.id, hud.defaultLayout]),
+) as Record<string, HudLayout>;
 
 export const initialHudState: HudState = {
   layouts: {
@@ -67,6 +74,7 @@ export const initialHudState: HudState = {
       pinned: true,
       offset: { x: -0.58, y: 0.42 },
     },
+    ...pluginHudLayouts,
   },
 };
 

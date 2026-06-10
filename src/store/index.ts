@@ -10,6 +10,10 @@ import systemReducer from "./slices/systemSlice";
 import systemSceneReducer from "./slices/systemSceneSlice";
 import jumpNavigationReducer from "./slices/jumpNavigationSlice";
 import hudReducer from "./slices/hudSlice";
+import { pluginsReducer } from "../plugins/registry";
+import { installPluginWorkflowHandlers } from "../plugins/workflowHandlerRegistration";
+
+installPluginWorkflowHandlers();
 
 export const store = configureStore({
   reducer: {
@@ -24,7 +28,15 @@ export const store = configureStore({
     systemScene: systemSceneReducer,
     jumpNavigation: jumpNavigationReducer,
     hud: hudReducer,
+    plugins: pluginsReducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: ["galaxy/loadSector/fulfilled"],
+        ignoredPaths: ["galaxy.sectorData"],
+      },
+    }),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

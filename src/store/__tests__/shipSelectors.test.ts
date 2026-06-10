@@ -4,6 +4,7 @@ import {
   selectShipCargo,
 } from "../selectors/ship.selectors";
 import { initialHudState } from "../slices/hudSlice";
+import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 
 const makeRoot = (ship: RootState["ship"]["ship"]): RootState => ({
   ui: {
@@ -65,6 +66,7 @@ const makeRoot = (ship: RootState["ship"]["ship"]): RootState => ({
     jumpResolveInProgress: false,
   },
   hud: initialHudState,
+  plugins: { stayInLocation: initialStayInLocationState },
 });
 
 describe("ship selectors", () => {

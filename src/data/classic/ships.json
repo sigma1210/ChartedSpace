@@ -3,7 +3,7 @@
     "type": "free_trader",
     "designation": "Type A",
     "hullTons": 200,
-    "jumpRating": 1,
+    "jumpRating": 2,
     "maneuverRating": 1,
     "fuelCostPerJump": 10000,
     "cargoCapacity": 82,

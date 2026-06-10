@@ -33,20 +33,24 @@ export const WarpSceneLifecycle = () => {
 
     if (warpExitBlankActive) {
       dispatch(setSceneMode("system"));
-      dispatch(setWarpLayerState({
-        showWarpLayer: false,
-        warpLayerActive: false,
-        warpLayerOpacity: 0,
-      }));
+      dispatch(
+        setWarpLayerState({
+          showWarpLayer: false,
+          warpLayerActive: false,
+          warpLayerOpacity: 0,
+        }),
+      );
       return;
     }
 
     if (ship?.status === "in_jump") {
       dispatch(setSceneMode("jump"));
-      dispatch(setWarpLayerState({
-        showWarpLayer: true,
-        warpLayerActive: true,
-      }));
+      dispatch(
+        setWarpLayerState({
+          showWarpLayer: true,
+          warpLayerActive: true,
+        }),
+      );
       enterFrameRef.current = window.requestAnimationFrame(() => {
         dispatch(setWarpLayerState({ warpLayerOpacity: 1 }));
         enterFrameRef.current = null;
@@ -57,31 +61,39 @@ export const WarpSceneLifecycle = () => {
     dispatch(setSceneMode("system"));
 
     if (showWarpLayer) {
-      dispatch(setWarpLayerState({
-        warpLayerActive: true,
-        warpLayerOpacity: 1,
-      }));
+      dispatch(
+        setWarpLayerState({
+          warpLayerActive: true,
+          warpLayerOpacity: 1,
+        }),
+      );
       fadeTimerRef.current = window.setTimeout(() => {
-        dispatch(setWarpLayerState({
-          showWarpLayer: false,
-          warpLayerActive: false,
-          warpLayerOpacity: 0,
-        }));
+        dispatch(
+          setWarpLayerState({
+            showWarpLayer: false,
+            warpLayerActive: false,
+            warpLayerOpacity: 0,
+          }),
+        );
         fadeTimerRef.current = null;
       }, 700);
       return;
     }
 
-    dispatch(setWarpLayerState({
-      warpLayerActive: false,
-      warpLayerOpacity: 0,
-    }));
+    dispatch(
+      setWarpLayerState({
+        warpLayerActive: false,
+        warpLayerOpacity: 0,
+      }),
+    );
   }, [dispatch, ship?.status, showWarpLayer, warpExitBlankActive]);
 
   useEffect(
     () => () => {
-      if (fadeTimerRef.current !== null) window.clearTimeout(fadeTimerRef.current);
-      if (enterFrameRef.current !== null) window.cancelAnimationFrame(enterFrameRef.current);
+      if (fadeTimerRef.current !== null)
+        window.clearTimeout(fadeTimerRef.current);
+      if (enterFrameRef.current !== null)
+        window.cancelAnimationFrame(enterFrameRef.current);
     },
     [],
   );

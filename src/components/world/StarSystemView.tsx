@@ -68,6 +68,21 @@ import { TradeSystemHudContent } from "./TradeSystemHud";
 import { SubsectorMiniMapHudContent } from "../map/SubsectorMiniMap";
 import { SectorMiniMapHudContent } from "../map/SectorMiniMap";
 import { GalaxyMiniMapHudContent } from "../map/GalaxyMiniMap";
+import { registeredPluginHudLayouts } from "../../plugins/hudLayouts";
+import { registeredPluginHudRenderers } from "../../plugins/hudRenderers";
+import type {
+  PluginHudRendererRegistration,
+  PluginRenderableHudRegistration,
+} from "../../plugins/types";
+
+const pluginHudRenderersById = new globalThis.Map(
+  registeredPluginHudRenderers.map((renderer) => [renderer.id, renderer]),
+);
+
+const registeredRenderablePluginHuds = registeredPluginHudLayouts.flatMap((layout) => {
+  const renderer = pluginHudRenderersById.get(layout.id);
+  return renderer ? [{ ...layout, ...renderer }] : [];
+}) satisfies PluginRenderableHudRegistration[];
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
 
@@ -1666,6 +1681,7 @@ const CameraPinnedSystemHud = ({
   onOpenCharacterProfileHud,
   tradeHudVisible,
   onOpenTradeHud,
+  pluginHudButtons,
 }: {
   world: World;
   miniMapVisible: boolean;
@@ -1681,6 +1697,14 @@ const CameraPinnedSystemHud = ({
   onOpenCharacterProfileHud: () => void;
   tradeHudVisible: boolean;
   onOpenTradeHud: () => void;
+  pluginHudButtons: Array<{
+    id: string;
+    openTitle: string;
+    visibleTitle: string;
+    visible: boolean;
+    Icon: PluginHudRendererRegistration["Icon"];
+    onOpen: () => void;
+  }>;
 }) => {
   const dispatch = useAppDispatch();
   const layout = useAppSelector(selectHudLayout("hudControls"));
@@ -1821,6 +1845,15 @@ const CameraPinnedSystemHud = ({
               >
                 <Coins size={13} aria-hidden="true" />
               </HudIconButton>
+              {pluginHudButtons.map(({ id, openTitle, visibleTitle, visible, Icon, onOpen }) => (
+                <HudIconButton
+                  key={id}
+                  title={visible ? visibleTitle : openTitle}
+                  onClick={onOpen}
+                >
+                  <Icon size={13} aria-hidden="true" />
+                </HudIconButton>
+              ))}
             </div>
           </HudPanel>
         ) : (
@@ -2305,6 +2338,123 @@ const CameraPinnedNavigationHud = ({
   );
 };
 
+const CameraPinnedPluginHud = ({
+  visible,
+  registration,
+  store,
+  onClose,
+}: {
+  visible: boolean;
+  registration: PluginRenderableHudRegistration;
+  store: AppStore;
+  onClose: () => void;
+}) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout(registration.id));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
+  const groupRef = useRef<THREE.Group>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+  const { camera, size } = useThree();
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group || !visible) return;
+
+    const distance = 4.8;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      const nextOffset = clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
+    };
+    const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id: registration.id, offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [dispatch, registration.id, size.height, size.width]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+    pendingOffsetRef.current = offset;
+  };
+
+  if (!visible) return null;
+
+  const PluginHudContent = registration.Component;
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.8}>
+        <HudPanel>
+          <HudHeader
+            title={registration.title}
+            pinned={pinned}
+            onTogglePinned={() => dispatch(setHudPinned({ id: registration.id, pinned: !pinned }))}
+            onClose={onClose}
+            onDragStart={startDrag}
+            closeTitle={`Close ${registration.title} HUD`}
+          />
+          <StoreBridge store={store}>
+            <PluginHudContent />
+          </StoreBridge>
+        </HudPanel>
+      </Html>
+    </group>
+  );
+};
+
 const CameraPinnedSubsectorMiniMapHud = ({
   visible,
   miniMap,
@@ -2698,6 +2848,8 @@ type StarSystemViewSceneProps = {
   onOpenTradeHud?: () => void;
   onCloseTradeHud?: () => void;
   tradeHud?: ReactNode;
+  pluginHuds?: readonly PluginRenderableHudRegistration[];
+  pluginHudVisibility?: Record<string, boolean>;
   navigationHudVisible?: boolean;
   onOpenNavigationHud?: () => void;
   onCloseNavigationHud?: () => void;
@@ -2745,6 +2897,8 @@ export const StarSystemViewScene = ({
   onOpenTradeHud = () => {},
   onCloseTradeHud = () => {},
   tradeHud = null,
+  pluginHuds = [],
+  pluginHudVisibility = {},
   navigationHudVisible = false,
   onOpenNavigationHud = () => {},
   onCloseNavigationHud = () => {},
@@ -2919,6 +3073,14 @@ export const StarSystemViewScene = ({
                 onOpenCharacterProfileHud={onOpenCharacterProfileHud}
                 tradeHudVisible={tradeHudVisible}
                 onOpenTradeHud={onOpenTradeHud}
+                pluginHudButtons={pluginHuds.map((registration) => ({
+                  id: registration.id,
+                  openTitle: registration.openTitle,
+                  visibleTitle: registration.visibleTitle,
+                  visible: pluginHudVisibility[registration.id] ?? false,
+                  Icon: registration.Icon,
+                  onOpen: () => dispatch(setHudVisible({ id: registration.id, visible: true })),
+                }))}
               />
             )}
           {showHudControls && mainWorldHud && (
@@ -2954,6 +3116,15 @@ export const StarSystemViewScene = ({
               onClose={onCloseTradeHud}
             />
           )}
+          {showHudControls && pluginHuds.map((registration) => (
+            <CameraPinnedPluginHud
+              key={registration.id}
+              visible={pluginHudVisibility[registration.id] ?? false}
+              registration={registration}
+              store={reduxStore}
+              onClose={() => dispatch(setHudVisible({ id: registration.id, visible: false }))}
+            />
+          ))}
           {showHudControls && miniMap && (
             <CameraPinnedSubsectorMiniMapHud
               visible={miniMapVisible}
@@ -3203,6 +3374,14 @@ const StarSystemView = () => {
   const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
   const characterProfileHudVisible = useAppSelector(selectHudVisible("characterProfile"));
   const tradeHudVisible = useAppSelector(selectHudVisible("trade"));
+  const pluginHudVisibility = useAppSelector((state) =>
+    Object.fromEntries(
+      registeredRenderablePluginHuds.map((registration) => [
+        registration.id,
+        state.hud.layouts[registration.id]?.visible ?? false,
+      ]),
+    ) as Record<string, boolean>,
+  );
   const hasStoredJumpDestination = useAppSelector(selectHasStoredJumpDestination);
   const renderedSceneMode = useAppSelector(selectSystemSceneMode);
   const showWarpLayer = useAppSelector(selectShowWarpLayer);
@@ -3394,6 +3573,8 @@ const StarSystemView = () => {
           onOpenTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: true }))}
           onCloseTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: false }))}
           tradeHud={<TradeSystemHudContent />}
+          pluginHuds={registeredRenderablePluginHuds}
+          pluginHudVisibility={pluginHudVisibility}
           onWarpExitReached={handleWarpExitReached}
         />
       </div>
