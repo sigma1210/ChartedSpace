@@ -13,11 +13,8 @@ afterEach(() => {
 });
 
 describe("turn workflow bridge", () => {
-  it("fires the world turn lifecycle after advancing", async () => {
-    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ total: 1000, newCredits: 99000, quit: [], unpaidCrew: [] }),
-    } as Response);
+  it("does not run the legacy monthly expense deduction during world turn lifecycle", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({ ok: true } as Response);
     const dispatch = jest.fn();
 
     await advanceTurnWorkflow({
@@ -25,16 +22,15 @@ describe("turn workflow bridge", () => {
       lifecycle: "world",
     })(dispatch, createPluginTestRootState, undefined);
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/ship/crew/settle-wages", { method: "POST" });
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/ship/crew/settle-wages",
+      { method: "POST" },
+    );
 
     fetchMock.mockRestore();
   });
 
   it("emits debug checkpoints when a workflow debug target is provided", async () => {
-    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ total: 1000, newCredits: 99000, quit: [], unpaidCrew: [] }),
-    } as Response);
     const dispatch = jest.fn();
     const checkpointActionType = "test/debugCheckpoint";
 
@@ -66,8 +62,6 @@ describe("turn workflow bridge", () => {
       "workflowComplete",
     ]);
     expect(checkpoints.every((checkpoint) => checkpoint.workflowRunId === "debug-run-1")).toBe(true);
-
-    fetchMock.mockRestore();
   });
 
   it("stops before committing a turn when a beforeTurnAdvance handler blocks", async () => {
@@ -99,10 +93,6 @@ describe("turn workflow bridge", () => {
   });
 
   it("collects trace-only effect proposals from plugin handlers", async () => {
-    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ total: 1000, newCredits: 99000, quit: [], unpaidCrew: [] }),
-    } as Response);
     const dispatch = jest.fn();
     const checkpointActionType = "test/debugCheckpoint";
     const proposedEffect = {
@@ -149,15 +139,9 @@ describe("turn workflow bridge", () => {
       label: "afterTurnAdvance effects proposed",
       summary: "test.handler:debug.note",
     }));
-
-    fetchMock.mockRestore();
   });
 
-  it("passes legacy monthly expense observations to the installed recorder", async () => {
-    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ total: 1000, newCredits: 99000, quit: [], unpaidCrew: [] }),
-    } as Response);
+  it("passes an empty legacy monthly expense observation list after legacy deduction is retired", async () => {
     const dispatch = jest.fn();
 
     setPluginLegacyMonthlyExpenseRecorder(async (observations) => [
@@ -174,14 +158,7 @@ describe("turn workflow bridge", () => {
 
     expect(dispatch).toHaveBeenCalledWith({
       type: "test/legacyMonthlyExpensesObserved",
-      payload: [{
-        turn: 4,
-        total: 1000,
-        newCredits: 99000,
-        source: "legacy.monthlyCosts",
-      }],
+      payload: [],
     });
-
-    fetchMock.mockRestore();
   });
 });

@@ -125,6 +125,8 @@ export const runExpenseScenario = createAsyncThunk(
         turn: 0,
         source: expenseScenarioPluginId,
         effectType: economyLedgerPostEffectType,
+        validationStatus: "rejected",
+        commitStatus: "blocked",
         status: "rejected",
         reason: `Expense scenario requires a positive mortgage or crew salary total; scenario funding: ${fundingStatus}`,
         memo: "Expense scenario",

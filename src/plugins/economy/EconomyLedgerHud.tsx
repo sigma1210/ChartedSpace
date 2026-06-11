@@ -1,12 +1,15 @@
 "use client";
 
-import { ReceiptText, Trash2 } from "lucide-react";
+import { CheckCircle2, ReceiptText, Trash2 } from "lucide-react";
 import {
   hudActionButtonClass,
   usePluginDispatch,
   usePluginSelector,
 } from "@/plugin-api";
-import { clearEconomyLedgerRequests } from "./economySlice";
+import {
+  clearEconomyLedgerRequests,
+  commitEconomyLedgerRequestToCredits,
+} from "./economySlice";
 import {
   selectEconomyLedgerRequests,
   selectEconomyLedgerSummary,
@@ -57,6 +60,31 @@ export const EconomyLedgerHudContent = () => {
               <div className="flex items-center justify-between gap-2 text-(--hud-text)">
                 <span>Turn {request.turn}</span>
                 <span className="uppercase text-(--hud-accent)">{request.status}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 uppercase text-(--hud-text-dim)">
+                <span>Validation</span>
+                <span
+                  className={
+                    request.validationStatus === "rejected"
+                      ? "text-red-300"
+                      : "text-(--hud-accent)"
+                  }
+                >
+                  {request.validationStatus}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 uppercase text-(--hud-text-dim)">
+                <span>Commit</span>
+                <span
+                  className={
+                    request.commitStatus === "blocked" ||
+                    request.commitStatus === "failed"
+                      ? "text-red-300"
+                      : "text-(--hud-accent)"
+                  }
+                >
+                  {request.commitStatus}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-2 text-(--hud-text)">
                 <span className="text-(--hud-text-dim)">Total</span>
@@ -124,10 +152,23 @@ export const EconomyLedgerHudContent = () => {
                   </span>
                 </div>
               )}
+              {request.commitNote && (
+                <div className="text-(--hud-text-dim)">{request.commitNote}</div>
+              )}
               <div className="text-(--hud-text-dim)">{request.source}</div>
               <div className="text-(--hud-text)">{request.memo ?? request.effectType}</div>
               {request.reason && (
                 <div className="text-(--hud-text-dim)">{request.reason}</div>
+              )}
+              {request.commitStatus === "pending" && (
+                <button
+                  type="button"
+                  onClick={() => dispatch(commitEconomyLedgerRequestToCredits(request.id))}
+                  className="mt-1 flex h-6 w-full items-center justify-center gap-1 border border-(--hud-accent) px-2 text-[8px] uppercase tracking-widest text-(--hud-accent) transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg)"
+                >
+                  <CheckCircle2 size={11} aria-hidden="true" />
+                  Commit Expense
+                </button>
               )}
               <div className="mt-1 space-y-1">
                 {request.entries.map((entry, index) => (

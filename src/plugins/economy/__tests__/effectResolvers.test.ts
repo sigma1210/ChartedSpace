@@ -8,6 +8,7 @@ import {
 import { economyLedgerPostResolver } from "../effectResolvers";
 import { economyMonthlyExpensesHandler } from "../handlerRegistration";
 import economyReducer, {
+  commitEconomyLedgerRequest,
   initialEconomyState,
   recordEconomyLegacyMonthlyExpenses,
   recordEconomyLedgerRequest,
@@ -49,6 +50,8 @@ describe("economy effect resolvers", () => {
     });
     expect(resolution.actions?.[0].payload).toMatchObject({
       total: 1000,
+      validationStatus: "accepted",
+      commitStatus: "notRequired",
     });
   });
 
@@ -81,6 +84,33 @@ describe("economy effect resolvers", () => {
       projectedBalance: -900,
       policy: "allowDebt",
       policyOutcome: "accepted",
+      commitStatus: "notRequired",
+    });
+  });
+
+  it("marks accepted ledger posts as pending when commit intent is pending", async () => {
+    const resolution = await resolvePluginWorkflowEffect({
+      type: economyLedgerPostEffectType,
+      source: "test.expenses",
+      payload: {
+        memo: "Pending commit",
+        commit: "pending",
+        entries: [
+          { accountId: "character:owner:credits", change: -1000 },
+          { accountId: "sink:monthly-expenses", change: 1000 },
+        ],
+      },
+    }, {
+      source: "test.workflow",
+      currentTurn: 4,
+    });
+
+    expect(resolution).toMatchObject({
+      status: "accepted",
+    });
+    expect(resolution.actions?.[0].payload).toMatchObject({
+      validationStatus: "accepted",
+      commitStatus: "pending",
     });
   });
 
@@ -110,6 +140,8 @@ describe("economy effect resolvers", () => {
     });
     expect(resolution.actions?.[0].payload).toMatchObject({
       status: "rejected",
+      validationStatus: "rejected",
+      commitStatus: "blocked",
       fundingStatus: "debt",
       projectedBalance: -900,
       policy: "blockPayment",
@@ -219,6 +251,9 @@ describe("economy effect resolvers", () => {
         source: economyPluginId,
       })],
     });
+    expect(result.effects?.[0].payload).toMatchObject({
+      commit: "pending",
+    });
     expect(result.effects?.[0].payload?.entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -266,6 +301,120 @@ describe("economy effect resolvers", () => {
       legacyNewCredits: 1000,
       comparisonStatus: "match",
     });
+  });
+
+  it("normalizes status-only ledger request payloads", () => {
+    const state = economyReducer(initialEconomyState, recordEconomyLedgerRequest({
+      id: "legacy-payload-1",
+      turn: 4,
+      source: "test.expenses",
+      effectType: economyLedgerPostEffectType,
+      status: "accepted",
+      memo: "Legacy payload",
+      total: 1000,
+      entries: [
+        { accountId: "character:owner-1:credits", change: -1000 },
+        { accountId: "sink:monthly-expenses", change: 1000 },
+      ],
+      createdAt: 1,
+    }));
+
+    expect(state.ledgerRequests[0]).toMatchObject({
+      status: "accepted",
+      validationStatus: "accepted",
+      commitStatus: "notRequired",
+    });
+  });
+
+  it("simulates committing a pending ledger request", () => {
+    const pendingState = economyReducer(initialEconomyState, recordEconomyLedgerRequest({
+      id: "pending-1",
+      turn: 4,
+      source: economyPluginId,
+      effectType: economyLedgerPostEffectType,
+      status: "accepted",
+      validationStatus: "accepted",
+      commitStatus: "pending",
+      memo: "Monthly ship expenses",
+      total: 1000,
+      entries: [
+        { accountId: "character:owner-1:credits", change: -1000 },
+        { accountId: "sink:monthly-expenses", change: 1000 },
+      ],
+      createdAt: 1,
+    }));
+
+    const committedState = economyReducer(
+      pendingState,
+      commitEconomyLedgerRequest({ id: "pending-1" }),
+    );
+
+    expect(committedState.ledgerRequests[0]).toMatchObject({
+      commitStatus: "committed",
+      commitNote: "Simulated commit bridge completed",
+    });
+  });
+
+  it("can record a simulated commit failure", () => {
+    const pendingState = economyReducer(initialEconomyState, recordEconomyLedgerRequest({
+      id: "pending-fail-1",
+      turn: 4,
+      source: economyPluginId,
+      effectType: economyLedgerPostEffectType,
+      status: "accepted",
+      validationStatus: "accepted",
+      commitStatus: "pending",
+      memo: "Monthly ship expenses",
+      total: 1000,
+      entries: [
+        { accountId: "character:owner-1:credits", change: -1000 },
+        { accountId: "sink:monthly-expenses", change: 1000 },
+      ],
+      createdAt: 1,
+    }));
+
+    const failedState = economyReducer(
+      pendingState,
+      commitEconomyLedgerRequest({
+        id: "pending-fail-1",
+        result: "failed",
+        note: "Simulated persistence error",
+      }),
+    );
+
+    expect(failedState.ledgerRequests[0]).toMatchObject({
+      commitStatus: "failed",
+      commitNote: "Simulated persistence error",
+    });
+  });
+
+  it("does not commit non-pending ledger requests", () => {
+    const notRequiredState = economyReducer(initialEconomyState, recordEconomyLedgerRequest({
+      id: "scenario-1",
+      turn: 0,
+      source: "core.expenseScenario",
+      effectType: economyLedgerPostEffectType,
+      status: "accepted",
+      validationStatus: "accepted",
+      commitStatus: "notRequired",
+      memo: "Expense scenario",
+      total: 1000,
+      entries: [
+        { accountId: "scenario:owner:credits", change: -1000 },
+        { accountId: "sink:monthly-expenses", change: 1000 },
+      ],
+      createdAt: 1,
+    }));
+
+    const nextState = economyReducer(
+      notRequiredState,
+      commitEconomyLedgerRequest({ id: "scenario-1" }),
+    );
+
+    expect(nextState.ledgerRequests[0]).toMatchObject({
+      commitStatus: "notRequired",
+    });
+    expect(nextState.ledgerRequests[0].commitNote).toBeUndefined();
   });
 
   it("keeps one monthly ledger request per source and turn", () => {

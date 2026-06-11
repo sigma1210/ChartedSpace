@@ -435,22 +435,23 @@ Current behavior:
 - the Economy Ledger HUD displays the accepted/rejected/unresolved ledger request log
 - the Economy Ledger HUD also displays comparison, funding, projected balance, policy, and policy outcome metadata when present
 
-This means the economy plugin is currently an audit/comparison system, not the source of truth for credit mutation.
+This means the economy plugin is now becoming the source of truth for monthly expense credit mutation.
 
-The workflow now supports a small legacy comparison bridge for monthly expenses:
+The legacy monthly-cost handler has been removed from the active turn lifecycle so expenses are not double-charged. The current economy bridge works like this:
 
 ```text
-legacy monthly-cost handler commits the current deduction
-  -> handler returns structured monthly expense metadata
-  -> workflow keeps that observation
-  -> economy plugin proposes and resolves its ledger post
-  -> workflow asks the economy plugin to record the legacy observation
-  -> economy plugin marks the ledger request as match, mismatch, or pending
+economy plugin proposes monthly expense ledger post
+  -> economy resolver validates the balanced ledger
+  -> accepted production monthly post is recorded as pending
+  -> Economy Ledger HUD exposes Commit Expense
+  -> commit bridge patches owner character credits
+  -> characters refresh
+  -> economy plugin marks the ledger request as committed or failed
 ```
 
-This keeps the old deduction path from importing or knowing about the economy plugin. The legacy code only reports what happened. The economy plugin owns the comparison state and the Ledger HUD display.
+The first commit trigger remains manual so we can verify one pending expense at a time. The mutation is real: it debits the owner-credit ledger entry from persisted character credits.
 
-The next economy step is to continue comparing logged requests against the old deduction path until the ledger output is trusted. After that, the economy plugin can become the commit authority for these expenses.
+The next economy step is to decide when this commit bridge should move from manual HUD control into the workflow commit phase.
 
 ## Economy-Owned Funding Policy
 
@@ -533,10 +534,10 @@ The current scenario harness has been manually verified for:
 
 We agreed that validation and commit should be modeled separately.
 
-Current proposed shape:
+The ledger log now records explicit lifecycle fields:
 
 ```ts
-validationStatus: "accepted" | "rejected";
+validationStatus: "accepted" | "rejected" | "unresolved";
 commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
 ```
 
@@ -548,7 +549,11 @@ Reasoning:
 - commit failures should not be confused with validation rejection
 - blocked workflow effects should not be confused with failed persistence
 
-The current implementation still has the older `status` field for accepted/rejected/unresolved display. The next implementation pass should introduce the clearer validation/commit fields while preserving compatibility during migration.
+The older `status` field is still retained for compatibility and summary display. Scenario/test ledger posts use `commitStatus: "notRequired"` because they are not meant to persist money movement. Production monthly expense ledger posts now declare a pending commit intent and appear as `commitStatus: "pending"`. Rejected ledger posts use `commitStatus: "blocked"`.
+
+The first real commit bridge is manual. The economy ledger HUD can move a pending monthly request to `committed` by patching the owner character credits and recording a before/after commit note. If the patch fails, the request becomes `failed` with the error message.
+
+The next lifecycle step is to move this commit bridge into a real workflow commit phase that can apply accepted production ledger posts automatically and atomically.
 
 ## Transaction Pattern
 

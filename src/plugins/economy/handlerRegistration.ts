@@ -62,6 +62,7 @@ export const economyMonthlyExpensesHandler = {
         description: "Monthly ship expenses",
         payload: {
           memo: "Monthly ship expenses",
+          commit: "pending",
           entries: [
             {
               accountId: `character:${ownerCharacterId}:credits`,

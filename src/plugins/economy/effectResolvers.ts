@@ -18,6 +18,7 @@ interface LedgerPostPayload {
   entries: LedgerPostEntry[];
   memo?: string;
   funding?: LedgerPostFunding;
+  commit?: "notRequired" | "pending";
 }
 
 interface LedgerPostFunding {
@@ -72,6 +73,7 @@ const parseLedgerPostPayload = (
     entries: parsedEntries,
     memo: typeof payload.memo === "string" ? payload.memo : undefined,
     funding: parseLedgerPostFunding(payload.funding),
+    commit: payload.commit === "pending" ? "pending" : "notRequired",
   };
 };
 
@@ -135,6 +137,8 @@ const ledgerRequestLog = ({
   turn,
   source: effect.source,
   effectType: effect.type,
+  validationStatus: status,
+  commitStatus: status === "accepted" ? (parsed?.commit ?? "notRequired") : "blocked",
   status,
   reason,
   memo: parsed?.memo,

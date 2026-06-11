@@ -1,5 +1,7 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { LegacyMonthlyExpenseObservation } from "@/plugin-api/workflows";
+import type { RootState } from "@/store";
+import { fetchCharacters, invalidateCharacters } from "@/store/slices/characterSlice";
 
 export interface EconomyLedgerEntryLog {
   accountId: string;
@@ -12,6 +14,8 @@ export interface EconomyLedgerRequestLog {
   turn: number;
   source: string;
   effectType: string;
+  validationStatus: "accepted" | "rejected" | "unresolved";
+  commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
   status: "accepted" | "rejected" | "unresolved";
   reason?: string;
   memo?: string;
@@ -27,7 +31,12 @@ export interface EconomyLedgerRequestLog {
   projectedBalance?: number;
   policy?: "allowDebt" | "blockPayment";
   policyOutcome?: "accepted" | "blocked";
+  commitNote?: string;
 }
+
+export type EconomyLedgerRequestPayload =
+  Omit<EconomyLedgerRequestLog, "validationStatus" | "commitStatus"> &
+  Partial<Pick<EconomyLedgerRequestLog, "validationStatus" | "commitStatus">>;
 
 export interface EconomyState {
   ledgerRequests: EconomyLedgerRequestLog[];
@@ -38,8 +47,11 @@ export const initialEconomyState: EconomyState = {
 };
 
 const maxLedgerRequests = 50;
+const characterCreditAccountPattern = /^character:([^:]+):credits$/;
 
-const isMonthlyExpenseRequest = (request: EconomyLedgerRequestLog) =>
+const isMonthlyExpenseRequest = (
+  request: Pick<EconomyLedgerRequestLog, "memo" | "entries">,
+) =>
   request.memo === "Monthly ship expenses" ||
   request.entries.some((entry) =>
     entry.accountId === "sink:monthly-mortgage" ||
@@ -48,7 +60,7 @@ const isMonthlyExpenseRequest = (request: EconomyLedgerRequestLog) =>
 
 const isSameMonthlyLedgerRequest = (
   left: EconomyLedgerRequestLog,
-  right: EconomyLedgerRequestLog,
+  right: EconomyLedgerRequestPayload,
 ) =>
   left.turn === right.turn &&
   left.source === right.source &&
@@ -63,6 +75,8 @@ const legacyMonthlyExpenseLog = (
   turn: observation.turn,
   source: observation.source,
   effectType: "legacy.monthlyExpenses",
+  validationStatus: "unresolved",
+  commitStatus: "notRequired",
   status: "unresolved",
   reason: "No economy ledger request found for this legacy expense total",
   memo: "Legacy monthly expenses observed",
@@ -76,16 +90,113 @@ const legacyMonthlyExpenseLog = (
   comparisonStatus: "pending",
 });
 
+const defaultCommitStatusForValidation = (
+  validationStatus: EconomyLedgerRequestLog["validationStatus"],
+): EconomyLedgerRequestLog["commitStatus"] => {
+  if (validationStatus === "accepted") return "notRequired";
+  if (validationStatus === "rejected") return "blocked";
+  return "notRequired";
+};
+
+const normalizeLedgerRequest = (
+  request: EconomyLedgerRequestPayload,
+): EconomyLedgerRequestLog => {
+  const validationStatus = request.validationStatus ?? request.status;
+  return {
+    ...request,
+    validationStatus,
+    commitStatus:
+      request.commitStatus ?? defaultCommitStatusForValidation(validationStatus),
+  };
+};
+
+const ownerCreditDebitForRequest = (request: EconomyLedgerRequestLog) => {
+  const ownerCreditEntry = request.entries.find((entry) =>
+    characterCreditAccountPattern.test(entry.accountId) && entry.change < 0,
+  );
+  if (!ownerCreditEntry) return null;
+
+  const match = ownerCreditEntry.accountId.match(characterCreditAccountPattern);
+  if (!match) return null;
+
+  return {
+    characterId: match[1],
+    change: ownerCreditEntry.change,
+  };
+};
+
+export const commitEconomyLedgerRequestToCredits = createAsyncThunk(
+  "economy/commitLedgerRequestToCredits",
+  async (requestId: string, { dispatch, getState }) => {
+    const state = getState() as RootState;
+    const request = state.plugins.economy.ledgerRequests.find(
+      (candidate) => candidate.id === requestId,
+    );
+    if (!request) {
+      throw new Error("Ledger request not found");
+    }
+    if (request.status !== "accepted" || request.commitStatus !== "pending") {
+      throw new Error("Ledger request is not an accepted pending commit");
+    }
+
+    const debit = ownerCreditDebitForRequest(request);
+    if (!debit) {
+      throw new Error("Ledger request has no owner credit debit");
+    }
+
+    const character = state.characters.items.find(
+      (candidate) => candidate.id === debit.characterId,
+    );
+    if (!character) {
+      throw new Error("Owner character not found in local state");
+    }
+
+    const nextCredits = character.credits + debit.change;
+    const response = await fetch(`/api/characters/${debit.characterId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credits: nextCredits }),
+    });
+
+    if (!response.ok) {
+      let message = "Failed to commit ledger request";
+      try {
+        const body = await response.json() as { error?: string };
+        message = body.error ?? message;
+      } catch {
+        // Keep the generic message if the response is not JSON.
+      }
+      throw new Error(message);
+    }
+
+    dispatch(commitEconomyLedgerRequest({
+      id: requestId,
+      result: "committed",
+      note: `Committed owner credits: Cr ${character.credits.toLocaleString()} -> Cr ${nextCredits.toLocaleString()}`,
+    }));
+    dispatch(invalidateCharacters());
+    await dispatch(fetchCharacters());
+
+    return {
+      requestId,
+      characterId: debit.characterId,
+      previousCredits: character.credits,
+      nextCredits,
+    };
+  },
+);
+
 const economySlice = createSlice({
   name: "economy",
   initialState: initialEconomyState,
   reducers: {
     recordEconomyLedgerRequest(
       state,
-      action: PayloadAction<EconomyLedgerRequestLog>,
+      action: PayloadAction<EconomyLedgerRequestPayload>,
     ) {
+      const nextRequest = normalizeLedgerRequest(action.payload);
       const existingIndex = state.ledgerRequests.findIndex((request) =>
-        isSameMonthlyLedgerRequest(request, action.payload),
+        isSameMonthlyLedgerRequest(request, nextRequest),
       );
       const existingRequest = existingIndex >= 0
         ? state.ledgerRequests[existingIndex]
@@ -95,34 +206,43 @@ const economySlice = createSlice({
       }
 
       state.ledgerRequests.unshift({
-        ...action.payload,
+        ...nextRequest,
         comparisonTotal: existingRequest
-          ? action.payload.comparisonTotal ?? existingRequest.comparisonTotal
-          : action.payload.comparisonTotal,
+          ? nextRequest.comparisonTotal ?? existingRequest.comparisonTotal
+          : nextRequest.comparisonTotal,
         comparisonLabel: existingRequest
-          ? action.payload.comparisonLabel ?? existingRequest.comparisonLabel
-          : action.payload.comparisonLabel,
+          ? nextRequest.comparisonLabel ?? existingRequest.comparisonLabel
+          : nextRequest.comparisonLabel,
         legacyTotal: existingRequest
-          ? action.payload.legacyTotal ?? existingRequest.legacyTotal
-          : action.payload.legacyTotal,
+          ? nextRequest.legacyTotal ?? existingRequest.legacyTotal
+          : nextRequest.legacyTotal,
         legacyNewCredits: existingRequest
-          ? action.payload.legacyNewCredits ?? existingRequest.legacyNewCredits
-          : action.payload.legacyNewCredits,
+          ? nextRequest.legacyNewCredits ?? existingRequest.legacyNewCredits
+          : nextRequest.legacyNewCredits,
         comparisonStatus: existingRequest
-          ? action.payload.comparisonStatus ?? existingRequest.comparisonStatus
-          : action.payload.comparisonStatus,
+          ? nextRequest.comparisonStatus ?? existingRequest.comparisonStatus
+          : nextRequest.comparisonStatus,
         fundingStatus: existingRequest
-          ? action.payload.fundingStatus ?? existingRequest.fundingStatus
-          : action.payload.fundingStatus,
+          ? nextRequest.fundingStatus ?? existingRequest.fundingStatus
+          : nextRequest.fundingStatus,
         projectedBalance: existingRequest
-          ? action.payload.projectedBalance ?? existingRequest.projectedBalance
-          : action.payload.projectedBalance,
+          ? nextRequest.projectedBalance ?? existingRequest.projectedBalance
+          : nextRequest.projectedBalance,
         policy: existingRequest
-          ? action.payload.policy ?? existingRequest.policy
-          : action.payload.policy,
+          ? nextRequest.policy ?? existingRequest.policy
+          : nextRequest.policy,
         policyOutcome: existingRequest
-          ? action.payload.policyOutcome ?? existingRequest.policyOutcome
-          : action.payload.policyOutcome,
+          ? nextRequest.policyOutcome ?? existingRequest.policyOutcome
+          : nextRequest.policyOutcome,
+        commitNote: existingRequest
+          ? nextRequest.commitNote ?? existingRequest.commitNote
+          : nextRequest.commitNote,
+        validationStatus: existingRequest
+          ? nextRequest.validationStatus ?? existingRequest.validationStatus
+          : nextRequest.validationStatus,
+        commitStatus: existingRequest
+          ? nextRequest.commitStatus ?? existingRequest.commitStatus
+          : nextRequest.commitStatus,
       });
       state.ledgerRequests = state.ledgerRequests.slice(0, maxLedgerRequests);
     },
@@ -163,14 +283,48 @@ const economySlice = createSlice({
         state.ledgerRequests.splice(duplicateIndex, 1);
       }
     },
+    commitEconomyLedgerRequest(
+      state,
+      action: PayloadAction<{
+        id: string;
+        result?: "committed" | "failed";
+        note?: string;
+      }>,
+    ) {
+      const request = state.ledgerRequests.find(
+        (candidate) => candidate.id === action.payload.id,
+      );
+      if (!request || request.commitStatus !== "pending") return;
+
+      const result = action.payload.result ?? "committed";
+      request.commitStatus = result;
+      request.commitNote =
+        action.payload.note ??
+        (result === "committed"
+          ? "Simulated commit bridge completed"
+          : "Simulated commit bridge failed");
+    },
     clearEconomyLedgerRequests(state) {
       state.ledgerRequests = [];
     },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(commitEconomyLedgerRequestToCredits.rejected, (state, action) => {
+      const request = state.ledgerRequests.find(
+        (candidate) => candidate.id === action.meta.arg,
+      );
+      if (!request || request.commitStatus !== "pending") return;
+
+      request.commitStatus = "failed";
+      request.commitNote =
+        action.error.message ?? "Ledger commit failed";
+    });
   },
 });
 
 export const {
   clearEconomyLedgerRequests,
+  commitEconomyLedgerRequest,
   recordEconomyLegacyMonthlyExpenses,
   recordEconomyLedgerRequest,
 } = economySlice.actions;

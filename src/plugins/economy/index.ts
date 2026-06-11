@@ -38,6 +38,8 @@ export {
 } from "./metadata";
 export {
   clearEconomyLedgerRequests,
+  commitEconomyLedgerRequest,
+  commitEconomyLedgerRequestToCredits,
   initialEconomyState,
   recordEconomyLegacyMonthlyExpenses,
   recordEconomyLedgerRequest,

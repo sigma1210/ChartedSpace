@@ -165,24 +165,25 @@ test harness plugin supplies controlled inputs
   -> domain HUD shows result
 ```
 
-## Implemented Legacy Comparison
+## Implemented Economy Commit Bridge
 
-The old monthly-cost path still performs the real credit deduction.
+The legacy monthly-cost path no longer performs the real credit deduction during the active turn lifecycle.
 
-The economy plugin currently audits and compares, rather than committing real credit changes.
+The economy plugin now owns the first real monthly expense commit path.
 
 The bridge works like this:
 
 ```text
-legacy monthly-cost handler commits current deduction
-  -> handler returns structured metadata
-  -> workflow keeps that observation
-  -> economy proposes and resolves its ledger post
-  -> workflow asks economy to record the legacy observation
-  -> economy marks match, mismatch, or pending
+economy proposes monthly expense ledger post
+  -> economy resolver validates the balanced ledger
+  -> accepted production monthly post is recorded as pending
+  -> Economy Ledger HUD exposes Commit Expense
+  -> commit bridge patches owner character credits
+  -> characters refresh
+  -> ledger request becomes committed or failed
 ```
 
-This keeps legacy code from importing the economy plugin. Legacy reports what happened; economy owns comparison state and display.
+The first commit trigger is still manual so we can test one pending expense at a time. The mutation is real: it debits the owner-credit ledger entry from persisted character credits.
 
 ## Design Decisions In Discussion
 
@@ -190,10 +191,10 @@ This keeps legacy code from importing the economy plugin. Legacy reports what ha
 
 We agreed that ledger validation and ledger commit should be separate concepts.
 
-Current proposed shape:
+The ledger log now records explicit lifecycle fields:
 
 ```ts
-validationStatus: "accepted" | "rejected";
+validationStatus: "accepted" | "rejected" | "unresolved";
 commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
 ```
 
@@ -204,7 +205,9 @@ Why:
 - real monthly expenses should eventually become pending commits
 - commit failure should not be confused with validation rejection
 
-The current implementation still has the older `status` field for accepted/rejected/unresolved display. The next pass should introduce the clearer validation/commit fields while preserving compatibility during migration.
+The older `status` field is still retained for compatibility and summary display. Scenario/test ledger posts use `commitStatus: "notRequired"` because they are not meant to persist money movement. Production monthly expense ledger posts now declare a pending commit intent and appear as `commitStatus: "pending"`. Rejected ledger posts use `commitStatus: "blocked"`.
+
+The economy ledger HUD includes the first real commit bridge. Pending requests can be manually committed, and the ledger records the owner-credit before/after note. Failed commits become `commitStatus: "failed"` with the error message.
 
 ### Transaction Pattern
 
