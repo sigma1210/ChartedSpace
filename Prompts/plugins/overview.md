@@ -1,308 +1,296 @@
 # Plugin And Workflow Architecture Overview
 
-## Design Direction
+## Purpose
 
-The long-term goal is to move beyond hardcoded feature workflows and toward a flexible game workflow system that plugins can observe, modify, suspend, or supersede.
+The plugin system is becoming part of the game engine, not just a folder structure for optional feature code.
 
-Jump navigation is the current example workflow, but the architecture should not be centered only on jumping. The same model should eventually support workflows such as staying in location, customs encounters, trade, repairs, news events, social networks, maintenance, docking, encounters, and other turn-advancing or turn-reactive systems.
+The goal is to move from hardcoded feature workflows toward flexible game workflows that internal and future external plugins can observe, modify, suspend, block, or extend through clear contracts.
 
-## Core Idea
+Jump navigation motivated the discussion, but the architecture is not jump-specific. The same model should support:
 
-A workflow should be treated as a game process with phases, context, and outcomes.
+- stay-in-location / next-turn actions
+- navigation and misjump workflows
+- fuel purchase gates
+- monthly expenses
+- trade and cargo settlement
+- docking and berthing fees
+- maintenance and repairs
+- customs inspections
+- encounters, news, and social systems
 
-Plugins should be able to listen to workflow events and return interventions. An intervention might:
+## Core Responsibilities
 
-- continue the workflow unchanged
-- modify workflow context
-- add warnings or options
-- suspend the workflow for player interaction
-- supersede the workflow with a different outcome
-- open a custom HUD
-- enqueue follow-up events
+Core owns stable engine responsibilities:
 
-This makes workflows open-ended and customizable while preserving a clear contract between core game systems and plugin behavior.
+- time authority
+- canonical location authority
+- player/session context
+- workflow runtime
+- plugin registry
+- deterministic event ordering
+- commit authority
+- persistence boundaries
+- stable plugin bridge
 
-## Workflow Model
-
-A workflow can be thought of as:
-
-```text
-player action
-  -> create workflow context
-  -> emit workflow phase event
-  -> plugins respond
-  -> continue, branch, suspend, or supersede
-  -> commit final outcome
-```
-
-The commit step should be controlled by the core game engine rather than arbitrary plugin mutation. Plugins can request outcomes; the workflow/commit layer applies approved state changes.
+Core should not own every domain rule. Credits, fuel, maintenance, trading, crew wages, news, and navigation behavior should be modeled as plugin-owned domains unless they become true engine primitives.
 
 ## Plugin Responsibilities
 
-A plugin may provide:
+Plugins may own:
 
+- private plugin state
+- HUD registrations and HUD renderers
+- player actions
 - workflow event handlers
-- custom HUD registrations
-- custom player actions
-- selectors/helpers for its domain
-- internal state for its feature
-- outcome modifiers for workflows
+- effect proposals
+- effect resolvers for their own domain
+- debug/test harnesses for their own behavior
 
-Example plugins:
+Internal plugins must also serve as reference implementations. They should use the same public plugin bridge and best practices expected of future plugin authors.
 
-- Navigation plugin
-- Customs inspection plugin
-- News feed plugin
-- Social network plugin
-- Ship maintenance plugin
-- Encounter plugin
+## Implemented Foundation
 
-## Navigation As An Internal Plugin
+The current implementation includes:
 
-Navigation could become a first-party/internal plugin rather than hardcoded workflow logic.
+- plugin manifest catalog
+- plugin reducer registration under `state.plugins`
+- plugin HUD layout registration
+- plugin HUD renderer registration
+- plugin action registration
+- plugin workflow handlers
+- plugin effect proposals
+- plugin effect resolvers
+- workflow debug checkpoints
+- a bridge that lets the turn workflow invoke plugin handlers without importing plugin registries directly
 
-It could register:
+The turn workflow currently supports these handler phases:
 
-- the Navigation HUD
-- destination selection actions
-- course plotting behavior
-- jump execution actions
-- jump resolution rules
-- handlers for jump-related workflow phases
+- `beforeTurnAdvance`
+- `turnAdvance`
+- `afterTurnAdvance`
 
-Conceptually:
-
-```ts
-const navigationPlugin = {
-  id: "core.navigation",
-  huds: ["navigation"],
-  handlers: {
-    "jump.plot": navigationPlotHandler,
-    "jump.resolve": navigationResolveHandler,
-  },
-};
-```
-
-The jump workflow would ask plugins how navigation resolves instead of deciding everything itself.
-
-## Plot Result Versus Execution Permission
-
-A key design point is that plotting should not be limited to a simple pass/fail result.
-
-Instead, plotting can produce an execution contract:
-
-```ts
-type JumpPlotResult = {
-  status: "clean-plot" | "poor-plot" | "critical-failure" | "no-plot";
-  canExecute: boolean;
-  requiresConfirmation?: boolean;
-  navigationQuality?: number;
-  risk?: JumpRiskProfile;
-  warnings?: string[];
-};
-```
-
-This allows richer behavior. For example, a critical navigation failure might still allow the player to execute the jump, but with a much higher chance of failed jump, misjump, damage, or other complications.
-
-In that model:
-
-```text
-failed plot does not always mean "cannot jump"
-it may mean "you can jump, but the workflow carries dangerous risk"
-```
-
-## Example: Critical Plot Failure
-
-A navigation plugin might return:
+Handlers can return:
 
 ```ts
 {
-  status: "critical-failure",
-  canExecute: true,
-  requiresConfirmation: true,
-  navigationQuality: -6,
-  risk: {
-    normalArrivalWeight: 2,
-    failedJumpWeight: 3,
-    misjumpWeight: 5,
-    driveDamageWeight: 2,
-  },
-  warnings: [
-    "Plot solution is unstable.",
-    "Execution may result in misjump or drive damage.",
-  ],
+  disposition: "continue" | "stop";
+  reason?: string;
+  effects?: PluginWorkflowEffect[];
 }
 ```
 
-The jump workflow would carry this risk profile forward into the resolution phase. Other plugins could further modify that risk profile before the final outcome is committed.
+The workflow collects effects, routes them through registered resolvers, records accepted/rejected/unresolved resolutions, and dispatches resolver-provided actions.
 
-## Suspending A Workflow
+## Implemented Internal Plugins
 
-Plugins should eventually be able to suspend workflows for player interaction.
+### Stay In Location
 
-Example: customs hails the ship on system entry.
+The stay-in-location plugin is the first simple workflow plugin.
 
-```text
-ship arrives in system
-  -> location-enter workflow emits event
-  -> customs plugin responds
-  -> workflow is suspended
-  -> customs HUD opens
-  -> player chooses response / skill roll
-  -> plugin resolves inspection
-  -> workflow resumes with consequences
+It owns:
+
+- Next Turn HUD
+- private plugin state for use counts and debug trace
+- action that requests a turn-advance workflow
+- debug-only before-turn handler that can block the workflow before commit
+
+This proves:
+
+- plugin-owned HUD/action/state shape
+- plugin-private debug controls
+- workflow invocation through a bridge
+- stop-before-commit behavior
+- serializable workflow trace checkpoints
+
+### Economy
+
+The economy plugin is the first resource-domain plugin.
+
+It owns:
+
+- Economy Ledger HUD
+- ledger request log in private plugin state
+- `economy.ledger.post` effect resolver
+- monthly expense proposal handler
+- comparison against the old monthly-cost deduction path
+
+The ledger post resolver validates balanced ledger entries:
+
+- at least two entries
+- non-empty account ids
+- finite nonzero changes
+- sum of changes equals zero
+
+The resolver can also evaluate funding metadata:
+
+```ts
+funding: {
+  availableCredits: number;
+  policy: "allowDebt" | "blockPayment";
+}
 ```
 
-This enables rich event-driven gameplay without hardcoding every possible encounter into the base workflow.
+Economy calculates:
 
-## Custom HUDs
+- `fundingStatus`: `solvent` or `debt`
+- `projectedBalance`
+- selected `policy`
+- `policyOutcome`: `accepted` or `blocked`
 
-Plugins should be able to register HUDs, not just workflow logic.
+Debt policy is now economy-owned. A plugin may supply controlled inputs and a selected policy, but the economy resolver decides whether the ledger post is accepted or rejected.
+
+### Expense Scenario
+
+The expense scenario plugin is an internal test harness.
+
+It owns:
+
+- Expense Scenario HUD
+- private scenario state
+- controlled inputs:
+  - mortgage amount
+  - crew salary total
+  - expected total
+  - owner credits
+  - debt policy
+- action that sends a controlled `economy.ledger.post` request through the economy resolver
+
+Results are displayed in the Economy Ledger HUD, not in a separate result panel.
+
+This proves a useful test pattern:
+
+```text
+test harness plugin supplies controlled inputs
+  -> domain plugin resolver owns validation/policy
+  -> domain HUD shows result
+```
+
+## Implemented Legacy Comparison
+
+The old monthly-cost path still performs the real credit deduction.
+
+The economy plugin currently audits and compares, rather than committing real credit changes.
+
+The bridge works like this:
+
+```text
+legacy monthly-cost handler commits current deduction
+  -> handler returns structured metadata
+  -> workflow keeps that observation
+  -> economy proposes and resolves its ledger post
+  -> workflow asks economy to record the legacy observation
+  -> economy marks match, mismatch, or pending
+```
+
+This keeps legacy code from importing the economy plugin. Legacy reports what happened; economy owns comparison state and display.
+
+## Design Decisions In Discussion
+
+### Ledger Lifecycle
+
+We agreed that ledger validation and ledger commit should be separate concepts.
+
+Current proposed shape:
+
+```ts
+validationStatus: "accepted" | "rejected";
+commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
+```
+
+Why:
+
+- a ledger post can be valid but not yet committed
+- scenario/test posts may not require persistence
+- real monthly expenses should eventually become pending commits
+- commit failure should not be confused with validation rejection
+
+The current implementation still has the older `status` field for accepted/rejected/unresolved display. The next pass should introduce the clearer validation/commit fields while preserving compatibility during migration.
+
+### Transaction Pattern
+
+The preferred long-term model is:
+
+```text
+plugin proposes ledger post
+  -> economy validates
+  -> accepted post is recorded as pending
+  -> workflow reaches commit phase
+  -> economy applies pending posts atomically
+  -> result is recorded as committed, failed, or blocked
+```
+
+This supports:
+
+- review/debug before commit
+- multiple plugins contributing ledger posts in one workflow
+- all-or-nothing commits
+- rollback/failure handling
+- workflow suspension before money moves
+- a real audit trail
+
+### Workflow Blocking
+
+Financial rejection should not automatically mean workflow stopped.
+
+The workflow consequence must be explicit.
 
 Examples:
 
-- Navigation HUD
-- Customs inspection HUD
-- News feed HUD
-- Social network HUD
-- Encounter HUD
+- fuel payment rejected by debt policy may block a jump
+- monthly mortgage debt may advance the turn but mark delinquency
+- crew salary debt may create unpaid crew consequences
+- docking fees might block departure or create port debt
 
-HUDs should expose their own UI and underlying functionality while remaining integrated into the game workflow/event system.
+This suggests a separate workflow intervention effect such as:
 
-## Architectural Layers
+```ts
+{
+  type: "workflow.block";
+  source: "core.economy";
+  reason: "Fuel purchase blocked by debt policy";
+}
+```
 
-The proposed architecture has three major layers:
+Economy owns financial policy. The workflow or requesting plugin owns what that financial result means for the current workflow.
 
-1. Workflow layer
-   - owns workflow phases and context
-   - emits events
-   - handles suspension/resume
+### Fuel As A Workflow Gate
 
-2. Plugin layer
-   - registers handlers, HUDs, actions, and feature logic
-   - returns workflow interventions
+Fuel expense is the clearest upcoming test for workflow blocking.
 
-3. Commit layer
-   - applies approved outcomes to game state
-   - advances turns
-   - changes ship/location/character/world state
-   - records notifications and consequences
+Possible flow:
+
+```text
+player attempts jump
+  -> navigation/fuel plugin proposes fuel ledger post
+  -> economy validates funding policy
+  -> if fuel payment is blocked:
+       workflow receives explicit block/suspend result
+       jump does not proceed
+  -> if fuel payment is accepted:
+       jump workflow continues
+       ledger post enters commit flow
+```
+
+This is different from monthly expenses because fuel may be a before-commit gate rather than after-turn settlement.
+
+## Open Concerns
+
+Important issues still to resolve:
+
+- how to model workflow block/suspend effects
+- how accepted ledger posts become pending commits
+- how economy commits to persisted character credits
+- how to handle partial payments
+- how crew wage debt creates crew consequences
+- how fuel, docking, mortgage, and salary policies differ
+- how player confirmation works for allowed debt
+- how multiple plugins contributing expenses in one workflow commit atomically
+- how audit logs distinguish proposed, accepted, rejected, blocked, pending, committed, and failed states
 
 ## Guiding Principle
 
-Workflows should define the structure of play, but plugins should be able to influence what happens inside that structure.
+Core runs the workflow and owns final commit boundaries.
 
-The system should support predictable core gameplay while leaving room for open-ended, customizable, plugin-driven events and outcomes.
+Plugins define domain behavior inside workflow windows.
 
-
-
-## codex question to reg  for first navigation plugin design
-
-What I need before designing/building it:
-
-Scope Of First Version
-
-Should the first plugin support only “jump to selected destination,” or should it also include plotting?
-### the plugin should handle plotting and executing the plotted jup
-
-Do you want plotting to remain a separate step, or can v1 combine plot + execute?
-Destination Selection
-
-### this is a combine step
-
-Should the new Navigation HUD reuse the current reachable-world list/range map logic?
-
-### yes - it should own this logic 
-
-Or should it start with a simpler destination input/selection for testing?
-
-### stop trying to make things easy - its make you seem lazy
-
-Turn Workflow
-
-For v1, what should happen when the player executes navigation?
-always advance turn?
-
-### we should handle the full potential case - failed  plots, failed jumps that result in no system change, mis jumps to wrong system.
-
-
-always change location?
-roll for outcome?
-support stay-in-location result?
-What outcomes should v1 support?
-Risk / Resolution
-
-### see above
-
-
-Should v1 include risk profiles now, or just establish the architecture?
-Example v1 outcomes:
-
-normal arrival
-failed plot/stay
-misjump
-delayed arrival
-Which of these do you want immediately?
-### all of above except delayed - 
-
-HUD Registration
-
-Should this plugin register a brand-new HUD ID, like plugin.navigation, while old navigation stays for now?
-Or should it take over the current navigation HUD slot immediately?
-State Location
-
-### its a new hud old navigation stays for now - 
-
-
-Are you okay with a new plugin slice, e.g.
-src/plugins/navigation/navigationSlice.ts
-### the plugin should maintain its own slice
-
-or do you prefer it under src/store/slices/navigationPluginSlice.ts?
-My recommendation: start a plugin-shaped folder:
-src/plugins/navigation/
-  index.ts
-  NavigationPluginHud.tsx
-  navigationPluginSlice.ts
-  workflow.ts
-  types.ts
-Plugin Runtime
-
-For v1, should we manually mount/register this internal plugin?
-My recommendation: yes. Do not build a general plugin runtime yet.
-### why because you are lazy - stop trying to avoid building things we need to build 
-
-But shape the code as if it will later be registered.
-### no we want the registration system. are you listening to me? please stop trying to make it easy. every time you try to make things easy - its gets harder. lets do this right from the start. do you understand ?
-
-
-Old System Interaction
-
-During development, should the old Navigation HUD remain available?
-Or should we hide/disable it and expose only the new plugin HUD?
-Since you said this is meant to replace it, I’d suggest exposing the new HUD under a new button first, then remove the old once validated.
-My proposed first implementation milestone would be:
-
-### i think i only mention keeping the old one a few times now. how many more times do you want me to say keep the old one until we prove the new one.
-
-Navigation internal plugin v1
-  - plugin-shaped folder
-  - new Redux slice for plugin state
-  - new HUD
-  - one workflow action: executeNavigationTurn
-  - advances turn
-  - can change system location
-  - records outcome
-  - does not depend on jumpNavigationSlice
-
-For v1, I’d keep outcome deterministic unless you want risk immediately:
-
-
-
-
-selected destination -> execute -> turn advances -> ship moves to destination
-
-
-Then v2 adds plot/risk/outcome branching.
-### this is V1 stop trying to make things easy on yourself 
- 
+Internal plugins must keep using the same bridge expected of future plugins so first-party systems do not become hidden special cases.

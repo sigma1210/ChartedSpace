@@ -433,6 +433,7 @@ Current behavior:
 - the resolver returns a follow-up log action
 - the workflow dispatches that action after tracing the resolution
 - the Economy Ledger HUD displays the accepted/rejected/unresolved ledger request log
+- the Economy Ledger HUD also displays comparison, funding, projected balance, policy, and policy outcome metadata when present
 
 This means the economy plugin is currently an audit/comparison system, not the source of truth for credit mutation.
 
@@ -450,6 +451,174 @@ legacy monthly-cost handler commits the current deduction
 This keeps the old deduction path from importing or knowing about the economy plugin. The legacy code only reports what happened. The economy plugin owns the comparison state and the Ledger HUD display.
 
 The next economy step is to continue comparing logged requests against the old deduction path until the ledger output is trusted. After that, the economy plugin can become the commit authority for these expenses.
+
+## Economy-Owned Funding Policy
+
+Debt policy now belongs to the economy resolver, not to the scenario harness.
+
+The `economy.ledger.post` payload may include funding metadata:
+
+```ts
+{
+  type: "economy.ledger.post",
+  source: "core.somePlugin",
+  payload: {
+    memo: "Fuel purchase",
+    entries: [
+      { accountId: "character:owner:credits", change: -1000 },
+      { accountId: "sink:fuel", change: 1000 }
+    ],
+    funding: {
+      availableCredits: 500,
+      policy: "allowDebt" | "blockPayment"
+    }
+  }
+}
+```
+
+The economy resolver calculates:
+
+- `fundingStatus`: `solvent` or `debt`
+- `projectedBalance`
+- selected `policy`
+- `policyOutcome`: `accepted` or `blocked`
+
+If projected balance is negative and policy is `blockPayment`, the economy resolver rejects the ledger post with the reason `Ledger post blocked by debt policy`.
+
+If projected balance is negative and policy is `allowDebt`, the ledger post can still be accepted. The accepted ledger request records debt metadata so the HUD and later commit phase can treat it appropriately.
+
+This is an important boundary:
+
+```text
+scenario/navigation/fuel plugin supplies controlled funding inputs
+  -> economy resolver owns financial validation and policy
+  -> workflow decides what a rejected/blocked financial result means for the current workflow
+```
+
+## Expense Scenario Test Harness
+
+The `core.expenseScenario` plugin is an internal test harness and reference implementation.
+
+It owns:
+
+- Expense Scenario HUD
+- private plugin state
+- mortgage amount input
+- crew salary total input
+- expected total input
+- owner credits input
+- debt policy selector
+- run action that submits a controlled `economy.ledger.post`
+
+The scenario plugin does not own ledger validation or debt blocking. It passes controlled inputs to economy and lets the economy resolver decide.
+
+Results appear in the Economy Ledger HUD. This confirms the pattern:
+
+```text
+test harness plugin supplies controlled inputs
+  -> domain plugin resolver owns behavior
+  -> domain plugin HUD displays results
+```
+
+The current scenario harness has been manually verified for:
+
+- matching expected total
+- mismatching expected total
+- solvent projected balance
+- debt projected balance
+- debt allowed
+- debt blocked
+
+## Ledger Lifecycle Design
+
+We agreed that validation and commit should be modeled separately.
+
+Current proposed shape:
+
+```ts
+validationStatus: "accepted" | "rejected";
+commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
+```
+
+Reasoning:
+
+- a ledger post can be financially valid but not yet persisted
+- scenario/test posts may not require persistence
+- real monthly expenses should become pending commits
+- commit failures should not be confused with validation rejection
+- blocked workflow effects should not be confused with failed persistence
+
+The current implementation still has the older `status` field for accepted/rejected/unresolved display. The next implementation pass should introduce the clearer validation/commit fields while preserving compatibility during migration.
+
+## Transaction Pattern
+
+The preferred long-term model is:
+
+```text
+plugin proposes ledger post
+  -> economy validates
+  -> accepted post is recorded as pending
+  -> workflow reaches commit phase
+  -> economy applies pending posts atomically
+  -> result is recorded as committed, failed, or blocked
+```
+
+This supports:
+
+- review/debug before commit
+- multiple plugins contributing ledger posts in one workflow
+- all-or-nothing commits
+- rollback/failure handling
+- workflow suspension before money moves
+- a clear audit trail of proposed, accepted, rejected, blocked, pending, committed, and failed states
+
+## Workflow Blocking And Fuel
+
+Financial rejection should not automatically mean the whole workflow stops.
+
+The consequence must be explicit and workflow-specific.
+
+Fuel is the clearest upcoming test case because it is likely a jump gate:
+
+```text
+player attempts jump
+  -> navigation/fuel plugin proposes fuel ledger post
+  -> economy validates funding policy
+  -> if fuel payment is blocked:
+       workflow receives an explicit block/suspend result
+       jump does not proceed
+  -> if fuel payment is accepted:
+       jump workflow continues
+       ledger post enters commit flow
+```
+
+Monthly expenses are different: debt may advance the turn while marking delinquency or unpaid wages. Fuel may block jump before the workflow commits.
+
+This suggests a future workflow effect such as:
+
+```ts
+{
+  type: "workflow.block",
+  source: "core.economy",
+  reason: "Fuel purchase blocked by debt policy"
+}
+```
+
+Economy owns financial validation. The workflow or requesting plugin owns the gameplay consequence of that financial result.
+
+## Open Economy Questions
+
+Remaining concerns:
+
+- how accepted ledger posts become pending commits
+- how economy commits to persisted character credits
+- whether commits are all-or-nothing across multiple ledger posts
+- how partial payments work
+- how crew wage debt creates crew consequences
+- how fuel, docking, mortgage, and salary policies differ
+- how player confirmation works for allowed debt
+- how workflow block/suspend effects are represented
+- how audit logs distinguish validation, policy, and persistence outcomes
 
 ## Workflow Debug Trace
 
