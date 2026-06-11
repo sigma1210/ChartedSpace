@@ -195,6 +195,7 @@ The ledger log now records explicit lifecycle fields:
 
 ```ts
 validationStatus: "accepted" | "rejected" | "unresolved";
+commitIntent: "notRequired" | "manual" | "automatic";
 commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
 ```
 
@@ -202,12 +203,19 @@ Why:
 
 - a ledger post can be valid but not yet committed
 - scenario/test posts may not require persistence
+- plugins should explicitly declare whether a valid ledger post is audit-only, manually trusted, or automatically trusted
 - real monthly expenses should eventually become pending commits
 - commit failure should not be confused with validation rejection
 
-The older `status` field is still retained for compatibility and summary display. Scenario/test ledger posts use `commitStatus: "notRequired"` because they are not meant to persist money movement. Production monthly expense ledger posts now declare a pending commit intent and appear as `commitStatus: "pending"`. Rejected ledger posts use `commitStatus: "blocked"`.
+The older `status` field is still retained for compatibility and summary display. Scenario/test ledger posts use `commitIntent: "notRequired"` and `commitStatus: "notRequired"` because they are not meant to persist money movement. Stay-in-location monthly expense ledger posts now declare `commitIntent: "automatic"`; after the accepted ledger action is recorded, the workflow action committer immediately runs the economy credit mutation bridge. Other production monthly expense sources can still declare `commitIntent: "manual"`. Rejected ledger posts use `commitStatus: "blocked"` regardless of intent.
 
-The economy ledger HUD includes the first real commit bridge. Pending requests can be manually committed, and the ledger records the owner-credit before/after note. Failed commits become `commitStatus: "failed"` with the error message.
+The supported intent values are:
+
+- `notRequired`: validation/logging only; never mutates credits
+- `manual`: valid request becomes pending and must be committed through an explicit control
+- `automatic`: valid request becomes pending, then the workflow action committer runs the registered commit bridge
+
+The economy ledger HUD includes the manual real commit bridge. The workflow action committer includes the automatic bridge. Both use the same owner-credit mutation path and record the owner-credit before/after note. Failed commits become `commitStatus: "failed"` with the error message.
 
 ### Transaction Pattern
 

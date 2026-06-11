@@ -2,13 +2,19 @@ import { createPluginTestRootState } from "@/plugin-api/testing";
 import {
   advanceTurnWorkflow,
   resetPluginLegacyMonthlyExpenseRecorder,
+  resetPluginWorkflowActionCommitter,
+  resetPluginWorkflowEffectResolver,
   resetPluginWorkflowPhaseRunner,
+  setPluginWorkflowActionCommitter,
+  setPluginWorkflowEffectResolver,
   setPluginLegacyMonthlyExpenseRecorder,
   setPluginWorkflowPhaseRunner,
 } from "../turnWorkflow";
 
 afterEach(() => {
   resetPluginWorkflowPhaseRunner();
+  resetPluginWorkflowEffectResolver();
+  resetPluginWorkflowActionCommitter();
   resetPluginLegacyMonthlyExpenseRecorder();
 });
 
@@ -160,5 +166,55 @@ describe("turn workflow bridge", () => {
       type: "test/legacyMonthlyExpensesObserved",
       payload: [],
     });
+  });
+
+  it("runs the installed action committer after dispatching resolved effect actions", async () => {
+    const dispatch = jest.fn();
+    const automaticLedgerAction = {
+      type: "economy/recordEconomyLedgerRequest",
+      payload: {
+        id: "ledger-automatic-1",
+        status: "accepted",
+        commitIntent: "automatic",
+        commitStatus: "pending",
+      },
+    };
+    const committedActions: unknown[] = [];
+
+    setPluginWorkflowPhaseRunner(async ({ phase }) => ({
+      disposition: "continue",
+      handlerCount: phase === "afterTurnAdvance" ? 1 : 0,
+      effects: phase === "afterTurnAdvance"
+        ? [{
+          type: "economy.ledger.post",
+          source: "test.economy",
+          payload: {},
+        }]
+        : [],
+    }));
+    setPluginWorkflowActionCommitter(async (action, _context, workflowDispatch) => {
+      committedActions.push(action);
+      workflowDispatch({
+        type: "test/automaticCommit",
+        payload: (action.payload as { id?: string } | undefined)?.id,
+      });
+    });
+
+    setPluginWorkflowEffectResolver(async () => [{
+      status: "accepted",
+      actions: [automaticLedgerAction],
+    }]);
+
+    await advanceTurnWorkflow({
+      source: "test.workflow",
+      lifecycle: "world",
+    })(dispatch, createPluginTestRootState, undefined);
+
+    expect(dispatch).toHaveBeenCalledWith(automaticLedgerAction);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "test/automaticCommit",
+      payload: "ledger-automatic-1",
+    });
+    expect(committedActions).toEqual([automaticLedgerAction]);
   });
 });

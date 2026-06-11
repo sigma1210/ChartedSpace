@@ -86,6 +86,10 @@ export const EconomyLedgerHudContent = () => {
                   {request.commitStatus}
                 </span>
               </div>
+              <div className="flex items-center justify-between gap-2 uppercase text-(--hud-text-dim)">
+                <span>Intent</span>
+                <span>{request.commitIntent}</span>
+              </div>
               <div className="flex items-center justify-between gap-2 text-(--hud-text)">
                 <span className="text-(--hud-text-dim)">Total</span>
                 <span>Cr {request.total.toLocaleString()}</span>
@@ -160,7 +164,7 @@ export const EconomyLedgerHudContent = () => {
               {request.reason && (
                 <div className="text-(--hud-text-dim)">{request.reason}</div>
               )}
-              {request.commitStatus === "pending" && (
+              {request.commitStatus === "pending" && request.commitIntent === "manual" && (
                 <button
                   type="button"
                   onClick={() => dispatch(commitEconomyLedgerRequestToCredits(request.id))}

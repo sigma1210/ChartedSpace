@@ -6,7 +6,10 @@ import {
   economyLedgerPostEffectType,
   economyPluginId,
 } from "./metadata";
-import { recordEconomyLedgerRequest } from "./economySlice";
+import {
+  type EconomyLedgerCommitIntent,
+  recordEconomyLedgerRequest,
+} from "./economySlice";
 
 interface LedgerPostEntry {
   accountId: string;
@@ -18,7 +21,7 @@ interface LedgerPostPayload {
   entries: LedgerPostEntry[];
   memo?: string;
   funding?: LedgerPostFunding;
-  commit?: "notRequired" | "pending";
+  commitIntent: EconomyLedgerCommitIntent;
 }
 
 interface LedgerPostFunding {
@@ -73,8 +76,18 @@ const parseLedgerPostPayload = (
     entries: parsedEntries,
     memo: typeof payload.memo === "string" ? payload.memo : undefined,
     funding: parseLedgerPostFunding(payload.funding),
-    commit: payload.commit === "pending" ? "pending" : "notRequired",
+    commitIntent: parseCommitIntent(payload.commit),
   };
+};
+
+const parseCommitIntent = (value: unknown): EconomyLedgerCommitIntent => {
+  if (value === "manual" || value === "automatic" || value === "notRequired") {
+    return value;
+  }
+  if (value === "pending") {
+    return "manual";
+  }
+  return "notRequired";
 };
 
 const parseLedgerPostFunding = (value: unknown): LedgerPostFunding | undefined => {
@@ -138,7 +151,13 @@ const ledgerRequestLog = ({
   source: effect.source,
   effectType: effect.type,
   validationStatus: status,
-  commitStatus: status === "accepted" ? (parsed?.commit ?? "notRequired") : "blocked",
+  commitIntent: status === "accepted" ? (parsed?.commitIntent ?? "notRequired") : "notRequired",
+  commitStatus:
+    status === "rejected"
+      ? "blocked"
+      : parsed?.commitIntent === "manual" || parsed?.commitIntent === "automatic"
+        ? "pending"
+        : "notRequired",
   status,
   reason,
   memo: parsed?.memo,

@@ -7,6 +7,10 @@ import {
 } from "./metadata";
 
 const monthlyExpenseCadence = 4;
+const automaticMonthlyExpenseSources = new Set([
+  "plugin.stayInLocation",
+  "core.stayInLocation",
+]);
 
 const isAdvanceTurnWorkflowEvent = (
   event: unknown,
@@ -21,6 +25,9 @@ const monthlyMortgageForShip = (shipType: string, isMortgaged: boolean) => {
     .find((shipTypeData) => shipTypeData.type === shipType);
   return typeData?.monthlyMortgage ?? 0;
 };
+
+const monthlyExpenseCommitIntentForSource = (source: string) =>
+  automaticMonthlyExpenseSources.has(source) ? "automatic" : "manual";
 
 export const economyMonthlyExpensesHandler = {
   id: "monthlyExpenses.proposeLedgerPost",
@@ -62,7 +69,7 @@ export const economyMonthlyExpensesHandler = {
         description: "Monthly ship expenses",
         payload: {
           memo: "Monthly ship expenses",
-          commit: "pending",
+          commit: monthlyExpenseCommitIntentForSource(event.source),
           entries: [
             {
               accountId: `character:${ownerCharacterId}:credits`,

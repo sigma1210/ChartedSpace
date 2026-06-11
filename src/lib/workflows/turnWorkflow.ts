@@ -119,6 +119,12 @@ type PluginLegacyMonthlyExpenseRecorder = (
   context: PluginWorkflowContext,
 ) => Promise<readonly { type: string; payload?: unknown }[]>;
 
+type PluginWorkflowActionCommitter = (
+  action: { type: string; payload?: unknown },
+  context: PluginWorkflowContext,
+  dispatch: (action: unknown) => unknown,
+) => Promise<void>;
+
 let pluginWorkflowPhaseRunner: PluginWorkflowPhaseRunner = async ({ onHandlersDiscovered }) => {
   onHandlersDiscovered?.(0);
   return {
@@ -135,6 +141,7 @@ let pluginWorkflowEffectResolver: PluginWorkflowEffectResolver = async (effects)
   }));
 
 let pluginLegacyMonthlyExpenseRecorder: PluginLegacyMonthlyExpenseRecorder = async () => [];
+let pluginWorkflowActionCommitter: PluginWorkflowActionCommitter = async () => {};
 
 export const resetPluginWorkflowPhaseRunner = () => {
   pluginWorkflowPhaseRunner = async ({ onHandlersDiscovered }) => {
@@ -173,6 +180,16 @@ export const setPluginLegacyMonthlyExpenseRecorder = (
   recorder: PluginLegacyMonthlyExpenseRecorder,
 ) => {
   pluginLegacyMonthlyExpenseRecorder = recorder;
+};
+
+export const resetPluginWorkflowActionCommitter = () => {
+  pluginWorkflowActionCommitter = async () => {};
+};
+
+export const setPluginWorkflowActionCommitter = (
+  committer: PluginWorkflowActionCommitter,
+) => {
+  pluginWorkflowActionCommitter = committer;
 };
 
 const isLegacyMonthlyExpenseObservation = (
@@ -338,6 +355,7 @@ const resolveWorkflowEffects = async ({
     );
     for (const action of resolution.actions ?? []) {
       dispatch(action);
+      await pluginWorkflowActionCommitter(action, context, dispatch);
     }
   }
 

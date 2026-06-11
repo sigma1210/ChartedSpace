@@ -9,12 +9,15 @@ export interface EconomyLedgerEntryLog {
   memo?: string;
 }
 
+export type EconomyLedgerCommitIntent = "notRequired" | "manual" | "automatic";
+
 export interface EconomyLedgerRequestLog {
   id: string;
   turn: number;
   source: string;
   effectType: string;
   validationStatus: "accepted" | "rejected" | "unresolved";
+  commitIntent: EconomyLedgerCommitIntent;
   commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
   status: "accepted" | "rejected" | "unresolved";
   reason?: string;
@@ -35,8 +38,8 @@ export interface EconomyLedgerRequestLog {
 }
 
 export type EconomyLedgerRequestPayload =
-  Omit<EconomyLedgerRequestLog, "validationStatus" | "commitStatus"> &
-  Partial<Pick<EconomyLedgerRequestLog, "validationStatus" | "commitStatus">>;
+  Omit<EconomyLedgerRequestLog, "validationStatus" | "commitIntent" | "commitStatus"> &
+  Partial<Pick<EconomyLedgerRequestLog, "validationStatus" | "commitIntent" | "commitStatus">>;
 
 export interface EconomyState {
   ledgerRequests: EconomyLedgerRequestLog[];
@@ -76,6 +79,7 @@ const legacyMonthlyExpenseLog = (
   source: observation.source,
   effectType: "legacy.monthlyExpenses",
   validationStatus: "unresolved",
+  commitIntent: "notRequired",
   commitStatus: "notRequired",
   status: "unresolved",
   reason: "No economy ledger request found for this legacy expense total",
@@ -98,15 +102,30 @@ const defaultCommitStatusForValidation = (
   return "notRequired";
 };
 
+const defaultCommitStatusForIntent = (
+  validationStatus: EconomyLedgerRequestLog["validationStatus"],
+  commitIntent: EconomyLedgerCommitIntent,
+): EconomyLedgerRequestLog["commitStatus"] => {
+  if (validationStatus === "rejected") return "blocked";
+  if (validationStatus !== "accepted") return "notRequired";
+  if (commitIntent === "notRequired") return "notRequired";
+  return "pending";
+};
+
 const normalizeLedgerRequest = (
   request: EconomyLedgerRequestPayload,
 ): EconomyLedgerRequestLog => {
   const validationStatus = request.validationStatus ?? request.status;
+  const commitIntent = request.commitIntent ??
+    (request.commitStatus === "pending" ? "manual" : "notRequired");
   return {
     ...request,
     validationStatus,
+    commitIntent,
     commitStatus:
-      request.commitStatus ?? defaultCommitStatusForValidation(validationStatus),
+      request.commitStatus ??
+      defaultCommitStatusForIntent(validationStatus, commitIntent) ??
+      defaultCommitStatusForValidation(validationStatus),
   };
 };
 
@@ -237,6 +256,9 @@ const economySlice = createSlice({
         commitNote: existingRequest
           ? nextRequest.commitNote ?? existingRequest.commitNote
           : nextRequest.commitNote,
+        commitIntent: existingRequest
+          ? nextRequest.commitIntent ?? existingRequest.commitIntent
+          : nextRequest.commitIntent,
         validationStatus: existingRequest
           ? nextRequest.validationStatus ?? existingRequest.validationStatus
           : nextRequest.validationStatus,
@@ -301,8 +323,8 @@ const economySlice = createSlice({
       request.commitNote =
         action.payload.note ??
         (result === "committed"
-          ? "Simulated commit bridge completed"
-          : "Simulated commit bridge failed");
+          ? "Ledger commit completed"
+          : "Ledger commit failed");
     },
     clearEconomyLedgerRequests(state) {
       state.ledgerRequests = [];

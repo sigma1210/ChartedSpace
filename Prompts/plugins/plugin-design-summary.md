@@ -451,7 +451,7 @@ economy plugin proposes monthly expense ledger post
 
 The first commit trigger remains manual so we can verify one pending expense at a time. The mutation is real: it debits the owner-credit ledger entry from persisted character credits.
 
-The next economy step is to decide when this commit bridge should move from manual HUD control into the workflow commit phase.
+Automatic economy commits now use the same bridge without requiring the Ledger HUD button.
 
 ## Economy-Owned Funding Policy
 
@@ -538,6 +538,7 @@ The ledger log now records explicit lifecycle fields:
 
 ```ts
 validationStatus: "accepted" | "rejected" | "unresolved";
+commitIntent: "notRequired" | "manual" | "automatic";
 commitStatus: "notRequired" | "pending" | "committed" | "failed" | "blocked";
 ```
 
@@ -545,15 +546,22 @@ Reasoning:
 
 - a ledger post can be financially valid but not yet persisted
 - scenario/test posts may not require persistence
+- plugins should explicitly declare whether a valid ledger post is audit-only, manually trusted, or automatically trusted
 - real monthly expenses should become pending commits
 - commit failures should not be confused with validation rejection
 - blocked workflow effects should not be confused with failed persistence
 
-The older `status` field is still retained for compatibility and summary display. Scenario/test ledger posts use `commitStatus: "notRequired"` because they are not meant to persist money movement. Production monthly expense ledger posts now declare a pending commit intent and appear as `commitStatus: "pending"`. Rejected ledger posts use `commitStatus: "blocked"`.
+The older `status` field is still retained for compatibility and summary display. Scenario/test ledger posts use `commitIntent: "notRequired"` and `commitStatus: "notRequired"` because they are not meant to persist money movement. Stay-in-location monthly expense ledger posts now declare `commitIntent: "automatic"`; after the accepted ledger action is recorded, the workflow action committer immediately runs the economy credit mutation bridge. Other production monthly expense sources can still declare `commitIntent: "manual"`. Rejected ledger posts use `commitStatus: "blocked"` regardless of intent.
 
-The first real commit bridge is manual. The economy ledger HUD can move a pending monthly request to `committed` by patching the owner character credits and recording a before/after commit note. If the patch fails, the request becomes `failed` with the error message.
+The supported intent values are:
 
-The next lifecycle step is to move this commit bridge into a real workflow commit phase that can apply accepted production ledger posts automatically and atomically.
+- `notRequired`: validation/logging only; never mutates credits
+- `manual`: valid request becomes pending and must be committed through an explicit control
+- `automatic`: valid request becomes pending, then the workflow action committer runs the registered commit bridge
+
+The first real commit bridge supports both manual and automatic triggers. The economy ledger HUD can move a pending manual request to `committed`. The workflow action committer moves automatic requests to `committed` without a HUD button. Both paths patch the owner character credits and record a before/after commit note. If the patch fails, the request becomes `failed` with the error message.
+
+The next lifecycle step is to make the automatic path more explicitly transactional across multiple effects, rather than committing each automatic ledger action immediately after it is recorded.
 
 ## Transaction Pattern
 

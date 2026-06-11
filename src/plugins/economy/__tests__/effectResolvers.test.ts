@@ -51,6 +51,7 @@ describe("economy effect resolvers", () => {
     expect(resolution.actions?.[0].payload).toMatchObject({
       total: 1000,
       validationStatus: "accepted",
+      commitIntent: "notRequired",
       commitStatus: "notRequired",
     });
   });
@@ -84,17 +85,18 @@ describe("economy effect resolvers", () => {
       projectedBalance: -900,
       policy: "allowDebt",
       policyOutcome: "accepted",
+      commitIntent: "notRequired",
       commitStatus: "notRequired",
     });
   });
 
-  it("marks accepted ledger posts as pending when commit intent is pending", async () => {
+  it("marks accepted ledger posts as pending when commit intent is manual", async () => {
     const resolution = await resolvePluginWorkflowEffect({
       type: economyLedgerPostEffectType,
       source: "test.expenses",
       payload: {
-        memo: "Pending commit",
-        commit: "pending",
+        memo: "Manual commit",
+        commit: "manual",
         entries: [
           { accountId: "character:owner:credits", change: -1000 },
           { accountId: "sink:monthly-expenses", change: 1000 },
@@ -110,6 +112,34 @@ describe("economy effect resolvers", () => {
     });
     expect(resolution.actions?.[0].payload).toMatchObject({
       validationStatus: "accepted",
+      commitIntent: "manual",
+      commitStatus: "pending",
+    });
+  });
+
+  it("marks accepted ledger posts as pending when commit intent is automatic", async () => {
+    const resolution = await resolvePluginWorkflowEffect({
+      type: economyLedgerPostEffectType,
+      source: "test.expenses",
+      payload: {
+        memo: "Automatic commit",
+        commit: "automatic",
+        entries: [
+          { accountId: "character:owner:credits", change: -1000 },
+          { accountId: "sink:monthly-expenses", change: 1000 },
+        ],
+      },
+    }, {
+      source: "test.workflow",
+      currentTurn: 4,
+    });
+
+    expect(resolution).toMatchObject({
+      status: "accepted",
+    });
+    expect(resolution.actions?.[0].payload).toMatchObject({
+      validationStatus: "accepted",
+      commitIntent: "automatic",
       commitStatus: "pending",
     });
   });
@@ -141,6 +171,7 @@ describe("economy effect resolvers", () => {
     expect(resolution.actions?.[0].payload).toMatchObject({
       status: "rejected",
       validationStatus: "rejected",
+      commitIntent: "notRequired",
       commitStatus: "blocked",
       fundingStatus: "debt",
       projectedBalance: -900,
@@ -252,7 +283,7 @@ describe("economy effect resolvers", () => {
       })],
     });
     expect(result.effects?.[0].payload).toMatchObject({
-      commit: "pending",
+      commit: "manual",
     });
     expect(result.effects?.[0].payload?.entries).toEqual(
       expect.arrayContaining([
@@ -270,6 +301,66 @@ describe("economy effect resolvers", () => {
         }),
       ]),
     );
+  });
+
+  it("uses automatic commit intent for stay-in-location monthly expenses", async () => {
+    const handler = economyMonthlyExpensesHandler as PluginEventHandler;
+
+    const result = await Promise.resolve(handler.handle({
+      source: "plugin.stayInLocation",
+      lifecycle: "world",
+      previousTurn: 3,
+      currentTurn: 4,
+      ownerCharacter: null,
+      ship: {
+        id: "ship-1",
+        name: "Free Trader",
+        type: "free_trader",
+        jumpRating: 1,
+        status: "docked",
+        isMortgaged: true,
+        mortgagePaid: 0,
+        currentWorldId: "world-1",
+        worldName: "Regina",
+        sectorAbbr: "Spin",
+        hex: "1910",
+        cargoCapacity: 82,
+        destinationWorldId: null,
+        jumpArrivesTurn: null,
+        cargo: [],
+        crew: [
+          {
+            id: "crew-owner",
+            role: "owner",
+            isOwnerOperator: true,
+            monthlySalary: 0,
+            characterId: "owner-1",
+            characterName: "Owner",
+            npcName: null,
+            keySkillName: null,
+            keySkillLevel: 0,
+          },
+          {
+            id: "crew-pilot",
+            role: "pilot",
+            isOwnerOperator: false,
+            monthlySalary: 1000,
+            characterId: null,
+            characterName: null,
+            npcName: "Pilot",
+            keySkillName: "Pilot",
+            keySkillLevel: 1,
+          },
+        ],
+      },
+    }, {
+      source: "test.workflow",
+      currentTurn: 4,
+    }));
+
+    expect(result.effects?.[0].payload).toMatchObject({
+      commit: "automatic",
+    });
   });
 
   it("marks monthly ledger requests when the legacy total matches", () => {
@@ -322,6 +413,7 @@ describe("economy effect resolvers", () => {
     expect(state.ledgerRequests[0]).toMatchObject({
       status: "accepted",
       validationStatus: "accepted",
+      commitIntent: "notRequired",
       commitStatus: "notRequired",
     });
   });
@@ -334,6 +426,7 @@ describe("economy effect resolvers", () => {
       effectType: economyLedgerPostEffectType,
       status: "accepted",
       validationStatus: "accepted",
+      commitIntent: "manual",
       commitStatus: "pending",
       memo: "Monthly ship expenses",
       total: 1000,
@@ -351,7 +444,7 @@ describe("economy effect resolvers", () => {
 
     expect(committedState.ledgerRequests[0]).toMatchObject({
       commitStatus: "committed",
-      commitNote: "Simulated commit bridge completed",
+      commitNote: "Ledger commit completed",
     });
   });
 
@@ -363,6 +456,7 @@ describe("economy effect resolvers", () => {
       effectType: economyLedgerPostEffectType,
       status: "accepted",
       validationStatus: "accepted",
+      commitIntent: "manual",
       commitStatus: "pending",
       memo: "Monthly ship expenses",
       total: 1000,
@@ -396,6 +490,7 @@ describe("economy effect resolvers", () => {
       effectType: economyLedgerPostEffectType,
       status: "accepted",
       validationStatus: "accepted",
+      commitIntent: "notRequired",
       commitStatus: "notRequired",
       memo: "Expense scenario",
       total: 1000,
@@ -412,6 +507,7 @@ describe("economy effect resolvers", () => {
     );
 
     expect(nextState.ledgerRequests[0]).toMatchObject({
+      commitIntent: "notRequired",
       commitStatus: "notRequired",
     });
     expect(nextState.ledgerRequests[0].commitNote).toBeUndefined();
