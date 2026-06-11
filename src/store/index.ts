@@ -9,9 +9,13 @@ import availableCrewReducer from "./slices/availableCrewSlice";
 import systemReducer from "./slices/systemSlice";
 import systemSceneReducer from "./slices/systemSceneSlice";
 import jumpNavigationReducer from "./slices/jumpNavigationSlice";
-import hudReducer from "./slices/hudSlice";
+import hudReducer, { hydrateHudLayouts } from "./slices/hudSlice";
 import { pluginsReducer } from "../plugins/registry";
 import { installPluginWorkflowHandlers } from "../plugins/workflowHandlerRegistration";
+import {
+  loadStoredHudLayouts,
+  saveStoredHudLayouts,
+} from "./hudLayoutStorage";
 
 installPluginWorkflowHandlers();
 
@@ -38,6 +42,21 @@ export const store = configureStore({
       },
     }),
 });
+
+if (typeof window !== "undefined") {
+  const storedHudLayouts = loadStoredHudLayouts();
+  if (Object.keys(storedHudLayouts).length > 0) {
+    store.dispatch(hydrateHudLayouts(storedHudLayouts));
+  }
+
+  let previousHudLayouts = store.getState().hud.layouts;
+  store.subscribe(() => {
+    const nextHudLayouts = store.getState().hud.layouts;
+    if (nextHudLayouts === previousHudLayouts) return;
+    previousHudLayouts = nextHudLayouts;
+    saveStoredHudLayouts(nextHudLayouts);
+  });
+}
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

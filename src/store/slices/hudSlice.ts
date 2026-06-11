@@ -82,6 +82,12 @@ const hudSlice = createSlice({
   name: "hud",
   initialState: initialHudState,
   reducers: {
+    hydrateHudLayouts(state, action: PayloadAction<Record<string, HudLayout>>) {
+      for (const [id, layout] of Object.entries(action.payload)) {
+        if (!state.layouts[id]) continue;
+        state.layouts[id] = layout;
+      }
+    },
     setHudVisible(state, action: PayloadAction<{ id: HudId; visible: boolean }>) {
       state.layouts[action.payload.id].visible = action.payload.visible;
     },
@@ -99,6 +105,7 @@ const hudSlice = createSlice({
 });
 
 export const {
+  hydrateHudLayouts,
   setHudVisible,
   toggleHudVisible,
   setHudPinned,

@@ -1,4 +1,5 @@
 import hudReducer, {
+  hydrateHudLayouts,
   initialHudState,
   setHudOffset,
   setHudPinned,
@@ -81,5 +82,27 @@ describe("hudSlice reducers", () => {
     }));
 
     expect(state.layouts.sectorMap.offset).toEqual({ x: -0.25, y: 0.15 });
+  });
+
+  it("hydrates persisted known HUD layouts", () => {
+    const state = hudReducer(initialHudState, hydrateHudLayouts({
+      navigation: {
+        visible: true,
+        pinned: false,
+        offset: { x: 0.12, y: -0.2 },
+      },
+      staleHud: {
+        visible: true,
+        pinned: false,
+        offset: { x: 0.5, y: 0.5 },
+      },
+    }));
+
+    expect(state.layouts.navigation).toEqual({
+      visible: true,
+      pinned: false,
+      offset: { x: 0.12, y: -0.2 },
+    });
+    expect(state.layouts.staleHud).toBeUndefined();
   });
 });
