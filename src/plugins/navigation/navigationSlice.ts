@@ -227,11 +227,6 @@ const clearPlotState = (state: NavigationState) => {
   state.executeResult = null;
 };
 
-const clearDestinationAndPlotState = (state: NavigationState) => {
-  state.selectedDestinationKey = null;
-  clearPlotState(state);
-};
-
 export const executeNavigationJump = createAsyncThunk<
   NavigationExecutionResult,
   void,
@@ -348,7 +343,6 @@ const navigationSlice = createSlice({
         state.snapshotOrigin = action.payload.origin;
         state.snapshotMaxJumpRating = 6;
         state.snapshotCells = action.payload.cells;
-        state.selectedDestinationKey = null;
         state.replotStatus = "idle";
         state.replotError = null;
         clearPlotState(state);
@@ -358,7 +352,6 @@ const navigationSlice = createSlice({
         state.snapshotError = action.payload ?? action.error.message ?? "Navigation snapshot unavailable";
         state.snapshotOrigin = null;
         state.snapshotCells = [];
-        state.selectedDestinationKey = null;
         state.replotStatus = "idle";
         state.replotError = null;
         clearPlotState(state);
@@ -390,13 +383,13 @@ const navigationSlice = createSlice({
         state.executeResult = null;
       })
       .addCase(executeNavigationJump.fulfilled, (state, action) => {
-        clearDestinationAndPlotState(state);
+        clearPlotState(state);
         state.executeStatus = action.payload.stopped ? "blocked" : "complete";
         state.executeError = action.payload.stoppedReason ?? null;
         state.executeResult = action.payload;
       })
       .addCase(executeNavigationJump.rejected, (state, action) => {
-        clearDestinationAndPlotState(state);
+        clearPlotState(state);
         state.executeStatus = "error";
         state.executeError = action.payload ?? action.error.message ?? "Jump execution failed";
       });

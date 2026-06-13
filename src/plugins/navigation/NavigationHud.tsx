@@ -140,6 +140,11 @@ export const NavigationHudContent = () => {
       : selectedDestination
         ? "#60a5fa"
         : "var(--hud-border)";
+  const plotButtonTooltip = !selectedDestination
+    ? "Select Destination"
+    : plotSuccess && navigationState.plottedRoute?.destinationKey === selectedDestinationKey
+      ? "Execute Jump"
+      : "Plot Course";
 
   return (
     <div className="flex w-[min(6rem,21vw,17vh)] select-none flex-col gap-1.5 font-mono uppercase tracking-[0.18em] text-(--hud-text)">
@@ -269,93 +274,98 @@ export const NavigationHudContent = () => {
           </div>
         )}
       </div>
-      <svg
-        viewBox="0 0 120 22"
-        preserveAspectRatio="none"
-        className="block h-5 w-full"
-        onClick={handlePlotClick}
-        role="button"
-        aria-label="Selected destination"
-        style={{
-          cursor: selectedDestination &&
-            navigationState.plotStatus !== "plotting" &&
-            navigationState.executeStatus !== "executing" &&
-            navigationState.replotStatus !== "advancing"
-            ? "pointer"
-            : "default",
-        }}
-      >
-        <style>
-          {`
-            @keyframes charted-space-nav-plot-contract {
-              from {
-                opacity: 0.9;
-                transform: scale(1);
+      <div className="group/button relative w-full">
+        <svg
+          viewBox="0 0 120 22"
+          preserveAspectRatio="none"
+          className="block h-5 w-full"
+          onClick={handlePlotClick}
+          role="button"
+          aria-label={plotButtonTooltip}
+          style={{
+            cursor: selectedDestination &&
+              navigationState.plotStatus !== "plotting" &&
+              navigationState.executeStatus !== "executing" &&
+              navigationState.replotStatus !== "advancing"
+              ? "pointer"
+              : "default",
+          }}
+        >
+          <style>
+            {`
+              @keyframes charted-space-nav-plot-contract {
+                from {
+                  opacity: 0.9;
+                  transform: scale(1);
+                }
+                to {
+                  opacity: 0.2;
+                  transform: scale(0.03);
+                }
               }
-              to {
-                opacity: 0.2;
-                transform: scale(0.03);
-              }
-            }
-          `}
-        </style>
-        <polygon
-          points="10,1 110,1 119,11 110,21 10,21 1,11"
-          fill={selectedDestination ? "rgba(34,211,238,0.10)" : "transparent"}
-          stroke={plotColor}
-          strokeWidth={0.8}
-        />
-        {(navigationState.plotStatus === "plotting" || executeAnimating) && (
+            `}
+          </style>
           <polygon
             points="10,1 110,1 119,11 110,21 10,21 1,11"
-            fill="transparent"
-            stroke="var(--hud-accent)"
-            strokeWidth={1.1}
-            style={{
-              animation: "charted-space-nav-plot-contract 500ms ease-in 3 forwards",
-              transformBox: "fill-box",
-              transformOrigin: "center",
-            }}
+            fill={selectedDestination ? "rgba(34,211,238,0.10)" : "transparent"}
+            stroke={plotColor}
+            strokeWidth={0.8}
           />
-        )}
-        {selectedDestination && (
-          <text
-            x="60"
-            y="14"
-            textAnchor="middle"
-            fontSize="7"
-            fill="var(--hud-accent)"
-            fontFamily="monospace"
-            letterSpacing="0.8"
-          >
-            {selectedDestination.name}
-          </text>
-        )}
-        {plotSuccess && (
-          <g
-            fill="none"
-            stroke="var(--hud-success)"
-            strokeWidth={1.2}
-            strokeLinecap="round"
-          >
-            <circle cx="106" cy="11" r="4.4" />
-            <line x1="106" y1="5.2" x2="106" y2="16.8" />
-            <line x1="100.2" y1="11" x2="111.8" y2="11" />
-          </g>
-        )}
-        {plotFailed && (
-          <g
-            fill="none"
-            stroke="var(--hud-error)"
-            strokeWidth={1.2}
-            strokeLinecap="round"
-          >
-            <circle cx="106" cy="11" r="4.4" />
-            <line x1="101.9" y1="6.9" x2="110.1" y2="15.1" />
-            <line x1="110.1" y1="6.9" x2="101.9" y2="15.1" />
-          </g>
-        )}
-      </svg>
+          {(navigationState.plotStatus === "plotting" || executeAnimating) && (
+            <polygon
+              points="10,1 110,1 119,11 110,21 10,21 1,11"
+              fill="transparent"
+              stroke="var(--hud-accent)"
+              strokeWidth={1.1}
+              style={{
+                animation: "charted-space-nav-plot-contract 500ms ease-in 3 forwards",
+                transformBox: "fill-box",
+                transformOrigin: "center",
+              }}
+            />
+          )}
+          {selectedDestination && (
+            <text
+              x="60"
+              y="14"
+              textAnchor="middle"
+              fontSize="7"
+              fill="var(--hud-accent)"
+              fontFamily="monospace"
+              letterSpacing="0.8"
+            >
+              {selectedDestination.name}
+            </text>
+          )}
+          {plotSuccess && (
+            <g
+              fill="none"
+              stroke="var(--hud-success)"
+              strokeWidth={1.2}
+              strokeLinecap="round"
+            >
+              <circle cx="106" cy="11" r="4.4" />
+              <line x1="106" y1="5.2" x2="106" y2="16.8" />
+              <line x1="100.2" y1="11" x2="111.8" y2="11" />
+            </g>
+          )}
+          {plotFailed && (
+            <g
+              fill="none"
+              stroke="var(--hud-error)"
+              strokeWidth={1.2}
+              strokeLinecap="round"
+            >
+              <circle cx="106" cy="11" r="4.4" />
+              <line x1="101.9" y1="6.9" x2="110.1" y2="15.1" />
+              <line x1="110.1" y1="6.9" x2="101.9" y2="15.1" />
+            </g>
+          )}
+        </svg>
+        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 border border-(--hud-accent) bg-black/70 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider whitespace-nowrap text-(--hud-accent) opacity-0 transition-opacity group-hover/button:opacity-100">
+          {plotButtonTooltip}
+        </div>
+      </div>
     </div>
   );
 };

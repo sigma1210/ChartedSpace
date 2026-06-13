@@ -324,7 +324,7 @@ describe("navigation plugin", () => {
       },
       fuelCostEstimate: 20000,
     });
-    expect(executedState.selectedDestinationKey).toBeNull();
+    expect(executedState.selectedDestinationKey).toBe("Spin:1912");
     expect(executedState.plotStatus).toBe("idle");
     expect(executedState.plotResult).toBeNull();
     expect(executedState.plottedRoute).toBeNull();
@@ -362,7 +362,7 @@ describe("navigation plugin", () => {
     expect(actions.some((action) => typeof action === "function")).toBe(false);
     expect(rejectedState.executeStatus).toBe("error");
     expect(rejectedState.executeError).toBe("No plotted navigation route is ready to execute");
-    expect(rejectedState.selectedDestinationKey).toBeNull();
+    expect(rejectedState.selectedDestinationKey).toBe("Spin:1912");
   });
 
   it("derives the minimal jump execution request from a valid plotted route", () => {
