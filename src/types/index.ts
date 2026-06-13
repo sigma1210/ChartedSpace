@@ -8,7 +8,6 @@ export type ModalType =
   | "worldDetail"
   | "systemDetail"
   | "userProfile"
-  | "jumpRangeSelector"
   | "crewManagement";
 
 export type MapView = "galaxy" | "sector" | "subsector";
@@ -24,12 +23,6 @@ export interface Notification {
   timestamp: number;
 }
 
-export interface JumpDestination {
-  hex: string;
-  sectorAbbr: string;
-  name: string;
-}
-
 export interface UIState {
   activeModal: ModalType | null;
   mapView: MapView;
@@ -42,11 +35,9 @@ export interface UIState {
   searchFilter: SearchFilter;
   searchQuery: string;
   previousModal: ModalType | null;
-  pendingJumpDestination: JumpDestination | null;
   showGalaxyMiniMap: boolean;
   showSectorMiniMap: boolean;
   showSubsectorMiniMap: boolean;
-  showNavigationHud: boolean;
   showMainWorldHud: boolean;
   showCharacterProfileHud: boolean;
   showTradeHud: boolean;

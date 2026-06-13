@@ -4,7 +4,6 @@ import { registeredPluginHudLayouts } from "../../plugins/hudLayouts";
 export type CoreHudId =
   | "mainWorld"
   | "sectorMap"
-  | "navigation"
   | "subsectorMap"
   | "galaxyMap"
   | "trade"
@@ -43,11 +42,6 @@ export const initialHudState: HudState = {
       visible: true,
       pinned: true,
       offset: { x: 0.12, y: 0.26 },
-    },
-    navigation: {
-      visible: false,
-      pinned: true,
-      offset: { x: -0.48, y: -0.08 },
     },
     subsectorMap: {
       visible: true,

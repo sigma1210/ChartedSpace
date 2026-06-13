@@ -11,7 +11,6 @@ import characterReducer from "../slices/characterSlice";
 import shipReducer from "../slices/shipSlice";
 import availableCrewReducer from "../slices/availableCrewSlice";
 import systemSceneReducer from "../slices/systemSceneSlice";
-import jumpNavigationReducer from "../slices/jumpNavigationSlice";
 import hudReducer from "../slices/hudSlice";
 import { pluginsReducer } from "../../plugins/registry";
 import {
@@ -43,7 +42,6 @@ const makeStore = () =>
       availableCrew: availableCrewReducer,
       system: systemReducer,
       systemScene: systemSceneReducer,
-      jumpNavigation: jumpNavigationReducer,
       hud: hudReducer,
       plugins: pluginsReducer,
     },

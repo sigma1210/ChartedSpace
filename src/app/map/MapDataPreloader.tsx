@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useAppDispatch } from "../../store/hooks";
 import { fetchCharacters } from "../../store/slices/characterSlice";
 import { preloadGalaxySectors } from "../../store/slices/galaxySlice";
-import { initializeJumpNavigationFromStorage } from "../../store/slices/jumpNavigationSlice";
 import { fetchShip } from "../../store/slices/shipSlice";
 import { fetchTurn } from "../../store/slices/turnSlice";
 
@@ -16,7 +15,6 @@ const MapDataPreloader = () => {
     dispatch(fetchTurn());
     dispatch(fetchCharacters());
     dispatch(preloadGalaxySectors());
-    dispatch(initializeJumpNavigationFromStorage());
   }, [dispatch]);
 
   return null;

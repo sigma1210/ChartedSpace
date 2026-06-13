@@ -1,6 +1,5 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import {
-  JumpDestination,
   MapView,
   ModalType,
   SearchFilter,
@@ -20,11 +19,9 @@ const initialState: UIState = {
   searchFilter: "all",
   searchQuery: "",
   previousModal: null,
-  pendingJumpDestination: null,
   showGalaxyMiniMap: true,
   showSectorMiniMap: true,
   showSubsectorMiniMap: true,
-  showNavigationHud: false,
   showMainWorldHud: false,
   showCharacterProfileHud: false,
   showTradeHud: false,
@@ -115,22 +112,9 @@ const uiSlice = createSlice({
       state.isOwnProfile = false;
       state.activeUserId = action.payload;
     },
-    openJumpRangeSelector(state) {
-      state.previousModal = state.activeModal;
-      state.activeModal = "jumpRangeSelector";
-      state.pendingJumpDestination = null;
-    },
     openCrewManagement(state) {
       state.previousModal = state.activeModal;
       state.activeModal = "crewManagement";
-    },
-    setJumpDestination(state, action: PayloadAction<JumpDestination>) {
-      state.pendingJumpDestination = action.payload;
-      state.activeModal = null;
-      state.previousModal = null;
-    },
-    clearJumpDestination(state) {
-      state.pendingJumpDestination = null;
     },
     toggleGalaxyMiniMap(state) {
       state.showGalaxyMiniMap = !state.showGalaxyMiniMap;
@@ -149,9 +133,6 @@ const uiSlice = createSlice({
     },
     setSectorMiniMapVisible(state, action: PayloadAction<boolean>) {
       state.showSectorMiniMap = action.payload;
-    },
-    setNavigationHudVisible(state, action: PayloadAction<boolean>) {
-      state.showNavigationHud = action.payload;
     },
     setMainWorldHudVisible(state, action: PayloadAction<boolean>) {
       state.showMainWorldHud = action.payload;
@@ -185,9 +166,6 @@ export const {
   openNotifications,
   openOwnProfile,
   openUserProfile,
-  openJumpRangeSelector,
-  setJumpDestination,
-  clearJumpDestination,
   openCrewManagement,
   toggleGalaxyMiniMap,
   setGalaxyMiniMapVisible,
@@ -195,7 +173,6 @@ export const {
   toggleSubsectorMiniMap,
   setSubsectorMiniMapVisible,
   setSectorMiniMapVisible,
-  setNavigationHudVisible,
   setMainWorldHudVisible,
   setCharacterProfileHudVisible,
   setTradeHudVisible,

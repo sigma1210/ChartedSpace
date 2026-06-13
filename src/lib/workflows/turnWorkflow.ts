@@ -516,10 +516,14 @@ const resolveWorkflowEffects = async ({
 };
 
 const rejectedWorkflowEffect = (
-  resolutions: PluginWorkflowEffectResolution[],
+  resolutions: PluginEffectResolution[],
 ) => resolutions.find((resolution) => resolution.status === "rejected");
 
-export const executeJumpWorkflow = createAsyncThunk(
+export const executeJumpWorkflow = createAsyncThunk<
+  ExecuteJumpWorkflowResult,
+  ExecuteJumpWorkflowInput,
+  { state: RootState }
+>(
   "coreWorkflow/executeJump",
   async (
     input: ExecuteJumpWorkflowInput,

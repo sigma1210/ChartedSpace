@@ -8,7 +8,6 @@ import turnReducer from "./slices/turnSlice";
 import availableCrewReducer from "./slices/availableCrewSlice";
 import systemReducer from "./slices/systemSlice";
 import systemSceneReducer from "./slices/systemSceneSlice";
-import jumpNavigationReducer from "./slices/jumpNavigationSlice";
 import hudReducer, { hydrateHudLayouts } from "./slices/hudSlice";
 import { pluginsReducer } from "../plugins/registry";
 import { installPluginWorkflowHandlers } from "../plugins/workflowHandlerRegistration";
@@ -30,7 +29,6 @@ export const store = configureStore({
     availableCrew: availableCrewReducer,
     system: systemReducer,
     systemScene: systemSceneReducer,
-    jumpNavigation: jumpNavigationReducer,
     hud: hudReducer,
     plugins: pluginsReducer,
   },

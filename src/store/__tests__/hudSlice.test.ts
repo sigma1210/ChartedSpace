@@ -8,6 +8,7 @@ import hudReducer, {
 } from "../slices/hudSlice";
 import { stayInLocationNextTurnHudId } from "../../plugins/stayInLocation/hudMetadata";
 import { expenseScenarioHudId } from "../../plugins/expenseScenario/hudMetadata";
+import { navigationSelectHudId } from "../../plugins/navigation";
 
 describe("hudSlice reducers", () => {
   it("returns initial HUD layout state", () => {
@@ -21,10 +22,10 @@ describe("hudSlice reducers", () => {
   });
 
   it("includes default layouts for migrated HUDs", () => {
-    expect(initialHudState.layouts.navigation).toEqual({
+    expect(initialHudState.layouts[navigationSelectHudId]).toEqual({
       visible: false,
       pinned: true,
-      offset: { x: -0.48, y: -0.08 },
+      offset: { x: 0.08, y: 0.28 },
     });
     expect(initialHudState.layouts.subsectorMap).toEqual({
       visible: true,
@@ -86,7 +87,7 @@ describe("hudSlice reducers", () => {
 
   it("hydrates persisted known HUD layouts", () => {
     const state = hudReducer(initialHudState, hydrateHudLayouts({
-      navigation: {
+      [navigationSelectHudId]: {
         visible: true,
         pinned: false,
         offset: { x: 0.12, y: -0.2 },
@@ -98,7 +99,7 @@ describe("hudSlice reducers", () => {
       },
     }));
 
-    expect(state.layouts.navigation).toEqual({
+    expect(state.layouts[navigationSelectHudId]).toEqual({
       visible: true,
       pinned: false,
       offset: { x: 0.12, y: -0.2 },

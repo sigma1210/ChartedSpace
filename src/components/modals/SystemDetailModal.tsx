@@ -52,7 +52,7 @@ const SystemDetailModal = () => {
         </div>
 
         <div className="flex-1 min-h-0">
-          <StarSystemViewScene world={world} autoRotateSystem />
+          <StarSystemViewScene world={world} autoRotateSystem loadSystemData={false} />
         </div>
       </div>
     </div>

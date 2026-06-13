@@ -33,7 +33,6 @@ import {
   selectShowCharacterProfileHud,
   selectShowGalaxyMiniMap,
   selectShowMainWorldHud,
-  selectShowNavigationHud,
   selectShowSectorMiniMap,
   selectShowSubsectorMiniMap,
   selectShowTradeHud,
@@ -59,18 +58,16 @@ const initialState: UIState = {
   searchFilter: "all",
   searchQuery: "",
   previousModal: null,
-  pendingJumpDestination: null,
   showGalaxyMiniMap: true,
   showSectorMiniMap: true,
   showSubsectorMiniMap: true,
-  showNavigationHud: false,
   showMainWorldHud: false,
   showCharacterProfileHud: false,
   showTradeHud: false,
 };
 
 const makeRoot = (ui: UIState): RootState => {
-  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, characters: { items: [], status: "idle", error: null }, ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} }, systemScene: { sceneMode: "system", showWarpLayer: false, warpLayerOpacity: 0, warpLayerActive: false, warpExitBlankActive: false, renderableLocation: null, transitionPhase: "idle", transitionReason: null, transitionSceneKey: null, sceneReady: true }, jumpNavigation: { selectedDestinationKey: null, plotStatus: "idle", actionBusy: false, hasStoredJumpDestination: false, warpExitInProgress: false, jumpResolveInProgress: false }, hud: initialHudState, plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mockShip: initialMockShipState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState } };
+  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, characters: { items: [], status: "idle", error: null }, ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} }, systemScene: { sceneMode: "system", showWarpLayer: false, warpLayerOpacity: 0, warpLayerActive: false, warpExitBlankActive: false, renderableLocation: null, transitionPhase: "idle", transitionReason: null, transitionSceneKey: null, sceneReady: true }, hud: initialHudState, plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mockShip: initialMockShipState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState } };
 }
 
 describe("uiSlice reducers", () => {
@@ -248,7 +245,6 @@ describe("ui selectors", () => {
     showGalaxyMiniMap: false,
     showSectorMiniMap: true,
     showSubsectorMiniMap: false,
-    showNavigationHud: true,
     showMainWorldHud: true,
     showCharacterProfileHud: false,
     showTradeHud: true,
@@ -268,7 +264,6 @@ describe("ui selectors", () => {
   it("selectShowGalaxyMiniMap", () => expect(selectShowGalaxyMiniMap(root)).toBe(false));
   it("selectShowSectorMiniMap", () => expect(selectShowSectorMiniMap(root)).toBe(true));
   it("selectShowSubsectorMiniMap", () => expect(selectShowSubsectorMiniMap(root)).toBe(false));
-  it("selectShowNavigationHud", () => expect(selectShowNavigationHud(root)).toBe(true));
   it("selectShowMainWorldHud", () => expect(selectShowMainWorldHud(root)).toBe(true));
   it("selectShowCharacterProfileHud", () => expect(selectShowCharacterProfileHud(root)).toBe(false));
   it("selectShowTradeHud", () => expect(selectShowTradeHud(root)).toBe(true));

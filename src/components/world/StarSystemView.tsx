@@ -32,11 +32,6 @@ import { openSelectedWorldSystemDetail } from "../../store/slices/uiSlice";
 import { setHudOffset, setHudPinned, setHudVisible, type HudId } from "../../store/slices/hudSlice";
 import { selectHudLayout, selectHudVisible } from "../../store/selectors/hud.selectors";
 import {
-  resolveFailedJump,
-  runWarpExitSequence,
-} from "../../store/slices/jumpNavigationSlice";
-import { selectHasStoredJumpDestination } from "../../store/selectors/jumpNavigation.selectors";
-import {
   selectActiveWorld,
   selectShipSectorLoadStatus,
 } from "../../store/selectors/galaxy.selectors";
@@ -52,7 +47,6 @@ import {
   markSceneReady,
   type SystemSceneTransitionPhase,
 } from "../../store/slices/systemSceneSlice";
-import { NavigationHudContent } from "./NavigationHud";
 import { CharacterProfileHudContent } from "./CharacterProfileHud";
 import { MainWorldHud } from "./MainWorldHud";
 import { TradeSystemHudContent } from "./TradeSystemHud";
@@ -61,6 +55,7 @@ import { SectorMiniMapHudContent } from "../map/SectorMiniMap";
 import { GalaxyMiniMapHudContent } from "../map/GalaxyMiniMap";
 import { registeredPluginHudLayouts } from "../../plugins/hudLayouts";
 import { registeredPluginHudRenderers } from "../../plugins/hudRenderers";
+import { navigationSelectHudId } from "../../plugins/navigation";
 import type {
   PluginHudRendererRegistration,
   PluginRenderableHudRegistration,
@@ -2208,80 +2203,6 @@ const CameraPinnedCharacterProfileHud = ({
   );
 };
 
-const CameraPinnedNavigationHud = ({
-  visible,
-  navigationHud,
-  store,
-  onClose,
-}: {
-  visible: boolean;
-  navigationHud: ReactNode;
-  store: AppStore;
-  onClose: () => void;
-}) => {
-  const dispatch = useAppDispatch();
-  const layout = useAppSelector(selectHudLayout("navigation"));
-  const offset = layout.offset;
-  const pinned = layout.pinned;
-  const groupRef = useRef<THREE.Group>(null);
-  const { camera, size } = useThree();
-  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
-    id: "navigation",
-    pinned,
-    offset,
-    size,
-    dispatch,
-  });
-
-  useFrame(() => {
-    const group = groupRef.current;
-    if (!group || !visible) return;
-
-    const distance = 4.8;
-    const perspective = camera as THREE.PerspectiveCamera;
-    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
-    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
-    const width = height * (size.width / Math.max(1, size.height));
-    const forward = new THREE.Vector3();
-    const right = new THREE.Vector3();
-    const up = new THREE.Vector3();
-
-    camera.getWorldDirection(forward);
-    right.setFromMatrixColumn(camera.matrixWorld, 0);
-    up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
-
-    group.position
-      .copy(camera.position)
-      .addScaledVector(forward, distance)
-      .addScaledVector(right, activeOffset.x * width * 0.5)
-      .addScaledVector(up, activeOffset.y * height * 0.5);
-    group.quaternion.copy(camera.quaternion);
-  });
-
-  if (!visible) return null;
-
-  return (
-    <group ref={groupRef}>
-      <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
-          <HudHeader
-            title="Nav"
-            pinned={pinned}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "navigation", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close navigation HUD"
-          />
-          <StoreBridge store={store}>
-            {navigationHud}
-          </StoreBridge>
-        </HudPanel>
-      </Html>
-    </group>
-  );
-};
-
 const CameraPinnedPluginHud = ({
   visible,
   registration,
@@ -2632,8 +2553,6 @@ type StarSystemViewSceneProps = {
   pluginHudVisibility?: Record<string, boolean>;
   navigationHudVisible?: boolean;
   onOpenNavigationHud?: () => void;
-  onCloseNavigationHud?: () => void;
-  navigationHud?: ReactNode;
   sceneMode?: "system" | "jump";
   showWarpLayer?: boolean;
   renderSystemLayer?: boolean;
@@ -2643,6 +2562,7 @@ type StarSystemViewSceneProps = {
   onWarpExitReached?: () => void;
   sceneKey?: string;
   onSceneReady?: (sceneKey: string) => void;
+  loadSystemData?: boolean;
 };
 
 export const StarSystemViewScene = ({
@@ -2681,8 +2601,6 @@ export const StarSystemViewScene = ({
   pluginHudVisibility = {},
   navigationHudVisible = false,
   onOpenNavigationHud = () => {},
-  onCloseNavigationHud = () => {},
-  navigationHud = null,
   sceneMode = "system",
   showWarpLayer = false,
   renderSystemLayer = true,
@@ -2692,13 +2610,14 @@ export const StarSystemViewScene = ({
   onWarpExitReached,
   sceneKey,
   onSceneReady,
+  loadSystemData = true,
 }: StarSystemViewSceneProps) => {
   const dispatch = useAppDispatch();
   const reduxStore = useStore() as AppStore;
   const activeWorldSectorAbbr = useSelector((s: { galaxy?: { activeWorldSectorAbbr?: string | null } }) => s.galaxy?.activeWorldSectorAbbr ?? null);
   const sectorAbbr = sectorAbbrProp ?? activeWorldSectorAbbr;
   const systemData = useSelector(
-    sectorAbbr
+    loadSystemData && sectorAbbr
       ? selectSystemDataByKey(sectorAbbr, world.hex)
       : () => null,
   );
@@ -2788,7 +2707,7 @@ export const StarSystemViewScene = ({
         >
           <Starfield />
           <StoreBridge store={reduxStore}>
-            <SystemDataLoader sectorAbbr={sectorAbbr} hex={world.hex} />
+            {loadSystemData && <SystemDataLoader sectorAbbr={sectorAbbr} hex={world.hex} />}
             <SystemCameraReset
               camZ={camZ}
               controlsRef={controlsRef}
@@ -2815,11 +2734,13 @@ export const StarSystemViewScene = ({
                 <PivotSmoother targetRef={pivotTarget} controlsRef={controlsRef} />
               </>
             )}
-            <JumpSpaceScene
-              active={showWarpLayer && warpLayerActive}
-              opacity={showWarpLayer ? warpLayerOpacity : 0}
-              onExitReached={onWarpExitReached}
-            />
+            {(showWarpLayer || warpLayerActive || warpLayerOpacity > 0) && (
+              <JumpSpaceScene
+                active={showWarpLayer && warpLayerActive}
+                opacity={showWarpLayer ? warpLayerOpacity : 0}
+                onExitReached={onWarpExitReached}
+              />
+            )}
           </StoreBridge>
         </Canvas>
       )}
@@ -2854,14 +2775,16 @@ export const StarSystemViewScene = ({
                 onOpenCharacterProfileHud={onOpenCharacterProfileHud}
                 tradeHudVisible={tradeHudVisible}
                 onOpenTradeHud={onOpenTradeHud}
-                pluginHudButtons={pluginHuds.map((registration) => ({
-                  id: registration.id,
-                  openTitle: registration.openTitle,
-                  visibleTitle: registration.visibleTitle,
-                  visible: pluginHudVisibility[registration.id] ?? false,
-                  Icon: registration.Icon,
-                  onOpen: () => dispatch(setHudVisible({ id: registration.id, visible: true })),
-                }))}
+                pluginHudButtons={pluginHuds
+                  .filter((registration) => registration.id !== navigationSelectHudId)
+                  .map((registration) => ({
+                    id: registration.id,
+                    openTitle: registration.openTitle,
+                    visibleTitle: registration.visibleTitle,
+                    visible: pluginHudVisibility[registration.id] ?? false,
+                    Icon: registration.Icon,
+                    onOpen: () => dispatch(setHudVisible({ id: registration.id, visible: true })),
+                  }))}
               />
             )}
           {showHudControls && mainWorldHud && (
@@ -2871,14 +2794,6 @@ export const StarSystemViewScene = ({
               world={world}
               inJump={mainWorldHudInJump}
               onClose={onCloseMainWorldHud}
-            />
-          )}
-          {showHudControls && navigationHud && (
-            <CameraPinnedNavigationHud
-              visible={navigationHudVisible}
-              navigationHud={navigationHud}
-              store={reduxStore}
-              onClose={onCloseNavigationHud}
             />
           )}
           {showHudControls && characterProfileHud && (
@@ -3133,7 +3048,7 @@ const StarSystemView = () => {
   const miniMapVisible = useAppSelector(selectHudVisible("subsectorMap"));
   const sectorMiniMapVisible = useAppSelector(selectHudVisible("sectorMap"));
   const galaxyMiniMapVisible = useAppSelector(selectHudVisible("galaxyMap"));
-  const navigationHudVisible = useAppSelector(selectHudVisible("navigation"));
+  const navigationHudVisible = useAppSelector(selectHudVisible(navigationSelectHudId));
   const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
   const characterProfileHudVisible = useAppSelector(selectHudVisible("characterProfile"));
   const tradeHudVisible = useAppSelector(selectHudVisible("trade"));
@@ -3145,7 +3060,6 @@ const StarSystemView = () => {
       ]),
     ) as Record<string, boolean>,
   );
-  const hasStoredJumpDestination = useAppSelector(selectHasStoredJumpDestination);
   const renderedSceneMode = useAppSelector(selectSystemSceneMode);
   const showWarpLayer = useAppSelector(selectShowWarpLayer);
   const warpLayerOpacity = useAppSelector(selectWarpLayerOpacity);
@@ -3170,14 +3084,6 @@ const StarSystemView = () => {
   );
   const activeScene = desiredScene;
   const transitionPhase: SystemSceneTransitionPhase = "idle";
-
-  const handleWarpExitReached = useCallback(() => {
-    dispatch(runWarpExitSequence());
-  }, [dispatch]);
-
-  const handleResolveFailedJump = useCallback(() => {
-    dispatch(resolveFailedJump());
-  }, [dispatch]);
 
   const handleOpenSelectedSystemDetail = useCallback(() => {
     dispatch(openSelectedWorldSystemDetail());
@@ -3242,9 +3148,7 @@ const StarSystemView = () => {
           onCloseGalaxyMiniMap={() => dispatch(setHudVisible({ id: "galaxyMap", visible: false }))}
           galaxyMiniMap={<GalaxyMiniMapHudContent />}
           navigationHudVisible={navigationHudVisible}
-          onOpenNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: true }))}
-          onCloseNavigationHud={() => dispatch(setHudVisible({ id: "navigation", visible: false }))}
-          navigationHud={<NavigationHudContent />}
+          onOpenNavigationHud={() => dispatch(setHudVisible({ id: navigationSelectHudId, visible: true }))}
           mainWorldHudVisible={mainWorldHudVisible}
           onOpenMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: true }))}
           onCloseMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: false }))}
@@ -3260,7 +3164,6 @@ const StarSystemView = () => {
           tradeHud={<TradeSystemHudContent />}
           pluginHuds={registeredRenderablePluginHuds}
           pluginHudVisibility={pluginHudVisibility}
-          onWarpExitReached={handleWarpExitReached}
         />
       </div>
       {SHOW_SCENE_TRANSITION_OVERLAY && (
@@ -3268,22 +3171,6 @@ const StarSystemView = () => {
           phase={transitionPhase}
           forceCovered={false}
         />
-      )}
-      {ship?.status === "in_jump" && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
-          <div className="hud-panel pointer-events-auto flex items-center gap-2 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-(--hud-text)">
-            <span className="text-(--hud-accent)">Jump Space</span>
-            {!hasStoredJumpDestination && (
-              <button
-                type="button"
-                onClick={handleResolveFailedJump}
-                className="border border-(--hud-border) px-2 py-1 text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
-              >
-                Return
-              </button>
-            )}
-          </div>
-        </div>
       )}
     </div>
   );

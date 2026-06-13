@@ -74,7 +74,6 @@ export const createPluginTestRootState = ({
   availableCrew: {} as RootState["availableCrew"],
   system: {} as RootState["system"],
   systemScene: {} as RootState["systemScene"],
-  jumpNavigation: {} as RootState["jumpNavigation"],
   hud: {} as RootState["hud"],
   plugins: {
     economy: initialEconomyState,
