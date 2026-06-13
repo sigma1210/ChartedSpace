@@ -27,9 +27,9 @@ import { getSystemData } from "../../store/slices/systemSlice";
 import type { GasGiantType as SystemGasGiantType, SystemData, WorldBody as SystemWorldBody, SystemOrbit } from "../../lib/systemTypes";
 import { HudHeader, HudIconButton, HudPanel } from "./HudPrimitives";
 import StoreBridge from "../StoreBridge";
-import type { AppStore } from "../../store";
+import type { AppDispatch, AppStore } from "../../store";
 import { openSelectedWorldSystemDetail } from "../../store/slices/uiSlice";
-import { setHudOffset, setHudPinned, setHudVisible } from "../../store/slices/hudSlice";
+import { setHudOffset, setHudPinned, setHudVisible, type HudId } from "../../store/slices/hudSlice";
 import { selectHudLayout, selectHudVisible } from "../../store/selectors/hud.selectors";
 import {
   resolveFailedJump,
@@ -376,14 +376,12 @@ const SingleScene = ({ layout, onPivot }: SceneProps) => (
 );
 
 const BinaryScene = ({ layout, onPivot, companionChildren, epochAngles }: SceneProps) => {
-  const groupRef = useRef<THREE.Group>(null);
   const [sA, sB] = layout.slots;
-  useEffect(() => { if (groupRef.current) groupRef.current.rotation.y = epochAngles?.outer ?? 0; }, []);
   return (
     <>
       <OrbitalRing radius={sA.orbitRadius} />
       <OrbitalRing radius={sB.orbitRadius} />
-      <group ref={groupRef}>
+      <group rotation={[0, epochAngles?.outer ?? 0, 0]}>
         <StarSphere slot={sA} position={[ sA.orbitRadius, 0, 0]} onPivot={onPivot} />
         <StarSphere slot={sB} position={[-sB.orbitRadius, 0, 0]} onPivot={onPivot} />
         {companionChildren && (
@@ -397,20 +395,14 @@ const BinaryScene = ({ layout, onPivot, companionChildren, epochAngles }: SceneP
 };
 
 const TrinaryScene = ({ layout, onPivot, companionChildren, epochAngles }: SceneProps) => {
-  const outerRef = useRef<THREE.Group>(null);
-  const innerRef = useRef<THREE.Group>(null);
   const [sA, sB, sC] = layout.slots;
-  useEffect(() => {
-    if (outerRef.current) outerRef.current.rotation.y = epochAngles?.outer ?? 0;
-    if (innerRef.current) innerRef.current.rotation.y = epochAngles?.inner ?? 0;
-  }, []);
   return (
     <>
       <OrbitalRing radius={layout.innerBinaryRadius} />
       <OrbitalRing radius={layout.companionRadius} />
-      <group ref={outerRef}>
+      <group rotation={[0, epochAngles?.outer ?? 0, 0]}>
         <group position={[layout.innerBinaryRadius, 0, 0]}>
-          <group ref={innerRef}>
+          <group rotation={[0, epochAngles?.inner ?? 0, 0]}>
             <StarSphere slot={sA} position={[ sA.orbitRadius, 0, 0]} onPivot={onPivot} />
             <StarSphere slot={sB} position={[-sB.orbitRadius, 0, 0]} onPivot={onPivot} />
           </group>
@@ -447,10 +439,7 @@ type WorldBodyProps = {
 };
 
 const WorldBody = ({ placement, world, onPivot, bodyId = `main-${placement.orbitNum}-${world.hex}`, focusedBodyId = null, onFocusBody }: WorldBodyProps) => {
-  const orbitRef = useRef<THREE.Group>(null);
   const r        = placement.sceneRadius;
-
-  useEffect(() => { if (orbitRef.current) orbitRef.current.rotation.y = placement.angle0; }, []);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -463,7 +452,7 @@ const WorldBody = ({ placement, world, onPivot, bodyId = `main-${placement.orbit
   return (
     <OrbitPlane seed={`world:${world.hex}:${bodyId}`} orbitNum={placement.orbitNum} subtle={placement.type === "mainWorld"}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
-      <group ref={orbitRef}>
+      <group rotation={[0, placement.angle0, 0]}>
         <group position={[r, 0, 0]}>
           <WorldGlobeVisual
             world={world}
@@ -517,7 +506,6 @@ const PlacedWorldBody = ({
   onFocusBody?: FocusBodyHandler;
 }) => {
   const body = orbit.body as SystemWorldBody;
-  const orbitRef = useRef<THREE.Group>(null);
   const cloudRefs = useRef<Array<THREE.Mesh | null>>([]);
   const [hovered, setHovered] = useState(false);
   const r     = orbitToScene(orbit.orbitId);
@@ -542,8 +530,6 @@ const PlacedWorldBody = ({
     [cloudTextures],
   );
 
-  useEffect(() => { if (orbitRef.current) orbitRef.current.rotation.y = orbit.angle0; }, []);
-
   useFrame((_, dt) => {
     if (clouds) {
       clouds.layers.forEach((layer, index) => {
@@ -564,7 +550,7 @@ const PlacedWorldBody = ({
   return (
     <OrbitPlane seed={`placed-world:${bodyId}`} orbitNum={orbit.orbitId}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
-      <group ref={orbitRef}>
+      <group rotation={[0, orbit.angle0, 0]}>
         <group position={[r, 0, 0]}>
           <mesh onClick={handleClick}>
             <sphereGeometry args={[radius, 24, 16]} />
@@ -653,13 +639,10 @@ const RockyParentBody = ({
   world: World;
   onPivot: (p: THREE.Vector3) => void;
 }) => {
-  const orbitRef = useRef<THREE.Group>(null);
   const r = orbitToScene(orbit.orbitId);
   const moonPlacement = useMemo((): WorldPlacement => ({
     type: "mainWorld", orbitNum: 1, sceneRadius: 0.45, angle0: 0, label: world.name,
   }), [world.name]);
-
-  useEffect(() => { if (orbitRef.current) orbitRef.current.rotation.y = orbit.angle0; }, []);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -671,7 +654,7 @@ const RockyParentBody = ({
   return (
     <OrbitPlane seed={`rocky-parent:${world.hex}:${orbit.orbitId}`} orbitNum={orbit.orbitId}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.5} />
-      <group ref={orbitRef}>
+      <group rotation={[0, orbit.angle0, 0]}>
         <group position={[r, 0, 0]}>
           <mesh onClick={handleClick}>
             <sphereGeometry args={[0.18, 24, 24]} />
@@ -846,14 +829,12 @@ type GasGiantBodyProps = {
 };
 
 const GasGiantBody = ({ placement, idx, onPivot, world, classification = null, bodyId = `gas-${placement.orbitNum}-${idx}`, focusedBodyId = null, onFocusBody }: GasGiantBodyProps) => {
-  const ref   = useRef<THREE.Group>(null);
   const sphereRef = useRef<THREE.Mesh>(null);
   const hazeRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
   const r     = placement.sceneRadius;
   const type  = visualGasGiantType(placement.orbitNum, classification);
 
-  useEffect(() => { if (ref.current) ref.current.rotation.y = placement.angle0; }, []);
   useFrame((_, delta) => {
     if (sphereRef.current) sphereRef.current.rotation.y += delta * (type === 'hot' ? 0.16 : type === 'ice' ? 0.08 : 0.11);
     if (hazeRef.current) hazeRef.current.rotation.y -= delta * (type === 'hot' ? 0.08 : 0.045);
@@ -914,7 +895,7 @@ const GasGiantBody = ({ placement, idx, onPivot, world, classification = null, b
   return (
     <OrbitPlane seed={`gas-giant:${bodyId}`} orbitNum={placement.orbitNum}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.4} />
-      <group ref={ref}>
+      <group rotation={[0, placement.angle0, 0]}>
         <group position={[r, 0, 0]}>
           <mesh
             ref={sphereRef}
@@ -1188,7 +1169,6 @@ const OtherWorld = ({
   focusedBodyId?: string | null;
   onFocusBody?: FocusBodyHandler;
 }) => {
-  const ref   = useRef<THREE.Group>(null);
   const r     = placement.sceneRadius;
   const [hovered, setHovered] = useState(false);
   const visual = useMemo(() => {
@@ -1203,8 +1183,6 @@ const OtherWorld = ({
     return palette[Math.floor(rng() * palette.length)] ?? palette[0];
   }, [placement.orbitNum, placement.sceneRadius]);
 
-  useEffect(() => { if (ref.current) ref.current.rotation.y = placement.angle0; }, []);
-
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     const pos = new THREE.Vector3();
@@ -1216,7 +1194,7 @@ const OtherWorld = ({
   return (
     <OrbitPlane seed={`other-world:${bodyId}`} orbitNum={placement.orbitNum}>
       <OrbitalRing radius={r} color="#0e3a50" opacity={0.25} />
-      <group ref={ref}>
+      <group rotation={[0, placement.angle0, 0]}>
         <mesh
           position={[r, 0, 0]}
           onClick={handleClick}
@@ -1349,7 +1327,6 @@ const WorldSystem = ({ world, onPivot, systemData, focusedBodyId = null, onFocus
       const bodyId = `world-${orbit.orbitId}-${i}`;
       return <PlacedWorldBody key={i} orbit={orbit} onPivot={onPivot} bodyId={bodyId} focusedBodyId={focusedBodyId} onFocusBody={onFocusBody} />;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedBodyId, onFocusBody, useData, systemData, world, onPivot]);
 
   // ── Unplaced bodies (procedural scatter) ───────────────────────────────────
@@ -1384,7 +1361,6 @@ const WorldSystem = ({ world, onPivot, systemData, focusedBodyId = null, onFocus
       }
       return null;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedBodyId, onFocusBody, useData, systemData, world.hex, onPivot]);
 
   // ── Procedural fallback (no system data) ──────────────────────────────────
@@ -1408,6 +1384,36 @@ const WorldSystem = ({ world, onPivot, systemData, focusedBodyId = null, onFocus
 const cameraZ = (layout: SystemLayout, outermostScene: number): number => {
   const starBase = layout.type === "single" ? 10 : layout.type === "binary" ? 16 : Math.max(22, layout.companionRadius * 2.8);
   return Math.max(starBase, outermostScene * 1.5);
+};
+
+const SystemDataLoader = ({
+  sectorAbbr,
+  hex,
+}: {
+  sectorAbbr: string | null | undefined;
+  hex: string;
+}) => {
+  const dispatch = useAppDispatch();
+  const systemStatus = useSelector(
+    sectorAbbr
+      ? selectSystemStatusByKey(sectorAbbr, hex)
+      : () => "idle",
+  );
+  const generatedTurn = useSelector(
+    sectorAbbr
+      ? selectSystemGeneratedTurnByKey(sectorAbbr, hex)
+      : () => null,
+  );
+  const currentTurn = useSelector((s: { turn?: { currentTurn?: number } }) => s.turn?.currentTurn ?? 1);
+
+  useEffect(() => {
+    if (!sectorAbbr) return;
+    if (systemStatus === "loading") return;
+    if (systemStatus === "loaded" && generatedTurn === currentTurn) return;
+    dispatch(getSystemData({ sectorAbbr, hex }));
+  }, [currentTurn, dispatch, generatedTurn, hex, sectorAbbr, systemStatus]);
+
+  return null;
 };
 
 const JumpSpaceScene = ({
@@ -1744,6 +1750,71 @@ const clampHudOffset = (value: HudOffset): HudOffset => ({
   y: Math.max(-0.58, Math.min(0.58, value.y)),
 });
 
+const useCameraPinnedHudDrag = ({
+  id,
+  pinned,
+  offset,
+  size,
+  dispatch,
+}: {
+  id: HudId;
+  pinned: boolean;
+  offset: HudOffset;
+  size: { width: number; height: number };
+  dispatch: AppDispatch;
+}) => {
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const pendingOffsetRef = useRef<HudOffset | null>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origin: HudOffset;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
+      const nextOffset = clampHudOffset({
+        x: dragRef.current.origin.x + dx,
+        y: dragRef.current.origin.y + dy,
+      });
+      pendingOffsetRef.current = nextOffset;
+      dragOffsetRef.current = nextOffset;
+    };
+    const handleUp = () => {
+      if (dragRef.current && pendingOffsetRef.current) {
+        dispatch(setHudOffset({ id, offset: pendingOffsetRef.current }));
+      }
+      pendingOffsetRef.current = null;
+      dragOffsetRef.current = null;
+      dragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [dispatch, id, size.height, size.width]);
+
+  const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pinned) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: offset,
+    };
+    pendingOffsetRef.current = offset;
+  }, [offset, pinned]);
+
+  return { dragOffsetRef, startDrag };
+};
+
 const CameraPinnedSystemHud = ({
   world,
   miniMapVisible,
@@ -1789,15 +1860,15 @@ const CameraPinnedSystemHud = ({
   const offset = layout.offset;
   const pinned = layout.pinned;
   const visible = layout.visible;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "hudControls",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -1824,47 +1895,6 @@ const CameraPinnedSystemHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "hudControls", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   return (
     <group ref={groupRef}>
@@ -1966,15 +1996,15 @@ const CameraPinnedTradeHud = ({
   const layout = useAppSelector(selectHudLayout("trade"));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "trade",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2001,47 +2031,6 @@ const CameraPinnedTradeHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "trade", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -2083,15 +2072,15 @@ const CameraPinnedMainWorldHud = ({
   const layout = useAppSelector(selectHudLayout("mainWorld"));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "mainWorld",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2118,47 +2107,6 @@ const CameraPinnedMainWorldHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "mainWorld", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -2201,15 +2149,15 @@ const CameraPinnedCharacterProfileHud = ({
   const layout = useAppSelector(selectHudLayout("characterProfile"));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "characterProfile",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2236,47 +2184,6 @@ const CameraPinnedCharacterProfileHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "characterProfile", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -2316,15 +2223,15 @@ const CameraPinnedNavigationHud = ({
   const layout = useAppSelector(selectHudLayout("navigation"));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "navigation",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2351,47 +2258,6 @@ const CameraPinnedNavigationHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "navigation", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -2431,15 +2297,15 @@ const CameraPinnedPluginHud = ({
   const layout = useAppSelector(selectHudLayout(registration.id));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: registration.id,
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2466,47 +2332,6 @@ const CameraPinnedPluginHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: registration.id, offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, registration.id, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -2550,15 +2375,15 @@ const CameraPinnedSubsectorMiniMapHud = ({
   const layout = useAppSelector(selectHudLayout("subsectorMap"));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "subsectorMap",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2585,47 +2410,6 @@ const CameraPinnedSubsectorMiniMapHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "subsectorMap", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -2672,15 +2456,15 @@ const CameraPinnedSectorMiniMapHud = ({
   const layout = useAppSelector(selectHudLayout("sectorMap"));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "sectorMap",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2707,47 +2491,6 @@ const CameraPinnedSectorMiniMapHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "sectorMap", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -2792,15 +2535,15 @@ const CameraPinnedGalaxyMiniMapHud = ({
   const layout = useAppSelector(selectHudLayout("galaxyMap"));
   const offset = layout.offset;
   const pinned = layout.pinned;
-  const dragOffsetRef = useRef<HudOffset | null>(null);
-  const pendingOffsetRef = useRef<HudOffset | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    origin: HudOffset;
-  } | null>(null);
   const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "galaxyMap",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
 
   useFrame(() => {
     const group = groupRef.current;
@@ -2827,47 +2570,6 @@ const CameraPinnedGalaxyMiniMapHud = ({
       .addScaledVector(up, activeOffset.y * height * 0.5);
     group.quaternion.copy(camera.quaternion);
   });
-
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
-      const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
-        x: dragRef.current.origin.x + dx,
-        y: dragRef.current.origin.y + dy,
-      });
-      pendingOffsetRef.current = nextOffset;
-      dragOffsetRef.current = nextOffset;
-    };
-    const handleUp = () => {
-      if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id: "galaxyMap", offset: pendingOffsetRef.current }));
-      }
-      pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
-      dragRef.current = null;
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [dispatch, size.height, size.width]);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (pinned) return;
-    dragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: offset,
-    };
-    pendingOffsetRef.current = offset;
-  };
 
   if (!visible) return null;
 
@@ -3000,29 +2702,12 @@ export const StarSystemViewScene = ({
       ? selectSystemDataByKey(sectorAbbr, world.hex)
       : () => null,
   );
-  const systemStatus = useSelector(
-    sectorAbbr
-      ? selectSystemStatusByKey(sectorAbbr, world.hex)
-      : () => "idle",
-  );
-  const generatedTurn = useSelector(
-    sectorAbbr
-      ? selectSystemGeneratedTurnByKey(sectorAbbr, world.hex)
-      : () => null,
-  );
   const useData = !!(
     systemData &&
     systemData.hex === world.hex &&
     (!sectorAbbr || systemData.sector === sectorAbbr)
   );
   const currentTurn = useSelector((s: { turn?: { currentTurn?: number } }) => s.turn?.currentTurn ?? 1);
-
-  useEffect(() => {
-    if (!sectorAbbr) return;
-    if (systemStatus === "loading") return;
-    if (systemStatus === "loaded" && generatedTurn === currentTurn) return;
-    dispatch(getSystemData({ sectorAbbr, hex: world.hex }));
-  }, [currentTurn, dispatch, generatedTurn, sectorAbbr, systemStatus, world.hex]);
 
   const layout = useMemo(
     () => useData ? buildLayoutFromSystemData(systemData!.stars) : buildSystemLayout(world.stellar),
@@ -3101,7 +2786,9 @@ export const StarSystemViewScene = ({
             background: "#020c14",
           }}
         >
+          <Starfield />
           <StoreBridge store={reduxStore}>
+            <SystemDataLoader sectorAbbr={sectorAbbr} hex={world.hex} />
             <SystemCameraReset
               camZ={camZ}
               controlsRef={controlsRef}
@@ -3111,7 +2798,6 @@ export const StarSystemViewScene = ({
             />
             <ambientLight intensity={0.6} />
             <directionalLight position={[2, 3, 4]} intensity={1.4} />
-            <Starfield />
             <AutoRotatingSystemGroup enabled={autoRotateSystem}>
               <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
               <WorldSystem

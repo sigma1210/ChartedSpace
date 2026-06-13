@@ -9,9 +9,7 @@ import {
 import { selectSystemStatusByKey } from "@/store/selectors/system.selectors";
 import { getSystemData } from "@/store/slices/systemSlice";
 import {
-  clearNavigationSelection,
   executeNavigationJump,
-  hydrateNavigationSnapshot,
   replotNavigationDestination,
   resolveNavigationPlot,
   selectNavigationDestination,
@@ -22,7 +20,6 @@ import {
   navigationHexPoints,
 } from "./navigationGridGeometry";
 import {
-  selectNavigationCurrentOriginKey,
   selectNavigationGridCells,
   selectNavigationSelectedDestination,
   selectNavigationSelectedDestinationKey,
@@ -35,7 +32,6 @@ export const NavigationHudContent = () => {
   const cells = usePluginSelector(selectNavigationGridCells);
   const navigationState = usePluginSelector(selectNavigationState);
   const snapshotStatus = usePluginSelector(selectNavigationSnapshotStatus);
-  const currentOriginKey = usePluginSelector(selectNavigationCurrentOriginKey);
   const selectedDestinationKey = usePluginSelector(selectNavigationSelectedDestinationKey);
   const selectedDestination = usePluginSelector(selectNavigationSelectedDestination);
   const plottedRouteSystemStatus = usePluginSelector((state) => {
@@ -52,21 +48,11 @@ export const NavigationHudContent = () => {
     yPct: number;
   } | null>(null);
 
-  useEffect(() => {
-    dispatch(hydrateNavigationSnapshot());
-  }, [currentOriginKey, dispatch]);
-
   useEffect(() => () => {
     if (plotResolveTimer.current) {
       clearTimeout(plotResolveTimer.current);
     }
   }, []);
-
-  useEffect(() => {
-    if (!navigationState.selectedDestinationKey) return;
-    if (selectedDestinationKey) return;
-    dispatch(clearNavigationSelection());
-  }, [dispatch, navigationState.selectedDestinationKey, selectedDestinationKey]);
 
   const runPlot = (
     destinationKey: string,

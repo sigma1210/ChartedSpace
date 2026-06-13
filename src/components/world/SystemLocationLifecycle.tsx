@@ -10,6 +10,7 @@ import {
 import {
   setRenderableLocation,
 } from "../../store/slices/systemSceneSlice";
+import { hydrateNavigationSnapshot } from "../../plugins/navigation/navigationSlice";
 
 const subsectorFromHex = (hex: string): string => {
   const hexX = parseInt(hex.slice(0, 2), 10);
@@ -32,6 +33,7 @@ export const SystemLocationLifecycle = () => {
       sectorAbbr: shipLocation.sectorAbbr,
       hex: world.hex,
     }));
+    dispatch(hydrateNavigationSnapshot());
   }, [dispatch, shipLocation?.sectorAbbr, world]);
 
   useEffect(() => {
