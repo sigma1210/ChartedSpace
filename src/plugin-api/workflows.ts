@@ -1,5 +1,7 @@
 export {
   advanceTurnWorkflow,
+  executeJumpWorkflow,
+  resolveJumpDriveCheck,
   type AdvanceTurnLifecycle,
   type AdvanceTurnWorkflowDebugCheckpoint,
   type AdvanceTurnWorkflowDebugInput,
@@ -7,6 +9,12 @@ export {
   type AdvanceTurnWorkflowInput,
   type AdvanceTurnWorkflowPluginEvent,
   type AdvanceTurnWorkflowResult,
+  type ExecuteJumpWorkflowInput,
+  type ExecuteJumpWorkflowResult,
+  type JumpDriveCheck,
+  type JumpDriveOutcome,
+  type JumpExecutionDestination,
+  type JumpExecutionRequest,
 } from "../lib/workflows/turnWorkflow";
 export type {
   LegacyMonthlyExpenseObservation,

@@ -11,7 +11,12 @@ import type {
 import type { RootState } from "../../store";
 import { fetchCharacters, invalidateCharacters } from "../../store/slices/characterSlice";
 import { fetchShip, invalidateShip } from "../../store/slices/shipSlice";
+import { getSystemData } from "../../store/slices/systemSlice";
 import { advanceTurn, type AdvanceTurnPayload } from "../../store/slices/turnSlice";
+import {
+  setSceneMode,
+  setWarpLayerState,
+} from "../../store/slices/systemSceneSlice";
 import {
   fireEndTurn,
   fireStartJumpTurn,
@@ -83,6 +88,55 @@ export interface AdvanceTurnWorkflowResult {
   stoppedReason?: string;
   proposedEffects: PluginWorkflowEffect[];
   effectResolutions: PluginEffectResolution[];
+}
+
+export interface JumpExecutionDestination {
+  sectorAbbr: string;
+  hex: string;
+}
+
+export interface JumpExecutionRequest {
+  destination: JumpExecutionDestination;
+  jumpDistance: number;
+  fuelCostEstimate: number;
+  plotCheck: {
+    roll: number;
+    target: number;
+  };
+}
+
+export type JumpDriveOutcome = "success" | "failed" | "misjump";
+
+export interface JumpDriveCheck {
+  rawRoll: number;
+  modifier: number;
+  total: number;
+  target: number;
+  outcome: JumpDriveOutcome;
+}
+
+export interface ExecuteJumpWorkflowInput extends JumpExecutionRequest {
+  source: string;
+  driveRoll?: number;
+  transitionDurationMs?: number;
+  metadata?: Record<string, unknown>;
+  debug?: AdvanceTurnWorkflowDebugInput;
+}
+
+export interface ExecuteJumpWorkflowResult {
+  source: string;
+  currentTurn: number;
+  stopped: boolean;
+  stoppedReason?: string;
+  proposedEffects: PluginWorkflowEffect[];
+  effectResolutions: PluginEffectResolution[];
+  driveCheck: JumpDriveCheck | null;
+  currentLocation: JumpExecutionDestination | null;
+  finalLocation: JumpExecutionDestination | null;
+  destination: JumpExecutionDestination;
+  jumpDistance: number;
+  fuelCostEstimate: number;
+  plotCheck: JumpExecutionRequest["plotCheck"];
 }
 
 interface PluginWorkflowPhaseRunnerInput {
@@ -220,6 +274,105 @@ const buildTurnContext = (state: RootState): TurnEventContext | null => {
     ownerCharacter,
   };
 };
+
+const roll2d6 = () =>
+  Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export const resolveJumpDriveCheck = (
+  rawRoll: number,
+  modifier = 0,
+): JumpDriveCheck => {
+  const normalizedRoll = Math.trunc(rawRoll);
+  const total = normalizedRoll + modifier;
+  const target = 4;
+  const outcome: JumpDriveOutcome =
+    normalizedRoll <= 2
+      ? "misjump"
+      : total >= target
+        ? "success"
+        : "failed";
+
+  return {
+    rawRoll: normalizedRoll,
+    modifier,
+    total,
+    target,
+    outcome,
+  };
+};
+
+const currentJumpLocation = (state: RootState): JumpExecutionDestination | null => {
+  const ship = state.ship.ship;
+  if (!ship?.sectorAbbr || !ship.hex) return null;
+
+  return {
+    sectorAbbr: ship.sectorAbbr,
+    hex: ship.hex,
+  };
+};
+
+const ownerCharacterForFuel = (state: RootState) => {
+  const ship = state.ship.ship;
+  if (!ship) return null;
+
+  const ownerCharacterId =
+    ship.crew.find((member) => member.isOwnerOperator)?.characterId ?? null;
+  if (!ownerCharacterId) return null;
+
+  return state.characters.items.find((character) => character.id === ownerCharacterId) ?? null;
+};
+
+const buildJumpFuelEffect = (
+  input: ExecuteJumpWorkflowInput,
+  state: RootState,
+): PluginWorkflowEffect => {
+  const ownerCharacter = ownerCharacterForFuel(state);
+  const fuelCost = Math.max(0, Math.trunc(input.fuelCostEstimate));
+
+  return {
+    type: "economy.ledger.post",
+    source: input.source,
+    description: "Jump fuel expense",
+    payload: {
+      memo: "Jump fuel",
+      commit: "automatic",
+      funding: ownerCharacter
+        ? {
+          availableCredits: ownerCharacter.credits,
+          policy: "allowDebt",
+        }
+        : undefined,
+      entries: ownerCharacter && fuelCost > 0
+        ? [
+          {
+            accountId: `character:${ownerCharacter.id}:credits`,
+            change: -fuelCost,
+            memo: "Jump fuel",
+          },
+          {
+            accountId: "sink:jump-fuel",
+            change: fuelCost,
+            memo: `Jump fuel distance ${input.jumpDistance}`,
+          },
+        ]
+        : [],
+    },
+  };
+};
+
+const jumpTransitionDurationMs = (input: ExecuteJumpWorkflowInput) =>
+  Math.max(0, Math.trunc(input.transitionDurationMs ?? 3200));
+
+const jumpTransitionCoverMs = (input: ExecuteJumpWorkflowInput) =>
+  jumpTransitionDurationMs(input) > 0 ? 350 : 0;
+
+const jumpTransitionRemainingMs = (input: ExecuteJumpWorkflowInput) =>
+  Math.max(0, jumpTransitionDurationMs(input) - jumpTransitionCoverMs(input));
+
+const jumpTransitionFadeMs = (input: ExecuteJumpWorkflowInput) =>
+  jumpTransitionDurationMs(input) > 0 ? 700 : 0;
 
 const refreshShipAndCharacters = async (dispatch: (action: unknown) => unknown) => {
   dispatch(invalidateShip());
@@ -361,6 +514,147 @@ const resolveWorkflowEffects = async ({
 
   return resolutions;
 };
+
+const rejectedWorkflowEffect = (
+  resolutions: PluginWorkflowEffectResolution[],
+) => resolutions.find((resolution) => resolution.status === "rejected");
+
+export const executeJumpWorkflow = createAsyncThunk(
+  "coreWorkflow/executeJump",
+  async (
+    input: ExecuteJumpWorkflowInput,
+    { dispatch, getState },
+  ): Promise<ExecuteJumpWorkflowResult> => {
+    const state = getState() as RootState;
+    const currentLocation = currentJumpLocation(state);
+    const checkpoint = createCheckpointEmitter(
+      {
+        source: input.source,
+        lifecycle: "jump-start",
+        metadata: input.metadata,
+        debug: input.debug,
+      },
+      dispatch,
+      state.turn.currentTurn,
+    );
+    const pluginContext = {
+      source: input.source,
+      currentTurn: state.turn.currentTurn,
+    } satisfies PluginWorkflowContext;
+    const proposedEffects = [
+      buildJumpFuelEffect(input, state),
+    ];
+
+    checkpoint("workflowRequested", "Jump workflow requested", input.source);
+    checkpoint(
+      "contextBuilt",
+      "Jump context built",
+      currentLocation
+        ? `${currentLocation.sectorAbbr} ${currentLocation.hex}`
+        : "No current ship location",
+    );
+
+    const effectResolutions = await resolveWorkflowEffects({
+      effects: proposedEffects,
+      context: pluginContext,
+      checkpoint,
+      currentTurn: state.turn.currentTurn,
+      dispatch,
+    });
+    const rejectedEffect = rejectedWorkflowEffect(effectResolutions);
+
+    if (rejectedEffect) {
+      checkpoint(
+        "workflowComplete",
+        "Jump workflow stopped",
+        rejectedEffect.reason ?? "Fuel effect rejected",
+      );
+      return {
+        source: input.source,
+        currentTurn: state.turn.currentTurn,
+        stopped: true,
+        stoppedReason: rejectedEffect.reason ?? "Fuel effect rejected",
+        proposedEffects,
+        effectResolutions,
+        driveCheck: null,
+        currentLocation,
+        finalLocation: currentLocation,
+        destination: input.destination,
+        jumpDistance: input.jumpDistance,
+        fuelCostEstimate: input.fuelCostEstimate,
+        plotCheck: input.plotCheck,
+      };
+    }
+
+    const driveCheck = resolveJumpDriveCheck(input.driveRoll ?? roll2d6(), 0);
+    const finalLocation =
+      driveCheck.outcome === "success"
+        ? input.destination
+        : currentLocation;
+
+    if (finalLocation) {
+      dispatch(setSceneMode("jump"));
+      dispatch(setWarpLayerState({
+        showWarpLayer: true,
+        warpLayerActive: true,
+        warpLayerOpacity: 1,
+      }));
+
+      await delay(jumpTransitionCoverMs(input));
+
+      await dispatch(advanceTurn({
+        shipUpdate: {
+          status: "docked",
+          currentWorldHex: finalLocation.hex,
+          currentWorldSectorAbbr: finalLocation.sectorAbbr,
+          destinationWorldHex: "",
+          jumpArrivesTurn: null,
+        },
+      }));
+      const finalSystemRequest = dispatch(getSystemData(finalLocation));
+      await refreshShipAndCharacters(dispatch);
+      await finalSystemRequest;
+
+      await delay(jumpTransitionRemainingMs(input));
+
+      dispatch(setSceneMode("system"));
+      dispatch(setWarpLayerState({
+        warpLayerActive: true,
+        warpLayerOpacity: 1,
+      }));
+      dispatch(setWarpLayerState({
+        warpLayerOpacity: 0,
+      }));
+      await delay(jumpTransitionFadeMs(input));
+      dispatch(setWarpLayerState({
+        showWarpLayer: false,
+        warpLayerActive: false,
+        warpLayerOpacity: 0,
+      }));
+    }
+
+    checkpoint(
+      "workflowComplete",
+      "Jump workflow complete",
+      driveCheck.outcome,
+    );
+
+    return {
+      source: input.source,
+      currentTurn: state.turn.currentTurn,
+      stopped: false,
+      proposedEffects,
+      effectResolutions,
+      driveCheck,
+      currentLocation,
+      finalLocation,
+      destination: input.destination,
+      jumpDistance: input.jumpDistance,
+      fuelCostEstimate: input.fuelCostEstimate,
+      plotCheck: input.plotCheck,
+    };
+  },
+);
 
 export const advanceTurnWorkflow = createAsyncThunk(
   "coreWorkflow/advanceTurn",

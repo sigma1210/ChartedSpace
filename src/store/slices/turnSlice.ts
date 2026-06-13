@@ -18,6 +18,8 @@ export interface AdvanceTurnPayload {
   shipUpdate?: {
     status?: "docked" | "in_jump";
     currentWorldId?: string | null;
+    currentWorldHex?: string;
+    currentWorldSectorAbbr?: string;
     destinationWorldHex?: string;
     destinationWorldSectorAbbr?: string;
     jumpArrivesTurn?: number | null;

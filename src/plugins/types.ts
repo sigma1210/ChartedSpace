@@ -106,6 +106,10 @@ export interface PluginManifest<State = unknown> {
   metadata: {
     id: string;
   };
+  capabilities?: {
+    provides?: readonly string[];
+    uses?: readonly string[];
+  };
   state: InternalPluginRegistration<State>;
   huds: readonly PluginHudLayoutRegistration[];
   actions: readonly PluginActionRegistration[];

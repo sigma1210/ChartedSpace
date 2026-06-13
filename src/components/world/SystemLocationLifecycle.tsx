@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { selectShipLocation } from "../../store/selectors/ship.selectors";
 import { selectWorldByCoord } from "../../store/selectors/galaxy.selectors";
-import { selectShowWarpLayer } from "../../store/selectors/systemScene.selectors";
 import {
   setActiveLocation,
 } from "../../store/slices/galaxySlice";
@@ -23,19 +22,17 @@ const subsectorFromHex = (hex: string): string => {
 export const SystemLocationLifecycle = () => {
   const dispatch = useAppDispatch();
   const shipLocation = useAppSelector(selectShipLocation);
-  const showWarpLayer = useAppSelector(selectShowWarpLayer);
   const world = useAppSelector(
     selectWorldByCoord(shipLocation?.sectorAbbr, shipLocation?.hex),
   );
 
   useEffect(() => {
     if (!world || !shipLocation?.sectorAbbr) return;
-    if (showWarpLayer) return;
     dispatch(setRenderableLocation({
       sectorAbbr: shipLocation.sectorAbbr,
       hex: world.hex,
     }));
-  }, [dispatch, shipLocation?.sectorAbbr, showWarpLayer, world]);
+  }, [dispatch, shipLocation?.sectorAbbr, world]);
 
   useEffect(() => {
     if (!shipLocation?.sectorAbbr || !shipLocation.hex) return;

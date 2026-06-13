@@ -129,6 +129,10 @@ const shipSlice = createSlice({
     setShipColor(state, action: PayloadAction<string>) {
       state.shipColor = action.payload;
     },
+    setShipJumpRating(state, action: PayloadAction<number>) {
+      if (!state.ship) return;
+      state.ship.jumpRating = Math.min(6, Math.max(1, Math.trunc(action.payload)));
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -147,5 +151,10 @@ const shipSlice = createSlice({
   },
 });
 
-export const { invalidateShip, updateShipInStore, setShipColor } = shipSlice.actions;
+export const {
+  invalidateShip,
+  updateShipInStore,
+  setShipColor,
+  setShipJumpRating,
+} = shipSlice.actions;
 export default shipSlice.reducer;

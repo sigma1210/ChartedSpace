@@ -1,6 +1,8 @@
 import type { RootState } from "../store";
 import { initialEconomyState } from "../plugins/economy";
 import { initialExpenseScenarioState } from "../plugins/expenseScenario";
+import { initialMockShipState } from "../plugins/mockShip";
+import { initialNavigationState } from "../plugins/navigation";
 import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLocationSlice";
 
 export interface PluginTestRootStateOptions {
@@ -77,6 +79,8 @@ export const createPluginTestRootState = ({
   plugins: {
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,
+    mockShip: initialMockShipState,
+    navigation: initialNavigationState,
     stayInLocation: initialStayInLocationState,
     ...pluginState,
   },

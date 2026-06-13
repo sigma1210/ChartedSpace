@@ -1,10 +1,12 @@
 import { createPluginTestRootState } from "@/plugin-api/testing";
 import {
   advanceTurnWorkflow,
+  executeJumpWorkflow,
   resetPluginLegacyMonthlyExpenseRecorder,
   resetPluginWorkflowActionCommitter,
   resetPluginWorkflowEffectResolver,
   resetPluginWorkflowPhaseRunner,
+  resolveJumpDriveCheck,
   setPluginWorkflowActionCommitter,
   setPluginWorkflowEffectResolver,
   setPluginLegacyMonthlyExpenseRecorder,
@@ -216,5 +218,211 @@ describe("turn workflow bridge", () => {
       payload: "ledger-automatic-1",
     });
     expect(committedActions).toEqual([automaticLedgerAction]);
+  });
+});
+
+describe("execute jump workflow", () => {
+  const jumpRequest = {
+    source: "plugin.navigation",
+    destination: {
+      sectorAbbr: "Spin",
+      hex: "1912",
+    },
+    jumpDistance: 2,
+    fuelCostEstimate: 20000,
+    plotCheck: {
+      roll: 10,
+      target: 8,
+    },
+    transitionDurationMs: 0,
+  };
+
+  it("resolves drive check outcomes from the raw engineering roll", () => {
+    expect(resolveJumpDriveCheck(2).outcome).toBe("misjump");
+    expect(resolveJumpDriveCheck(3).outcome).toBe("failed");
+    expect(resolveJumpDriveCheck(4).outcome).toBe("success");
+  });
+
+  it("proposes automatic fuel expense and returns the destination on drive success", async () => {
+    const dispatch = jest.fn();
+    const resolvedActions: unknown[] = [];
+
+    setPluginWorkflowEffectResolver(async (effects) => {
+      resolvedActions.push(...effects);
+      return effects.map(() => ({
+        status: "accepted",
+      }));
+    });
+
+    const result = await executeJumpWorkflow({
+      ...jumpRequest,
+      driveRoll: 4,
+    })(dispatch, createPluginTestRootState, undefined);
+
+    expect(result.payload).toMatchObject({
+      source: "plugin.navigation",
+      currentTurn: 3,
+      stopped: false,
+      driveCheck: {
+        rawRoll: 4,
+        modifier: 0,
+        total: 4,
+        target: 4,
+        outcome: "success",
+      },
+      currentLocation: {
+        sectorAbbr: "Spin",
+        hex: "1910",
+      },
+      finalLocation: {
+        sectorAbbr: "Spin",
+        hex: "1912",
+      },
+    });
+    expect(resolvedActions).toEqual([
+      expect.objectContaining({
+        type: "economy.ledger.post",
+        source: "plugin.navigation",
+        description: "Jump fuel expense",
+        payload: expect.objectContaining({
+          memo: "Jump fuel",
+          commit: "automatic",
+          funding: {
+            availableCredits: 100000,
+            policy: "allowDebt",
+          },
+          entries: [
+            {
+              accountId: "character:owner-1:credits",
+              change: -20000,
+              memo: "Jump fuel",
+            },
+            {
+              accountId: "sink:jump-fuel",
+              change: 20000,
+              memo: "Jump fuel distance 2",
+            },
+          ],
+        }),
+      }),
+    ]);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "systemScene/setSceneMode",
+      payload: "jump",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "systemScene/setWarpLayerState",
+      payload: {
+        showWarpLayer: true,
+        warpLayerActive: true,
+        warpLayerOpacity: 1,
+      },
+    });
+    expect(dispatch).toHaveBeenCalledWith(expect.any(Function));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "systemScene/setSceneMode",
+      payload: "system",
+    });
+    const dispatchedActions = dispatch.mock.calls.map(([action]) => action);
+    const warpStartIndex = dispatchedActions.findIndex((action) =>
+      typeof action === "object" &&
+      action !== null &&
+      (action as { type?: string }).type === "systemScene/setWarpLayerState" &&
+      (action as { payload?: { showWarpLayer?: boolean } }).payload?.showWarpLayer === true,
+    );
+    const turnCommitIndex = dispatchedActions.findIndex((action) => typeof action === "function");
+    const warpFadeIndex = dispatchedActions.findIndex((action) =>
+      typeof action === "object" &&
+      action !== null &&
+      (action as { type?: string }).type === "systemScene/setWarpLayerState" &&
+      (action as { payload?: { warpLayerOpacity?: number } }).payload?.warpLayerOpacity === 0,
+    );
+    expect(warpStartIndex).toBeGreaterThanOrEqual(0);
+    expect(turnCommitIndex).toBeGreaterThan(warpStartIndex);
+    expect(warpFadeIndex).toBeGreaterThan(turnCommitIndex);
+  });
+
+  it("keeps the ship at the current location when the drive check fails", async () => {
+    const dispatch = jest.fn();
+    setPluginWorkflowEffectResolver(async (effects) =>
+      effects.map(() => ({ status: "accepted" })),
+    );
+
+    const result = await executeJumpWorkflow({
+      ...jumpRequest,
+      driveRoll: 3,
+    })(dispatch, createPluginTestRootState, undefined);
+
+    expect(result.payload).toMatchObject({
+      stopped: false,
+      driveCheck: {
+        outcome: "failed",
+      },
+      finalLocation: {
+        sectorAbbr: "Spin",
+        hex: "1910",
+      },
+    });
+  });
+
+  it("keeps the ship at the current location on snake-eyes misjump for the first pass", async () => {
+    const dispatch = jest.fn();
+    setPluginWorkflowEffectResolver(async (effects) =>
+      effects.map(() => ({ status: "accepted" })),
+    );
+
+    const result = await executeJumpWorkflow({
+      ...jumpRequest,
+      driveRoll: 2,
+    })(dispatch, createPluginTestRootState, undefined);
+
+    expect(result.payload).toMatchObject({
+      stopped: false,
+      driveCheck: {
+        rawRoll: 2,
+        outcome: "misjump",
+      },
+      finalLocation: {
+        sectorAbbr: "Spin",
+        hex: "1910",
+      },
+    });
+  });
+
+  it("stops before the drive check when the fuel effect is rejected", async () => {
+    const dispatch = jest.fn();
+    setPluginWorkflowEffectResolver(async (effects) =>
+      effects.map(() => ({
+        status: "rejected",
+        reason: "Ledger post blocked by debt policy",
+      })),
+    );
+
+    const result = await executeJumpWorkflow({
+      ...jumpRequest,
+      driveRoll: 8,
+    })(dispatch, createPluginTestRootState, undefined);
+
+    expect(result.payload).toMatchObject({
+      stopped: true,
+      stoppedReason: "Ledger post blocked by debt policy",
+      driveCheck: null,
+      finalLocation: {
+        sectorAbbr: "Spin",
+        hex: "1910",
+      },
+    });
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: "systemScene/setSceneMode",
+      payload: "jump",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: "systemScene/setWarpLayerState",
+      payload: {
+        showWarpLayer: true,
+        warpLayerActive: true,
+        warpLayerOpacity: 1,
+      },
+    });
   });
 });

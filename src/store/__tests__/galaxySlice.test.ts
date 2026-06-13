@@ -14,6 +14,8 @@ import type { RootState } from "../index";
 import { initialHudState } from "../slices/hudSlice";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
+import { initialMockShipState } from "../../plugins/mockShip";
+import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 
 jest.mock("../../../Galaxy/sectors.json", () => ({
@@ -61,7 +63,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   });
 
 const makeRoot = (galaxy: GalaxyState): RootState =>
-  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], ship: {} as RootState["ship"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], jumpNavigation: {} as RootState["jumpNavigation"], hud: initialHudState, plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, stayInLocation: initialStayInLocationState } });
+  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], ship: {} as RootState["ship"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], jumpNavigation: {} as RootState["jumpNavigation"], hud: initialHudState, plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mockShip: initialMockShipState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState } });
 
 describe("galaxySlice reducers", () => {
   it("populates sectors from the index on initialization", () => {

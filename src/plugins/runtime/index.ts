@@ -1,4 +1,5 @@
 export {
+  selectShipNavigationCapabilities,
   useCoreCurrentTurn,
   useCoreTurnAdvanceBusy,
 } from "./coreReads";

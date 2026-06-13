@@ -43,23 +43,14 @@ import {
 import { selectShip, selectShipStatus } from "../../store/selectors/ship.selectors";
 import {
   selectShowWarpLayer,
-  selectSystemSceneReady,
   selectSystemSceneMode,
   selectSystemSceneRenderableLocation,
-  selectSystemSceneTransitionPhase,
-  selectSystemSceneTransitionSceneKey,
-  selectWarpExitBlankActive,
   selectWarpLayerActive,
   selectWarpLayerOpacity,
 } from "../../store/selectors/systemScene.selectors";
 import {
-  beginSceneReveal,
-  beginSceneTransition,
-  completeSceneTransition,
   markSceneReady,
-  markSceneTransitionCovered,
   type SystemSceneTransitionPhase,
-  type SystemSceneTransitionReason,
 } from "../../store/slices/systemSceneSlice";
 import { NavigationHudContent } from "./NavigationHud";
 import { CharacterProfileHudContent } from "./CharacterProfileHud";
@@ -83,6 +74,8 @@ const registeredRenderablePluginHuds = registeredPluginHudLayouts.flatMap((layou
   const renderer = pluginHudRenderersById.get(layout.id);
   return renderer ? [{ ...layout, ...renderer }] : [];
 }) satisfies PluginRenderableHudRegistration[];
+
+const WARP_RENDER_LAYER = 1;
 
 // ─── Shared glow texture ──────────────────────────────────────────────────────
 
@@ -1419,16 +1412,41 @@ const cameraZ = (layout: SystemLayout, outermostScene: number): number => {
 
 const JumpSpaceScene = ({
   active,
+  opacity,
   onExitReached,
 }: {
   active: boolean;
+  opacity: number;
   onExitReached?: () => void;
 }) => {
-  const { camera } = useThree();
+  const { camera: systemCamera, gl, scene, size } = useThree();
+  const warpCameraRef = useRef(
+    new THREE.PerspectiveCamera(72, Math.max(1, size.width) / Math.max(1, size.height), 0.1, 220),
+  );
+  const tunnelLightRef = useRef<THREE.PointLight>(null);
+  const accentLightRef = useRef<THREE.PointLight>(null);
   const exitTriggeredRef = useRef(false);
   const startTimeRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number | null>(null);
   const travelRef = useRef(0.08);
+
+  useEffect(() => {
+    const camera = warpCameraRef.current;
+    camera.aspect = Math.max(1, size.width) / Math.max(1, size.height);
+    camera.updateProjectionMatrix();
+  }, [size.height, size.width]);
+
+  useEffect(() => {
+    exitTriggeredRef.current = false;
+    startTimeRef.current = null;
+    lastFrameTimeRef.current = null;
+    travelRef.current = 0.08;
+    if (!active) {
+      const camera = warpCameraRef.current;
+      camera.position.set(0, 0, 0);
+      camera.lookAt(0, 0, -1);
+    }
+  }, [active]);
 
   const { path, tunnel, accents } = useMemo(() => {
     const pointCount = 34;
@@ -1548,6 +1566,40 @@ const JumpSpaceScene = ({
     };
   }, []);
 
+  useEffect(() => {
+    const setLayer = (object: THREE.Object3D) => {
+      object.layers.set(WARP_RENDER_LAYER);
+      object.traverse((child) => child.layers.set(WARP_RENDER_LAYER));
+    };
+    setLayer(tunnel);
+    accents.forEach(setLayer);
+    tunnelLightRef.current?.layers.set(WARP_RENDER_LAYER);
+    accentLightRef.current?.layers.set(WARP_RENDER_LAYER);
+    warpCameraRef.current.layers.set(WARP_RENDER_LAYER);
+  }, [accents, tunnel]);
+
+  useEffect(() => {
+    const opacityScale = THREE.MathUtils.clamp(opacity, 0, 1);
+    const applyOpacity = (object: THREE.Object3D) => {
+      object.traverse((child) => {
+        if (!(child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Points)) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((material) => {
+          const baseOpacity = typeof material.userData.baseOpacity === "number"
+            ? material.userData.baseOpacity
+            : material.opacity;
+          material.userData.baseOpacity = baseOpacity;
+          material.opacity = baseOpacity * opacityScale;
+          material.transparent = true;
+        });
+      });
+    };
+    applyOpacity(tunnel);
+    accents.forEach(applyOpacity);
+    if (tunnelLightRef.current) tunnelLightRef.current.intensity = 2.4 * opacityScale;
+    if (accentLightRef.current) accentLightRef.current.intensity = 1.8 * opacityScale;
+  }, [accents, opacity, tunnel]);
+
   useEffect(
     () => () => {
       tunnel.traverse((child) => {
@@ -1592,8 +1644,9 @@ const JumpSpaceScene = ({
       lookAt.copy(position).addScaledVector(tangent, 4);
     }
 
-    camera.position.copy(position);
-    camera.lookAt(lookAt);
+    const warpCamera = warpCameraRef.current;
+    warpCamera.position.copy(position);
+    warpCamera.lookAt(lookAt);
 
     if (!exitTriggeredRef.current && travel >= 0.5) {
       exitTriggeredRef.current = true;
@@ -1601,14 +1654,39 @@ const JumpSpaceScene = ({
     }
   });
 
+  // This pass intentionally mirrors Three.js postprocessing examples: one renderer
+  // renders the system layer first, then overlays the warp layer with a private camera.
+  /* eslint-disable react-hooks/immutability */
+  useFrame(() => {
+    const previousAutoClear = gl.autoClear;
+    const previousSystemLayerMask = systemCamera.layers.mask;
+    const previousWarpLayerMask = warpCameraRef.current.layers.mask;
+
+    gl.autoClear = true;
+    systemCamera.layers.set(0);
+    gl.render(scene, systemCamera);
+
+    if (opacity > 0) {
+      gl.autoClear = false;
+      gl.clearDepth();
+      warpCameraRef.current.layers.set(WARP_RENDER_LAYER);
+      gl.render(scene, warpCameraRef.current);
+    }
+
+    systemCamera.layers.mask = previousSystemLayerMask;
+    warpCameraRef.current.layers.mask = previousWarpLayerMask;
+    gl.autoClear = previousAutoClear;
+  }, 1);
+  /* eslint-enable react-hooks/immutability */
+
   return (
     <>
       <primitive object={tunnel} />
       {accents.map((accent, index) => (
         <primitive key={index} object={accent} />
       ))}
-      <pointLight color="#22d3ee" intensity={2.4} distance={12} position={[0, 0, 0]} />
-      <pointLight color="#22d3ee" intensity={1.8} distance={14} position={[3, 2, -8]} />
+      <pointLight ref={tunnelLightRef} color="#22d3ee" intensity={2.4 * opacity} distance={12} position={[0, 0, 0]} />
+      <pointLight ref={accentLightRef} color="#22d3ee" intensity={1.8 * opacity} distance={14} position={[3, 2, -8]} />
     </>
   );
 };
@@ -2994,7 +3072,6 @@ export const StarSystemViewScene = ({
   const camZ = cameraZ(layout, outermostScene);
   const cameraResetKey = `${sectorAbbr ?? ""}:${world.hex}`;
   const renderHudLayer = showHudControls;
-  const renderSystemCanvas = renderSystemLayer || renderHudLayer;
 
   useEffect(() => {
     if (!sceneKey || !onSceneReady) return;
@@ -3013,50 +3090,68 @@ export const StarSystemViewScene = ({
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#020c14" }}>
-      {renderSystemCanvas && (
+      {renderSystemLayer && (
         <Canvas
-          key={renderSystemLayer ? "system-layer" : "hud-layer"}
           camera={{ position: [0, camZ * 0.4, camZ] as [number, number, number], fov: 50, far: 200 }}
-          gl={{ alpha: !renderSystemLayer }}
+          gl={{ alpha: false }}
           style={{
             position: "absolute",
             inset: 0,
-            zIndex: renderSystemLayer ? 0 : 20,
-            background: renderSystemLayer ? "#020c14" : "transparent",
+            zIndex: 0,
+            background: "#020c14",
           }}
         >
           <StoreBridge store={reduxStore}>
-            {renderSystemLayer && (
+            <SystemCameraReset
+              camZ={camZ}
+              controlsRef={controlsRef}
+              pivotTarget={pivotTarget}
+              resetKey={cameraResetKey}
+              sceneMode={sceneMode}
+            />
+            <ambientLight intensity={0.6} />
+            <directionalLight position={[2, 3, 4]} intensity={1.4} />
+            <Starfield />
+            <AutoRotatingSystemGroup enabled={autoRotateSystem}>
+              <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
+              <WorldSystem
+                world={world}
+                onPivot={onPivot}
+                systemData={systemData}
+                focusedBodyId={focusedBodyId}
+                onFocusBody={setFocusedBodyId}
+              />
+            </AutoRotatingSystemGroup>
+            {sceneMode === "system" && (
               <>
-                <SystemCameraReset
-                  camZ={camZ}
-                  controlsRef={controlsRef}
-                  pivotTarget={pivotTarget}
-                  resetKey={cameraResetKey}
-                  sceneMode={sceneMode}
-                />
-                <ambientLight intensity={0.6} />
-                <directionalLight position={[2, 3, 4]} intensity={1.4} />
-                <Starfield />
-                <AutoRotatingSystemGroup enabled={autoRotateSystem}>
-                  <SystemScene layout={layout} onPivot={onPivot} companionChildren={companionChildren} epochAngles={epochAngles} />
-                  <WorldSystem
-                    world={world}
-                    onPivot={onPivot}
-                    systemData={systemData}
-                    focusedBodyId={focusedBodyId}
-                    onFocusBody={setFocusedBodyId}
-                  />
-                </AutoRotatingSystemGroup>
-                {sceneMode === "system" && (
-                  <>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
-                    <PivotSmoother targetRef={pivotTarget} controlsRef={controlsRef} />
-                  </>
-                )}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <OrbitControls ref={controlsRef as any} enablePan={false} minDistance={2} maxDistance={80} />
+                <PivotSmoother targetRef={pivotTarget} controlsRef={controlsRef} />
               </>
             )}
+            <JumpSpaceScene
+              active={showWarpLayer && warpLayerActive}
+              opacity={showWarpLayer ? warpLayerOpacity : 0}
+              onExitReached={onWarpExitReached}
+            />
+          </StoreBridge>
+        </Canvas>
+      )}
+      {renderHudLayer && (
+        <Canvas
+          camera={{ position: [0, camZ * 0.4, camZ] as [number, number, number], fov: 50, far: 200 }}
+          gl={{ alpha: true }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 20,
+            background: "transparent",
+            pointerEvents: "none",
+          }}
+        >
+          <StoreBridge store={reduxStore}>
+            <ambientLight intensity={0.55} />
+            <directionalLight position={[4, 3, 5]} intensity={1.25} />
             {showHudControls && (
               <CameraPinnedSystemHud
                 world={world}
@@ -3154,24 +3249,6 @@ export const StarSystemViewScene = ({
           </StoreBridge>
         </Canvas>
       )}
-      {showWarpLayer && (
-        <Canvas
-          camera={{ position: [0, 0, 0] as [number, number, number], fov: 72, far: 220 }}
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 10,
-            opacity: warpLayerOpacity,
-            pointerEvents: "none",
-          }}
-        >
-          <ambientLight intensity={0.15} />
-          <JumpSpaceScene
-            active={warpLayerActive}
-            onExitReached={onWarpExitReached}
-          />
-        </Canvas>
-      )}
     </div>
   );
 };
@@ -3190,8 +3267,8 @@ type DisplayedSceneSnapshot = {
   warpLayerActive: boolean;
 };
 
-const TRANSITION_COVER_MS = 240;
 const TRANSITION_REVEAL_MS = 420;
+const SHOW_SCENE_TRANSITION_OVERLAY = false;
 const TRANSITION_STATIC_IMAGE =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='4' seed='13'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 .06 0 0 0 0 .68 0 0 0 0 .76 0 0 0 .38 0'/%3E%3C/filter%3E%3Crect width='160' height='160' fill='%2306161d'/%3E%3Crect width='160' height='160' filter='url(%23noise)' opacity='.95'/%3E%3C/svg%3E\")";
 
@@ -3220,15 +3297,6 @@ const buildDisplayedSceneSnapshot = ({
   warpLayerOpacity,
   warpLayerActive,
 });
-
-const sceneTransitionReason = (
-  currentScene: DisplayedSceneSnapshot,
-  nextScene: DisplayedSceneSnapshot,
-): Exclude<SystemSceneTransitionReason, null> => {
-  if (!currentScene.showWarpLayer && nextScene.showWarpLayer) return "jump-enter";
-  if (currentScene.showWarpLayer && !nextScene.showWarpLayer) return "jump-exit";
-  return "system-change";
-};
 
 const sceneTransitionClass = (
   phase: SystemSceneTransitionPhase,
@@ -3350,6 +3418,15 @@ const sceneFocusStyle = (
   phase: SystemSceneTransitionPhase,
   forceCovered: boolean,
 ): CSSProperties => {
+  if (!SHOW_SCENE_TRANSITION_OVERLAY) {
+    return {
+      filter: "none",
+      transform: "none",
+      transition: "none",
+      willChange: "auto",
+    };
+  }
+
   const focusHidden = forceCovered || phase === "covering" || phase === "covered";
   return {
     filter: focusHidden
@@ -3387,11 +3464,7 @@ const StarSystemView = () => {
   const showWarpLayer = useAppSelector(selectShowWarpLayer);
   const warpLayerOpacity = useAppSelector(selectWarpLayerOpacity);
   const warpLayerActive = useAppSelector(selectWarpLayerActive);
-  const warpExitBlankActive = useAppSelector(selectWarpExitBlankActive);
   const renderableLocation = useAppSelector(selectSystemSceneRenderableLocation);
-  const transitionPhase = useAppSelector(selectSystemSceneTransitionPhase);
-  const transitionSceneKey = useAppSelector(selectSystemSceneTransitionSceneKey);
-  const sceneReady = useAppSelector(selectSystemSceneReady);
   const sectorStatus = useAppSelector(selectShipSectorLoadStatus);
   const desiredScene = useMemo(
     () => buildDisplayedSceneSnapshot({
@@ -3409,83 +3482,8 @@ const StarSystemView = () => {
       warpLayerOpacity,
     ],
   );
-  const [displayedScene, setDisplayedScene] = useState(desiredScene);
-  const displayedSceneRef = useRef(displayedScene);
-  const desiredSceneRef = useRef(desiredScene);
-  const transitionCoverTimerRef = useRef<number | null>(null);
-  const transitionRevealTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    desiredSceneRef.current = desiredScene;
-  }, [desiredScene]);
-
-  useEffect(() => {
-    displayedSceneRef.current = displayedScene;
-  }, [displayedScene]);
-
-  useEffect(() => {
-    const currentDesiredScene = desiredSceneRef.current;
-    if (currentDesiredScene.key === displayedSceneRef.current.key) {
-      setDisplayedScene((current) => ({
-        ...current,
-        warpLayerOpacity: currentDesiredScene.warpLayerOpacity,
-        warpLayerActive: currentDesiredScene.warpLayerActive,
-      }));
-      return;
-    }
-
-    if (transitionCoverTimerRef.current !== null) {
-      window.clearTimeout(transitionCoverTimerRef.current);
-      transitionCoverTimerRef.current = null;
-    }
-    if (transitionRevealTimerRef.current !== null) {
-      window.clearTimeout(transitionRevealTimerRef.current);
-      transitionRevealTimerRef.current = null;
-    }
-
-    const nextSceneKey = currentDesiredScene.key;
-    dispatch(beginSceneTransition({
-      reason: sceneTransitionReason(displayedSceneRef.current, currentDesiredScene),
-      sceneKey: nextSceneKey,
-    }));
-    transitionCoverTimerRef.current = window.setTimeout(() => {
-      const nextScene = desiredSceneRef.current;
-      setDisplayedScene(nextScene);
-      displayedSceneRef.current = nextScene;
-      dispatch(markSceneTransitionCovered(nextScene.key));
-
-      transitionCoverTimerRef.current = null;
-    }, TRANSITION_COVER_MS);
-  }, [
-    dispatch,
-    desiredScene.key,
-    desiredScene.warpLayerActive,
-    desiredScene.warpLayerOpacity,
-  ]);
-
-  useEffect(() => {
-    if (transitionPhase !== "covered" || !sceneReady || !transitionSceneKey) return;
-    dispatch(beginSceneReveal(transitionSceneKey));
-    if (transitionRevealTimerRef.current !== null) {
-      window.clearTimeout(transitionRevealTimerRef.current);
-    }
-    transitionRevealTimerRef.current = window.setTimeout(() => {
-      dispatch(completeSceneTransition(transitionSceneKey));
-      transitionRevealTimerRef.current = null;
-    }, TRANSITION_REVEAL_MS);
-  }, [dispatch, sceneReady, transitionPhase, transitionSceneKey]);
-
-  useEffect(
-    () => () => {
-      if (transitionCoverTimerRef.current !== null) {
-        window.clearTimeout(transitionCoverTimerRef.current);
-      }
-      if (transitionRevealTimerRef.current !== null) {
-        window.clearTimeout(transitionRevealTimerRef.current);
-      }
-    },
-    [],
-  );
+  const activeScene = desiredScene;
+  const transitionPhase: SystemSceneTransitionPhase = "idle";
 
   const handleWarpExitReached = useCallback(() => {
     dispatch(runWarpExitSequence());
@@ -3504,7 +3502,7 @@ const StarSystemView = () => {
   }, [dispatch]);
 
   const inJump = ship?.status === "in_jump";
-  const visibleRenderableLocation = displayedScene.renderableLocation;
+  const visibleRenderableLocation = activeScene.renderableLocation;
   const mainWorldHud = <MainWorldHud world={visibleRenderableLocation?.world ?? null} inJump={inJump} />;
 
   if (!visibleRenderableLocation) {
@@ -3515,10 +3513,12 @@ const StarSystemView = () => {
             ? "Loading current system"
             : "Current ship system unavailable"}
         </span>
-        <SceneTransitionOverlay
-          phase={transitionPhase}
-          forceCovered={warpExitBlankActive}
-        />
+        {SHOW_SCENE_TRANSITION_OVERLAY && (
+          <SceneTransitionOverlay
+            phase={transitionPhase}
+            forceCovered={false}
+          />
+        )}
       </div>
     );
   }
@@ -3527,19 +3527,18 @@ const StarSystemView = () => {
     <div className="relative h-full w-full">
       <div
         className="absolute inset-0 origin-center overflow-hidden"
-        style={sceneFocusStyle(transitionPhase, warpExitBlankActive)}
+        style={sceneFocusStyle(transitionPhase, false)}
       >
         <StarSystemViewScene
-          key={displayedScene.key}
-          sceneKey={displayedScene.key}
+          sceneKey={activeScene.key}
           onSceneReady={handleSceneReady}
           world={visibleRenderableLocation.world}
           sectorAbbr={visibleRenderableLocation.sectorAbbr}
-          sceneMode={displayedScene.renderedSceneMode}
-          showWarpLayer={displayedScene.showWarpLayer}
-          renderSystemLayer={!displayedScene.showWarpLayer}
-          warpLayerOpacity={displayedScene.warpLayerOpacity}
-          warpLayerActive={displayedScene.warpLayerActive}
+          sceneMode={activeScene.renderedSceneMode}
+          showWarpLayer={activeScene.showWarpLayer}
+          renderSystemLayer
+          warpLayerOpacity={activeScene.warpLayerOpacity}
+          warpLayerActive={activeScene.warpLayerActive}
           showHudControls
           miniMapVisible={miniMapVisible}
           onOpenMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: true }))}
@@ -3578,10 +3577,12 @@ const StarSystemView = () => {
           onWarpExitReached={handleWarpExitReached}
         />
       </div>
-      <SceneTransitionOverlay
-        phase={transitionPhase}
-        forceCovered={warpExitBlankActive}
-      />
+      {SHOW_SCENE_TRANSITION_OVERLAY && (
+        <SceneTransitionOverlay
+          phase={transitionPhase}
+          forceCovered={false}
+        />
+      )}
       {ship?.status === "in_jump" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
           <div className="hud-panel pointer-events-auto flex items-center gap-2 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-(--hud-text)">
