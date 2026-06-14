@@ -2,8 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export const DEV_CLERK_ID = "dev_user_local";
 
-export const isDevAuthMode = () =>
-  process.env.DEV_MODE === "true" && process.env.NODE_ENV === "development";
+export const isDevAuthMode = () => process.env.DEV_MODE === "true";
 
 export const getClerkId = async (): Promise<string | null> => {
   if (isDevAuthMode()) {
@@ -25,5 +24,9 @@ export const getCurrentUser = async () => {
 
   const clerkId = await getClerkId();
   if (!clerkId) return null;
-  return prisma.user.findUnique({ where: { clerkId } });
+  return prisma.user.upsert({
+    where: { clerkId },
+    create: { clerkId },
+    update: {},
+  });
 };

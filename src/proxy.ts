@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher(["/", "/sign-up(.*)", "/verify", "/dev-reset", "/api/webhooks/clerk"]);
 
-const DEV_BYPASS = process.env.DEV_MODE === "true" && process.env.NODE_ENV === "development";
+const DEV_BYPASS = process.env.DEV_MODE === "true";
 
 export default clerkMiddleware(async (auth, request) => {
   if (DEV_BYPASS) return NextResponse.next();
