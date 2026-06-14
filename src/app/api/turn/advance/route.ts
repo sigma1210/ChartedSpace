@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUser } from "@/actions/user";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 
 interface ShipUpdateBody {
   status?: "docked" | "in_jump";
@@ -21,10 +20,7 @@ interface AdvanceBody {
 
 export const POST = async (request: Request) => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const dbUser = await getUser(clerkId);
+    const dbUser = await getCurrentUser();
     if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const body: AdvanceBody = await request.json().catch(() => ({}));

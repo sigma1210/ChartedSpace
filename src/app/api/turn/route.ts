@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
-import { getUser } from "@/actions/user";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 
 // ─── GET /api/turn ────────────────────────────────────────────────────────────
 
 export const GET = async () => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const dbUser = await getUser(clerkId);
+    const dbUser = await getCurrentUser();
     if (!dbUser) return NextResponse.json({ currentTurn: 1 });
 
     return NextResponse.json({ currentTurn: dbUser.currentTurn });

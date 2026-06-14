@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 import spawnPoints from "@/data/spawnPoints.json";
 import shipTypes from "@/data/classic/ships.json";
 
@@ -16,10 +16,8 @@ interface Params { params: Promise<{ id: string }> }
 export const POST = async (_req: Request, { params }: Params) => {
   try {
     const { id: characterId } = await params;
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
-    const user = await prisma.user.findUnique({ where: { clerkId } });
+    const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const character = await prisma.character.findUnique({

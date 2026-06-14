@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 
 // ─── POST /api/resign ─────────────────────────────────────────────────────────
 // Player-initiated restart. Deletes the captain and ship, resets turn to 1.
@@ -9,10 +9,7 @@ import { getClerkId } from "@/lib/devAuth";
 
 export const POST = async () => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-
-    const user = await prisma.user.findUnique({ where: { clerkId } });
+    const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const ship = await prisma.ship.findFirst({

@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUser } from "@/actions/user";
 import type { Prisma } from "@prisma/client";
 import type { CharacterSheet } from "@/lib/characters/types";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 
 type Params = { params: Promise<{ id: string }> };
 
 const resolveDbUser = async () => {
-  const clerkId = await getClerkId();
-  if (!clerkId) return undefined;
-  return await getUser(clerkId);
+  return await getCurrentUser();
 };
 
 const canModify = (characterUserId: string | null, dbUserId: string | null | undefined): boolean => {

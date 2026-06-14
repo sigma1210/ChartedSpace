@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 
 type Params = { params: Promise<{ crewId: string }> };
 
 // DELETE /api/ship/crew/[crewId] — fire a crew member
 export const DELETE = async (_req: Request, { params }: Params) => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-
     const { crewId } = await params;
 
-    const user = await prisma.user.findUnique({ where: { clerkId } });
+    const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const ship = await prisma.ship.findFirst({ where: { userId: user.id } });
@@ -39,9 +36,6 @@ export const DELETE = async (_req: Request, { params }: Params) => {
 // PATCH /api/ship/crew/[crewId] — change the owner-operator's role
 export const PATCH = async (req: Request, { params }: Params) => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-
     const { crewId } = await params;
     const body = await req.json() as { role?: string };
 
@@ -49,7 +43,7 @@ export const PATCH = async (req: Request, { params }: Params) => {
       return NextResponse.json({ error: "role is required" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { clerkId } });
+    const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const ship = await prisma.ship.findFirst({ where: { userId: user.id } });

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUser } from "@/actions/user";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 import { calculateWorldPairSalePrice } from "@/lib/trade";
 
 const UWP_SELECT = {
@@ -21,10 +20,8 @@ interface Params { params: Promise<{ lotId: string }> }
 export const POST = async (_req: Request, { params }: Params) => {
   try {
     const { lotId } = await params;
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const dbUser = await getUser(clerkId);
+    const dbUser = await getCurrentUser();
     if (!dbUser) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const lot = await prisma.cargoLot.findUnique({

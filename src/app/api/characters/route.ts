@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createOrUpdateUser, getUser } from "@/actions/user";
 import type { Prisma } from "@prisma/client";
 import type { CharacterSheet } from "@/lib/characters/types";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 import spawnPoints from "@/data/spawnPoints.json";
 import shipTypes from "@/data/classic/ships.json";
 
@@ -63,10 +62,7 @@ const createShipForNewPlayer = async (
 
 export const GET = async () => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const dbUser = await getUser(clerkId);
+    const dbUser = await getCurrentUser();
     if (!dbUser) return NextResponse.json({ items: [] });
 
     const rows = await prisma.character.findMany({
@@ -119,10 +115,7 @@ export const GET = async () => {
 
 export const POST = async (request: Request) => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const user = await createOrUpdateUser({ clerkId });
+    const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Failed to resolve user" }, { status: 500 });
 
     const body: { sheet: CharacterSheet; name?: string; role?: string } = await request.json();

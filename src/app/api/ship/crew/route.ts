@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 import { calculateSalary, ROLE_REQUIRED_SKILL } from "@/lib/crew";
 
 // POST /api/ship/crew — hire a crew member from the available pool
 export const POST = async (req: Request) => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-
     const body = await req.json() as {
       role:         string;
       npcName:      string;
@@ -21,7 +18,7 @@ export const POST = async (req: Request) => {
       return NextResponse.json({ error: "role and npcName required" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { clerkId } });
+    const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const ship = await prisma.ship.findFirst({ where: { userId: user.id } });

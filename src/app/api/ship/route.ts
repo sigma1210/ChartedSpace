@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUser } from "@/actions/user";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 import shipTypes from "@/data/classic/ships.json";
 import { calculateWorldPairSalePrice } from "@/lib/trade";
 
@@ -16,19 +15,14 @@ const UWP_SELECT = {
 } as const;
 
 const resolveDbUser = async () => {
-  const clerkId = await getClerkId();
-  if (!clerkId) return undefined;
-  return await getUser(clerkId);
+  return await getCurrentUser();
 };
 
 // ─── GET /api/ship ────────────────────────────────────────────────────────────
 
 export const GET = async () => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const dbUser = await getUser(clerkId);
+    const dbUser = await getCurrentUser();
     if (!dbUser) return NextResponse.json({ ship: null });
 
     const ship = await prisma.ship.findUnique({

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUser } from "@/actions/user";
-import { getClerkId } from "@/lib/devAuth";
+import { getCurrentUser } from "@/lib/devAuth";
 import shipTypes from "@/data/classic/ships.json";
 import {
   deriveWorldPricePerTon,
@@ -16,10 +15,7 @@ const TRADE_SKILL_NAMES = ["Broker", "Streetwise", "Admin", "Steward"];
 
 export const POST = async (request: Request) => {
   try {
-    const clerkId = await getClerkId();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const dbUser = await getUser(clerkId);
+    const dbUser = await getCurrentUser();
     if (!dbUser) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const body: { commodity?: string; tons?: number } = await request.json();
