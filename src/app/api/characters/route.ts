@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { CharacterSheet } from "@/lib/characters/types";
-import { getCurrentUser } from "@/lib/devAuth";
+import { getCurrentUser, isDevAuthMode } from "@/lib/devAuth";
 import spawnPoints from "@/data/spawnPoints.json";
 import shipTypes from "@/data/classic/ships.json";
 
@@ -14,6 +14,17 @@ type CrewRole = typeof REQUIRED_CREW[number];
 
 const pickRandom = <T>(arr: readonly T[] | T[]): T =>
   arr[Math.floor(Math.random() * arr.length)];
+
+const errorResponse = (err: unknown) => {
+  const detail = err instanceof Error ? err.message : String(err);
+  return NextResponse.json(
+    {
+      error: "Internal server error",
+      ...(isDevAuthMode() ? { detail } : {}),
+    },
+    { status: 500 },
+  );
+};
 
 const createShipForNewPlayer = async (
   tx: Prisma.TransactionClient,
@@ -31,6 +42,10 @@ const createShipForNewPlayer = async (
   }
 
   const freeTrader = shipTypes[0];
+  if (!freeTrader) {
+    console.warn("[createShipForNewPlayer] no ship types configured");
+    return;
+  }
 
   const ship = await tx.ship.create({
     data: {
@@ -109,7 +124,7 @@ export const GET = async () => {
     return NextResponse.json({ items });
   } catch (err) {
     console.error("[GET /api/characters]", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return errorResponse(err);
   }
 };
 
@@ -127,6 +142,10 @@ export const POST = async (request: Request) => {
 
     const name = (body.name?.trim() || sheet.name || "Unnamed Traveller").trim();
     const role = REQUIRED_CREW.includes(body.role as CrewRole) ? (body.role as CrewRole) : null;
+    const skills = Array.isArray(sheet.skills)
+      ? sheet.skills.filter(s => s && typeof s.name === "string" && Number.isFinite(s.level))
+      : [];
+    const credits = Number.isFinite(sheet.credits) ? sheet.credits : 0;
 
     const character = await prisma.$transaction(async (tx) => {
       const data = {
@@ -138,16 +157,16 @@ export const POST = async (request: Request) => {
         intelligence:   sheet.upp.int,
         education:      sheet.upp.edu,
         socialStanding: sheet.upp.soc,
-        credits:        sheet.credits,
+        credits,
         sheet:          sheet as unknown as Prisma.InputJsonValue,
         currentWorldId: sheet.currentWorldId ?? null,
       } as unknown as Prisma.CharacterUncheckedCreateInput;
 
       const created = await tx.character.create({ data });
 
-      if (sheet.skills.length > 0) {
+      if (skills.length > 0) {
         await tx.characterSkill.createMany({
-          data: sheet.skills.map(s => ({
+          data: skills.map(s => ({
             characterId: created.id,
             name:        s.name,
             level:       s.level,
@@ -168,6 +187,6 @@ export const POST = async (request: Request) => {
     return NextResponse.json({ id: character.id, name: character.name }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/characters]", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return errorResponse(err);
   }
 };
