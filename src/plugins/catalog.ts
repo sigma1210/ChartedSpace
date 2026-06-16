@@ -1,13 +1,13 @@
 import { economyPlugin } from "./economy";
 import { expenseScenarioPlugin } from "./expenseScenario";
-import { mockShipPlugin } from "./mockShip";
 import { navigationPlugin } from "./navigation";
+import { shipPlugin } from "./ship";
 import { stayInLocationPlugin } from "./stayInLocation";
 
 export const registeredPluginManifests = [
   economyPlugin,
   expenseScenarioPlugin,
-  mockShipPlugin,
   navigationPlugin,
+  shipPlugin,
   stayInLocationPlugin,
 ] as const;

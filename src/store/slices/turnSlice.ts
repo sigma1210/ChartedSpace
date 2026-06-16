@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import type { RootState } from "../index";
-import { invalidateShip } from "./shipSlice";
+import { invalidateShip } from "../../plugins/ship";
 
 interface TurnState {
   currentTurn: number;

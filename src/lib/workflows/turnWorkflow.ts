@@ -10,7 +10,7 @@ import type {
 } from "../../plugins/types";
 import type { RootState } from "../../store";
 import { fetchCharacters, invalidateCharacters } from "../../store/slices/characterSlice";
-import { fetchShip, invalidateShip } from "../../store/slices/shipSlice";
+import { fetchShip, invalidateShip, selectActiveShip } from "../../plugins/ship";
 import { getSystemData } from "../../store/slices/systemSlice";
 import { advanceTurn, type AdvanceTurnPayload } from "../../store/slices/turnSlice";
 import {
@@ -257,7 +257,7 @@ const isLegacyMonthlyExpenseObservation = (
   typeof (value as LegacyMonthlyExpenseObservation).newCredits === "number";
 
 const buildTurnContext = (state: RootState): TurnEventContext | null => {
-  const ship = state.ship.ship;
+  const ship = selectActiveShip(state);
   if (!ship) return null;
   if (ship.status !== "docked" && ship.status !== "in_jump") return null;
 
@@ -304,7 +304,7 @@ export const resolveJumpDriveCheck = (
 };
 
 const currentJumpLocation = (state: RootState): JumpExecutionDestination | null => {
-  const ship = state.ship.ship;
+  const ship = selectActiveShip(state);
   if (!ship?.sectorAbbr || !ship.hex) return null;
 
   return {
@@ -314,7 +314,7 @@ const currentJumpLocation = (state: RootState): JumpExecutionDestination | null 
 };
 
 const ownerCharacterForFuel = (state: RootState) => {
-  const ship = state.ship.ship;
+  const ship = selectActiveShip(state);
   if (!ship) return null;
 
   const ownerCharacterId =

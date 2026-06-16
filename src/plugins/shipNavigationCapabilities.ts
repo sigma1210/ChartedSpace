@@ -31,6 +31,6 @@ export const resolveShipNavigationCapabilities = (
   }
 
   return {
-    jumpRating: clampJumpRating(state.ship.ship?.jumpRating),
+    jumpRating: clampJumpRating(state.plugins.shipPlugin.ship?.jumpRating),
   };
 };

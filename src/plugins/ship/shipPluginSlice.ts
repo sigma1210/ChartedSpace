@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { RootState } from "../index";
-import { fetchCharacters, invalidateCharacters } from "./characterSlice";
+import type { RootState } from "@/store";
+import { fetchCharacters, invalidateCharacters } from "@/store/slices/characterSlice";
 
 export const DEFAULT_SHIP_COLOR = "#9ca3af";
 
@@ -46,22 +46,24 @@ export interface ShipSummary {
   cargo: CargoLotSummary[];
 }
 
-interface ShipState {
+export interface ShipPluginState {
   ship: ShipSummary | null;
   status: "idle" | "loading" | "loaded" | "error";
   error: string | null;
   shipColor: string;
+  developmentJumpRatingOverride: number | null;
 }
 
-const initialState: ShipState = {
+export const initialShipPluginState: ShipPluginState = {
   ship: null,
   status: "idle",
   error: null,
   shipColor: DEFAULT_SHIP_COLOR,
+  developmentJumpRatingOverride: null,
 };
 
 export const fetchShip = createAsyncThunk(
-  "ship/fetch",
+  "shipPlugin/fetch",
   async () => {
     const res = await fetch("/api/ship");
     if (!res.ok) throw new Error("Failed to fetch ship");
@@ -70,14 +72,14 @@ export const fetchShip = createAsyncThunk(
   },
   {
     condition: (_, { getState }) => {
-      const status = (getState() as RootState).ship.status;
+      const status = (getState() as RootState).plugins.shipPlugin.status;
       return status === "idle";
     },
-  }
+  },
 );
 
 export const buyCargoAndRefresh = createAsyncThunk(
-  "ship/buyCargoAndRefresh",
+  "shipPlugin/buyCargoAndRefresh",
   async ({ commodity, tons }: { commodity: string; tons: number }, { dispatch }) => {
     const response = await fetch("/api/ship/cargo", {
       method: "POST",
@@ -98,7 +100,7 @@ export const buyCargoAndRefresh = createAsyncThunk(
 );
 
 export const sellCargoAndRefresh = createAsyncThunk(
-  "ship/sellCargoAndRefresh",
+  "shipPlugin/sellCargoAndRefresh",
   async ({ lotId }: { lotId: string }, { dispatch }) => {
     const response = await fetch(`/api/ship/cargo/${lotId}/sell`, { method: "POST" });
 
@@ -114,9 +116,9 @@ export const sellCargoAndRefresh = createAsyncThunk(
   },
 );
 
-const shipSlice = createSlice({
-  name: "ship",
-  initialState,
+const shipPluginSlice = createSlice({
+  name: "shipPlugin",
+  initialState: initialShipPluginState,
   reducers: {
     invalidateShip(state) {
       state.status = "idle";
@@ -132,6 +134,9 @@ const shipSlice = createSlice({
     setShipJumpRating(state, action: PayloadAction<number>) {
       if (!state.ship) return;
       state.ship.jumpRating = Math.min(6, Math.max(1, Math.trunc(action.payload)));
+    },
+    setDevelopmentJumpRatingOverride(state, action: PayloadAction<number>) {
+      state.developmentJumpRatingOverride = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -156,5 +161,7 @@ export const {
   updateShipInStore,
   setShipColor,
   setShipJumpRating,
-} = shipSlice.actions;
-export default shipSlice.reducer;
+  setDevelopmentJumpRatingOverride,
+} = shipPluginSlice.actions;
+
+export default shipPluginSlice.reducer;

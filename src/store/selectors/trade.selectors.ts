@@ -1,4 +1,5 @@
 import type { RootState } from "../index";
+import { selectActiveShip } from "../../plugins/ship";
 import { deriveWorldPricePerTon } from "../../lib/trade";
 import { deriveTradeClassifications, selectWorldByCoord } from "./galaxy.selectors";
 
@@ -11,7 +12,7 @@ export interface CurrentMarketData {
 }
 
 export const selectCurrentMarketData = (state: RootState): CurrentMarketData | null => {
-  const ship = state.ship.ship;
+  const ship = selectActiveShip(state);
   if (!ship || ship.status !== "docked") return null;
 
   const world = selectWorldByCoord(ship.sectorAbbr, ship.hex)(state);

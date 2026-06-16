@@ -5,6 +5,7 @@ import {
   calculateWorldPairSalePrice,
   deriveWorldPricePerTon,
 } from "@/lib/trade";
+import { selectShipLocation } from "@/plugins/ship";
 import { uwpVal } from "../../lib/worldMap";
 
 // Wrapper so callers using the World shape still work
@@ -17,7 +18,7 @@ export const selectSectorData = (abbr: string) => (state: RootState) =>
 export const selectSectorLoadStatus = (abbr: string) => (state: RootState) =>
   state.galaxy.loadingStatus[abbr] ?? "idle";
 export const selectShipSectorLoadStatus = (state: RootState) => {
-  const sectorAbbr = state.ship.ship?.sectorAbbr;
+  const sectorAbbr = selectShipLocation(state)?.sectorAbbr;
   return sectorAbbr ? state.galaxy.loadingStatus[sectorAbbr] ?? "idle" : "idle";
 };
 export const selectIsSectorLoaded = (abbr: string) => (state: RootState) =>
@@ -194,8 +195,9 @@ export const selectWorldDotStyle = (state: RootState) => {
   const activeSector = state.galaxy.activeWorldSectorAbbr;
   const targetHex    = state.galaxy.targetWorldHex;
   const targetSector = state.galaxy.targetWorldSectorAbbr;
-  const shipHex      = state.ship.ship?.hex    ?? null;
-  const shipSector   = state.ship.ship?.sectorAbbr ?? null;
+  const shipLocation = selectShipLocation(state);
+  const shipHex      = shipLocation?.hex ?? null;
+  const shipSector   = shipLocation?.sectorAbbr ?? null;
 
   return (coord: WorldCoord, mode: MapMode): WorldDotStyle => {
     const { hex, sectorAbbr } = coord;

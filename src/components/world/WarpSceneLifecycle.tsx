@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { selectShip } from "../../store/selectors/ship.selectors";
+import { selectActiveShip as selectShip } from "../../plugins/ship";
 import {
   selectShowWarpLayer,
   selectWarpExitBlankActive,

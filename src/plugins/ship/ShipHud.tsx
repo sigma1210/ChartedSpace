@@ -5,19 +5,19 @@ import {
   usePluginDispatch,
   usePluginSelector,
 } from "@/plugin-api";
-import { setShipJumpRating } from "@/store/slices/shipSlice";
-import { recordMockShipJumpRating } from "./mockShipSlice";
-import { selectMockShipJumpRating } from "./selectors";
+import { setShipJumpRating } from "./actions";
+import { setDevelopmentJumpRatingOverride } from "./shipPluginSlice";
+import { selectShipPluginJumpRating } from "./selectors";
 
 const jumpRatings = [1, 2, 3, 4, 5, 6] as const;
 
-export const MockShipHudContent = () => {
+export const ShipHudContent = () => {
   const dispatch = usePluginDispatch();
-  const jumpRating = usePluginSelector(selectMockShipJumpRating);
+  const jumpRating = usePluginSelector(selectShipPluginJumpRating);
 
   const setJumpRating = (rating: number) => {
     dispatch(setShipJumpRating(rating));
-    dispatch(recordMockShipJumpRating(rating));
+    dispatch(setDevelopmentJumpRatingOverride(rating));
   };
 
   return (
@@ -43,4 +43,4 @@ export const MockShipHudContent = () => {
   );
 };
 
-export const MockShipHudIcon = Gauge;
+export const ShipHudIcon = Gauge;

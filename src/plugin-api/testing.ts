@@ -1,7 +1,7 @@
 import type { RootState } from "../store";
 import { initialEconomyState } from "../plugins/economy";
 import { initialExpenseScenarioState } from "../plugins/expenseScenario";
-import { initialMockShipState } from "../plugins/mockShip";
+import { initialShipPluginState } from "../plugins/ship";
 import { initialNavigationState } from "../plugins/navigation";
 import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLocationSlice";
 
@@ -37,39 +37,6 @@ export const createPluginTestRootState = ({
     status: "loaded",
     error: null,
   },
-  ship: {
-    ship: {
-      id: "ship-1",
-      name: "Test Ship",
-      type: "Free Trader",
-      jumpRating: 1,
-      status: "docked",
-      isMortgaged: false,
-      mortgagePaid: 0,
-      currentWorldId: "world-1",
-      worldName: "Regina",
-      sectorAbbr: "Spin",
-      hex: "1910",
-      cargoCapacity: 82,
-      destinationWorldId: null,
-      jumpArrivesTurn: null,
-      cargo: [],
-      crew: [{
-        id: "crew-1",
-        characterId: "owner-1",
-        characterName: "Owner",
-        npcName: null,
-        role: "owner",
-        isOwnerOperator: true,
-        monthlySalary: 0,
-        keySkillName: null,
-        keySkillLevel: 0,
-      }],
-    },
-    status: "loaded",
-    error: null,
-    shipColor: "#9ca3af",
-  },
   turn: { currentTurn, status: "loaded", error: null },
   availableCrew: {} as RootState["availableCrew"],
   system: {} as RootState["system"],
@@ -78,7 +45,38 @@ export const createPluginTestRootState = ({
   plugins: {
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,
-    mockShip: initialMockShipState,
+    shipPlugin: {
+      ...initialShipPluginState,
+      ship: {
+        id: "ship-1",
+        name: "Test Ship",
+        type: "Free Trader",
+        jumpRating: 1,
+        status: "docked",
+        isMortgaged: false,
+        mortgagePaid: 0,
+        currentWorldId: "world-1",
+        worldName: "Regina",
+        sectorAbbr: "Spin",
+        hex: "1910",
+        cargoCapacity: 82,
+        destinationWorldId: null,
+        jumpArrivesTurn: null,
+        cargo: [],
+        crew: [{
+          id: "crew-1",
+          characterId: "owner-1",
+          characterName: "Owner",
+          npcName: null,
+          role: "owner",
+          isOwnerOperator: true,
+          monthlySalary: 0,
+          keySkillName: null,
+          keySkillLevel: 0,
+        }],
+      },
+      status: "loaded",
+    },
     navigation: initialNavigationState,
     stayInLocation: initialStayInLocationState,
     ...pluginState,

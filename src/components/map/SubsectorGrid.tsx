@@ -6,11 +6,11 @@ import { loadSector } from "../../store/slices/galaxySlice";
 import { selectSectorData, selectSectorLoadStatus } from "../../store/selectors/galaxy.selectors";
 import { setActiveWorldHex, setTargetWorldHex, clearTargetWorldHex } from "../../store/slices/galaxySlice";
 import { selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
-import { selectShip, selectShipColor } from "../../store/selectors/ship.selectors";
+import { selectActiveShip as selectShip, selectShipColor } from "../../plugins/ship";
 import { parseHex } from "../../lib/hex";
 import HexGrid, { type HexWorld } from "./HexGrid";
 import type { SectorDetail } from "../../types";
-import type { ShipSummary } from "../../store/slices/shipSlice";
+import type { ShipSummary } from "../../plugins/ship";
 
 interface SubsectorGridProps {
   sectorAbbr: string;

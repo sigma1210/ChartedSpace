@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { selectShipLocation } from "../../store/selectors/ship.selectors";
+import { selectShipLocation } from "../../plugins/ship";
 import { selectWorldByCoord } from "../../store/selectors/galaxy.selectors";
 import {
   setActiveLocation,

@@ -35,7 +35,7 @@ import {
   selectActiveWorld,
   selectShipSectorLoadStatus,
 } from "../../store/selectors/galaxy.selectors";
-import { selectShip, selectShipStatus } from "../../store/selectors/ship.selectors";
+import { selectActiveShip as selectShip, selectShipStatus } from "../../plugins/ship";
 import {
   selectShowWarpLayer,
   selectSystemSceneMode,

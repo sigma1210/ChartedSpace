@@ -1,4 +1,4 @@
-import type { ShipSummary } from "@/store/slices/shipSlice";
+import type { ShipSummary } from "@/plugins/ship";
 import type { CharacterSummary } from "@/store/slices/characterSlice";
 
 export interface TurnEventContext {

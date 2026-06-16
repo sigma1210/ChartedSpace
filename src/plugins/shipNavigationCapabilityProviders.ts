@@ -1,5 +1,5 @@
-import { mockShipNavigationCapabilitiesProvider } from "./mockShip/shipNavigationCapabilities";
+import { shipNavigationCapabilitiesProvider } from "./ship/shipNavigationCapabilities";
 
 export const registeredShipNavigationCapabilitiesProviders = [
-  mockShipNavigationCapabilitiesProvider,
+  shipNavigationCapabilitiesProvider,
 ] as const;

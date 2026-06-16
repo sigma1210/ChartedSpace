@@ -6,6 +6,7 @@ import {
   type JumpDriveOutcome,
   type JumpExecutionDestination,
 } from "@/plugin-api/workflows";
+import { selectActiveShip, selectShipLocation } from "@/plugins/ship";
 import type { RootState } from "@/store";
 
 export interface NavigationSnapshotOrigin {
@@ -95,14 +96,15 @@ export const initialNavigationState: NavigationState = {
 };
 
 const navigationSnapshotOriginFromState = (state: RootState): NavigationSnapshotOrigin | null => {
-  const ship = state.ship.ship;
-  if (!ship?.sectorAbbr || !ship.hex) return null;
+  const ship = selectActiveShip(state);
+  const location = selectShipLocation(state);
+  if (!location?.sectorAbbr || !location.hex) return null;
 
   return {
-    worldId: ship.currentWorldId,
-    worldName: ship.worldName,
-    sectorAbbr: ship.sectorAbbr,
-    hex: ship.hex,
+    worldId: ship?.currentWorldId ?? null,
+    worldName: location.worldName,
+    sectorAbbr: location.sectorAbbr,
+    hex: location.hex,
   };
 };
 

@@ -1,6 +1,7 @@
 import type { JumpRangeTarget } from "@/lib/jumpRange";
 import type { RootState } from "@/store";
 import { selectShipNavigationCapabilities } from "@/plugin-api";
+import { selectActiveShip, selectShipLocation } from "@/plugins/ship";
 import {
   navigationStateKey,
 } from "./metadata";
@@ -55,13 +56,14 @@ export const selectNavigationSnapshotOrigin = (state: NavigationPluginRoot) =>
   selectNavigationState(state).snapshotOrigin;
 
 export const selectNavigationCurrentOrigin = (state: NavigationPluginRoot): NavigationSnapshotOrigin | null => {
-  const ship = state.ship.ship;
-  if (!ship?.sectorAbbr || !ship.hex) return null;
+  const ship = selectActiveShip(state);
+  const location = selectShipLocation(state);
+  if (!location?.sectorAbbr || !location.hex) return null;
   return {
-    worldId: ship.currentWorldId,
-    worldName: ship.worldName,
-    sectorAbbr: ship.sectorAbbr,
-    hex: ship.hex,
+    worldId: ship?.currentWorldId ?? null,
+    worldName: location.worldName,
+    sectorAbbr: location.sectorAbbr,
+    hex: location.hex,
   };
 };
 
@@ -114,8 +116,11 @@ export const selectNavigationSelectedDestination = (state: NavigationPluginRoot)
   return selectNavigationTargets(state).find((target) => target.key === selectedKey) ?? null;
 };
 
-export const selectNavigationShipLocation = (state: NavigationPluginRoot) => ({
-  sectorAbbr: state.ship.ship?.sectorAbbr ?? null,
-  hex: state.ship.ship?.hex ?? null,
-  worldName: state.ship.ship?.worldName ?? null,
-});
+export const selectNavigationShipLocation = (state: NavigationPluginRoot) => {
+  const location = selectShipLocation(state);
+  return {
+    sectorAbbr: location?.sectorAbbr ?? null,
+    hex: location?.hex ?? null,
+    worldName: location?.worldName ?? null,
+  };
+};

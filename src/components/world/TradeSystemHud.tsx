@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { World } from "../../types";
-import { buyCargoAndRefresh, sellCargoAndRefresh, type CargoLotSummary } from "../../store/slices/shipSlice";
+import { buyCargoAndRefresh, sellCargoAndRefresh, type CargoLotSummary } from "../../plugins/ship";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
   selectActiveWorld,
@@ -23,7 +23,7 @@ import {
 import {
   selectIsShipDocked,
   selectShipCargo,
-} from "../../store/selectors/ship.selectors";
+} from "../../plugins/ship";
 import { selectCurrentTurn } from "../../store/selectors/turn.selectors";
 import { selectOwnerOperatorCredits } from "../../store/selectors/character.selectors";
 import { selectCurrentMarketData, type CurrentMarketData } from "../../store/selectors/trade.selectors";

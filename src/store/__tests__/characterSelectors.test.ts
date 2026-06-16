@@ -7,11 +7,11 @@ import {
   selectOwnerOperatorCharacter,
   selectOwnerOperatorCredits,
 } from "../selectors/character.selectors";
-import { selectOwnerOperatorCharacterId } from "../selectors/ship.selectors";
+import { selectOwnerOperatorCharacterId } from "../../plugins/ship";
 import { initialHudState } from "../slices/hudSlice";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
-import { initialMockShipState } from "../../plugins/mockShip";
+import { initialShipPluginState, type ShipSummary } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 
@@ -69,7 +69,6 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     targetWorldSectorAbbr: null,
   },
   characters: { items: [], status: "idle", error: null },
-  ship: { ship: null, status: "idle", error: null, shipColor: "#9ca3af" },
   turn: { currentTurn: 1, status: "idle", error: null },
   availableCrew: { poolSize: 20, crew: [] },
   system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} },
@@ -86,7 +85,7 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     sceneReady: true,
   },
   hud: initialHudState,
-  plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mockShip: initialMockShipState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState },
+  plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState },
   ...overrides,
 });
 
@@ -103,14 +102,14 @@ describe("character profile selectors", () => {
     const root = makeRoot({
       ui: { ...makeRoot().ui, activeCharacterId: active.id },
       characters: { items: [owner, active, fallback], status: "loaded", error: null },
-      ship: {
-        ship: {
-          crew: [{ characterId: owner.id, isOwnerOperator: true }],
+      plugins: {
+        ...makeRoot().plugins,
+        shipPlugin: {
+          ...initialShipPluginState,
+          ship: { crew: [{ characterId: owner.id, isOwnerOperator: true }] } as unknown as ShipSummary,
+          status: "loaded",
         },
-        status: "loaded",
-        error: null,
-        shipColor: "#9ca3af",
-      } as unknown as RootState["ship"],
+      },
     });
 
     expect(selectEffectiveCharacterProfile(root)).toBe(active);
@@ -119,14 +118,14 @@ describe("character profile selectors", () => {
   it("falls back to the owner operator when there is no active character", () => {
     const root = makeRoot({
       characters: { items: [owner, fallback], status: "loaded", error: null },
-      ship: {
-        ship: {
-          crew: [{ characterId: owner.id, isOwnerOperator: true }],
+      plugins: {
+        ...makeRoot().plugins,
+        shipPlugin: {
+          ...initialShipPluginState,
+          ship: { crew: [{ characterId: owner.id, isOwnerOperator: true }] } as unknown as ShipSummary,
+          status: "loaded",
         },
-        status: "loaded",
-        error: null,
-        shipColor: "#9ca3af",
-      } as unknown as RootState["ship"],
+      },
     });
 
     expect(selectOwnerOperatorCharacterId(root)).toBe(owner.id);
@@ -153,17 +152,19 @@ describe("character profile selectors", () => {
   it("prefers ship location over character location", () => {
     const root = makeRoot({
       characters: { items: [fallback], status: "loaded", error: null },
-      ship: {
-        ship: {
-          worldName: "Ruie",
-          sectorAbbr: "Spin",
-          hex: "1809",
-          crew: [],
+      plugins: {
+        ...makeRoot().plugins,
+        shipPlugin: {
+          ...initialShipPluginState,
+          ship: {
+            worldName: "Ruie",
+            sectorAbbr: "Spin",
+            hex: "1809",
+            crew: [],
+          } as unknown as ShipSummary,
+          status: "loaded",
         },
-        status: "loaded",
-        error: null,
-        shipColor: "#9ca3af",
-      } as unknown as RootState["ship"],
+      },
     });
 
     expect(selectEffectiveCharacterProfileLocation(root)).toEqual({

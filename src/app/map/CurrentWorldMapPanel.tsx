@@ -7,7 +7,7 @@ import {
   selectSectorData,
   selectWorldByCoord,
 } from "../../store/selectors/galaxy.selectors";
-import { selectShipLocation } from "../../store/selectors/ship.selectors";
+import { selectShipLocation } from "../../plugins/ship";
 
 const CurrentWorldMapPanel = () => {
   const shipLocation = useAppSelector(selectShipLocation);

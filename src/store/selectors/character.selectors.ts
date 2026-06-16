@@ -1,6 +1,6 @@
 import type { RootState } from "../index";
 import type { CharacterSummary } from "../slices/characterSlice";
-import { selectOwnerOperatorCharacterId, selectShipLocation } from "./ship.selectors";
+import { selectOwnerOperatorCharacterId, selectShipLocation } from "../../plugins/ship";
 
 export interface CharacterProfileLocation {
   worldName: string | null;

@@ -31,6 +31,20 @@ import { createPluginTestRootState } from "@/plugin-api/testing";
 import type { RootState } from "@/store";
 import type { World } from "@/types";
 
+type TestThunk = (
+  dispatch: (action: unknown) => unknown,
+  getState: () => RootState,
+  extra: undefined,
+) => unknown | Promise<unknown>;
+
+const runTestThunk = async (
+  thunk: unknown,
+  dispatch: (action: unknown) => unknown,
+  getState: () => RootState,
+) => {
+  await (thunk as TestThunk)(dispatch, getState, undefined);
+};
+
 const world = (hex: string, name: string): World => ({
   hex,
   hexX: Number.parseInt(hex.slice(0, 2), 10),
@@ -69,15 +83,18 @@ const createNavigationRoot = (jumpRating = 2): RootState => {
   const root = createPluginTestRootState();
   return {
     ...root,
-    ship: {
-      ...root.ship,
-      ship: root.ship.ship && {
-        ...root.ship.ship,
-        currentWorldId: "world-regina",
-        worldName: "Regina",
-        sectorAbbr: "Spin",
-        hex: "1910",
-        jumpRating,
+    plugins: {
+      ...root.plugins,
+      shipPlugin: {
+        ...root.plugins.shipPlugin,
+        ship: root.plugins.shipPlugin.ship && {
+          ...root.plugins.shipPlugin.ship,
+          currentWorldId: "world-regina",
+          worldName: "Regina",
+          sectorAbbr: "Spin",
+          hex: "1910",
+          jumpRating,
+        },
       },
     },
     galaxy: {
@@ -116,7 +133,6 @@ const createNavigationRoot = (jumpRating = 2): RootState => {
     },
   };
 };
-
 const successfulPlotState = navigationReducer(
   navigationReducer(
     navigationReducer(
@@ -302,7 +318,7 @@ describe("navigation plugin", () => {
       return action;
     });
 
-    await (executeNavigationJump() as any)(dispatch, () => root, undefined);
+    await runTestThunk(executeNavigationJump(), dispatch, () => root);
 
     const navigationActions = actions.filter(
       (action): action is { type: string; payload?: unknown } =>
@@ -348,7 +364,7 @@ describe("navigation plugin", () => {
       return action;
     });
 
-    await (executeNavigationJump() as any)(dispatch, () => root, undefined);
+    await runTestThunk(executeNavigationJump(), dispatch, () => root);
 
     const navigationActions = actions.filter(
       (action): action is { type: string; payload?: unknown } =>
@@ -437,11 +453,7 @@ describe("navigation plugin", () => {
       return action;
     });
 
-    await (replotNavigationDestination("Spin:1916") as any)(
-      dispatch,
-      () => root,
-      undefined,
-    );
+    await runTestThunk(replotNavigationDestination("Spin:1916"), dispatch, () => root);
 
     const navigationActions = actions.filter(
       (action): action is { type: string; payload?: unknown } =>
@@ -485,11 +497,7 @@ describe("navigation plugin", () => {
       return action;
     });
 
-    await (replotNavigationDestination("Spin:1916") as any)(
-      dispatch,
-      () => root,
-      undefined,
-    );
+    await runTestThunk(replotNavigationDestination("Spin:1916"), dispatch, () => root);
 
     const navigationActions = actions.filter(
       (action): action is { type: string; payload?: unknown } =>
@@ -532,11 +540,7 @@ describe("navigation plugin", () => {
       return action;
     });
 
-    await (replotNavigationDestination("Spin:1916") as any)(
-      dispatch,
-      () => root,
-      undefined,
-    );
+    await runTestThunk(replotNavigationDestination("Spin:1916"), dispatch, () => root);
 
     const navigationActions = actions.filter(
       (action): action is { type: string; payload?: unknown } =>
@@ -576,12 +580,14 @@ describe("navigation plugin", () => {
   it("hydrates a location-based jump six navigation snapshot", async () => {
     const root = createNavigationRoot(2);
     const actions: Array<{ type: string; payload?: unknown }> = [];
-    const dispatch = (action: { type: string; payload?: unknown }) => {
-      actions.push(action);
-      return action;
+    const dispatch = (action: unknown) => {
+      if (typeof action !== "object" || action === null || !("type" in action)) return action;
+      const typedAction = action as { type: string; payload?: unknown };
+      actions.push(typedAction);
+      return typedAction;
     };
 
-    await (hydrateNavigationSnapshot() as any)(dispatch, () => root, undefined);
+    await runTestThunk(hydrateNavigationSnapshot(), dispatch, () => root);
 
     const hydrated = actions.reduce(
       (state, action) => navigationReducer(state, action),
@@ -603,12 +609,14 @@ describe("navigation plugin", () => {
   it("keeps jump six snapshot data while filtering visible targets by ship jump rating", async () => {
     const root = createNavigationRoot(2);
     const actions: Array<{ type: string; payload?: unknown }> = [];
-    const dispatch = (action: { type: string; payload?: unknown }) => {
-      actions.push(action);
-      return action;
+    const dispatch = (action: unknown) => {
+      if (typeof action !== "object" || action === null || !("type" in action)) return action;
+      const typedAction = action as { type: string; payload?: unknown };
+      actions.push(typedAction);
+      return typedAction;
     };
 
-    await (hydrateNavigationSnapshot() as any)(dispatch, () => root, undefined);
+    await runTestThunk(hydrateNavigationSnapshot(), dispatch, () => root);
     const navigationState = actions.reduce(
       (state, action) => navigationReducer(state, action),
       initialNavigationState,
@@ -622,11 +630,14 @@ describe("navigation plugin", () => {
     };
     const jump6Root = {
       ...jump2Root,
-      ship: {
-        ...jump2Root.ship,
-        ship: jump2Root.ship.ship && {
-          ...jump2Root.ship.ship,
-          jumpRating: 6,
+      plugins: {
+        ...jump2Root.plugins,
+        shipPlugin: {
+          ...jump2Root.plugins.shipPlugin,
+          ship: jump2Root.plugins.shipPlugin.ship && {
+            ...jump2Root.plugins.shipPlugin.ship,
+            jumpRating: 6,
+          },
         },
       },
     };
@@ -645,15 +656,17 @@ describe("navigation plugin", () => {
     ]);
   });
 
-  it("uses the mock ship jump rating override after core ship refreshes", async () => {
+  it("uses the ship plugin jump rating override after core ship refreshes", async () => {
     const root = createNavigationRoot(1);
     const actions: Array<{ type: string; payload?: unknown }> = [];
-    const dispatch = (action: { type: string; payload?: unknown }) => {
-      actions.push(action);
-      return action;
+    const dispatch = (action: unknown) => {
+      if (typeof action !== "object" || action === null || !("type" in action)) return action;
+      const typedAction = action as { type: string; payload?: unknown };
+      actions.push(typedAction);
+      return typedAction;
     };
 
-    await (hydrateNavigationSnapshot() as any)(dispatch, () => root, undefined);
+    await runTestThunk(hydrateNavigationSnapshot(), dispatch, () => root);
     const navigationState = actions.reduce(
       (state, action) => navigationReducer(state, action),
       initialNavigationState,
@@ -662,9 +675,9 @@ describe("navigation plugin", () => {
       ...root,
       plugins: {
         ...root.plugins,
-        mockShip: {
-          ...root.plugins.mockShip,
-          lastMockedJumpRating: 6,
+        shipPlugin: {
+          ...root.plugins.shipPlugin,
+          developmentJumpRatingOverride: 6,
         },
         navigation: navigationState,
       },

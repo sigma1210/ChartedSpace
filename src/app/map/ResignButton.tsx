@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppDispatch } from "../../store/hooks";
-import { invalidateShip } from "../../store/slices/shipSlice";
+import { invalidateShip } from "../../plugins/ship";
 import { invalidateTurn } from "../../store/slices/turnSlice";
 import { fetchCharacters, invalidateCharacters } from "../../store/slices/characterSlice";
 import { openCharacterCreate, openCharacterList } from "../../store/slices/uiSlice";
