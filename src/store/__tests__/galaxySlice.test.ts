@@ -17,6 +17,7 @@ import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialShipPluginState } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
+import { initialTradeState } from "../../plugins/trade/tradeSlice";
 
 jest.mock("../../../Galaxy/sectors.json", () => ({
   Sectors: [
@@ -63,7 +64,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   });
 
 const makeRoot = (galaxy: GalaxyState): RootState =>
-  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState } });
+  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } });
 
 describe("galaxySlice reducers", () => {
   it("populates sectors from the index on initialization", () => {
@@ -198,7 +199,13 @@ describe("galaxy selectors", () => {
   it("selectShipSectorLoadStatus returns the current ship sector status", () => {
     const rootWithShip = {
       ...root,
-      ship: { ship: { sectorAbbr: "Spin" } },
+      plugins: {
+        ...root.plugins,
+        shipPlugin: {
+          ...root.plugins.shipPlugin,
+          ship: { sectorAbbr: "Spin" },
+        },
+      },
     } as RootState;
     expect(selectShipSectorLoadStatus(rootWithShip)).toBe("loading");
   });

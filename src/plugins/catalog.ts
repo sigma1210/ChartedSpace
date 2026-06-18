@@ -3,6 +3,7 @@ import { expenseScenarioPlugin } from "./expenseScenario";
 import { navigationPlugin } from "./navigation";
 import { shipPlugin } from "./ship";
 import { stayInLocationPlugin } from "./stayInLocation";
+import { tradePlugin } from "./trade";
 
 export const registeredPluginManifests = [
   economyPlugin,
@@ -10,4 +11,5 @@ export const registeredPluginManifests = [
   navigationPlugin,
   shipPlugin,
   stayInLocationPlugin,
+  tradePlugin,
 ] as const;

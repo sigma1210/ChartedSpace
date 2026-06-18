@@ -9,6 +9,7 @@ import hudReducer, {
 import { stayInLocationNextTurnHudId } from "../../plugins/stayInLocation/hudMetadata";
 import { expenseScenarioHudId } from "../../plugins/expenseScenario/hudMetadata";
 import { navigationSelectHudId } from "../../plugins/navigation";
+import { tradeHudId } from "../../plugins/trade";
 
 describe("hudSlice reducers", () => {
   it("returns initial HUD layout state", () => {
@@ -37,7 +38,7 @@ describe("hudSlice reducers", () => {
       pinned: true,
       offset: { x: -0.12, y: -0.06 },
     });
-    expect(initialHudState.layouts.trade).toEqual({
+    expect(initialHudState.layouts[tradeHudId]).toEqual({
       visible: false,
       pinned: true,
       offset: { x: 0.2, y: -0.1 },

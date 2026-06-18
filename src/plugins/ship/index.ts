@@ -1,5 +1,6 @@
 import type { PluginManifest } from "@/plugin-api/types";
 import { shipNavigationCapabilityId } from "@/plugins/shipNavigationCapabilities";
+import { shipTradeCapabilityId } from "@/plugins/shipTradeCapabilities";
 import { shipHudMetadata } from "./hudMetadata";
 import { shipPluginId } from "./metadata";
 import { shipPluginStateRegistration } from "./stateRegistration";
@@ -10,7 +11,7 @@ export const shipPlugin = {
     id: shipPluginId,
   },
   capabilities: {
-    provides: [shipNavigationCapabilityId],
+    provides: [shipNavigationCapabilityId, shipTradeCapabilityId],
   },
   state: shipPluginStateRegistration,
   huds: [
@@ -37,6 +38,9 @@ export {
   shipNavigationCapabilitiesProvider,
 } from "./shipNavigationCapabilities";
 export {
+  shipTradeCapabilitiesProvider,
+} from "./shipTradeCapabilities";
+export {
   selectActiveShip,
   selectIsShipDocked,
   selectOwnerOperatorCharacterId,
@@ -49,14 +53,13 @@ export {
   selectShipStatus,
 } from "./selectors";
 export {
-  buyCargoAndRefresh,
   fetchShip,
   invalidateShip,
-  sellCargoAndRefresh,
   setShipColor,
   setShipJumpRating,
   updateShipInStore,
-  type CargoLotSummary,
+  type CargoManifestLot,
   type CrewMember,
   type ShipSummary,
+  type WorldCoordinateToken,
 } from "./actions";

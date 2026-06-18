@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSelector, useStore } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { Coins, Globe2, Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
+import { Globe2, Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
@@ -49,7 +49,6 @@ import {
 } from "../../store/slices/systemSceneSlice";
 import { CharacterProfileHudContent } from "./CharacterProfileHud";
 import { MainWorldHud } from "./MainWorldHud";
-import { TradeSystemHudContent } from "./TradeSystemHud";
 import { SubsectorMiniMapHudContent } from "../map/SubsectorMiniMap";
 import { SectorMiniMapHudContent } from "../map/SectorMiniMap";
 import { GalaxyMiniMapHudContent } from "../map/GalaxyMiniMap";
@@ -1823,8 +1822,6 @@ const CameraPinnedSystemHud = ({
   onOpenMainWorldHud,
   characterProfileHudVisible,
   onOpenCharacterProfileHud,
-  tradeHudVisible,
-  onOpenTradeHud,
   pluginHudButtons,
 }: {
   world: World;
@@ -1839,8 +1836,6 @@ const CameraPinnedSystemHud = ({
   onOpenMainWorldHud: () => void;
   characterProfileHudVisible: boolean;
   onOpenCharacterProfileHud: () => void;
-  tradeHudVisible: boolean;
-  onOpenTradeHud: () => void;
   pluginHudButtons: Array<{
     id: string;
     openTitle: string;
@@ -1942,12 +1937,6 @@ const CameraPinnedSystemHud = ({
               >
                 <User size={13} aria-hidden="true" />
               </HudIconButton>
-              <HudIconButton
-                title={tradeHudVisible ? "Trade HUD visible" : "Open trade HUD"}
-                onClick={onOpenTradeHud}
-              >
-                <Coins size={13} aria-hidden="true" />
-              </HudIconButton>
               {pluginHudButtons.map(({ id, openTitle, visibleTitle, visible, Icon, onOpen }) => (
                 <HudIconButton
                   key={id}
@@ -1971,80 +1960,6 @@ const CameraPinnedSystemHud = ({
             HUD
           </button>
         )}
-      </Html>
-    </group>
-  );
-};
-
-const CameraPinnedTradeHud = ({
-  visible,
-  tradeHud,
-  store,
-  onClose,
-}: {
-  visible: boolean;
-  tradeHud: ReactNode;
-  store: AppStore;
-  onClose: () => void;
-}) => {
-  const dispatch = useAppDispatch();
-  const layout = useAppSelector(selectHudLayout("trade"));
-  const offset = layout.offset;
-  const pinned = layout.pinned;
-  const groupRef = useRef<THREE.Group>(null);
-  const { camera, size } = useThree();
-  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
-    id: "trade",
-    pinned,
-    offset,
-    size,
-    dispatch,
-  });
-
-  useFrame(() => {
-    const group = groupRef.current;
-    if (!group || !visible) return;
-
-    const distance = 4.8;
-    const perspective = camera as THREE.PerspectiveCamera;
-    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
-    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
-    const width = height * (size.width / Math.max(1, size.height));
-    const forward = new THREE.Vector3();
-    const right = new THREE.Vector3();
-    const up = new THREE.Vector3();
-
-    camera.getWorldDirection(forward);
-    right.setFromMatrixColumn(camera.matrixWorld, 0);
-    up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
-
-    group.position
-      .copy(camera.position)
-      .addScaledVector(forward, distance)
-      .addScaledVector(right, activeOffset.x * width * 0.5)
-      .addScaledVector(up, activeOffset.y * height * 0.5);
-    group.quaternion.copy(camera.quaternion);
-  });
-
-  if (!visible) return null;
-
-  return (
-    <group ref={groupRef}>
-      <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
-          <HudHeader
-            title="Trade"
-            pinned={pinned}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "trade", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close trade HUD"
-          />
-          <StoreBridge store={store}>
-            {tradeHud}
-          </StoreBridge>
-        </HudPanel>
       </Html>
     </group>
   );
@@ -2545,10 +2460,6 @@ type StarSystemViewSceneProps = {
   onOpenCharacterProfileHud?: () => void;
   onCloseCharacterProfileHud?: () => void;
   characterProfileHud?: ReactNode;
-  tradeHudVisible?: boolean;
-  onOpenTradeHud?: () => void;
-  onCloseTradeHud?: () => void;
-  tradeHud?: ReactNode;
   pluginHuds?: readonly PluginRenderableHudRegistration[];
   pluginHudVisibility?: Record<string, boolean>;
   navigationHudVisible?: boolean;
@@ -2593,10 +2504,6 @@ export const StarSystemViewScene = ({
   onOpenCharacterProfileHud = () => {},
   onCloseCharacterProfileHud = () => {},
   characterProfileHud = null,
-  tradeHudVisible = false,
-  onOpenTradeHud = () => {},
-  onCloseTradeHud = () => {},
-  tradeHud = null,
   pluginHuds = [],
   pluginHudVisibility = {},
   navigationHudVisible = false,
@@ -2773,8 +2680,6 @@ export const StarSystemViewScene = ({
                 onOpenMainWorldHud={onOpenMainWorldHud}
                 characterProfileHudVisible={characterProfileHudVisible}
                 onOpenCharacterProfileHud={onOpenCharacterProfileHud}
-                tradeHudVisible={tradeHudVisible}
-                onOpenTradeHud={onOpenTradeHud}
                 pluginHudButtons={pluginHuds
                   .filter((registration) => registration.id !== navigationSelectHudId)
                   .map((registration) => ({
@@ -2802,14 +2707,6 @@ export const StarSystemViewScene = ({
               characterProfileHud={characterProfileHud}
               store={reduxStore}
               onClose={onCloseCharacterProfileHud}
-            />
-          )}
-          {showHudControls && tradeHud && (
-            <CameraPinnedTradeHud
-              visible={tradeHudVisible}
-              tradeHud={tradeHud}
-              store={reduxStore}
-              onClose={onCloseTradeHud}
             />
           )}
           {showHudControls && pluginHuds.map((registration) => (
@@ -3051,7 +2948,6 @@ const StarSystemView = () => {
   const navigationHudVisible = useAppSelector(selectHudVisible(navigationSelectHudId));
   const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
   const characterProfileHudVisible = useAppSelector(selectHudVisible("characterProfile"));
-  const tradeHudVisible = useAppSelector(selectHudVisible("trade"));
   const pluginHudVisibility = useAppSelector((state) =>
     Object.fromEntries(
       registeredRenderablePluginHuds.map((registration) => [
@@ -3158,10 +3054,6 @@ const StarSystemView = () => {
           onOpenCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: true }))}
           onCloseCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: false }))}
           characterProfileHud={<CharacterProfileHudContent />}
-          tradeHudVisible={tradeHudVisible}
-          onOpenTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: true }))}
-          onCloseTradeHud={() => dispatch(setHudVisible({ id: "trade", visible: false }))}
-          tradeHud={<TradeSystemHudContent />}
           pluginHuds={registeredRenderablePluginHuds}
           pluginHudVisibility={pluginHudVisibility}
         />

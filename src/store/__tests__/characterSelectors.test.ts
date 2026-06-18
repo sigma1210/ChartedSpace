@@ -14,6 +14,7 @@ import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialShipPluginState, type ShipSummary } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
+import { initialTradeState } from "../../plugins/trade/tradeSlice";
 
 const makeCharacter = (
   id: string,
@@ -85,7 +86,7 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     sceneReady: true,
   },
   hud: initialHudState,
-  plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState },
+  plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
   ...overrides,
 });
 

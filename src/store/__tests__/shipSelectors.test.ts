@@ -1,5 +1,6 @@
 import type { RootState } from "../index";
 import {
+  shipPlugin,
   selectIsShipDocked,
   selectShipCargo,
   selectActiveShip,
@@ -10,14 +11,18 @@ import {
   selectShipLocation,
   selectShipPluginJumpRating,
   selectShipStatus,
+  type CargoManifestLot,
   type ShipSummary,
 } from "../../plugins/ship";
+import { shipTradeCapabilityId } from "../../plugins/shipTradeCapabilities";
+import { selectShipTradeCapabilities } from "../../plugins/runtime";
 import { initialHudState } from "../slices/hudSlice";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialShipPluginState } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
+import { initialTradeState } from "../../plugins/trade/tradeSlice";
 
 const makeRoot = (ship: ShipSummary | null): RootState => ({
   ui: {
@@ -74,12 +79,13 @@ const makeRoot = (ship: ShipSummary | null): RootState => ({
     shipPlugin: { ...initialShipPluginState, ship },
     navigation: initialNavigationState,
     stayInLocation: initialStayInLocationState,
+    trade: initialTradeState,
   },
 });
 
 describe("ship selectors", () => {
   it("selectShipCargo returns cargo or an empty hold", () => {
-    const cargo = [{ id: "lot-1", commodity: "Ag", tons: 2 }];
+    const cargo = [{ id: "lot-1", commodity: "Botanical Wonders", origin: "Spin:1910", tons: 2 }];
 
     expect(selectShipCargo(makeRoot({ cargo } as ShipSummary))).toBe(cargo);
     expect(selectShipCargo(makeRoot(null))).toEqual([]);
@@ -92,9 +98,10 @@ describe("ship selectors", () => {
   });
 
   it("ship plugin selectors read plugin-owned ship state", () => {
-    const cargo = [{
+    const cargo: CargoManifestLot[] = [{
       id: "lot-1",
-      commodity: "Ag",
+      commodity: "Botanical Wonders",
+      origin: "Spin:1910",
       tons: 2,
       purchasePrice: 100,
       originWorldName: "Regina",
@@ -146,5 +153,75 @@ describe("ship selectors", () => {
       sectorAbbr: "Spin",
       status: "docked",
     });
+  });
+
+  it("ship plugin provides trade capabilities for other plugins", () => {
+    const cargo: CargoManifestLot[] = [{
+      id: "lot-1",
+      commodity: "Botanical Wonders",
+      origin: "Spin:1910",
+      tons: 12,
+      purchasePrice: 12000,
+      originWorldName: "Regina",
+      salePricePerTon: null,
+      saleProceeds: null,
+      profitLoss: null,
+    }];
+    const ship = {
+      id: "ship-1",
+      name: "Free Trader",
+      type: "Free Trader",
+      jumpRating: 2,
+      status: "docked",
+      isMortgaged: true,
+      mortgagePaid: 0,
+      currentWorldId: "world-1",
+      worldName: "Regina",
+      sectorAbbr: "Spin",
+      hex: "1910",
+      cargoCapacity: 82,
+      destinationWorldId: null,
+      jumpArrivesTurn: null,
+      crew: [{
+        id: "crew-1",
+        role: "broker",
+        isOwnerOperator: false,
+        monthlySalary: 1000,
+        characterId: null,
+        characterName: null,
+        npcName: "Market Hand",
+        keySkillName: "Broker",
+        keySkillLevel: 2,
+      }],
+      cargo,
+    };
+    const capabilities = selectShipTradeCapabilities(makeRoot(ship));
+
+    expect(shipPlugin.capabilities?.provides).toContain(shipTradeCapabilityId);
+    expect(capabilities).toEqual({
+      shipId: "ship-1",
+      status: "docked",
+      isDocked: true,
+      currentWorld: {
+        id: "world-1",
+        name: "Regina",
+        sectorAbbr: "Spin",
+        hex: "1910",
+      },
+      cargoCapacity: 82,
+      usedCargoTons: 12,
+      remainingCargoTons: 70,
+      cargo,
+      crewTradeSkills: {
+        broker: 2,
+        streetwise: 0,
+        admin: 0,
+        steward: 0,
+      },
+    });
+  });
+
+  it("ship trade capabilities are unavailable without a ship", () => {
+    expect(selectShipTradeCapabilities(makeRoot(null))).toBeNull();
   });
 });

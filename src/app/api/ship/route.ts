@@ -65,7 +65,14 @@ export const GET = async () => {
             commodity:    true,
             tons:         true,
             purchasePrice: true,
-            originWorld:  { select: { name: true, ...UWP_SELECT } },
+            originWorld:  {
+              select: {
+                name: true,
+                hex: true,
+                sector: { select: { abbreviation: true } },
+                ...UWP_SELECT,
+              },
+            },
           },
           orderBy: { acquiredAt: "asc" },
         },
@@ -113,6 +120,9 @@ export const GET = async () => {
           return {
             id:              lot.id,
             commodity:       lot.commodity,
+            origin:          lot.originWorld
+              ? `${lot.originWorld.sector.abbreviation}:${lot.originWorld.hex}`
+              : null,
             tons:            lot.tons,
             purchasePrice:   lot.purchasePrice,
             originWorldName: lot.originWorld?.name ?? null,

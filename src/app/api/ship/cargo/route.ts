@@ -34,9 +34,12 @@ export const POST = async (request: Request) => {
         currentWorldId: true,
         currentWorld: {
           select: {
+            name:      true,
+            hex:       true,
             starport:  true,
             techLevel: true,
             remarks:   true,
+            sector:    { select: { abbreviation: true } },
           },
         },
         cargo: { select: { tons: true } },
@@ -128,6 +131,8 @@ export const POST = async (request: Request) => {
       cargoLot: {
         id:            result.lot.id,
         commodity:     result.lot.commodity,
+        origin:        `${ship.currentWorld.sector.abbreviation}:${ship.currentWorld.hex}`,
+        originWorldName: ship.currentWorld.name,
         tons:          result.lot.tons,
         purchasePrice: result.lot.purchasePrice,
       },

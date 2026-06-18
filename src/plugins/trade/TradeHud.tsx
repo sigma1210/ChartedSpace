@@ -1,32 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import type { World } from "../../types";
-import { buyCargoAndRefresh, sellCargoAndRefresh, type CargoLotSummary } from "../../plugins/ship";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { Coins } from "lucide-react";
+import type { CargoManifestLot } from "@/plugins/ship";
+import { selectShipTradeCapabilities } from "@/plugins/runtime";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  selectActiveWorld,
   selectActiveWorldCost,
   selectActiveWorldLocation,
   selectActiveWorldName,
   selectActiveWorldTechLevel,
   selectActiveWorldTradeCodes,
   selectExpectedSalePrice,
-  selectTargetWorld,
   selectTargetWorldLocation,
   selectTargetWorldName,
   selectTargetWorldTechLevel,
   selectTargetWorldTradeCodes,
   TRADE_CODE_LABELS,
   type WorldLocation,
-} from "../../store/selectors/galaxy.selectors";
-import {
-  selectIsShipDocked,
-  selectShipCargo,
-} from "../../plugins/ship";
-import { selectCurrentTurn } from "../../store/selectors/turn.selectors";
-import { selectOwnerOperatorCredits } from "../../store/selectors/character.selectors";
-import { selectCurrentMarketData, type CurrentMarketData } from "../../store/selectors/trade.selectors";
+} from "@/store/selectors/galaxy.selectors";
+import { selectCurrentTurn } from "@/store/selectors/turn.selectors";
+import { selectOwnerOperatorCredits } from "@/store/selectors/character.selectors";
+import { buyCargoAndRefresh, sellCargoAndRefresh } from "./actions";
+import { selectCurrentMarketData, type CurrentMarketData } from "./selectors";
 
 type TradeTab = "speculation" | "buy" | "sell";
 
@@ -71,7 +67,6 @@ const PriceLine = ({ amount, label }: { amount: number | null; label: string }) 
 
 const TradeWorldPanel = ({
   label,
-  world,
   worldName,
   location,
   tradeCodes,
@@ -81,7 +76,6 @@ const TradeWorldPanel = ({
   empty,
 }: {
   label: string;
-  world: World | null;
   worldName: string | null;
   location: WorldLocation | null;
   tradeCodes: string[];
@@ -116,26 +110,22 @@ const TradeWorldPanel = ({
 };
 
 const SpeculationPanel = ({
-  activeWorld,
   activeWorldName,
   activeWorldLocation,
   activeTradeCodes,
   activeWorldTechLevel,
   activeWorldCost,
-  targetWorld,
   targetWorldName,
   targetWorldLocation,
   targetTradeCodes,
   targetWorldTechLevel,
   expectedSalePrice,
 }: {
-  activeWorld: World | null;
   activeWorldName: string | null;
   activeWorldLocation: WorldLocation | null;
   activeTradeCodes: string[];
   activeWorldTechLevel: number | null;
   activeWorldCost: number | null;
-  targetWorld: World | null;
   targetWorldName: string | null;
   targetWorldLocation: WorldLocation | null;
   targetTradeCodes: string[];
@@ -146,7 +136,6 @@ const SpeculationPanel = ({
     <div className="divide-y divide-(--hud-border)">
       <TradeWorldPanel
         label="Origin"
-        world={activeWorld}
         worldName={activeWorldName}
         location={activeWorldLocation}
         tradeCodes={activeTradeCodes}
@@ -157,7 +146,6 @@ const SpeculationPanel = ({
       />
       <TradeWorldPanel
         label="Destination"
-        world={targetWorld}
         worldName={targetWorldName}
         location={targetWorldLocation}
         tradeCodes={targetTradeCodes}
@@ -177,16 +165,12 @@ const BuyPanel = ({
   marketData: CurrentMarketData | null;
   onBuyCargo: (commodity: string, tons: number) => Promise<void>;
 }) => {
-  const [commodity, setCommodity] = useState("");
   const [tons, setTons] = useState("1");
   const [buyState, setBuyState] = useState<"idle" | "buying" | "error">("idle");
   const [buyError, setBuyError] = useState<string | null>(null);
 
   const remainingCapacity = marketData?.remainingCapacity ?? 0;
-  const defaultCommodity = marketData?.tradeCodes[0] ?? "";
-  const selectedCommodity = marketData?.tradeCodes.includes(commodity)
-    ? commodity
-    : defaultCommodity;
+  const selectedCommodity = marketData?.commodity ?? "";
   const tonsNum = parseInt(tons, 10);
   const validTons = !Number.isNaN(tonsNum) && tonsNum >= 1 && tonsNum <= remainingCapacity;
   const totalCost = validTons && marketData ? tonsNum * marketData.pricePerTon : 0;
@@ -229,24 +213,14 @@ const BuyPanel = ({
             </span>
           </div>
 
+          <div className="border border-(--hud-border) bg-(--hud-bg)/35 px-1.5 py-1 font-mono">
+            <div className="text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Commodity</div>
+            <div className="truncate text-[9px] text-(--hud-text)">{selectedCommodity}</div>
+          </div>
+
           <div className="flex flex-wrap gap-1">
             {marketData.tradeCodes.map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => {
-                  setCommodity(code);
-                  setBuyState("idle");
-                  setBuyError(null);
-                }}
-                className={`border px-1 py-px font-mono text-[7px] uppercase tracking-wider transition-colors ${
-                  selectedCommodity === code
-                    ? "border-(--hud-accent) bg-(--hud-accent)/10 text-(--hud-accent)"
-                    : "border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent)"
-                }`}
-              >
-                {code}
-              </button>
+              <CodeBadge key={code} code={code} label={TRADE_CODE_LABELS[code]} />
             ))}
           </div>
 
@@ -299,7 +273,7 @@ const SellPanel = ({
   isDocked,
   onSellCargo,
 }: {
-  cargo: CargoLotSummary[];
+  cargo: CargoManifestLot[];
   isDocked: boolean;
   onSellCargo: (lotId: string) => Promise<void>;
 }) => {
@@ -359,9 +333,10 @@ const SellPanel = ({
                   {sellingLotId === lot.id ? "..." : "Sell"}
                 </button>
               </div>
-              {lot.originWorldName && (
+              {(lot.originWorldName || lot.origin) && (
                 <p className="mt-0.5 truncate font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">
-                  Origin {lot.originWorldName}
+                  Origin {lot.originWorldName ?? lot.origin}
+                  {lot.originWorldName && lot.origin ? ` (${lot.origin})` : ""}
                 </p>
               )}
               <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 font-mono text-[7px] uppercase tracking-wider">
@@ -405,13 +380,11 @@ const SellPanel = ({
 };
 
 export const TradeSystemHud = ({
-  activeWorld,
   activeWorldName,
   activeWorldLocation,
   activeTradeCodes,
   activeWorldTechLevel,
   activeWorldCost,
-  targetWorld,
   targetWorldName,
   targetWorldLocation,
   targetTradeCodes,
@@ -425,13 +398,11 @@ export const TradeSystemHud = ({
   onBuyCargo,
   onSellCargo,
 }: {
-  activeWorld: World | null;
   activeWorldName: string | null;
   activeWorldLocation: WorldLocation | null;
   activeTradeCodes: string[];
   activeWorldTechLevel: number | null;
   activeWorldCost: number | null;
-  targetWorld: World | null;
   targetWorldName: string | null;
   targetWorldLocation: WorldLocation | null;
   targetTradeCodes: string[];
@@ -439,7 +410,7 @@ export const TradeSystemHud = ({
   expectedSalePrice: number | null;
   credits?: number | null;
   currentTurn: number;
-  cargo: CargoLotSummary[];
+  cargo: CargoManifestLot[];
   isDocked: boolean;
   marketData: CurrentMarketData | null;
   onBuyCargo: (commodity: string, tons: number) => Promise<void>;
@@ -483,13 +454,11 @@ export const TradeSystemHud = ({
       <div className="h-40 overflow-y-auto">
         {activeTab === "speculation" && (
           <SpeculationPanel
-            activeWorld={activeWorld}
             activeWorldName={activeWorldName}
             activeWorldLocation={activeWorldLocation}
             activeTradeCodes={activeTradeCodes}
             activeWorldTechLevel={activeWorldTechLevel}
             activeWorldCost={activeWorldCost}
-            targetWorld={targetWorld}
             targetWorldName={targetWorldName}
             targetWorldLocation={targetWorldLocation}
             targetTradeCodes={targetTradeCodes}
@@ -513,21 +482,20 @@ export const TradeSystemHud = ({
 
 export const TradeSystemHudContent = () => {
   const dispatch = useAppDispatch();
-  const activeWorld = useAppSelector(selectActiveWorld);
   const activeWorldName = useAppSelector(selectActiveWorldName);
   const activeWorldLocation = useAppSelector(selectActiveWorldLocation);
   const activeTradeCodes = useAppSelector(selectActiveWorldTradeCodes);
   const activeWorldTechLevel = useAppSelector(selectActiveWorldTechLevel);
   const activeWorldCost = useAppSelector(selectActiveWorldCost);
-  const targetWorld = useAppSelector(selectTargetWorld);
   const targetWorldName = useAppSelector(selectTargetWorldName);
   const targetWorldLocation = useAppSelector(selectTargetWorldLocation);
   const targetTradeCodes = useAppSelector(selectTargetWorldTradeCodes);
   const targetWorldTechLevel = useAppSelector(selectTargetWorldTechLevel);
   const expectedSalePrice = useAppSelector(selectExpectedSalePrice);
   const currentTurn = useAppSelector(selectCurrentTurn);
-  const cargo = useAppSelector(selectShipCargo);
-  const isDocked = useAppSelector(selectIsShipDocked);
+  const shipTrade = useAppSelector(selectShipTradeCapabilities);
+  const cargo = shipTrade?.cargo ?? [];
+  const isDocked = shipTrade?.isDocked ?? false;
   const credits = useAppSelector(selectOwnerOperatorCredits);
   const marketData = useAppSelector(selectCurrentMarketData);
 
@@ -541,13 +509,11 @@ export const TradeSystemHudContent = () => {
 
   return (
     <TradeSystemHud
-      activeWorld={activeWorld}
       activeWorldName={activeWorldName}
       activeWorldLocation={activeWorldLocation}
       activeTradeCodes={activeTradeCodes}
       activeWorldTechLevel={activeWorldTechLevel}
       activeWorldCost={activeWorldCost}
-      targetWorld={targetWorld}
       targetWorldName={targetWorldName}
       targetWorldLocation={targetWorldLocation}
       targetTradeCodes={targetTradeCodes}
@@ -563,3 +529,5 @@ export const TradeSystemHudContent = () => {
     />
   );
 };
+
+export const TradeHudIcon = Coins;

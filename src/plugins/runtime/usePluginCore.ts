@@ -4,4 +4,5 @@ export {
   usePluginActionRunner,
   usePluginDispatch,
   usePluginSelector,
+  selectShipTradeCapabilities,
 } from ".";

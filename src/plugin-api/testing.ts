@@ -4,6 +4,7 @@ import { initialExpenseScenarioState } from "../plugins/expenseScenario";
 import { initialShipPluginState } from "../plugins/ship";
 import { initialNavigationState } from "../plugins/navigation";
 import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLocationSlice";
+import { initialTradeState } from "../plugins/trade/tradeSlice";
 
 export interface PluginTestRootStateOptions {
   currentTurn?: number;
@@ -79,6 +80,7 @@ export const createPluginTestRootState = ({
     },
     navigation: initialNavigationState,
     stayInLocation: initialStayInLocationState,
+    trade: initialTradeState,
     ...pluginState,
   },
 });

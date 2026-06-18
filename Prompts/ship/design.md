@@ -61,3 +61,60 @@ My guess: navigation must get jump rating from ship plugin through a ship provid
 
 ### i think the first step is stop calling the mock a mock - if we start treating it like the ship plugin - the ability to set jump rating via the hud is just a developmnet tool that allows us to alter the jump rating 
 
+
+## ciodex to reg
+I read Prompts/ship/design.md. The direction is clear: the current “mock ship” should become the first version of the real Ship plugin, and its jump-rating HUD is a development control, not a fake system.
+
+Before implementation, I only have a few real questions:
+
+Plugin identity
+Should we rename the plugin IDs/state keys now from mockShip / core.mockShip to ship / core.ship, even if the first HUD still only edits jump rating?
+My recommendation: yes. This matches your point that core/navigation should stop thinking of it as mock.
+
+### yes rename so it clear its not a mock
+
+State ownership in first pass
+The current HUD writes both:
+
+plugin state: plugins.mockShip.lastMockedJumpRating
+core state: ship.ship.jumpRating via setShipJumpRating
+For the first “real ship plugin” pass, should the plugin still write to core ship state as a temporary bridge, or should it only expose capability through the ship provider registry?
+My recommendation: keep the bridge for one pass, but rename it as a development override, not mock state.
+
+### keep the bridge for the foirst pass
+
+Development jump override
+Should the jump-rating control represent:
+
+the active ship’s actual jumpRating, or
+a temporary development override layered over the DB ship?
+Based on your design note, I think it should be a development override for now. The DB remains the real long-term source, but the HUD can override jump rating while we test navigation.
+
+### this is a local development override 
+
+
+Multiple ships
+DB currently has Ship.userId @unique, which enforces one ship per user. Since you want many ships with one active, do we postpone schema changes until after the plugin shell is renamed, or do we include the schema concept now?
+My recommendation: postpone schema changes. First pass is identity cleanup and provider boundary.
+### tyes postpone til later
+
+Name of first HUD
+Should the HUD title be something like Ship Systems or Ship Control instead of Mock Ship?
+My recommendation: Ship Systems, with the current jump selector inside it.
+
+### just "Ship"  
+
+
+My suggested first pass:
+
+Rename src/plugins/mockShip to src/plugins/ship.
+Rename plugin ID/state key/HUD ID from mock language to ship language.
+Rename state field from lastMockedJumpRating to something like developmentJumpRatingOverride.
+Rename HUD title from Mock Ship to Ship Systems.
+Keep current behavior: selecting jump rating updates navigation capability.
+Update tests/imports to use the new real ship plugin naming.
+Do not change DB schema yet.
+Do not add buying/selling/mortgage/cargo UI yet.
+## agreed
+
+

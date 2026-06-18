@@ -1,6 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "@/store";
-import { fetchCharacters, invalidateCharacters } from "@/store/slices/characterSlice";
 
 export const DEFAULT_SHIP_COLOR = "#9ca3af";
 
@@ -16,9 +15,12 @@ export interface CrewMember {
   keySkillLevel: number;
 }
 
-export interface CargoLotSummary {
+export type WorldCoordinateToken = `${string}:${string}`;
+
+export interface CargoManifestLot {
   id: string;
   commodity: string;
+  origin: WorldCoordinateToken | null;
   tons: number;
   purchasePrice: number;
   originWorldName: string | null;
@@ -43,7 +45,7 @@ export interface ShipSummary {
   destinationWorldId: string | null;
   jumpArrivesTurn: number | null;
   crew: CrewMember[];
-  cargo: CargoLotSummary[];
+  cargo: CargoManifestLot[];
 }
 
 export interface ShipPluginState {
@@ -75,44 +77,6 @@ export const fetchShip = createAsyncThunk(
       const status = (getState() as RootState).plugins.shipPlugin.status;
       return status === "idle";
     },
-  },
-);
-
-export const buyCargoAndRefresh = createAsyncThunk(
-  "shipPlugin/buyCargoAndRefresh",
-  async ({ commodity, tons }: { commodity: string; tons: number }, { dispatch }) => {
-    const response = await fetch("/api/ship/cargo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commodity, tons }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({})) as { error?: string };
-      throw new Error(error.error ?? "Purchase failed");
-    }
-
-    dispatch(invalidateShip());
-    await dispatch(fetchShip());
-    dispatch(invalidateCharacters());
-    await dispatch(fetchCharacters());
-  },
-);
-
-export const sellCargoAndRefresh = createAsyncThunk(
-  "shipPlugin/sellCargoAndRefresh",
-  async ({ lotId }: { lotId: string }, { dispatch }) => {
-    const response = await fetch(`/api/ship/cargo/${lotId}/sell`, { method: "POST" });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({})) as { error?: string };
-      throw new Error(error.error ?? "Sale failed");
-    }
-
-    dispatch(invalidateShip());
-    await dispatch(fetchShip());
-    dispatch(invalidateCharacters());
-    await dispatch(fetchCharacters());
   },
 );
 

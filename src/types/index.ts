@@ -85,6 +85,7 @@ export interface World {
   hexX: number;
   hexY: number;
   name: string;
+  commodity?: string;
   uwp: WorldUWP;
   remarks: string[];
   importance: string;

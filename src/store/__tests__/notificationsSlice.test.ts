@@ -16,6 +16,7 @@ import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialShipPluginState } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
+import { initialTradeState } from "../../plugins/trade/tradeSlice";
 
 const initialState: NotificationsState = { items: [] };
 
@@ -59,7 +60,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       sceneReady: true,
     },
     hud: initialHudState,
-    plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState },
+    plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
   };
 }
 
