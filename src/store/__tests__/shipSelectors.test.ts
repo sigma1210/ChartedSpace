@@ -42,7 +42,6 @@ const makeRoot = (ship: ShipSummary | null): RootState => ({
     showSubsectorMiniMap: true,
     showMainWorldHud: false,
     showCharacterProfileHud: false,
-    showTradeHud: false,
   },
   notifications: { items: [] },
   galaxy: {

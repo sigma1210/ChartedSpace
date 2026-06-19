@@ -39,7 +39,6 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       showSubsectorMiniMap: true,
       showMainWorldHud: false,
       showCharacterProfileHud: false,
-      showTradeHud: false,
     },
     notifications,
     galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null },

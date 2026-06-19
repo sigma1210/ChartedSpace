@@ -35,7 +35,6 @@ import {
   selectShowMainWorldHud,
   selectShowSectorMiniMap,
   selectShowSubsectorMiniMap,
-  selectShowTradeHud,
 } from "../selectors/ui.selectors";
 import type { UIState } from "../../types";
 import type { RootState } from "../index";
@@ -64,7 +63,6 @@ const initialState: UIState = {
   showSubsectorMiniMap: true,
   showMainWorldHud: false,
   showCharacterProfileHud: false,
-  showTradeHud: false,
 };
 
 const makeRoot = (ui: UIState): RootState => {
@@ -248,7 +246,6 @@ describe("ui selectors", () => {
     showSubsectorMiniMap: false,
     showMainWorldHud: true,
     showCharacterProfileHud: false,
-    showTradeHud: true,
   });
 
   it("selectActiveModal", () => expect(selectActiveModal(root)).toBe("search"));
@@ -267,7 +264,6 @@ describe("ui selectors", () => {
   it("selectShowSubsectorMiniMap", () => expect(selectShowSubsectorMiniMap(root)).toBe(false));
   it("selectShowMainWorldHud", () => expect(selectShowMainWorldHud(root)).toBe(true));
   it("selectShowCharacterProfileHud", () => expect(selectShowCharacterProfileHud(root)).toBe(false));
-  it("selectShowTradeHud", () => expect(selectShowTradeHud(root)).toBe(true));
 });
 
 describe("ui workflow thunks", () => {

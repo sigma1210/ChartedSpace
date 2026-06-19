@@ -55,7 +55,6 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     showSubsectorMiniMap: true,
     showMainWorldHud: false,
     showCharacterProfileHud: false,
-    showTradeHud: false,
   },
   notifications: { items: [] },
   galaxy: {

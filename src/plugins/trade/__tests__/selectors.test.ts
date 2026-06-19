@@ -1,13 +1,13 @@
-import type { RootState } from "../index";
-import { selectCurrentMarketData } from "../selectors/trade.selectors";
-import { initialHudState } from "../slices/hudSlice";
-import { initialEconomyState } from "../../plugins/economy";
-import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
-import { initialNavigationState } from "../../plugins/navigation";
-import { initialShipPluginState, type ShipSummary } from "../../plugins/ship";
-import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
-import { initialTradeState } from "../../plugins/trade/tradeSlice";
-import type { SectorDetail, World } from "../../types";
+import type { RootState } from "@/store";
+import { initialHudState } from "@/store/slices/hudSlice";
+import { initialEconomyState } from "@/plugins/economy";
+import { initialExpenseScenarioState } from "@/plugins/expenseScenario";
+import { initialNavigationState } from "@/plugins/navigation";
+import { initialShipPluginState, type ShipSummary } from "@/plugins/ship";
+import { initialStayInLocationState } from "@/plugins/stayInLocation/stayInLocationSlice";
+import type { SectorDetail, World } from "@/types";
+import { selectCurrentMarketData } from "../selectors";
+import { initialTradeState } from "../tradeSlice";
 
 const world = (commodity?: string): World => ({
   hex: "1910",

@@ -24,7 +24,6 @@ const initialState: UIState = {
   showSubsectorMiniMap: true,
   showMainWorldHud: false,
   showCharacterProfileHud: false,
-  showTradeHud: false,
 };
 
 const uiSlice = createSlice({
@@ -140,9 +139,6 @@ const uiSlice = createSlice({
     setCharacterProfileHudVisible(state, action: PayloadAction<boolean>) {
       state.showCharacterProfileHud = action.payload;
     },
-    setTradeHudVisible(state, action: PayloadAction<boolean>) {
-      state.showTradeHud = action.payload;
-    },
   },
 });
 
@@ -175,7 +171,6 @@ export const {
   setSectorMiniMapVisible,
   setMainWorldHudVisible,
   setCharacterProfileHudVisible,
-  setTradeHudVisible,
 } = uiSlice.actions;
 
 export const openSelectedWorldSystemDetail = createAsyncThunk(

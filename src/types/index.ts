@@ -40,7 +40,6 @@ export interface UIState {
   showSubsectorMiniMap: boolean;
   showMainWorldHud: boolean;
   showCharacterProfileHud: boolean;
-  showTradeHud: boolean;
 }
 
 export interface NotificationsState {
