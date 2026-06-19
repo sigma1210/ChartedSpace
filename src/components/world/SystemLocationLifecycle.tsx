@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { selectShipLocation } from "../../plugins/ship";
-import { selectWorldByCoord } from "../../store/selectors/galaxy.selectors";
 import {
   setActiveLocation,
 } from "../../store/slices/galaxySlice";
@@ -23,18 +22,25 @@ const subsectorFromHex = (hex: string): string => {
 export const SystemLocationLifecycle = () => {
   const dispatch = useAppDispatch();
   const shipLocation = useAppSelector(selectShipLocation);
-  const world = useAppSelector(
-    selectWorldByCoord(shipLocation?.sectorAbbr, shipLocation?.hex),
+  const currentSectorStatus = useAppSelector(
+    (state) => shipLocation?.sectorAbbr ? state.galaxy.loadingStatus[shipLocation.sectorAbbr] : null,
   );
 
   useEffect(() => {
-    if (!world || !shipLocation?.sectorAbbr) return;
+    if (!shipLocation?.sectorAbbr || !shipLocation.hex) return;
     dispatch(setRenderableLocation({
       sectorAbbr: shipLocation.sectorAbbr,
-      hex: world.hex,
+      hex: shipLocation.hex,
     }));
+  }, [dispatch, shipLocation?.sectorAbbr, shipLocation?.hex]);
+
+  // Gate snapshot on sector data being loaded — fetchShip can resolve before
+  // preloadGalaxySectors finishes, causing a stale snapshot with no world data.
+  useEffect(() => {
+    if (!shipLocation?.sectorAbbr || !shipLocation.hex) return;
+    if (currentSectorStatus !== "loaded") return;
     dispatch(hydrateNavigationSnapshot());
-  }, [dispatch, shipLocation?.sectorAbbr, world]);
+  }, [dispatch, shipLocation?.sectorAbbr, shipLocation?.hex, currentSectorStatus]);
 
   useEffect(() => {
     if (!shipLocation?.sectorAbbr || !shipLocation.hex) return;

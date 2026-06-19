@@ -35,12 +35,12 @@ export interface JumpRangeTarget {
   key: string;
   sectorAbbr: string;
   hex: string;
-  name: string;
-  starport: string;
+  name: string | null;
+  starport: string | null;
   distance: number;
   dq: number;
   dr: number;
-  world: World;
+  world: World | null;
 }
 
 export interface JumpRangeCell {
@@ -116,13 +116,8 @@ export const buildJumpRangeTargets = ({
     allSectors,
     sectorData,
   })
-    .filter((cell): cell is JumpRangeCell & {
-      sectorAbbr: string;
-      hex: string;
-      name: string;
-      starport: string;
-      world: World;
-    } => cell.inRange && !!cell.sectorAbbr && !!cell.hex && !!cell.name && !!cell.starport && !!cell.world)
+    .filter((cell): cell is JumpRangeCell & { sectorAbbr: string; hex: string } =>
+      cell.inRange && !!cell.sectorAbbr && !!cell.hex)
     .map((cell) => ({
       key: `${cell.sectorAbbr}:${cell.hex}`,
       sectorAbbr: cell.sectorAbbr,
@@ -136,7 +131,7 @@ export const buildJumpRangeTargets = ({
     }))
     .sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      return a.name.localeCompare(b.name);
+      return (a.name ?? a.hex).localeCompare(b.name ?? b.hex);
     });
 
 export const buildJumpRangeCells = ({
@@ -192,7 +187,7 @@ export const buildJumpRangeCells = ({
       name: world?.name ?? null,
       starport: world?.uwp.starport ?? null,
       world: world ?? null,
-      inRange: !isCenter && !!world,
+      inRange: !isCenter,
     });
   }
 

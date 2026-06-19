@@ -3,13 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/devAuth";
 
 interface ShipUpdateBody {
-  status?: "docked" | "in_jump";
-  currentWorldId?: string | null;
-  currentWorldHex?: string;
-  currentWorldSectorAbbr?: string;
-  destinationWorldHex?: string;
-  destinationWorldSectorAbbr?: string;
-  jumpArrivesTurn?: number | null;
+  status?:              "docked" | "in_jump";
+  currentLocation?:    string | null;
+  destinationLocation?: string | null;
+  jumpArrivesTurn?:    number | null;
 }
 
 interface AdvanceBody {
@@ -26,42 +23,11 @@ export const POST = async (request: Request) => {
     const body: AdvanceBody = await request.json().catch(() => ({}));
     const { shipUpdate } = body;
 
-    let currentWorldId: string | null | undefined;
-    if (shipUpdate?.currentWorldHex && shipUpdate?.currentWorldSectorAbbr) {
-      const world = await prisma.world.findFirst({
-        where: {
-          hex: shipUpdate.currentWorldHex,
-          sector: { abbreviation: shipUpdate.currentWorldSectorAbbr },
-        },
-        select: { id: true },
-      });
-      currentWorldId = world?.id ?? null;
-    } else if (shipUpdate && "currentWorldHex" in shipUpdate) {
-      currentWorldId = null;
-    }
-
-    // Resolve destination world FK if hex + sector provided
-    let destinationWorldId: string | null | undefined;
-    if (shipUpdate?.destinationWorldHex && shipUpdate?.destinationWorldSectorAbbr) {
-      const world = await prisma.world.findFirst({
-        where: {
-          hex: shipUpdate.destinationWorldHex,
-          sector: { abbreviation: shipUpdate.destinationWorldSectorAbbr },
-        },
-        select: { id: true },
-      });
-      destinationWorldId = world?.id ?? null;
-    } else if (shipUpdate && "destinationWorldHex" in shipUpdate) {
-      destinationWorldId = null;
-    }
-
-    // Build ship updates
     const shipData: Record<string, unknown> = {};
-    if (shipUpdate?.status) shipData.status = shipUpdate.status;
-    if (shipUpdate?.currentWorldId !== undefined) shipData.currentWorldId = shipUpdate.currentWorldId;
-    if (currentWorldId !== undefined) shipData.currentWorldId = currentWorldId;
-    if (destinationWorldId !== undefined) shipData.destinationWorldId = destinationWorldId;
-    if (shipUpdate?.jumpArrivesTurn !== undefined) shipData.jumpArrivesTurn = shipUpdate.jumpArrivesTurn;
+    if (shipUpdate?.status)                       shipData.status              = shipUpdate.status;
+    if (shipUpdate?.currentLocation !== undefined) shipData.currentLocation    = shipUpdate.currentLocation;
+    if (shipUpdate?.destinationLocation !== undefined) shipData.destinationLocation = shipUpdate.destinationLocation;
+    if (shipUpdate?.jumpArrivesTurn !== undefined) shipData.jumpArrivesTurn    = shipUpdate.jumpArrivesTurn;
 
     const hasShipUpdate = Object.keys(shipData).length > 0;
 

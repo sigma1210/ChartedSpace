@@ -1,7 +1,7 @@
 import type { JumpRangeTarget } from "@/lib/jumpRange";
 import type { RootState } from "@/store";
 import { selectShipNavigationCapabilities } from "@/plugin-api";
-import { selectActiveShip, selectShipLocation } from "@/plugins/ship";
+import { selectShipLocation } from "@/plugins/ship";
 import {
   navigationStateKey,
 } from "./metadata";
@@ -56,21 +56,19 @@ export const selectNavigationSnapshotOrigin = (state: NavigationPluginRoot) =>
   selectNavigationState(state).snapshotOrigin;
 
 export const selectNavigationCurrentOrigin = (state: NavigationPluginRoot): NavigationSnapshotOrigin | null => {
-  const ship = selectActiveShip(state);
   const location = selectShipLocation(state);
   if (!location?.sectorAbbr || !location.hex) return null;
   return {
-    worldId: ship?.currentWorldId ?? null,
-    worldName: location.worldName,
+    worldName:  location.worldName,
     sectorAbbr: location.sectorAbbr,
-    hex: location.hex,
+    hex:        location.hex,
   };
 };
 
 export const selectNavigationCurrentOriginKey = (state: NavigationPluginRoot) => {
   const origin = selectNavigationCurrentOrigin(state);
   if (!origin) return null;
-  return `${origin.worldId ?? "unknown"}:${origin.sectorAbbr}:${origin.hex}`;
+  return `${origin.sectorAbbr}:${origin.hex}`;
 };
 
 export const selectNavigationGridCells = (state: NavigationPluginRoot) =>
@@ -83,21 +81,24 @@ export const selectNavigationSnapshotWorldCells = (state: NavigationPluginRoot) 
 
 export const selectNavigationTargets = (state: NavigationPluginRoot): JumpRangeTarget[] =>
   selectNavigationGridCells(state)
-    .filter((cell) => cell.inRange && !!cell.sectorAbbr && !!cell.hex && !!cell.name && !!cell.starport && !!cell.world)
+    .filter((cell): cell is typeof cell & { sectorAbbr: string; hex: string } =>
+      cell.inRange && !!cell.sectorAbbr && !!cell.hex)
     .map((cell) => ({
       key: `${cell.sectorAbbr}:${cell.hex}`,
-      sectorAbbr: cell.sectorAbbr!,
-      hex: cell.hex!,
-      name: cell.name!,
-      starport: cell.starport!,
+      sectorAbbr: cell.sectorAbbr,
+      hex: cell.hex,
+      name: cell.name,
+      starport: cell.starport,
       distance: cell.distance,
       dq: cell.dq,
       dr: cell.dr,
-      world: cell.world!,
+      world: cell.world,
     }))
     .sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      return a.name.localeCompare(b.name);
+      const aName = a.name ?? a.hex;
+      const bName = b.name ?? b.hex;
+      return aName.localeCompare(bName);
     });
 
 export const selectNavigationSelectedDestinationKey = (

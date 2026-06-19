@@ -16,13 +16,10 @@ const initialState: TurnState = {
 
 export interface AdvanceTurnPayload {
   shipUpdate?: {
-    status?: "docked" | "in_jump";
-    currentWorldId?: string | null;
-    currentWorldHex?: string;
-    currentWorldSectorAbbr?: string;
-    destinationWorldHex?: string;
-    destinationWorldSectorAbbr?: string;
-    jumpArrivesTurn?: number | null;
+    status?:              "docked" | "in_jump";
+    currentLocation?:    string | null;
+    destinationLocation?: string | null;
+    jumpArrivesTurn?:    number | null;
   };
 }
 

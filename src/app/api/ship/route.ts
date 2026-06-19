@@ -18,6 +18,16 @@ const resolveDbUser = async () => {
   return await getCurrentUser();
 };
 
+const parseLocation = (location: string | null): { sectorAbbr: string; hex: string } | null => {
+  if (!location) return null;
+  const colonIdx = location.indexOf(":");
+  if (colonIdx === -1) return null;
+  return {
+    sectorAbbr: location.slice(0, colonIdx),
+    hex: location.slice(colonIdx + 1),
+  };
+};
+
 // ─── GET /api/ship ────────────────────────────────────────────────────────────
 
 export const GET = async () => {
@@ -28,24 +38,16 @@ export const GET = async () => {
     const ship = await prisma.ship.findUnique({
       where: { userId: dbUser.id },
       select: {
-        id:           true,
-        name:         true,
-        type:         true,
-        jumpRating:   true,
-        status:       true,
-        isMortgaged:  true,
-        mortgagePaid: true,
-        currentWorldId:     true,
-        destinationWorldId: true,
-        jumpArrivesTurn:    true,
-        currentWorld: {
-          select: {
-            name:   true,
-            hex:    true,
-            ...UWP_SELECT,
-            sector: { select: { abbreviation: true } },
-          },
-        },
+        id:                  true,
+        name:                true,
+        type:                true,
+        jumpRating:          true,
+        status:              true,
+        isMortgaged:         true,
+        mortgagePaid:        true,
+        currentLocation:     true,
+        destinationLocation: true,
+        jumpArrivesTurn:     true,
         crew: {
           select: {
             id:              true,
@@ -61,18 +63,11 @@ export const GET = async () => {
         },
         cargo: {
           select: {
-            id:           true,
-            commodity:    true,
-            tons:         true,
-            purchasePrice: true,
-            originWorld:  {
-              select: {
-                name: true,
-                hex: true,
-                sector: { select: { abbreviation: true } },
-                ...UWP_SELECT,
-              },
-            },
+            id:             true,
+            commodity:      true,
+            tons:           true,
+            purchasePrice:  true,
+            originLocation: true,
           },
           orderBy: { acquiredAt: "asc" },
         },
@@ -81,25 +76,59 @@ export const GET = async () => {
 
     if (!ship) return NextResponse.json({ ship: null });
 
+    const parsed = parseLocation(ship.currentLocation);
+
+    // Look up current world for display name and UWP (for cargo pricing)
+    const world = parsed
+      ? await prisma.world.findFirst({
+          where: {
+            hex:    parsed.hex,
+            sector: { abbreviation: parsed.sectorAbbr },
+          },
+          select: { name: true, ...UWP_SELECT },
+        })
+      : null;
+
+    // Collect unique origin locations from cargo and look them up in one query
+    const originLocations = [...new Set(ship.cargo.map(lot => lot.originLocation).filter(Boolean))] as string[];
+    const originWorlds = originLocations.length > 0
+      ? await prisma.world.findMany({
+          where: {
+            OR: originLocations.map(loc => {
+              const colonIdx = loc.indexOf(":");
+              return {
+                hex:    loc.slice(colonIdx + 1),
+                sector: { abbreviation: loc.slice(0, colonIdx) },
+              };
+            }),
+          },
+          select: { name: true, hex: true, sector: { select: { abbreviation: true } }, ...UWP_SELECT },
+        })
+      : [];
+
+    const originWorldByLocation = new Map(
+      originWorlds.map(w => [`${w.sector.abbreviation}:${w.hex}`, w])
+    );
+
     const typeData = shipTypes.find(s => s.type === ship.type);
 
     return NextResponse.json({
       ship: {
-        id:             ship.id,
-        name:           ship.name,
-        type:           ship.type,
-        jumpRating:     ship.jumpRating,
-        status:         ship.status,
-        isMortgaged:    ship.isMortgaged,
-        mortgagePaid:   ship.mortgagePaid,
-        currentWorldId:     ship.currentWorldId,
-        destinationWorldId: ship.destinationWorldId,
-        jumpArrivesTurn:    ship.jumpArrivesTurn,
-        worldName:          ship.currentWorld?.name ?? null,
-        sectorAbbr:     ship.currentWorld?.sector.abbreviation ?? null,
-        hex:            ship.currentWorld?.hex ?? null,
-        cargoCapacity:  typeData?.cargoCapacity ?? 0,
-        crew:           ship.crew.map(c => ({
+        id:                  ship.id,
+        name:                ship.name,
+        type:                ship.type,
+        jumpRating:          ship.jumpRating,
+        status:              ship.status,
+        isMortgaged:         ship.isMortgaged,
+        mortgagePaid:        ship.mortgagePaid,
+        currentLocation:     ship.currentLocation,
+        destinationLocation: ship.destinationLocation,
+        jumpArrivesTurn:     ship.jumpArrivesTurn,
+        worldName:           world?.name ?? null,
+        sectorAbbr:          parsed?.sectorAbbr ?? null,
+        hex:                 parsed?.hex ?? null,
+        cargoCapacity:       typeData?.cargoCapacity ?? 0,
+        crew: ship.crew.map(c => ({
           id:              c.id,
           role:            c.role,
           isOwnerOperator: c.isOwnerOperator,
@@ -110,22 +139,22 @@ export const GET = async () => {
           keySkillName:    c.keySkillName,
           keySkillLevel:   c.keySkillLevel,
         })),
-        cargo:          ship.cargo.map(lot => {
-          const salePricePerTon = ship.currentWorld
-            ? Math.round(calculateWorldPairSalePrice(lot.originWorld, ship.currentWorld))
+        cargo: ship.cargo.map(lot => {
+          const originWorld = lot.originLocation
+            ? originWorldByLocation.get(lot.originLocation) ?? null
             : null;
-          const saleProceeds = salePricePerTon === null ? null : salePricePerTon * lot.tons;
-          const profitLoss = saleProceeds === null ? null : saleProceeds - lot.purchasePrice;
-
+          const salePricePerTon = (world && originWorld)
+            ? Math.round(calculateWorldPairSalePrice(originWorld, world))
+            : null;
+          const saleProceeds = salePricePerTon !== null ? salePricePerTon * lot.tons : null;
+          const profitLoss   = saleProceeds   !== null ? saleProceeds - lot.purchasePrice : null;
           return {
             id:              lot.id,
             commodity:       lot.commodity,
-            origin:          lot.originWorld
-              ? `${lot.originWorld.sector.abbreviation}:${lot.originWorld.hex}`
-              : null,
+            origin:          lot.originLocation ?? null,
             tons:            lot.tons,
             purchasePrice:   lot.purchasePrice,
-            originWorldName: lot.originWorld?.name ?? null,
+            originWorldName: originWorld?.name ?? null,
             salePricePerTon,
             saleProceeds,
             profitLoss,
@@ -150,11 +179,11 @@ export const PATCH = async (request: Request) => {
     if (!ship) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const body: {
-      name?: string;
-      status?: string;
-      currentWorldId?: string | null;
-      destinationWorldId?: string | null;
-      jumpArrivesTurn?: number | null;
+      name?:               string;
+      status?:             string;
+      currentLocation?:    string | null;
+      destinationLocation?: string | null;
+      jumpArrivesTurn?:    number | null;
     } = await request.json();
     const updates: Record<string, unknown> = {};
 
@@ -166,12 +195,12 @@ export const PATCH = async (request: Request) => {
       updates.status = body.status;
     }
 
-    if (body.currentWorldId !== undefined) {
-      updates.currentWorldId = body.currentWorldId;
+    if (body.currentLocation !== undefined) {
+      updates.currentLocation = body.currentLocation;
     }
 
-    if (body.destinationWorldId !== undefined) {
-      updates.destinationWorldId = body.destinationWorldId;
+    if (body.destinationLocation !== undefined) {
+      updates.destinationLocation = body.destinationLocation;
     }
 
     if (body.jumpArrivesTurn !== undefined) {

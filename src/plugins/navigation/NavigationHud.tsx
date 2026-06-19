@@ -84,7 +84,7 @@ export const NavigationHudContent = () => {
             destinationKey: destination.key,
             sectorAbbr: destination.sectorAbbr,
             hex: destination.hex,
-            worldName: destination.name,
+            worldName: destination.name ?? null,
             jumpDistance: destination.distance,
             fuelCostEstimate: destination.distance * 10000,
           }
@@ -176,7 +176,7 @@ export const NavigationHudContent = () => {
               const fill = cell.isCenter ? "rgba(34,211,238,0.16)" : "transparent";
               const hasWorld = cell.inRange && cell.world;
               const hasAnyWorld = !!cell.world;
-              const targetKey = hasWorld && cell.sectorAbbr && cell.hex
+              const targetKey = cell.inRange && cell.sectorAbbr && cell.hex
                 ? `${cell.sectorAbbr}:${cell.hex}`
                 : null;
               const selected = targetKey !== null && targetKey === selectedDestinationKey;
@@ -195,10 +195,12 @@ export const NavigationHudContent = () => {
                   ? "#60a5fa"
                 : cell.isCenter
                   ? "var(--hud-accent)"
-                  : hasAnyWorld
-                    ? "var(--hud-border)"
-                    : "transparent";
-              const strokeWidth = hovered || selected || completedPlotEndpoint ? 1.45 : cell.isCenter ? 1.4 : hasAnyWorld ? 0.65 : 0;
+                : hasAnyWorld
+                  ? "var(--hud-border)"
+                : cell.inRange
+                  ? "rgba(34,211,238,0.12)"
+                  : "transparent";
+              const strokeWidth = hovered || selected || completedPlotEndpoint ? 1.45 : cell.isCenter ? 1.4 : hasAnyWorld ? 0.65 : cell.inRange ? 0.35 : 0;
 
               return (
                 <g
@@ -219,7 +221,7 @@ export const NavigationHudContent = () => {
                     dispatch(selectNavigationDestination(targetKey));
                   }}
                   onMouseEnter={() => {
-                    if (!hasWorld || !cell.name) return;
+                    if (!cell.inRange || !cell.name) return;
                     setHoveredWorld({
                       key: cell.key,
                       name: cell.name,
@@ -334,7 +336,7 @@ export const NavigationHudContent = () => {
               fontFamily="monospace"
               letterSpacing="0.8"
             >
-              {selectedDestination.name}
+              {selectedDestination.name ?? `${selectedDestination.sectorAbbr} ${selectedDestination.hex}`}
             </text>
           )}
           {plotSuccess && (

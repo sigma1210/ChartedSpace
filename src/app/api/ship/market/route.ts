@@ -11,6 +11,13 @@ import {
 
 const TRADE_SKILL_NAMES = ["Broker", "Streetwise", "Admin", "Steward"];
 
+const parseLocation = (location: string | null) => {
+  if (!location) return null;
+  const colonIdx = location.indexOf(":");
+  if (colonIdx === -1) return null;
+  return { sectorAbbr: location.slice(0, colonIdx), hex: location.slice(colonIdx + 1) };
+};
+
 // ─── GET /api/ship/market ─────────────────────────────────────────────────────
 
 export const GET = async () => {
@@ -21,17 +28,10 @@ export const GET = async () => {
     const ship = await prisma.ship.findUnique({
       where: { userId: dbUser.id },
       select: {
-        type:           true,
-        status:         true,
-        currentWorld: {
-          select: {
-            name:      true,
-            starport:  true,
-            techLevel: true,
-            remarks:   true,
-          },
-        },
-        cargo: { select: { tons: true } },
+        type:            true,
+        status:          true,
+        currentLocation: true,
+        cargo:           { select: { tons: true } },
         crew: {
           where:  { characterId: { not: null } },
           select: {
@@ -48,16 +48,25 @@ export const GET = async () => {
       },
     });
 
-    if (!ship)                 return NextResponse.json({ error: "Not found" },               { status: 404 });
+    if (!ship)                    return NextResponse.json({ error: "Not found" },             { status: 404 });
     if (ship.status !== "docked") return NextResponse.json({ error: "Ship is not docked" },   { status: 400 });
-    if (!ship.currentWorld)    return NextResponse.json({ error: "Ship has no current world" }, { status: 400 });
+
+    const parsed = parseLocation(ship.currentLocation);
+    if (!parsed) return NextResponse.json({ error: "Ship has no current location" }, { status: 400 });
+
+    const world = await prisma.world.findFirst({
+      where: { hex: parsed.hex, sector: { abbreviation: parsed.sectorAbbr } },
+      select: { name: true, starport: true, techLevel: true, remarks: true },
+    });
+
+    if (!world) return NextResponse.json({ error: "No world at current location — cannot trade" }, { status: 400 });
 
     const typeData          = shipTypes.find(s => s.type === ship.type);
     const cargoCapacity     = typeData?.cargoCapacity ?? 0;
     const usedTons          = ship.cargo.reduce((sum, c) => sum + c.tons, 0);
     const remainingCapacity = cargoCapacity - usedTons;
 
-    const tradeCodes  = filterTradeCodes(ship.currentWorld.remarks);
+    const tradeCodes  = filterTradeCodes(world.remarks);
     const allSkills   = ship.crew.flatMap(c => c.character?.skills ?? []);
 
     const tradeSkills: TradeSkills = {
@@ -67,12 +76,12 @@ export const GET = async () => {
       steward:    Math.max(0, ...allSkills.filter(s => s.name === "Steward").map(s => s.level)),
     };
 
-    const basePricePerTon  = deriveWorldPricePerTon(tradeCodes, ship.currentWorld.starport, ship.currentWorld.techLevel);
+    const basePricePerTon  = deriveWorldPricePerTon(tradeCodes, world.starport, world.techLevel);
     const skillModifier    = deriveSkillPriceModifier(tradeSkills);
     const finalPricePerTon = Math.round(basePricePerTon * skillModifier);
 
     return NextResponse.json({
-      worldName:         ship.currentWorld.name,
+      worldName:         world.name,
       tradeCodes,
       basePricePerTon,
       skillModifier,

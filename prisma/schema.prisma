@@ -17,26 +17,25 @@ model User {
 }
 
 model Character {
-  id             String           @id @default(cuid())
-  name           String
-  userId         String?
-  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  strength       Int
-  dexterity      Int
-  endurance      Int
-  intelligence   Int
-  education      Int
-  socialStanding Int
-  credits        Int              @default(0)
-  sheet          Json?
-  currentWorldId String?
-  currentWorld   World?           @relation(fields: [currentWorldId], references: [id])
-  skills         CharacterSkill[]
-  locationLog    LocationLog[]
-  crewAssignment ShipCrew?
-  shipPassage    ShipPassenger?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id              String           @id @default(cuid())
+  name            String
+  userId          String?
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  strength        Int
+  dexterity       Int
+  endurance       Int
+  intelligence    Int
+  education       Int
+  socialStanding  Int
+  credits         Int              @default(0)
+  sheet           Json?
+  currentLocation String?
+  skills          CharacterSkill[]
+  locationLog     LocationLog[]
+  crewAssignment  ShipCrew?
+  shipPassage     ShipPassenger?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model CharacterSkill {
@@ -51,8 +50,7 @@ model LocationLog {
   id          String    @id @default(cuid())
   characterId String
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  worldId     String
-  world       World     @relation(fields: [worldId], references: [id])
+  location    String
   arrivedAt   DateTime  @default(now())
 }
 
@@ -91,12 +89,7 @@ model World {
   gasGiants      Int           @default(0)
   belts          Int           @default(0)
   worldsInSystem Int           @default(0)
-  characters     Character[]
-  locationLogs   LocationLog[]
-  dockedShips    Ship[]        @relation("ShipCurrentWorld")
-  inboundShips   Ship[]        @relation("ShipDestinationWorld")
-  cargoOrigins   CargoLot[]
-  systemCaches    WorldSystemCache[]
+  systemCaches   WorldSystemCache[]
 
   @@unique([sectorId, hex])
 }
@@ -123,10 +116,8 @@ model Ship {
   mortgagePaid        Int             @default(0)
   status              String          @default("docked")
   sheet               Json?
-  currentWorldId      String?
-  currentWorld        World?          @relation("ShipCurrentWorld", fields: [currentWorldId], references: [id])
-  destinationWorldId  String?
-  destinationWorld    World?          @relation("ShipDestinationWorld", fields: [destinationWorldId], references: [id])
+  currentLocation     String?
+  destinationLocation String?
   jumpArrivesTurn     Int?
   userId              String?         @unique
   user                User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -162,13 +153,12 @@ model ShipPassenger {
 }
 
 model CargoLot {
-  id            String   @id @default(cuid())
-  shipId        String
-  ship          Ship     @relation(fields: [shipId], references: [id], onDelete: Cascade)
-  commodity     String
-  tons          Int
-  purchasePrice Int
-  originWorldId String
-  originWorld   World    @relation(fields: [originWorldId], references: [id])
-  acquiredAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  shipId         String
+  ship           Ship     @relation(fields: [shipId], references: [id], onDelete: Cascade)
+  commodity      String
+  tons           Int
+  purchasePrice  Int
+  originLocation String?
+  acquiredAt     DateTime @default(now())
 }

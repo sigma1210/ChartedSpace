@@ -76,7 +76,7 @@ export interface CharacterSheet {
   credits: number;
   benefits: Benefits;
   homeWorldId: string | null;
-  currentWorldId: string | null;
+  currentLocation: string | null;
   generation: Generation;
 }
 
@@ -102,5 +102,5 @@ export interface GenerationOptions {
   mode?: GenerationMode;
   targetRole?: string;
   homeWorldId?: string;
-  currentWorldId?: string;
+  currentLocation?: string;
 }

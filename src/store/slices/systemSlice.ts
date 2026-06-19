@@ -27,7 +27,7 @@ const initialState: SystemState = {
 };
 
 export const getSystemData = createAsyncThunk<
-  { key: string; data: SystemData; generatedTurn: number },
+  { key: string; data: SystemData | null; generatedTurn: number },
   SystemWorldKey,
   { state: RootState; rejectValue: { key: string; error: string } }
 >(
@@ -41,6 +41,9 @@ export const getSystemData = createAsyncThunk<
     );
 
     if (!response.ok) {
+      if (response.status === 404) {
+        return { key, data: null, generatedTurn: turn };
+      }
       const body = await response.json().catch(() => ({})) as { error?: string };
       return rejectWithValue({
         key,
@@ -85,11 +88,13 @@ const systemSlice = createSlice({
         state.errorByKey[key] = null;
       })
       .addCase(getSystemData.fulfilled, (state, action) => {
-        const { key, data } = action.payload;
-        state.records[key] = data;
+        const { key, data, generatedTurn } = action.payload;
+        if (data !== null) {
+          state.records[key] = data;
+        }
         state.statusByKey[key] = "loaded";
         state.errorByKey[key] = null;
-        state.generatedTurnByKey[key] = action.payload.generatedTurn;
+        state.generatedTurnByKey[key] = generatedTurn;
       })
       .addCase(getSystemData.rejected, (state, action) => {
         const key = action.payload?.key ?? systemCacheKey(action.meta.arg);

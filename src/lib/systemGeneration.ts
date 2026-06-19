@@ -327,9 +327,9 @@ export const buildSystemData = (
   const sectorAbbr = options.sectorAbbr ?? "";
   const hex = world.hex;
 
-  const stellar = Array.isArray(world.stellar)
+  const stellar = Array.isArray(world.stellar) && world.stellar.length > 0
     ? world.stellar
-    : world.stellar
+    : world.stellar && !Array.isArray(world.stellar)
       ? [world.stellar]
       : ["G2 V"];
 

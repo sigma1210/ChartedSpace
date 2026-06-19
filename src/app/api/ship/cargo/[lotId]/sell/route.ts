@@ -13,6 +13,13 @@ const UWP_SELECT = {
   techLevel:     true,
 } as const;
 
+const parseLocation = (location: string | null) => {
+  if (!location) return null;
+  const colonIdx = location.indexOf(":");
+  if (colonIdx === -1) return null;
+  return { sectorAbbr: location.slice(0, colonIdx), hex: location.slice(colonIdx + 1) };
+};
+
 // ─── POST /api/ship/cargo/[lotId]/sell ───────────────────────────────────────
 
 interface Params { params: Promise<{ lotId: string }> }
@@ -27,36 +34,60 @@ export const POST = async (_req: Request, { params }: Params) => {
     const lot = await prisma.cargoLot.findUnique({
       where: { id: lotId },
       select: {
-        id:            true,
-        tons:          true,
-        purchasePrice: true,
-        commodity:     true,
-        originWorld:   { select: UWP_SELECT },
-        ship: {
-          select: {
-            id:           true,
-            status:       true,
-            userId:       true,
-            currentWorld: { select: UWP_SELECT },
-            crew: {
-              where:  { isOwnerOperator: true },
-              select: { characterId: true },
-              take:   1,
-            },
-          },
+        id:             true,
+        tons:           true,
+        purchasePrice:  true,
+        commodity:      true,
+        originLocation: true,
+        shipId:         true,
+      },
+    });
+
+    if (!lot) return NextResponse.json({ error: "Lot not found" }, { status: 404 });
+
+    const ship = await prisma.ship.findUnique({
+      where: { id: lot.shipId },
+      select: {
+        id:              true,
+        status:          true,
+        userId:          true,
+        currentLocation: true,
+        crew: {
+          where:  { isOwnerOperator: true },
+          select: { characterId: true },
+          take:   1,
         },
       },
     });
 
-    if (!lot)                                  return NextResponse.json({ error: "Lot not found" },                    { status: 404 });
-    if (lot.ship.userId !== dbUser.id)         return NextResponse.json({ error: "Forbidden" },                        { status: 403 });
-    if (lot.ship.status !== "docked")          return NextResponse.json({ error: "Ship must be docked to sell cargo" }, { status: 400 });
-    if (!lot.ship.currentWorld)                return NextResponse.json({ error: "Ship has no current world" },         { status: 400 });
+    if (!ship)                          return NextResponse.json({ error: "Ship not found" },                   { status: 404 });
+    if (ship.userId !== dbUser.id)      return NextResponse.json({ error: "Forbidden" },                        { status: 403 });
+    if (ship.status !== "docked")       return NextResponse.json({ error: "Ship must be docked to sell cargo" }, { status: 400 });
 
-    const ownerCharacterId = lot.ship.crew[0]?.characterId ?? null;
+    const currentParsed = parseLocation(ship.currentLocation);
+    const originParsed  = parseLocation(lot.originLocation);
+
+    if (!currentParsed) return NextResponse.json({ error: "Ship has no current location" }, { status: 400 });
+    if (!originParsed)  return NextResponse.json({ error: "Lot has no origin location" },   { status: 400 });
+
+    const [currentWorld, originWorld] = await Promise.all([
+      prisma.world.findFirst({
+        where: { hex: currentParsed.hex, sector: { abbreviation: currentParsed.sectorAbbr } },
+        select: UWP_SELECT,
+      }),
+      prisma.world.findFirst({
+        where: { hex: originParsed.hex, sector: { abbreviation: originParsed.sectorAbbr } },
+        select: UWP_SELECT,
+      }),
+    ]);
+
+    if (!currentWorld) return NextResponse.json({ error: "No world at current location — cannot sell" }, { status: 400 });
+    if (!originWorld)  return NextResponse.json({ error: "No world at origin location" },                { status: 400 });
+
+    const ownerCharacterId = ship.crew[0]?.characterId ?? null;
     if (!ownerCharacterId) return NextResponse.json({ error: "No owner-operator found" }, { status: 400 });
 
-    const salePricePerTon = calculateWorldPairSalePrice(lot.originWorld, lot.ship.currentWorld);
+    const salePricePerTon = calculateWorldPairSalePrice(originWorld, currentWorld);
     const saleProceeds    = Math.round(salePricePerTon * lot.tons);
     const profitLoss      = saleProceeds - lot.purchasePrice;
 

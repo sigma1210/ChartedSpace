@@ -6,11 +6,10 @@ import {
   type JumpDriveOutcome,
   type JumpExecutionDestination,
 } from "@/plugin-api/workflows";
-import { selectActiveShip, selectShipLocation } from "@/plugins/ship";
+import { selectShipLocation } from "@/plugins/ship";
 import type { RootState } from "@/store";
 
 export interface NavigationSnapshotOrigin {
-  worldId: string | null;
   worldName: string | null;
   sectorAbbr: string;
   hex: string;
@@ -31,7 +30,7 @@ export interface NavigationPlottedRoute {
   destinationKey: string;
   sectorAbbr: string;
   hex: string;
-  worldName: string;
+  worldName: string | null;
   jumpDistance: number;
   fuelCostEstimate: number;
 }
@@ -96,15 +95,13 @@ export const initialNavigationState: NavigationState = {
 };
 
 const navigationSnapshotOriginFromState = (state: RootState): NavigationSnapshotOrigin | null => {
-  const ship = selectActiveShip(state);
   const location = selectShipLocation(state);
   if (!location?.sectorAbbr || !location.hex) return null;
 
   return {
-    worldId: ship?.currentWorldId ?? null,
-    worldName: location.worldName,
+    worldName:  location.worldName,
     sectorAbbr: location.sectorAbbr,
-    hex: location.hex,
+    hex:        location.hex,
   };
 };
 
@@ -114,7 +111,6 @@ const sameNavigationOrigin = (
 ) =>
   !!left &&
   !!right &&
-  left.worldId === right.worldId &&
   left.sectorAbbr === right.sectorAbbr &&
   left.hex === right.hex;
 
@@ -152,10 +148,15 @@ export const hydrateNavigationSnapshot = createAsyncThunk<
       if (!origin) return true;
 
       const navigationState = state.plugins.navigation;
-      return (
-        navigationState.snapshotStatus !== "loading" &&
-        !sameNavigationOrigin(navigationState.snapshotOrigin, origin)
-      ) || navigationState.snapshotStatus === "idle";
+      if (navigationState.snapshotStatus === "loading") return false;
+      if (navigationState.snapshotStatus === "idle") return true;
+      if (!sameNavigationOrigin(navigationState.snapshotOrigin, origin)) return true;
+
+      // Same origin: allow re-run if sector data is now loaded but snapshot found no worlds
+      // (happens when fetchShip resolves before preloadGalaxySectors completes)
+      const sectorLoaded = state.galaxy.loadingStatus[origin.sectorAbbr] === "loaded";
+      const hasWorldData = navigationState.snapshotCells.some((c) => c.world !== null);
+      return sectorLoaded && !hasWorldData;
     },
   },
 );

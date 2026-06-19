@@ -33,25 +33,20 @@ export const POST = async (_req: Request, { params }: Params) => {
     }
 
     const spawn = pickRandom(spawnPoints);
-    const world = await prisma.world.findFirst({
-      where: { hex: spawn.hex, sector: { abbreviation: spawn.sectorAbbr } },
-    });
-    if (!world) {
-      return NextResponse.json({ error: "Spawn world not found" }, { status: 500 });
-    }
+    const spawnLocation = `${spawn.sectorAbbr}:${spawn.hex}`;
 
     const freeTrader = shipTypes[0];
 
     await prisma.$transaction(async (tx) => {
       const ship = await tx.ship.create({
         data: {
-          name:           "Free Trader",
-          type:           freeTrader.type,
-          jumpRating:     freeTrader.jumpRating,
-          isMortgaged:    true,
-          status:         "docked",
-          currentWorldId: world.id,
-          userId:         user.id,
+          name:            "Free Trader",
+          type:            freeTrader.type,
+          jumpRating:      freeTrader.jumpRating,
+          isMortgaged:     true,
+          status:          "docked",
+          currentLocation: spawnLocation,
+          userId:          user.id,
         },
       });
 
@@ -67,7 +62,7 @@ export const POST = async (_req: Request, { params }: Params) => {
 
       await tx.character.update({
         where: { id: characterId },
-        data:  { currentWorldId: world.id },
+        data:  { currentLocation: spawnLocation },
       });
     });
 

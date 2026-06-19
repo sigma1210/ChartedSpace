@@ -434,7 +434,7 @@ export const generateCharacter = async (
       retirementPay: getRetirementPay(draft.terms, draft.career),
     },
     homeWorldId: options.homeWorldId ?? null,
-    currentWorldId: options.currentWorldId ?? null,
+    currentLocation: options.currentLocation ?? null,
     generation: {
       ruleset: "classic",
       mode,

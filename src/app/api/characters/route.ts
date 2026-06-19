@@ -33,28 +33,22 @@ const createShipForNewPlayer = async (
   role: CrewRole,
 ) => {
   const spawn = pickRandom(spawnPoints);
-  const world = await tx.world.findFirst({
-    where: { hex: spawn.hex, sector: { abbreviation: spawn.sectorAbbr } },
-  });
-  if (!world) {
-    console.warn("[createShipForNewPlayer] spawn world not found:", spawn);
-    return;
-  }
-
   const freeTrader = shipTypes[0];
   if (!freeTrader) {
     console.warn("[createShipForNewPlayer] no ship types configured");
     return;
   }
 
+  const spawnLocation = `${spawn.sectorAbbr}:${spawn.hex}`;
+
   const ship = await tx.ship.create({
     data: {
-      name:           "Free Trader",
-      type:           freeTrader.type,
-      jumpRating:     freeTrader.jumpRating,
-      isMortgaged:    true,
-      status:         "docked",
-      currentWorldId: world.id,
+      name:            "Free Trader",
+      type:            freeTrader.type,
+      jumpRating:      freeTrader.jumpRating,
+      isMortgaged:     true,
+      status:          "docked",
+      currentLocation: spawnLocation,
       userId,
     },
   });
@@ -71,7 +65,7 @@ const createShipForNewPlayer = async (
 
   await tx.character.update({
     where: { id: characterId },
-    data:  { currentWorldId: world.id },
+    data:  { currentLocation: spawnLocation },
   });
 };
 
@@ -93,33 +87,32 @@ export const GET = async () => {
         education:      true,
         socialStanding: true,
         credits:        true,
-        skills: { select: { name: true, level: true } },
-        currentWorld: {
-          select: {
-            name:   true,
-            hex:    true,
-            sector: { select: { abbreviation: true } },
-          },
-        },
+        skills:          { select: { name: true, level: true } },
+        currentLocation: true,
       },
     });
 
-    const items = rows.map(c => ({
-      id:             c.id,
-      name:           c.name,
-      upp:            [c.strength, c.dexterity, c.endurance, c.intelligence, c.education, c.socialStanding].map(toHex).join(""),
-      strength:       c.strength,
-      dexterity:      c.dexterity,
-      endurance:      c.endurance,
-      intelligence:   c.intelligence,
-      education:      c.education,
-      socialStanding: c.socialStanding,
-      credits:        c.credits,
-      skills:         c.skills,
-      worldName:      c.currentWorld?.name ?? null,
-      sectorAbbr:     c.currentWorld?.sector.abbreviation ?? null,
-      hex:            c.currentWorld?.hex ?? null,
-    }));
+    const items = rows.map(c => {
+      const colonIdx = c.currentLocation?.indexOf(":") ?? -1;
+      const sectorAbbr = colonIdx !== -1 ? c.currentLocation!.slice(0, colonIdx) : null;
+      const hex        = colonIdx !== -1 ? c.currentLocation!.slice(colonIdx + 1) : null;
+      return {
+        id:             c.id,
+        name:           c.name,
+        upp:            [c.strength, c.dexterity, c.endurance, c.intelligence, c.education, c.socialStanding].map(toHex).join(""),
+        strength:       c.strength,
+        dexterity:      c.dexterity,
+        endurance:      c.endurance,
+        intelligence:   c.intelligence,
+        education:      c.education,
+        socialStanding: c.socialStanding,
+        credits:        c.credits,
+        skills:         c.skills,
+        worldName:      null,
+        sectorAbbr,
+        hex,
+      };
+    });
 
     return NextResponse.json({ items });
   } catch (err) {
@@ -158,8 +151,7 @@ export const POST = async (request: Request) => {
         education:      sheet.upp.edu,
         socialStanding: sheet.upp.soc,
         credits,
-        sheet:          sheet as unknown as Prisma.InputJsonValue,
-        currentWorldId: sheet.currentWorldId ?? null,
+        sheet: sheet as unknown as Prisma.InputJsonValue,
       } as unknown as Prisma.CharacterUncheckedCreateInput;
 
       const created = await tx.character.create({ data });

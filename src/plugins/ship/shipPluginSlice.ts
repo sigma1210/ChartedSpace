@@ -37,12 +37,12 @@ export interface ShipSummary {
   status: string;
   isMortgaged: boolean;
   mortgagePaid: number;
-  currentWorldId: string | null;
+  currentLocation: string | null;
+  destinationLocation: string | null;
   worldName: string | null;
   sectorAbbr: string | null;
   hex: string | null;
   cargoCapacity: number;
-  destinationWorldId: string | null;
   jumpArrivesTurn: number | null;
   crew: CrewMember[];
   cargo: CargoManifestLot[];

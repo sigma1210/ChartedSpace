@@ -89,7 +89,8 @@ const createNavigationRoot = (jumpRating = 2): RootState => {
         ...root.plugins.shipPlugin,
         ship: root.plugins.shipPlugin.ship && {
           ...root.plugins.shipPlugin.ship,
-          currentWorldId: "world-regina",
+          currentLocation: "Spin:1910",
+          destinationLocation: null,
           worldName: "Regina",
           sectorAbbr: "Spin",
           hex: "1910",
@@ -596,7 +597,6 @@ describe("navigation plugin", () => {
 
     expect(hydrated.snapshotStatus).toBe("ready");
     expect(hydrated.snapshotOrigin).toEqual({
-      worldId: "world-regina",
       worldName: "Regina",
       sectorAbbr: "Spin",
       hex: "1910",
@@ -647,10 +647,10 @@ describe("navigation plugin", () => {
       "Six Parsecs",
     ]);
     expect(selectNavigationGridCells(jump2Root).some((cell) => cell.name === "Six Parsecs")).toBe(false);
-    expect(selectNavigationTargets(jump2Root).map((target) => target.name)).toEqual([
+    expect(selectNavigationTargets(jump2Root).filter((t) => t.world).map((target) => target.name)).toEqual([
       "Two Parsecs",
     ]);
-    expect(selectNavigationTargets(jump6Root).map((target) => target.name)).toEqual([
+    expect(selectNavigationTargets(jump6Root).filter((t) => t.world).map((target) => target.name)).toEqual([
       "Two Parsecs",
       "Six Parsecs",
     ]);
@@ -685,7 +685,7 @@ describe("navigation plugin", () => {
 
     expect(selectNavigationJumpRating(mockedRoot)).toBe(6);
     expect(selectShipNavigationCapabilities(mockedRoot)).toEqual({ jumpRating: 6 });
-    expect(selectNavigationTargets(mockedRoot).map((target) => target.name)).toEqual([
+    expect(selectNavigationTargets(mockedRoot).filter((t) => t.world).map((target) => target.name)).toEqual([
       "Two Parsecs",
       "Six Parsecs",
     ]);

@@ -40,7 +40,7 @@ export const shipTradeCapabilitiesProvider = {
       status: ship.status,
       isDocked: ship.status === "docked",
       currentWorld: {
-        id: ship.currentWorldId,
+        location: ship.currentLocation,
         name: ship.worldName,
         sectorAbbr: ship.sectorAbbr,
         hex: ship.hex,

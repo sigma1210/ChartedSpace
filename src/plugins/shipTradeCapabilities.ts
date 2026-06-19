@@ -8,7 +8,7 @@ export interface ShipTradeCapabilities {
   status: string;
   isDocked: boolean;
   currentWorld: {
-    id: string | null;
+    location: string | null;
     name: string | null;
     sectorAbbr: string | null;
     hex: string | null;

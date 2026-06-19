@@ -11,6 +11,13 @@ import {
 
 const TRADE_SKILL_NAMES = ["Broker", "Streetwise", "Admin", "Steward"];
 
+const parseLocation = (location: string | null) => {
+  if (!location) return null;
+  const colonIdx = location.indexOf(":");
+  if (colonIdx === -1) return null;
+  return { sectorAbbr: location.slice(0, colonIdx), hex: location.slice(colonIdx + 1) };
+};
+
 // ─── POST /api/ship/cargo ─────────────────────────────────────────────────────
 
 export const POST = async (request: Request) => {
@@ -28,20 +35,10 @@ export const POST = async (request: Request) => {
     const ship = await prisma.ship.findUnique({
       where: { userId: dbUser.id },
       select: {
-        id:             true,
-        type:           true,
-        status:         true,
-        currentWorldId: true,
-        currentWorld: {
-          select: {
-            name:      true,
-            hex:       true,
-            starport:  true,
-            techLevel: true,
-            remarks:   true,
-            sector:    { select: { abbreviation: true } },
-          },
-        },
+        id:              true,
+        type:            true,
+        status:          true,
+        currentLocation: true,
         cargo: { select: { tons: true } },
         crew: {
           where:  { characterId: { not: null } },
@@ -63,8 +60,20 @@ export const POST = async (request: Request) => {
 
     if (!ship)                    return NextResponse.json({ error: "Not found" },                        { status: 404 });
     if (ship.status !== "docked") return NextResponse.json({ error: "Ship must be docked to buy cargo" }, { status: 400 });
-    if (!ship.currentWorld || !ship.currentWorldId) {
-      return NextResponse.json({ error: "Ship has no current world" }, { status: 400 });
+
+    const parsed = parseLocation(ship.currentLocation);
+    if (!parsed) {
+      return NextResponse.json({ error: "Ship has no current location" }, { status: 400 });
+    }
+
+    // Look up world for trade calculations
+    const world = await prisma.world.findFirst({
+      where: { hex: parsed.hex, sector: { abbreviation: parsed.sectorAbbr } },
+      select: { id: true, name: true, hex: true, starport: true, techLevel: true, remarks: true, sector: { select: { abbreviation: true } } },
+    });
+
+    if (!world) {
+      return NextResponse.json({ error: "No world at current location — cannot trade" }, { status: 400 });
     }
 
     const typeData          = shipTypes.find(s => s.type === ship.type);
@@ -84,7 +93,7 @@ export const POST = async (request: Request) => {
       return NextResponse.json({ error: "No owner-operator found on crew" }, { status: 400 });
     }
 
-    const tradeCodes  = filterTradeCodes(ship.currentWorld.remarks);
+    const tradeCodes  = filterTradeCodes(world.remarks);
     const allSkills   = ship.crew.flatMap(c => c.character?.skills ?? []);
 
     const tradeSkills: TradeSkills = {
@@ -95,7 +104,7 @@ export const POST = async (request: Request) => {
     };
 
     const pricePerTon = Math.round(
-      deriveWorldPricePerTon(tradeCodes, ship.currentWorld.starport, ship.currentWorld.techLevel) *
+      deriveWorldPricePerTon(tradeCodes, world.starport, world.techLevel) *
       deriveSkillPriceModifier(tradeSkills)
     );
     const totalCost = pricePerTon * tons;
@@ -110,11 +119,11 @@ export const POST = async (request: Request) => {
 
       const lot = await tx.cargoLot.create({
         data: {
-          shipId:        ship.id,
+          shipId:         ship.id,
           commodity,
           tons,
-          purchasePrice: totalCost,
-          originWorldId: ship.currentWorldId!,
+          purchasePrice:  totalCost,
+          originLocation: ship.currentLocation!,
         },
       });
 
@@ -129,12 +138,12 @@ export const POST = async (request: Request) => {
 
     return NextResponse.json({
       cargoLot: {
-        id:            result.lot.id,
-        commodity:     result.lot.commodity,
-        origin:        `${ship.currentWorld.sector.abbreviation}:${ship.currentWorld.hex}`,
-        originWorldName: ship.currentWorld.name,
-        tons:          result.lot.tons,
-        purchasePrice: result.lot.purchasePrice,
+        id:              result.lot.id,
+        commodity:       result.lot.commodity,
+        origin:          ship.currentLocation,
+        originWorldName: world.name,
+        tons:            result.lot.tons,
+        purchasePrice:   result.lot.purchasePrice,
       },
       newCredits: result.newCredits,
     }, { status: 201 });

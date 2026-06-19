@@ -608,11 +608,10 @@ export const executeJumpWorkflow = createAsyncThunk<
 
       await dispatch(advanceTurn({
         shipUpdate: {
-          status: "docked",
-          currentWorldHex: finalLocation.hex,
-          currentWorldSectorAbbr: finalLocation.sectorAbbr,
-          destinationWorldHex: "",
-          jumpArrivesTurn: null,
+          status:             "docked",
+          currentLocation:    `${finalLocation.sectorAbbr}:${finalLocation.hex}`,
+          destinationLocation: null,
+          jumpArrivesTurn:    null,
         },
       }));
       const finalSystemRequest = dispatch(getSystemData(finalLocation));
