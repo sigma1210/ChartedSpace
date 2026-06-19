@@ -112,14 +112,11 @@ export const NavigationHudContent = () => {
       navigationState.plotStatus === "success" &&
       navigationState.plottedRoute?.destinationKey === selectedDestinationKey
     ) {
-      if (plottedRouteSystemStatus !== "loaded") {
-        if (plottedRouteSystemStatus !== "loading") {
-          void dispatch(getSystemData({
-            sectorAbbr: navigationState.plottedRoute.sectorAbbr,
-            hex: navigationState.plottedRoute.hex,
-          }));
-        }
-        return;
+      if (plottedRouteSystemStatus === "idle") {
+        void dispatch(getSystemData({
+          sectorAbbr: navigationState.plottedRoute.sectorAbbr,
+          hex: navigationState.plottedRoute.hex,
+        }));
       }
       void dispatch(executeNavigationJump());
       return;
