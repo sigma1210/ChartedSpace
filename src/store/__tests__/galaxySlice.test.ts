@@ -15,6 +15,11 @@ import {
 import type { GalaxyState, SectorDetail, World } from "../../types";
 import type { RootState } from "../index";
 import { initialHudState } from "../slices/hudSlice";
+import { initialDemographicsState } from "../../plugins/demographics";
+import {
+  getAllegianceColor,
+  getPrimaryStellarColor,
+} from "../../plugins/demographics/palettes";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialShipPluginState } from "../../plugins/ship";
@@ -67,7 +72,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   });
 
 const makeRoot = (galaxy: GalaxyState): RootState =>
-  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } });
+  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } });
 
 describe("galaxySlice reducers", () => {
   it("populates sectors from the index on initialization", () => {
@@ -318,6 +323,47 @@ describe("galaxy selectors", () => {
     });
     expect(getStyle({ sectorAbbr: "Core", hex: "0103" }, "subsectorMiniMap")).toEqual({
       fill: "white",
+      r: 5,
+    });
+  });
+
+  it("uses demographics plugin mode for unselected world dot colors", () => {
+    const stellarWorld = {
+      ...mockWorld("0103", "A"),
+      allegiance: "ImDc",
+      stellar: ["K9 V"],
+    } as unknown as World;
+    const root = makeRoot({
+      ...galaxyState,
+      sectorData: {
+        Core: {
+          ...mockCoreData,
+          worlds: [stellarWorld],
+        },
+      },
+    });
+
+    const stellarRoot = {
+      ...root,
+      plugins: {
+        ...root.plugins,
+        demographics: { selectedDotMode: "stellar" },
+      },
+    } as RootState;
+    const allegianceRoot = {
+      ...root,
+      plugins: {
+        ...root.plugins,
+        demographics: { selectedDotMode: "allegiance" },
+      },
+    } as RootState;
+
+    expect(selectWorldDotStyle(stellarRoot)({ sectorAbbr: "Core", hex: "0103" }, "subsectorMiniMap")).toEqual({
+      fill: getPrimaryStellarColor(stellarWorld),
+      r: 5,
+    });
+    expect(selectWorldDotStyle(allegianceRoot)({ sectorAbbr: "Core", hex: "0103" }, "subsectorMiniMap")).toEqual({
+      fill: getAllegianceColor("ImDc"),
       r: 5,
     });
   });

@@ -11,6 +11,7 @@ import {
 import type { NotificationsState } from "../../types";
 import type { RootState } from "../index";
 import { initialHudState } from "../slices/hudSlice";
+import { initialDemographicsState } from "../../plugins/demographics";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialShipPluginState } from "../../plugins/ship";
@@ -59,7 +60,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       sceneReady: true,
     },
     hud: initialHudState,
-    plugins: { economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
+    plugins: { demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
   };
 }
 

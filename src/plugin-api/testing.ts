@@ -1,4 +1,5 @@
 import type { RootState } from "../store";
+import { initialDemographicsState } from "../plugins/demographics";
 import { initialEconomyState } from "../plugins/economy";
 import { initialExpenseScenarioState } from "../plugins/expenseScenario";
 import { initialShipPluginState } from "../plugins/ship";
@@ -44,6 +45,7 @@ export const createPluginTestRootState = ({
   systemScene: {} as RootState["systemScene"],
   hud: {} as RootState["hud"],
   plugins: {
+    demographics: initialDemographicsState,
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,
     shipPlugin: {

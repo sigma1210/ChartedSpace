@@ -7,6 +7,7 @@ import {
   deriveWorldPricePerTon,
 } from "@/lib/trade";
 import { selectShipLocation } from "@/plugins/ship";
+import { selectDemographicWorldDotStyleResolver } from "@/plugins/demographics/selectors";
 import { uwpVal } from "../../lib/worldMap";
 
 // Wrapper so callers using the World shape still work
@@ -211,6 +212,7 @@ const resolveSelectionWorldDotStyle = ({
   shipSector,
   coord,
   mode,
+  baseStyle,
 }: {
   activeHex: string | null;
   activeSector: string | null;
@@ -220,6 +222,7 @@ const resolveSelectionWorldDotStyle = ({
   shipSector: string | null;
   coord: WorldCoord;
   mode: MapMode;
+  baseStyle: WorldDotStyle;
 }): WorldDotStyle => {
   const { hex, sectorAbbr } = coord;
   const selectedR = selectedWorldDotRadius(mode);
@@ -233,7 +236,7 @@ const resolveSelectionWorldDotStyle = ({
   if (targetHex === hex && targetSector === sectorAbbr) {
     return { fill: "var(--hud-success)", r: selectedR };
   }
-  return { fill: "white", r: 5 };
+  return baseStyle;
 };
 
 export const selectWorldDotStyle = createSelector(
@@ -244,6 +247,8 @@ export const selectWorldDotStyle = createSelector(
     selectTargetWorldSectorAbbr,
     selectShipWorldDotHex,
     selectShipWorldDotSector,
+    (state: RootState) => state.galaxy.sectorData,
+    selectDemographicWorldDotStyleResolver,
   ],
   (
     activeHex,
@@ -252,9 +257,15 @@ export const selectWorldDotStyle = createSelector(
     targetSector,
     shipHex,
     shipSector,
+    sectorData,
+    resolveDemographicStyle,
   ) =>
-    (coord: WorldCoord, mode: MapMode): WorldDotStyle =>
-      resolveSelectionWorldDotStyle({
+    (coord: WorldCoord, mode: MapMode): WorldDotStyle => {
+      const world = sectorData[coord.sectorAbbr]?.worlds.find((candidate) =>
+        candidate.hex === coord.hex,
+      ) ?? null;
+      const baseStyle = resolveDemographicStyle(world, coord, mode);
+      return resolveSelectionWorldDotStyle({
         activeHex,
         activeSector,
         targetHex,
@@ -263,7 +274,9 @@ export const selectWorldDotStyle = createSelector(
         shipSector,
         coord,
         mode,
-      }),
+        baseStyle,
+      });
+    },
 );
 
 export const selectTargetWorldLocation = (

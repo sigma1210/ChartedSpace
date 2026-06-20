@@ -17,6 +17,7 @@ import {
 import { shipTradeCapabilityId } from "../../plugins/ship";
 import { selectShipTradeCapabilities } from "../../plugins/runtime";
 import { initialHudState } from "../slices/hudSlice";
+import { initialDemographicsState } from "../../plugins/demographics";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialShipPluginState } from "../../plugins/ship";
@@ -73,6 +74,7 @@ const makeRoot = (ship: ShipSummary | null): RootState => ({
   },
   hud: initialHudState,
   plugins: {
+    demographics: initialDemographicsState,
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,
     shipPlugin: { ...initialShipPluginState, ship },

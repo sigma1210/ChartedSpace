@@ -1,5 +1,6 @@
 import type { RootState } from "@/store";
 import { initialHudState } from "@/store/slices/hudSlice";
+import { initialDemographicsState } from "@/plugins/demographics";
 import { initialEconomyState } from "@/plugins/economy";
 import { initialExpenseScenarioState } from "@/plugins/expenseScenario";
 import { initialNavigationState } from "@/plugins/navigation";
@@ -105,6 +106,7 @@ const makeRoot = (mainWorld: World): RootState => ({
   systemScene: {} as RootState["systemScene"],
   hud: initialHudState,
   plugins: {
+    demographics: initialDemographicsState,
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,
     shipPlugin: { ...initialShipPluginState, ship },
