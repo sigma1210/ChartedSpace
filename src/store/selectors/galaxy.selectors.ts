@@ -1,4 +1,5 @@
 import type { RootState } from "../index";
+import { createSelector } from "@reduxjs/toolkit";
 import type { World, WorldCoord, MapMode, WorldDotStyle } from "../../types";
 import {
   deriveTradeClassifications as deriveTradeCodes,
@@ -55,10 +56,12 @@ export const selectWorldByCoord =
 export const selectActiveWorldName = (state: RootState) =>
   selectActiveWorld(state)?.name ?? null;
 
-export const selectActiveWorldTradeCodes = (state: RootState): string[] => {
-  const world = selectActiveWorld(state);
-  return world ? deriveTradeCodes(world.uwp) : [];
-};
+const emptyTradeCodes: string[] = [];
+
+export const selectActiveWorldTradeCodes = createSelector(
+  [selectActiveWorld],
+  (world): string[] => world ? deriveTradeCodes(world.uwp) : emptyTradeCodes,
+);
 
 export const deriveWorldTechLevel = (world: World | null): number | null =>
   world ? uwpVal(world.uwp.techLevel) : null;
@@ -87,10 +90,10 @@ export const TRADE_CODE_LABELS: Record<string, string> = {
   Wa: "Water World",
 };
 
-export const selectActiveWorldTradeLabels = (state: RootState): string[] =>
-  selectActiveWorldTradeCodes(state).map(
-    (code) => TRADE_CODE_LABELS[code] ?? code,
-  );
+export const selectActiveWorldTradeLabels = createSelector(
+  [selectActiveWorldTradeCodes],
+  (tradeCodes): string[] => tradeCodes.map((code) => TRADE_CODE_LABELS[code] ?? code),
+);
 
 export const deriveWorldCost = (world: World): number =>
   deriveWorldPricePerTon(
@@ -121,18 +124,18 @@ export const selectTargetWorld = (state: RootState) => {
 export const selectTargetWorldName = (state: RootState) =>
   selectTargetWorld(state)?.name ?? null;
 
-export const selectTargetWorldTradeCodes = (state: RootState): string[] => {
-  const world = selectTargetWorld(state);
-  return world ? deriveTradeCodes(world.uwp) : [];
-};
+export const selectTargetWorldTradeCodes = createSelector(
+  [selectTargetWorld],
+  (world): string[] => world ? deriveTradeCodes(world.uwp) : emptyTradeCodes,
+);
 
 export const selectTargetWorldTechLevel = (state: RootState): number | null =>
   deriveWorldTechLevel(selectTargetWorld(state));
 
-export const selectTargetWorldTradeLabels = (state: RootState): string[] =>
-  selectTargetWorldTradeCodes(state).map(
-    (code) => TRADE_CODE_LABELS[code] ?? code,
-  );
+export const selectTargetWorldTradeLabels = createSelector(
+  [selectTargetWorldTradeCodes],
+  (tradeCodes): string[] => tradeCodes.map((code) => TRADE_CODE_LABELS[code] ?? code),
+);
 
 export const selectTargetWorldCost = (state: RootState): number | null => {
   const world = selectTargetWorld(state);
@@ -190,31 +193,78 @@ export const selectActiveWorldLocation = (
   };
 };
 
-export const selectWorldDotStyle = (state: RootState) => {
-  const activeHex    = state.galaxy.activeWorldHex;
-  const activeSector = state.galaxy.activeWorldSectorAbbr;
-  const targetHex    = state.galaxy.targetWorldHex;
-  const targetSector = state.galaxy.targetWorldSectorAbbr;
-  const shipLocation = selectShipLocation(state);
-  const shipHex      = shipLocation?.hex ?? null;
-  const shipSector   = shipLocation?.sectorAbbr ?? null;
+const selectShipWorldDotHex = (state: RootState) =>
+  state.plugins.shipPlugin.ship?.hex ?? null;
 
-  return (coord: WorldCoord, mode: MapMode): WorldDotStyle => {
-    const { hex, sectorAbbr } = coord;
-    const selectedR = mode === "galaxyMiniMap" ? 20 : 10;
+const selectShipWorldDotSector = (state: RootState) =>
+  state.plugins.shipPlugin.ship?.sectorAbbr ?? null;
 
-    if (shipHex && shipSector && shipHex === hex && shipSector === sectorAbbr) {
-      return { fill: "var(--hud-ship)",    r: selectedR * 2 };
-    }
-    if (activeHex === hex && activeSector === sectorAbbr) {
-      return { fill: "var(--hud-error)",   r: selectedR };
-    }
-    if (targetHex === hex && targetSector === sectorAbbr) {
-      return { fill: "var(--hud-success)", r: selectedR };
-    }
-    return { fill: "white", r: 5 };
-  };
+const selectedWorldDotRadius = (mode: MapMode) =>
+  mode === "galaxyMiniMap" ? 20 : 10;
+
+const resolveSelectionWorldDotStyle = ({
+  activeHex,
+  activeSector,
+  targetHex,
+  targetSector,
+  shipHex,
+  shipSector,
+  coord,
+  mode,
+}: {
+  activeHex: string | null;
+  activeSector: string | null;
+  targetHex: string | null;
+  targetSector: string | null;
+  shipHex: string | null;
+  shipSector: string | null;
+  coord: WorldCoord;
+  mode: MapMode;
+}): WorldDotStyle => {
+  const { hex, sectorAbbr } = coord;
+  const selectedR = selectedWorldDotRadius(mode);
+
+  if (shipHex && shipSector && shipHex === hex && shipSector === sectorAbbr) {
+    return { fill: "var(--hud-ship)",    r: selectedR * 2 };
+  }
+  if (activeHex === hex && activeSector === sectorAbbr) {
+    return { fill: "var(--hud-error)",   r: selectedR };
+  }
+  if (targetHex === hex && targetSector === sectorAbbr) {
+    return { fill: "var(--hud-success)", r: selectedR };
+  }
+  return { fill: "white", r: 5 };
 };
+
+export const selectWorldDotStyle = createSelector(
+  [
+    selectActiveWorldHex,
+    selectActiveWorldSectorAbbr,
+    selectTargetWorldHex,
+    selectTargetWorldSectorAbbr,
+    selectShipWorldDotHex,
+    selectShipWorldDotSector,
+  ],
+  (
+    activeHex,
+    activeSector,
+    targetHex,
+    targetSector,
+    shipHex,
+    shipSector,
+  ) =>
+    (coord: WorldCoord, mode: MapMode): WorldDotStyle =>
+      resolveSelectionWorldDotStyle({
+        activeHex,
+        activeSector,
+        targetHex,
+        targetSector,
+        shipHex,
+        shipSector,
+        coord,
+        mode,
+      }),
+);
 
 export const selectTargetWorldLocation = (
   state: RootState,

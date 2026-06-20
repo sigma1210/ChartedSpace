@@ -1,5 +1,5 @@
 import type { PluginManifest } from "@/plugin-api/types";
-import { shipNavigationCapabilityId } from "@/plugins/shipNavigationCapabilities";
+import { shipNavigationCapabilityId } from "@/plugins/ship";
 import { navigationHudMetadata } from "./hudMetadata";
 import { navigationPluginId } from "./metadata";
 import { navigationStateRegistration } from "./stateRegistration";

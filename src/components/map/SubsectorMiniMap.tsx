@@ -103,6 +103,7 @@ export const SubsectorMiniMapView = ({
 }: SubsectorMiniMapViewProps) => (
   <motion.div
     layout
+    initial={{ maxWidth: visible ? 1000 : 32 }}
     animate={{ maxWidth: visible ? 1000 : 32 }}
     transition={TRANSITION}
     className="shrink-0 overflow-hidden flex flex-col gap-2 select-none"

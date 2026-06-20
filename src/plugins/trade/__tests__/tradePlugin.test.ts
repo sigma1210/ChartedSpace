@@ -2,7 +2,7 @@ import { registeredPluginHudLayouts } from "../../hudLayouts";
 import { registeredPluginHudRenderers } from "../../hudRenderers";
 import { registeredPluginManifests } from "../../catalog";
 import { pluginReducers } from "../../registry";
-import { shipTradeCapabilityId } from "../../shipTradeCapabilities";
+import { shipTradeCapabilityId } from "../../ship";
 import { tradePlugin } from "..";
 import {
   buyCargoAndRefresh,

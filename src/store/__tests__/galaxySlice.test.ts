@@ -6,8 +6,11 @@ import {
   selectSectorLoadStatus,
   selectShipSectorLoadStatus,
   selectIsSectorLoaded,
+  selectActiveWorldTradeCodes,
   selectActiveWorldTechLevel,
+  selectTargetWorldTradeCodes,
   selectTargetWorldTechLevel,
+  selectWorldDotStyle,
 } from "../selectors/galaxy.selectors";
 import type { GalaxyState, SectorDetail, World } from "../../types";
 import type { RootState } from "../index";
@@ -237,5 +240,85 @@ describe("galaxy selectors", () => {
 
     expect(selectActiveWorldTechLevel(rootWithWorlds)).toBe(10);
     expect(selectTargetWorldTechLevel(rootWithWorlds)).toBe(12);
+  });
+
+  it("returns stable trade code arrays for unchanged world selections", () => {
+    const rootWithWorlds = makeRoot({
+      ...galaxyState,
+      sectorData: {
+        Core: {
+          ...mockCoreData,
+          worlds: [mockWorld("0101", "A"), mockWorld("0102", "C")],
+        },
+      },
+      activeWorldSectorAbbr: "Core",
+      activeWorldHex: "0101",
+      targetWorldSectorAbbr: "Core",
+      targetWorldHex: "0102",
+    });
+
+    expect(selectActiveWorldTradeCodes(rootWithWorlds)).toBe(
+      selectActiveWorldTradeCodes(rootWithWorlds),
+    );
+    expect(selectTargetWorldTradeCodes(rootWithWorlds)).toBe(
+      selectTargetWorldTradeCodes(rootWithWorlds),
+    );
+  });
+
+  it("returns a stable world dot style function for unchanged map state", () => {
+    const rootWithWorlds = makeRoot({
+      ...galaxyState,
+      activeWorldSectorAbbr: "Core",
+      activeWorldHex: "0101",
+      targetWorldSectorAbbr: "Core",
+      targetWorldHex: "0102",
+    });
+    const rootWithShip = {
+      ...rootWithWorlds,
+      plugins: {
+        ...rootWithWorlds.plugins,
+        shipPlugin: {
+          ...initialShipPluginState,
+          ship: {
+            id: "ship-1",
+            name: "Test Ship",
+            type: "Free Trader",
+            jumpRating: 1,
+            status: "docked",
+            isMortgaged: false,
+            mortgagePaid: 0,
+            currentLocation: "Spin:1910",
+            destinationLocation: null,
+            worldName: "Regina",
+            sectorAbbr: "Spin",
+            hex: "1910",
+            cargoCapacity: 82,
+            jumpArrivesTurn: null,
+            crew: [],
+            cargo: [],
+          },
+        },
+      },
+    } as RootState;
+
+    const getStyle = selectWorldDotStyle(rootWithShip);
+
+    expect(getStyle).toBe(selectWorldDotStyle(rootWithShip));
+    expect(getStyle({ sectorAbbr: "Spin", hex: "1910" }, "subsectorMiniMap")).toEqual({
+      fill: "var(--hud-ship)",
+      r: 20,
+    });
+    expect(getStyle({ sectorAbbr: "Core", hex: "0101" }, "subsectorMiniMap")).toEqual({
+      fill: "var(--hud-error)",
+      r: 10,
+    });
+    expect(getStyle({ sectorAbbr: "Core", hex: "0102" }, "subsectorMiniMap")).toEqual({
+      fill: "var(--hud-success)",
+      r: 10,
+    });
+    expect(getStyle({ sectorAbbr: "Core", hex: "0103" }, "subsectorMiniMap")).toEqual({
+      fill: "white",
+      r: 5,
+    });
   });
 });

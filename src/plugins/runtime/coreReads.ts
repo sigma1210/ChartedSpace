@@ -3,14 +3,20 @@
 import { useAppSelector } from "../../store/hooks";
 import type { RootState } from "../../store";
 import { selectCurrentTurn, selectTurnStatus } from "../../store/selectors/turn.selectors";
-import { registeredShipNavigationCapabilitiesProviders } from "../shipNavigationCapabilityProviders";
-import { registeredShipTradeCapabilitiesProviders } from "../shipTradeCapabilityProviders";
 import {
   resolveShipNavigationCapabilities,
-} from "../shipNavigationCapabilities";
-import {
   resolveShipTradeCapabilities,
-} from "../shipTradeCapabilities";
+  shipNavigationCapabilitiesProvider,
+  shipTradeCapabilitiesProvider,
+} from "../ship";
+
+const registeredShipNavigationCapabilitiesProviders = [
+  shipNavigationCapabilitiesProvider,
+] as const;
+
+const registeredShipTradeCapabilitiesProviders = [
+  shipTradeCapabilitiesProvider,
+] as const;
 
 export const useCoreCurrentTurn = () => useAppSelector(selectCurrentTurn);
 

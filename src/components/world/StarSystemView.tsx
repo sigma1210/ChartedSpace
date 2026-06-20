@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useCallback, useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useSelector, useStore } from "react-redux";
+import { shallowEqual, useSelector, useStore } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import { Globe2, Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
@@ -2948,13 +2948,15 @@ const StarSystemView = () => {
   const navigationHudVisible = useAppSelector(selectHudVisible(navigationSelectHudId));
   const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
   const characterProfileHudVisible = useAppSelector(selectHudVisible("characterProfile"));
-  const pluginHudVisibility = useAppSelector((state) =>
-    Object.fromEntries(
-      registeredRenderablePluginHuds.map((registration) => [
-        registration.id,
-        state.hud.layouts[registration.id]?.visible ?? false,
-      ]),
-    ) as Record<string, boolean>,
+  const pluginHudVisibility = useAppSelector(
+    (state) =>
+      Object.fromEntries(
+        registeredRenderablePluginHuds.map((registration) => [
+          registration.id,
+          state.hud.layouts[registration.id]?.visible ?? false,
+        ]),
+      ) as Record<string, boolean>,
+    shallowEqual,
   );
   const renderedSceneMode = useAppSelector(selectSystemSceneMode);
   const showWarpLayer = useAppSelector(selectShowWarpLayer);

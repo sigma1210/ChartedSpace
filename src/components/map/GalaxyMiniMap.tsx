@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { selectAllSectors, selectActiveSectorAbbr, selectWorldDotStyle } from "../../store/selectors/galaxy.selectors";
-import { loadSector, setActiveSector } from "../../store/slices/galaxySlice";
+import { setActiveSector } from "../../store/slices/galaxySlice";
 import { toggleGalaxyMiniMap } from "../../store/slices/uiSlice";
 import type { MapMode, SectorDetail, SectorMeta, WorldCoord, WorldDotStyle } from "../../types";
 import { GalaxyStarFieldView } from "./GalaxyStarField";
@@ -39,6 +38,7 @@ export const GalaxyMiniMapView = ({
   return (
     <motion.div
       layout
+      initial={{ maxWidth: visible ? 1000 : 32 }}
       animate={{ maxWidth: visible ? 1000 : 32 }}
       transition={TRANSITION}
       className="shrink-0 overflow-hidden flex flex-col gap-2"
@@ -136,16 +136,7 @@ export const GalaxyMiniMapHudContent = () => {
   const allSectors = useAppSelector(selectAllSectors);
   const activeSectorAbbr = useAppSelector(selectActiveSectorAbbr);
   const sectorData = useAppSelector(s => s.galaxy.sectorData);
-  const loadingStatus = useAppSelector(s => s.galaxy.loadingStatus);
   const getStyle = useAppSelector(selectWorldDotStyle);
-
-  useEffect(() => {
-    for (const sector of allSectors) {
-      const status = loadingStatus[sector.Abbreviation];
-      if (status === "loaded" || status === "loading") continue;
-      dispatch(loadSector(sector.Abbreviation));
-    }
-  }, [allSectors, dispatch, loadingStatus]);
 
   return (
     <GalaxyMiniMapView

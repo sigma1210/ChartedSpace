@@ -14,7 +14,7 @@ import {
   type CargoManifestLot,
   type ShipSummary,
 } from "../../plugins/ship";
-import { shipTradeCapabilityId } from "../../plugins/shipTradeCapabilities";
+import { shipTradeCapabilityId } from "../../plugins/ship";
 import { selectShipTradeCapabilities } from "../../plugins/runtime";
 import { initialHudState } from "../slices/hudSlice";
 import { initialEconomyState } from "../../plugins/economy";

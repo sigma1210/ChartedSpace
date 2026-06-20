@@ -120,7 +120,6 @@ export interface ExecuteJumpWorkflowInput extends JumpExecutionRequest {
   driveRoll?: number;
   transitionDurationMs?: number;
   metadata?: Record<string, unknown>;
-  debug?: AdvanceTurnWorkflowDebugInput;
 }
 
 export interface ExecuteJumpWorkflowResult {
@@ -519,6 +518,27 @@ const rejectedWorkflowEffect = (
   resolutions: PluginEffectResolution[],
 ) => resolutions.find((resolution) => resolution.status === "rejected");
 
+const buildJumpTurnAdvanceInput = (
+  input: ExecuteJumpWorkflowInput,
+  finalLocation: JumpExecutionDestination,
+  driveOutcome: JumpDriveOutcome,
+): AdvanceTurnWorkflowInput => ({
+  source: input.source,
+  lifecycle: "world",
+  payload: {
+    shipUpdate: {
+      status:             "docked",
+      currentLocation:    `${finalLocation.sectorAbbr}:${finalLocation.hex}`,
+      ...(driveOutcome === "failed"
+        ? {}
+        : {
+          destinationLocation: null,
+          jumpArrivesTurn:    null,
+        }),
+    },
+  },
+});
+
 export const executeJumpWorkflow = createAsyncThunk<
   ExecuteJumpWorkflowResult,
   ExecuteJumpWorkflowInput,
@@ -531,16 +551,6 @@ export const executeJumpWorkflow = createAsyncThunk<
   ): Promise<ExecuteJumpWorkflowResult> => {
     const state = getState() as RootState;
     const currentLocation = currentJumpLocation(state);
-    const checkpoint = createCheckpointEmitter(
-      {
-        source: input.source,
-        lifecycle: "jump-start",
-        metadata: input.metadata,
-        debug: input.debug,
-      },
-      dispatch,
-      state.turn.currentTurn,
-    );
     const pluginContext = {
       source: input.source,
       currentTurn: state.turn.currentTurn,
@@ -549,30 +559,16 @@ export const executeJumpWorkflow = createAsyncThunk<
       buildJumpFuelEffect(input, state),
     ];
 
-    checkpoint("workflowRequested", "Jump workflow requested", input.source);
-    checkpoint(
-      "contextBuilt",
-      "Jump context built",
-      currentLocation
-        ? `${currentLocation.sectorAbbr} ${currentLocation.hex}`
-        : "No current ship location",
-    );
-
     const effectResolutions = await resolveWorkflowEffects({
       effects: proposedEffects,
       context: pluginContext,
-      checkpoint,
+      checkpoint: () => {},
       currentTurn: state.turn.currentTurn,
       dispatch,
     });
     const rejectedEffect = rejectedWorkflowEffect(effectResolutions);
 
     if (rejectedEffect) {
-      checkpoint(
-        "workflowComplete",
-        "Jump workflow stopped",
-        rejectedEffect.reason ?? "Fuel effect rejected",
-      );
       return {
         source: input.source,
         currentTurn: state.turn.currentTurn,
@@ -606,20 +602,12 @@ export const executeJumpWorkflow = createAsyncThunk<
 
       await delay(jumpTransitionCoverMs(input));
 
-      await dispatch(advanceTurnWorkflow({
-        source: input.source,
-        lifecycle: "world",
-        payload: {
-          shipUpdate: {
-            status:             "docked",
-            currentLocation:    `${finalLocation.sectorAbbr}:${finalLocation.hex}`,
-            destinationLocation: null,
-            jumpArrivesTurn:    null,
-          },
-        },
-      }));
+      await dispatch(advanceTurnWorkflow(buildJumpTurnAdvanceInput(
+        input,
+        finalLocation,
+        driveCheck.outcome,
+      )));
       const finalSystemRequest = dispatch(getSystemData(finalLocation));
-      await refreshShipAndCharacters(dispatch);
       await finalSystemRequest;
 
       await delay(jumpTransitionRemainingMs(input));
@@ -639,12 +627,6 @@ export const executeJumpWorkflow = createAsyncThunk<
         warpLayerOpacity: 0,
       }));
     }
-
-    checkpoint(
-      "workflowComplete",
-      "Jump workflow complete",
-      driveCheck.outcome,
-    );
 
     return {
       source: input.source,

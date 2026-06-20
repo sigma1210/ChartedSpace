@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { loadSector } from "../../store/slices/galaxySlice";
 import { selectSectorData, selectSectorLoadStatus } from "../../store/selectors/galaxy.selectors";
 import { setActiveWorldHex, setTargetWorldHex, clearTargetWorldHex } from "../../store/slices/galaxySlice";
 import { selectActiveWorldHex } from "../../store/selectors/galaxy.selectors";
@@ -152,10 +150,6 @@ const SubsectorGrid = ({ sectorAbbr, subsectorKey, showHeader = true, scale = 1 
   const activeWorldHex = useAppSelector(selectActiveWorldHex);
   const ship      = useAppSelector(selectShip);
   const shipColor = useAppSelector(selectShipColor);
-
-  useEffect(() => {
-    dispatch(loadSector(sectorAbbr));
-  }, [sectorAbbr, dispatch]);
 
   return (
     <SubsectorGridView

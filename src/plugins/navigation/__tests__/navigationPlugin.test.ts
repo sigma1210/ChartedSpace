@@ -18,6 +18,7 @@ import navigationReducer, {
   resolveNavigationPlot,
   selectNavigationDestination,
   startNavigationPlot,
+  type NavigationState,
 } from "../navigationSlice";
 import { buildNavigationGridLayout } from "../navigationGridGeometry";
 import {
@@ -347,6 +348,171 @@ describe("navigation plugin", () => {
     expect(executedState.plottedRoute).toBeNull();
   });
 
+  it("keeps the plotted route and marks a failed jump attempt", async () => {
+    const root = {
+      ...createNavigationRoot(6),
+      plugins: {
+        ...createNavigationRoot(6).plugins,
+        navigation: successfulPlotState,
+      },
+    };
+    const actions: unknown[] = [];
+    const dispatch = jest.fn((action: unknown) => {
+      actions.push(action);
+      if (typeof action === "function") {
+        return {
+          unwrap: async () => ({
+            source: "plugin.navigation.execute",
+            currentTurn: 3,
+            stopped: false,
+            proposedEffects: [],
+            effectResolutions: [],
+            driveCheck: {
+              rawRoll: 3,
+              modifier: 0,
+              total: 3,
+              target: 4,
+              outcome: "failed",
+            },
+            currentLocation: {
+              sectorAbbr: "Spin",
+              hex: "1910",
+            },
+            finalLocation: {
+              sectorAbbr: "Spin",
+              hex: "1910",
+            },
+            destination: {
+              sectorAbbr: "Spin",
+              hex: "1912",
+            },
+            jumpDistance: 2,
+            fuelCostEstimate: 20000,
+            plotCheck: {
+              roll: 10,
+              target: 4,
+            },
+          }),
+        };
+      }
+      return action;
+    });
+
+    await runTestThunk(executeNavigationJump(), dispatch, () => root);
+
+    const navigationActions = actions.filter(
+      (action): action is { type: string; payload?: unknown } =>
+        typeof action === "object" && action !== null && "type" in action,
+    );
+    const failedJumpState = navigationActions.reduce(
+      (state, action) => navigationReducer(state, action),
+      successfulPlotState,
+    );
+
+    expect(failedJumpState.executeStatus).toBe("complete");
+    expect(failedJumpState.executeResult?.driveOutcome).toBe("failed");
+    expect(failedJumpState.lastJumpFailure).toEqual({
+      destinationKey: "Spin:1912",
+      driveOutcome: "failed",
+    });
+    expect(failedJumpState.selectedDestinationKey).toBe("Spin:1912");
+    expect(failedJumpState.plotStatus).toBe("success");
+    expect(failedJumpState.plotResult).toEqual({ success: true, roll: 10, target: 4 });
+    expect(failedJumpState.plottedRoute).toEqual(successfulPlotState.plottedRoute);
+
+    const changedDestination = navigationReducer(
+      failedJumpState,
+      selectNavigationDestination("Spin:1916"),
+    );
+    expect(changedDestination.lastJumpFailure).toBeNull();
+
+    const replotStarted = navigationReducer(
+      failedJumpState,
+      replotNavigationDestination.pending("request-1", "Spin:1912"),
+    );
+    expect(replotStarted.lastJumpFailure).toBeNull();
+
+    const replotActions: unknown[] = [];
+    const replotDispatch = jest.fn((action: unknown) => {
+      replotActions.push(action);
+      if (typeof action === "function") {
+        return {
+          unwrap: async () => ({
+            source: "plugin.navigation.replot",
+            previousTurn: 3,
+            currentTurn: 4,
+            stopped: false,
+          }),
+        };
+      }
+      return action;
+    });
+    await runTestThunk(
+      replotNavigationDestination("Spin:1912"),
+      replotDispatch,
+      () => ({
+        ...createNavigationRoot(6),
+        plugins: {
+          ...createNavigationRoot(6).plugins,
+          navigation: failedJumpState,
+        },
+      }),
+    );
+    expect(replotActions.some((action) => typeof action === "function")).toBe(true);
+  });
+
+  it("requires a replot before executing again after a failed jump", async () => {
+    const failedJumpState: NavigationState = {
+      ...successfulPlotState,
+      executeStatus: "complete" as const,
+      executeResult: {
+        stopped: false,
+        driveOutcome: "failed" as const,
+        finalLocation: {
+          sectorAbbr: "Spin",
+          hex: "1910",
+        },
+        fuelCostEstimate: 20000,
+      },
+      lastJumpFailure: {
+        destinationKey: "Spin:1912",
+        driveOutcome: "failed" as const,
+      },
+    };
+    const root = {
+      ...createNavigationRoot(6),
+      plugins: {
+        ...createNavigationRoot(6).plugins,
+        navigation: failedJumpState,
+      },
+    };
+    const actions: unknown[] = [];
+    const dispatch = jest.fn((action: unknown) => {
+      actions.push(action);
+      return action;
+    });
+
+    await runTestThunk(executeNavigationJump(), dispatch, () => root);
+
+    const navigationActions = actions.filter(
+      (action): action is { type: string; payload?: unknown } =>
+        typeof action === "object" && action !== null && "type" in action,
+    );
+    const rejectedState = navigationActions.reduce(
+      (state, action) => navigationReducer(state, action),
+      failedJumpState,
+    );
+
+    expect(actions.some((action) => typeof action === "function")).toBe(false);
+    expect(rejectedState.executeStatus).toBe("error");
+    expect(rejectedState.executeError).toBe("Jump must be replotted after drive failure");
+    expect(rejectedState.lastJumpFailure).toEqual({
+      destinationKey: "Spin:1912",
+      driveOutcome: "failed",
+    });
+    expect(rejectedState.plottedRoute).toEqual(successfulPlotState.plottedRoute);
+  });
+
   it("does not execute without a successful plotted route", async () => {
     const selected = navigationReducer(
       initialNavigationState,
@@ -654,6 +820,8 @@ describe("navigation plugin", () => {
       "Two Parsecs",
       "Six Parsecs",
     ]);
+    expect(selectNavigationGridCells(jump2Root)).toBe(selectNavigationGridCells(jump2Root));
+    expect(selectNavigationTargets(jump2Root)).toBe(selectNavigationTargets(jump2Root));
   });
 
   it("uses the ship plugin jump rating override after core ship refreshes", async () => {

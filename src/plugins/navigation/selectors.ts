@@ -1,4 +1,5 @@
 import type { JumpRangeTarget } from "@/lib/jumpRange";
+import { createSelector } from "@reduxjs/toolkit";
 import type { RootState } from "@/store";
 import { selectShipNavigationCapabilities } from "@/plugin-api";
 import { selectShipLocation } from "@/plugins/ship";
@@ -71,16 +72,24 @@ export const selectNavigationCurrentOriginKey = (state: NavigationPluginRoot) =>
   return `${origin.sectorAbbr}:${origin.hex}`;
 };
 
-export const selectNavigationGridCells = (state: NavigationPluginRoot) =>
-  selectNavigationState(state).snapshotCells.filter(
-    (cell) => cell.distance <= selectNavigationJumpRating(state),
-  );
+const selectNavigationSnapshotCells = (state: NavigationPluginRoot) =>
+  selectNavigationState(state).snapshotCells;
 
-export const selectNavigationSnapshotWorldCells = (state: NavigationPluginRoot) =>
-  selectNavigationState(state).snapshotCells.filter((cell) => cell.inRange && cell.world);
+export const selectNavigationGridCells = createSelector(
+  [selectNavigationSnapshotCells, selectNavigationJumpRating],
+  (snapshotCells, jumpRating) =>
+    snapshotCells.filter((cell) => cell.distance <= jumpRating),
+);
 
-export const selectNavigationTargets = (state: NavigationPluginRoot): JumpRangeTarget[] =>
-  selectNavigationGridCells(state)
+export const selectNavigationSnapshotWorldCells = createSelector(
+  [selectNavigationSnapshotCells],
+  (snapshotCells) => snapshotCells.filter((cell) => cell.inRange && cell.world),
+);
+
+export const selectNavigationTargets = createSelector(
+  [selectNavigationGridCells],
+  (gridCells): JumpRangeTarget[] =>
+    gridCells
     .filter((cell): cell is typeof cell & { sectorAbbr: string; hex: string } =>
       cell.inRange && !!cell.sectorAbbr && !!cell.hex)
     .map((cell) => ({
@@ -99,7 +108,8 @@ export const selectNavigationTargets = (state: NavigationPluginRoot): JumpRangeT
       const aName = a.name ?? a.hex;
       const bName = b.name ?? b.hex;
       return aName.localeCompare(bName);
-    });
+    }),
+);
 
 export const selectNavigationSelectedDestinationKey = (
   state: NavigationPluginRoot,

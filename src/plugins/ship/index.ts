@@ -1,6 +1,6 @@
 import type { PluginManifest } from "@/plugin-api/types";
-import { shipNavigationCapabilityId } from "@/plugins/shipNavigationCapabilities";
-import { shipTradeCapabilityId } from "@/plugins/shipTradeCapabilities";
+import { shipNavigationCapabilityId } from "./shipNavigationCapabilities";
+import { shipTradeCapabilityId } from "./shipTradeCapabilities";
 import { shipHudMetadata } from "./hudMetadata";
 import { shipPluginId } from "./metadata";
 import { shipPluginStateRegistration } from "./stateRegistration";
@@ -35,10 +35,18 @@ export {
   setDevelopmentJumpRatingOverride,
 } from "./shipPluginSlice";
 export {
+  resolveShipNavigationCapabilities,
+  shipNavigationCapabilityId,
   shipNavigationCapabilitiesProvider,
+  type ShipNavigationCapabilities,
+  type ShipNavigationCapabilitiesProvider,
 } from "./shipNavigationCapabilities";
 export {
+  resolveShipTradeCapabilities,
+  shipTradeCapabilityId,
   shipTradeCapabilitiesProvider,
+  type ShipTradeCapabilities,
+  type ShipTradeCapabilitiesProvider,
 } from "./shipTradeCapabilities";
 export {
   selectActiveShip,

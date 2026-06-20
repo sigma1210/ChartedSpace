@@ -20,6 +20,35 @@ afterEach(() => {
   resetPluginLegacyMonthlyExpenseRecorder();
 });
 
+const createDispatchExecutingNestedThunks = (limit: number) => {
+  let nestedThunkExecutions = 0;
+  const dispatch: jest.Mock = jest.fn((action: unknown): unknown => {
+    if (typeof action === "function" && nestedThunkExecutions < limit) {
+      nestedThunkExecutions += 1;
+      return action(dispatch, createPluginTestRootState, undefined);
+    }
+    return action;
+  });
+
+  return dispatch;
+};
+
+const turnAdvancePayloadsFrom = (dispatch: jest.Mock) =>
+  dispatch.mock.calls
+    .map(([action]) => action)
+    .filter((action): action is { type: string; meta?: { arg?: unknown } } =>
+      typeof action === "object" &&
+      action !== null &&
+      (action as { type?: string }).type === "turn/advance/pending",
+    )
+    .map((action) => action.meta?.arg);
+
+const mockAdvanceTurnFetch = () =>
+  jest.spyOn(global, "fetch").mockResolvedValue({
+    ok: true,
+    json: async () => ({ currentTurn: 4 }),
+  } as Response);
+
 describe("turn workflow bridge", () => {
   it("does not run the legacy monthly expense deduction during world turn lifecycle", async () => {
     const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({ ok: true } as Response);
@@ -244,7 +273,8 @@ describe("execute jump workflow", () => {
   });
 
   it("proposes automatic fuel expense and returns the destination on drive success", async () => {
-    const dispatch = jest.fn();
+    const dispatch = createDispatchExecutingNestedThunks(2);
+    const fetchMock = mockAdvanceTurnFetch();
     const resolvedActions: unknown[] = [];
 
     setPluginWorkflowEffectResolver(async (effects) => {
@@ -340,10 +370,22 @@ describe("execute jump workflow", () => {
     expect(warpStartIndex).toBeGreaterThanOrEqual(0);
     expect(turnCommitIndex).toBeGreaterThan(warpStartIndex);
     expect(warpFadeIndex).toBeGreaterThan(turnCommitIndex);
+    expect(turnAdvancePayloadsFrom(dispatch)).toEqual([
+      {
+        shipUpdate: {
+          status: "docked",
+          currentLocation: "Spin:1912",
+          destinationLocation: null,
+          jumpArrivesTurn: null,
+        },
+      },
+    ]);
+    fetchMock.mockRestore();
   });
 
   it("keeps the ship at the current location when the drive check fails", async () => {
-    const dispatch = jest.fn();
+    const dispatch = createDispatchExecutingNestedThunks(2);
+    const fetchMock = mockAdvanceTurnFetch();
     setPluginWorkflowEffectResolver(async (effects) =>
       effects.map(() => ({ status: "accepted" })),
     );
@@ -363,10 +405,20 @@ describe("execute jump workflow", () => {
         hex: "1910",
       },
     });
+    expect(turnAdvancePayloadsFrom(dispatch)).toEqual([
+      {
+        shipUpdate: {
+          status: "docked",
+          currentLocation: "Spin:1910",
+        },
+      },
+    ]);
+    fetchMock.mockRestore();
   });
 
   it("keeps the ship at the current location on snake-eyes misjump for the first pass", async () => {
-    const dispatch = jest.fn();
+    const dispatch = createDispatchExecutingNestedThunks(2);
+    const fetchMock = mockAdvanceTurnFetch();
     setPluginWorkflowEffectResolver(async (effects) =>
       effects.map(() => ({ status: "accepted" })),
     );
@@ -387,6 +439,17 @@ describe("execute jump workflow", () => {
         hex: "1910",
       },
     });
+    expect(turnAdvancePayloadsFrom(dispatch)).toEqual([
+      {
+        shipUpdate: {
+          status: "docked",
+          currentLocation: "Spin:1910",
+          destinationLocation: null,
+          jumpArrivesTurn: null,
+        },
+      },
+    ]);
+    fetchMock.mockRestore();
   });
 
   it("stops before the drive check when the fuel effect is rejected", async () => {

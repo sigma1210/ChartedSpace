@@ -93,12 +93,15 @@ export const NavigationHudContent = () => {
     }, 1500);
   };
 
+  const jumpFailed =
+    navigationState.lastJumpFailure?.destinationKey === selectedDestinationKey;
+
   const handlePlotClick = () => {
     if (!selectedDestinationKey || !selectedDestination) return;
     if (navigationState.plotStatus === "plotting") return;
     if (navigationState.executeStatus === "executing") return;
     if (navigationState.replotStatus === "advancing") return;
-    if (navigationState.plotStatus === "failed") {
+    if (navigationState.plotStatus === "failed" || jumpFailed) {
       void dispatch(replotNavigationDestination(selectedDestinationKey))
         .unwrap()
         .then((result) => {
@@ -130,7 +133,9 @@ export const NavigationHudContent = () => {
   const plotAnimating = navigationState.plotStatus === "plotting";
   const executeAnimating = navigationState.executeStatus === "executing";
   const routeAnimating = plotAnimating || executeAnimating;
-  const plotColor = plotSuccess
+  const plotColor = jumpFailed
+    ? "var(--hud-error)"
+    : plotSuccess
     ? "var(--hud-success)"
     : plotFailed
       ? "var(--hud-error)"
@@ -139,6 +144,8 @@ export const NavigationHudContent = () => {
         : "var(--hud-border)";
   const plotButtonTooltip = !selectedDestination
     ? "Select Destination"
+    : jumpFailed
+      ? "Jump Failed"
     : plotSuccess && navigationState.plottedRoute?.destinationKey === selectedDestinationKey
       ? "Execute Jump"
       : "Plot Course";
@@ -336,7 +343,7 @@ export const NavigationHudContent = () => {
               {selectedDestination.name ?? `${selectedDestination.sectorAbbr} ${selectedDestination.hex}`}
             </text>
           )}
-          {plotSuccess && (
+          {plotSuccess && !jumpFailed && (
             <g
               fill="none"
               stroke="var(--hud-success)"
@@ -346,6 +353,18 @@ export const NavigationHudContent = () => {
               <circle cx="106" cy="11" r="4.4" />
               <line x1="106" y1="5.2" x2="106" y2="16.8" />
               <line x1="100.2" y1="11" x2="111.8" y2="11" />
+            </g>
+          )}
+          {jumpFailed && (
+            <g
+              fill="none"
+              stroke="var(--hud-error)"
+              strokeWidth={1.2}
+              strokeLinecap="round"
+            >
+              <circle cx="106" cy="11" r="4.4" />
+              <line x1="106" y1="6.8" x2="106" y2="11.7" />
+              <circle cx="106" cy="15" r="0.45" fill="var(--hud-error)" stroke="none" />
             </g>
           )}
           {plotFailed && (

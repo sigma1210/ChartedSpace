@@ -56,6 +56,11 @@ export interface NavigationExecutionResult {
   fuelCostEstimate: number;
 }
 
+export interface NavigationJumpFailureNotice {
+  destinationKey: string;
+  driveOutcome: "failed";
+}
+
 export interface NavigationState {
   selectedDestinationKey: string | null;
   plotStatus: NavigationPlotStatus;
@@ -65,6 +70,7 @@ export interface NavigationState {
   executeStatus: NavigationExecuteStatus;
   executeError: string | null;
   executeResult: NavigationExecutionResult | null;
+  lastJumpFailure: NavigationJumpFailureNotice | null;
   replotStatus: NavigationReplotStatus;
   replotError: string | null;
   lastReplotTurn: number | null;
@@ -84,6 +90,7 @@ export const initialNavigationState: NavigationState = {
   executeStatus: "idle",
   executeError: null,
   executeResult: null,
+  lastJumpFailure: null,
   replotStatus: "idle",
   replotError: null,
   lastReplotTurn: null,
@@ -207,6 +214,8 @@ export const replotNavigationDestination = createAsyncThunk<
     condition: (targetKey, { getState }) => {
       const navigationState = (getState() as RootState).plugins.navigation;
       const completedFailedPlot = navigationState.plotStatus === "failed";
+      const failedJumpForTarget =
+        navigationState.lastJumpFailure?.destinationKey === targetKey;
       const completedSuccessfulDifferentPlot =
         navigationState.plotStatus === "success" &&
         !!navigationState.plottedRoute &&
@@ -214,7 +223,7 @@ export const replotNavigationDestination = createAsyncThunk<
 
       return (
         navigationState.replotStatus !== "advancing" &&
-        (completedFailedPlot || completedSuccessfulDifferentPlot)
+        (completedFailedPlot || failedJumpForTarget || completedSuccessfulDifferentPlot)
       );
     },
   },
@@ -248,6 +257,9 @@ export const executeNavigationJump = createAsyncThunk<
       navigationState.selectedDestinationKey !== route.destinationKey
     ) {
       return rejectWithValue("No plotted navigation route is ready to execute");
+    }
+    if (navigationState.lastJumpFailure?.destinationKey === route.destinationKey) {
+      return rejectWithValue("Jump must be replotted after drive failure");
     }
 
     const result = await dispatch(executeJumpWorkflow({
@@ -290,17 +302,22 @@ const navigationSlice = createSlice({
       state.snapshotOrigin = null;
       state.snapshotCells = [];
       state.selectedDestinationKey = null;
+      state.lastJumpFailure = null;
       state.replotStatus = "idle";
       state.replotError = null;
       clearPlotState(state);
     },
     clearNavigationSelection(state) {
       state.selectedDestinationKey = null;
+      state.lastJumpFailure = null;
       state.replotStatus = "idle";
       state.replotError = null;
       clearPlotState(state);
     },
     selectNavigationDestination(state, action: PayloadAction<string>) {
+      if (state.selectedDestinationKey !== action.payload) {
+        state.lastJumpFailure = null;
+      }
       state.selectedDestinationKey = action.payload;
       state.replotStatus = "idle";
       state.replotError = null;
@@ -309,6 +326,7 @@ const navigationSlice = createSlice({
     startNavigationPlot(state, action: PayloadAction<string>) {
       state.plotStatus = "plotting";
       state.plotDestinationKey = action.payload;
+      state.lastJumpFailure = null;
       state.plotResult = null;
       state.plottedRoute = null;
       state.executeStatus = "idle";
@@ -330,6 +348,7 @@ const navigationSlice = createSlice({
       state.executeStatus = "idle";
       state.executeError = null;
       state.executeResult = null;
+      state.lastJumpFailure = null;
       state.replotStatus = "idle";
       state.replotError = null;
     },
@@ -346,6 +365,7 @@ const navigationSlice = createSlice({
         state.snapshotOrigin = action.payload.origin;
         state.snapshotMaxJumpRating = 6;
         state.snapshotCells = action.payload.cells;
+        state.lastJumpFailure = null;
         state.replotStatus = "idle";
         state.replotError = null;
         clearPlotState(state);
@@ -355,6 +375,7 @@ const navigationSlice = createSlice({
         state.snapshotError = action.payload ?? action.error.message ?? "Navigation snapshot unavailable";
         state.snapshotOrigin = null;
         state.snapshotCells = [];
+        state.lastJumpFailure = null;
         state.replotStatus = "idle";
         state.replotError = null;
         clearPlotState(state);
@@ -362,6 +383,7 @@ const navigationSlice = createSlice({
       .addCase(replotNavigationDestination.pending, (state) => {
         state.replotStatus = "advancing";
         state.replotError = null;
+        state.lastJumpFailure = null;
       })
       .addCase(replotNavigationDestination.fulfilled, (state, action) => {
         if (action.payload.stopped) {
@@ -386,15 +408,35 @@ const navigationSlice = createSlice({
         state.executeResult = null;
       })
       .addCase(executeNavigationJump.fulfilled, (state, action) => {
+        if (
+          !action.payload.stopped &&
+          action.payload.driveOutcome === "failed" &&
+          state.selectedDestinationKey
+        ) {
+          state.executeStatus = "complete";
+          state.executeError = null;
+          state.executeResult = action.payload;
+          state.lastJumpFailure = {
+            destinationKey: state.selectedDestinationKey,
+            driveOutcome: "failed",
+          };
+          return;
+        }
+
+        state.lastJumpFailure = null;
         clearPlotState(state);
         state.executeStatus = action.payload.stopped ? "blocked" : "complete";
         state.executeError = action.payload.stoppedReason ?? null;
         state.executeResult = action.payload;
       })
       .addCase(executeNavigationJump.rejected, (state, action) => {
-        clearPlotState(state);
+        const error = action.payload ?? action.error.message ?? "Jump execution failed";
+        if (error !== "Jump must be replotted after drive failure") {
+          clearPlotState(state);
+          state.lastJumpFailure = null;
+        }
         state.executeStatus = "error";
-        state.executeError = action.payload ?? action.error.message ?? "Jump execution failed";
+        state.executeError = error;
       });
   },
 });

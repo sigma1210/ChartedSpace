@@ -1,5 +1,5 @@
 import type { PluginManifest } from "@/plugin-api/types";
-import { shipTradeCapabilityId } from "@/plugins/shipTradeCapabilities";
+import { shipTradeCapabilityId } from "@/plugins/ship";
 import { tradeHudMetadata } from "./hudMetadata";
 import { tradePluginId } from "./metadata";
 import { tradeStateRegistration } from "./stateRegistration";
