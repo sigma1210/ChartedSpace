@@ -8,6 +8,7 @@ import {
 
 const monthlyExpenseCadence = 4;
 const automaticMonthlyExpenseSources = new Set([
+  "plugin.navigation.execute",
   "plugin.stayInLocation",
   "core.stayInLocation",
 ]);

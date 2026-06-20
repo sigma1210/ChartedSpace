@@ -31,7 +31,7 @@ describe("turn workflow bridge", () => {
     })(dispatch, createPluginTestRootState, undefined);
 
     expect(fetchMock).not.toHaveBeenCalledWith(
-      "/api/ship/crew/settle-wages",
+      "/api/crew/settle-wages",
       { method: "POST" },
     );
 

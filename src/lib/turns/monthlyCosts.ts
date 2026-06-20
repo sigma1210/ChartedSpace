@@ -6,7 +6,7 @@ onEndTurn(async (ctx) => {
   const owner = ctx.ship.crew.find(c => c.isOwnerOperator);
   if (!owner?.characterId) return null;
 
-  const res = await fetch("/api/ship/crew/settle-wages", { method: "POST" });
+  const res = await fetch("/api/crew/settle-wages", { method: "POST" });
   if (!res.ok) return null;
 
   const data = await res.json() as {

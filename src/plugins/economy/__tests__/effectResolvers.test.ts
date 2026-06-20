@@ -363,6 +363,66 @@ describe("economy effect resolvers", () => {
     });
   });
 
+  it("uses automatic commit intent for navigation jump monthly expenses", async () => {
+    const handler = economyMonthlyExpensesHandler as PluginEventHandler;
+
+    const result = await Promise.resolve(handler.handle({
+      source: "plugin.navigation.execute",
+      lifecycle: "world",
+      previousTurn: 3,
+      currentTurn: 4,
+      ownerCharacter: null,
+      ship: {
+        id: "ship-1",
+        name: "Free Trader",
+        type: "free_trader",
+        jumpRating: 1,
+        status: "docked",
+        isMortgaged: true,
+        mortgagePaid: 0,
+        currentLocation: "Spin:1910",
+        worldName: "Regina",
+        sectorAbbr: "Spin",
+        hex: "1910",
+        cargoCapacity: 82,
+        destinationLocation: null,
+        jumpArrivesTurn: null,
+        cargo: [],
+        crew: [
+          {
+            id: "crew-owner",
+            role: "owner",
+            isOwnerOperator: true,
+            monthlySalary: 0,
+            characterId: "owner-1",
+            characterName: "Owner",
+            npcName: null,
+            keySkillName: null,
+            keySkillLevel: 0,
+          },
+          {
+            id: "crew-pilot",
+            role: "pilot",
+            isOwnerOperator: false,
+            monthlySalary: 1000,
+            characterId: null,
+            characterName: null,
+            npcName: "Pilot",
+            keySkillName: "Pilot",
+            keySkillLevel: 1,
+          },
+        ],
+      },
+    }, {
+      source: "test.workflow",
+      currentTurn: 4,
+    }));
+
+    expect(result.effects?.[0].payload).toMatchObject({
+      commit: "automatic",
+    });
+  });
+
   it("marks monthly ledger requests when the legacy total matches", () => {
     const state = economyReducer(initialEconomyState, recordEconomyLedgerRequest({
       id: "ledger-1",
