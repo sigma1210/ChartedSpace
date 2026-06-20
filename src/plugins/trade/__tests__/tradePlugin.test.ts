@@ -7,6 +7,8 @@ import { tradePlugin } from "..";
 import {
   buyCargoAndRefresh,
   sellCargoAndRefresh,
+  tradeCargoEndpoint,
+  tradeCargoSellEndpoint,
 } from "../actions";
 import {
   tradeHudId,
@@ -29,5 +31,7 @@ describe("trade plugin", () => {
   it("owns trade cargo command actions", () => {
     expect(buyCargoAndRefresh.typePrefix).toBe("trade/buyCargoAndRefresh");
     expect(sellCargoAndRefresh.typePrefix).toBe("trade/sellCargoAndRefresh");
+    expect(tradeCargoEndpoint).toBe("/api/trade/cargo");
+    expect(tradeCargoSellEndpoint("lot-1")).toBe("/api/trade/cargo/lot-1/sell");
   });
 });
