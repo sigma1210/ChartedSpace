@@ -166,7 +166,7 @@ const FeatureMark = ({
   }
 };
 
-const WorldMap = ({ world }: { world: World }) => {
+const WorldMap = ({ world, compact = false }: { world: World; compact?: boolean }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const size = uwpVal(world.uwp.size);
   const { svgW, svgH } = svgDimensions(size);
@@ -238,7 +238,25 @@ const WorldMap = ({ world }: { world: World }) => {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-2">
+    <div className={compact ? "flex h-full min-h-0 w-full flex-col gap-1" : "flex h-full min-h-0 w-full flex-col gap-2"}>
+      {compact && (
+        <div className="flex h-4 shrink-0 items-center justify-end gap-1">
+          <button
+            type="button"
+            onClick={downloadSVG}
+            className="h-4 border border-(--hud-border) px-1 font-mono text-[7px] uppercase leading-none tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
+          >
+            SVG
+          </button>
+          <button
+            type="button"
+            onClick={downloadPNG}
+            className="h-4 border border-(--hud-border) px-1 font-mono text-[7px] uppercase leading-none tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
+          >
+            PNG
+          </button>
+        </div>
+      )}
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
         <div
           className="h-full max-h-full max-w-full border border-(--hud-border)"
@@ -278,7 +296,7 @@ const WorldMap = ({ world }: { world: World }) => {
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
+      {!compact && <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div className="flex max-h-20 flex-wrap gap-x-3 gap-y-1 overflow-auto">
           {presentTerrains.map((terrain) => (
             <div key={terrain} className="flex items-center gap-1">
@@ -314,7 +332,7 @@ const WorldMap = ({ world }: { world: World }) => {
             PNG
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

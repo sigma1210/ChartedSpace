@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useCallback, useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { shallowEqual, useSelector, useStore } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
@@ -51,6 +50,7 @@ import { MainWorldHud } from "./MainWorldHud";
 import { SubsectorMiniMapHudContent } from "../map/SubsectorMiniMap";
 import { SectorMiniMapHudContent } from "../map/SectorMiniMap";
 import { GalaxyMiniMapHudContent } from "../map/GalaxyMiniMap";
+import CurrentWorldMapPanel from "./CurrentWorldMapPanel";
 import { registeredPluginHudLayouts } from "../../plugins/hudLayouts";
 import { registeredPluginHudRenderers } from "../../plugins/hudRenderers";
 import { CharacterCreateHudContent } from "../../plugins/characters/CharacterCreateHud";
@@ -1749,6 +1749,10 @@ const clampHudOffset = (value: HudOffset): HudOffset => ({
   y: Math.max(-0.58, Math.min(0.58, value.y)),
 });
 
+const sameHudOffset = (left: HudOffset, right: HudOffset) =>
+  Math.abs(left.x - right.x) < 0.0001 &&
+  Math.abs(left.y - right.y) < 0.0001;
+
 const useCameraPinnedHudDrag = ({
   id,
   pinned,
@@ -1770,6 +1774,10 @@ const useCameraPinnedHudDrag = ({
     origin: HudOffset;
   } | null>(null);
 
+  if (!dragRef.current && dragOffsetRef.current && sameHudOffset(dragOffsetRef.current, offset)) {
+    dragOffsetRef.current = null;
+  }
+
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
       if (!dragRef.current) return;
@@ -1784,10 +1792,11 @@ const useCameraPinnedHudDrag = ({
     };
     const handleUp = () => {
       if (dragRef.current && pendingOffsetRef.current) {
-        dispatch(setHudOffset({ id, offset: pendingOffsetRef.current }));
+        const finalOffset = pendingOffsetRef.current;
+        dragOffsetRef.current = finalOffset;
+        dispatch(setHudOffset({ id, offset: finalOffset }));
       }
       pendingOffsetRef.current = null;
-      dragOffsetRef.current = null;
       dragRef.current = null;
     };
 
@@ -1818,7 +1827,8 @@ const CameraPinnedSystemHud = ({
   world,
   miniMapVisible,
   onOpenMiniMap,
-  onOpenMapPage,
+  worldMapVisible,
+  onOpenWorldMap,
   selectedSystemDetailAvailable,
   onOpenSelectedSystemDetail,
   navigationHudVisible,
@@ -1830,7 +1840,8 @@ const CameraPinnedSystemHud = ({
   world: World;
   miniMapVisible: boolean;
   onOpenMiniMap: () => void;
-  onOpenMapPage: () => void;
+  worldMapVisible: boolean;
+  onOpenWorldMap: () => void;
   selectedSystemDetailAvailable: boolean;
   onOpenSelectedSystemDetail: () => void;
   navigationHudVisible: boolean;
@@ -1908,8 +1919,8 @@ const CameraPinnedSystemHud = ({
                 <Radar size={13} aria-hidden="true" />
               </HudIconButton>
               <HudIconButton
-                title="Open 2D map"
-                onClick={onOpenMapPage}
+                title={worldMapVisible ? "2D map visible" : "Open 2D map"}
+                onClick={onOpenWorldMap}
               >
                 <Map size={13} aria-hidden="true" />
               </HudIconButton>
@@ -2196,6 +2207,82 @@ const CameraPinnedSubsectorMiniMapHud = ({
   );
 };
 
+const CameraPinnedWorldMapHud = ({
+  visible,
+  worldMap,
+  store,
+  onClose,
+}: {
+  visible: boolean;
+  worldMap: ReactNode;
+  store: AppStore;
+  onClose: () => void;
+}) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout("worldMap"));
+  const offset = layout.offset;
+  const pinned = layout.pinned;
+  const groupRef = useRef<THREE.Group>(null);
+  const { camera, size } = useThree();
+  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
+    id: "worldMap",
+    pinned,
+    offset,
+    size,
+    dispatch,
+  });
+
+  useFrame(() => {
+    const group = groupRef.current;
+    if (!group || !visible) return;
+
+    const distance = 4.6;
+    const perspective = camera as THREE.PerspectiveCamera;
+    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const activeOffset = dragOffsetRef.current ?? offset;
+
+    group.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, activeOffset.x * width * 0.5)
+      .addScaledVector(up, activeOffset.y * height * 0.5);
+    group.quaternion.copy(camera.quaternion);
+  });
+
+  if (!visible) return null;
+
+  return (
+    <group ref={groupRef}>
+      <Html transform center occlude={false} distanceFactor={4.6}>
+        <HudPanel className="flex h-[310px] max-h-[72vh] w-[430px] max-w-[84vw] flex-col !bg-(--hud-bg)/55">
+          <HudHeader
+            title="World Map"
+            pinned={pinned}
+            onTogglePinned={() => dispatch(setHudPinned({ id: "worldMap", pinned: !pinned }))}
+            onClose={onClose}
+            onDragStart={startDrag}
+            closeTitle="Close world map HUD"
+          />
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <StoreBridge store={store}>
+              {worldMap}
+            </StoreBridge>
+          </div>
+        </HudPanel>
+      </Html>
+    </group>
+  );
+};
+
 const CameraPinnedSectorMiniMapHud = ({
   visible,
   sectorMiniMap,
@@ -2359,7 +2446,10 @@ type StarSystemViewSceneProps = {
   showHudControls?: boolean;
   miniMapVisible?: boolean;
   onOpenMiniMap?: () => void;
-  onOpenMapPage?: () => void;
+  worldMapVisible?: boolean;
+  onOpenWorldMap?: () => void;
+  onCloseWorldMap?: () => void;
+  worldMap?: ReactNode;
   onCloseMiniMap?: () => void;
   miniMap?: ReactNode;
   selectedSystemDetailAvailable?: boolean;
@@ -2399,7 +2489,10 @@ export const StarSystemViewScene = ({
   showHudControls = false,
   miniMapVisible = false,
   onOpenMiniMap = () => {},
-  onOpenMapPage = () => {},
+  worldMapVisible = false,
+  onOpenWorldMap = () => {},
+  onCloseWorldMap = () => {},
+  worldMap = null,
   onCloseMiniMap = () => {},
   miniMap = null,
   selectedSystemDetailAvailable = false,
@@ -2584,7 +2677,8 @@ export const StarSystemViewScene = ({
                 world={world}
                 miniMapVisible={miniMapVisible}
                 onOpenMiniMap={onOpenMiniMap}
-                onOpenMapPage={onOpenMapPage}
+                worldMapVisible={worldMapVisible}
+                onOpenWorldMap={onOpenWorldMap}
                 selectedSystemDetailAvailable={selectedSystemDetailAvailable}
                 onOpenSelectedSystemDetail={onOpenSelectedSystemDetail}
                 navigationHudVisible={navigationHudVisible}
@@ -2613,6 +2707,14 @@ export const StarSystemViewScene = ({
               world={world}
               inJump={mainWorldHudInJump}
               onClose={onCloseMainWorldHud}
+            />
+          )}
+          {showHudControls && worldMap && (
+            <CameraPinnedWorldMapHud
+              visible={worldMapVisible}
+              worldMap={worldMap}
+              store={reduxStore}
+              onClose={onCloseWorldMap}
             />
           )}
           {showHudControls && pluginHuds.map((registration) => (
@@ -2844,7 +2946,6 @@ const sceneFocusStyle = (
 
 const StarSystemView = () => {
   const dispatch = useAppDispatch();
-  const router = useRouter();
   const shipStatus = useAppSelector(selectShipStatus);
   const ship = useAppSelector(selectShip);
   const characters = useAppSelector(selectCharacters);
@@ -2853,6 +2954,7 @@ const StarSystemView = () => {
   const miniMapVisible = useAppSelector(selectHudVisible("subsectorMap"));
   const sectorMiniMapVisible = useAppSelector(selectHudVisible("sectorMap"));
   const galaxyMiniMapVisible = useAppSelector(selectHudVisible("galaxyMap"));
+  const worldMapVisible = useAppSelector(selectHudVisible("worldMap"));
   const navigationHudVisible = useAppSelector(selectHudVisible(navigationSelectHudId));
   const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
   const pluginHudVisibility = useAppSelector(
@@ -2955,7 +3057,10 @@ const StarSystemView = () => {
           showHudControls
           miniMapVisible={miniMapVisible}
           onOpenMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: true }))}
-          onOpenMapPage={() => router.push("/map")}
+          worldMapVisible={worldMapVisible}
+          onOpenWorldMap={() => dispatch(setHudVisible({ id: "worldMap", visible: true }))}
+          onCloseWorldMap={() => dispatch(setHudVisible({ id: "worldMap", visible: false }))}
+          worldMap={<CurrentWorldMapPanel compact />}
           onCloseMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: false }))}
           miniMap={<SubsectorMiniMapHudContent />}
           selectedSystemDetailAvailable={!!activeTradeWorld}

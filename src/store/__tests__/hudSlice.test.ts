@@ -44,6 +44,11 @@ describe("hudSlice reducers", () => {
       pinned: true,
       offset: { x: -0.12, y: -0.06 },
     });
+    expect(initialHudState.layouts.worldMap).toEqual({
+      visible: false,
+      pinned: true,
+      offset: { x: 0.04, y: -0.08 },
+    });
     expect(initialHudState.layouts[tradeHudId]).toEqual({
       visible: false,
       pinned: true,
