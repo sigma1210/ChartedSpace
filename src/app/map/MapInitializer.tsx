@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { fetchCharacters } from "../../store/slices/characterSlice";
+import { fetchCharacters } from "../../plugins/characters";
 import { fetchShip } from "../../plugins/ship";
 import { fetchTurn } from "../../store/slices/turnSlice";
 import { refreshWorldCrew } from "../../store/slices/availableCrewSlice";
-import { selectCharacters, selectCharactersStatus } from "../../store/selectors/character.selectors";
+import { selectCharacters, selectCharactersStatus } from "../../plugins/characters";
 import { setActiveLocation } from "../../store/slices/galaxySlice";
 import { setActiveCharacter } from "../../store/slices/uiSlice";
 

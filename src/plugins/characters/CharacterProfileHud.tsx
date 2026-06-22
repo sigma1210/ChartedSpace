@@ -1,10 +1,10 @@
-import type { CharacterSummary } from "../../store/slices/characterSlice";
-import { useAppSelector } from "../../store/hooks";
+import type { CharacterSummary } from "./charactersSlice";
+import { usePluginSelector } from "@/plugin-api";
 import {
   selectEffectiveCharacterProfile,
   selectEffectiveCharacterProfileLocation,
   type CharacterProfileLocation,
-} from "../../store/selectors/character.selectors";
+} from "./selectors";
 
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
@@ -105,7 +105,7 @@ export const CharacterProfileHud = ({
             {character.skills.map((skill) => (
               <li key={skill.name} className="flex justify-between gap-2">
                 <span className="truncate text-(--hud-text)">{skill.name}</span>
-                <span className="text-(--hud-text-dim)">··· {skill.level}</span>
+                <span className="text-(--hud-text-dim)">... {skill.level}</span>
               </li>
             ))}
           </ul>
@@ -116,8 +116,8 @@ export const CharacterProfileHud = ({
 };
 
 export const CharacterProfileHudContent = () => {
-  const character = useAppSelector(selectEffectiveCharacterProfile);
-  const currentLocation = useAppSelector(selectEffectiveCharacterProfileLocation);
+  const character = usePluginSelector(selectEffectiveCharacterProfile);
+  const currentLocation = usePluginSelector(selectEffectiveCharacterProfileLocation);
 
   return (
     <CharacterProfileHud

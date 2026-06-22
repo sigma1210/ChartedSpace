@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/devAuth";
+import {
+  getCharacterForUser,
+  recordCharacterShipAssignment,
+} from "@/plugins/characters/server/characterService";
 import spawnPoints from "@/data/spawnPoints.json";
 import shipTypes from "@/data/classic/ships.json";
 
@@ -20,12 +24,8 @@ export const POST = async (_req: Request, { params }: Params) => {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-      select: { id: true, userId: true },
-    });
-    if (!character)                    return NextResponse.json({ error: "Character not found" }, { status: 404 });
-    if (character.userId !== user.id)  return NextResponse.json({ error: "Forbidden" },           { status: 403 });
+    const character = await getCharacterForUser(user.id, characterId);
+    if (!character) return NextResponse.json({ error: "Character not found" }, { status: 404 });
 
     const existingShip = await prisma.ship.findFirst({ where: { userId: user.id } });
     if (existingShip) {
@@ -37,7 +37,7 @@ export const POST = async (_req: Request, { params }: Params) => {
 
     const freeTrader = shipTypes[0];
 
-    await prisma.$transaction(async (tx) => {
+    const ship = await prisma.$transaction(async (tx) => {
       const ship = await tx.ship.create({
         data: {
           name:            "Free Trader",
@@ -60,10 +60,15 @@ export const POST = async (_req: Request, { params }: Params) => {
         },
       });
 
-      await tx.character.update({
-        where: { id: characterId },
-        data:  { currentLocation: spawnLocation },
-      });
+      return ship;
+    });
+
+    await recordCharacterShipAssignment({
+      characterId,
+      userId:   user.id,
+      shipId:   ship.id,
+      role:     "pilot",
+      location: spawnLocation,
     });
 
     return NextResponse.json({ spawnName: spawn.name, spawnHex: spawn.hex });

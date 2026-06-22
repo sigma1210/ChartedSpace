@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { RootState } from "../index";
+import type { RootState } from "@/store";
 
 export interface CharacterSummary {
   id: string;
@@ -18,13 +18,13 @@ export interface CharacterSummary {
   hex: string | null;
 }
 
-interface CharacterState {
+export interface CharacterState {
   items: CharacterSummary[];
   status: "idle" | "loading" | "loaded" | "error";
   error: string | null;
 }
 
-const initialState: CharacterState = {
+export const initialCharactersState: CharacterState = {
   items: [],
   status: "idle",
   error: null,
@@ -40,7 +40,7 @@ export const fetchCharacters = createAsyncThunk(
   },
   {
     condition: (_, { getState }) => {
-      const status = (getState() as RootState).characters.status;
+      const status = (getState() as RootState).plugins.characters.status;
       return status === "idle";
     },
   }
@@ -48,7 +48,7 @@ export const fetchCharacters = createAsyncThunk(
 
 const characterSlice = createSlice({
   name: "characters",
-  initialState,
+  initialState: initialCharactersState,
   reducers: {
     invalidateCharacters(state) {
       state.status = "idle";

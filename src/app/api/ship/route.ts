@@ -28,6 +28,19 @@ const parseLocation = (location: string | null): { sectorAbbr: string; hex: stri
   };
 };
 
+const loadCrewCharacterNames = async (userId: string, characterIds: readonly string[]) => {
+  try {
+    const { getCharactersForUserByIds } = await import("@/plugins/characters/server/characterService");
+    return new Map(
+      (await getCharactersForUserByIds(userId, characterIds))
+        .map((character) => [character.id, character.name]),
+    );
+  } catch (err) {
+    console.warn("[GET /api/ship] Character name lookup failed", err);
+    return new Map<string, string>();
+  }
+};
+
 // ─── GET /api/ship ────────────────────────────────────────────────────────────
 
 export const GET = async () => {
@@ -58,7 +71,6 @@ export const GET = async () => {
             npcName:         true,
             keySkillName:    true,
             keySkillLevel:   true,
-            character:       { select: { name: true } },
           },
         },
         cargo: {
@@ -77,6 +89,10 @@ export const GET = async () => {
     if (!ship) return NextResponse.json({ ship: null });
 
     const parsed = parseLocation(ship.currentLocation);
+    const characterNamesById = await loadCrewCharacterNames(
+      dbUser.id,
+      ship.crew.flatMap(c => c.characterId ? [c.characterId] : []),
+    );
 
     // Look up current world for display name and UWP (for cargo pricing)
     const world = parsed
@@ -134,7 +150,7 @@ export const GET = async () => {
           isOwnerOperator: c.isOwnerOperator,
           monthlySalary:   c.monthlySalary,
           characterId:     c.characterId,
-          characterName:   c.character?.name ?? null,
+          characterName:   c.characterId ? characterNamesById.get(c.characterId) ?? null : null,
           npcName:         c.npcName,
           keySkillName:    c.keySkillName,
           keySkillLevel:   c.keySkillLevel,

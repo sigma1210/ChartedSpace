@@ -2,9 +2,6 @@ import uiReducer, {
   openModal,
   closeModal,
   goBack,
-  openCharacterList,
-  openCharacterProfile,
-  openCharacterCreate,
   openMap,
   setMapView,
   setActiveSector,
@@ -30,7 +27,6 @@ import {
   selectSearchQuery,
   selectSearchFilter,
   selectPreviousModal,
-  selectShowCharacterProfileHud,
   selectShowGalaxyMiniMap,
   selectShowMainWorldHud,
   selectShowSectorMiniMap,
@@ -39,6 +35,7 @@ import {
 import type { UIState } from "../../types";
 import type { RootState } from "../index";
 import { initialHudState } from "../slices/hudSlice";
+import { initialCharactersState } from "../../plugins/characters";
 import { initialDemographicsState } from "../../plugins/demographics";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
@@ -63,11 +60,10 @@ const initialState: UIState = {
   showSectorMiniMap: true,
   showSubsectorMiniMap: true,
   showMainWorldHud: false,
-  showCharacterProfileHud: false,
 };
 
 const makeRoot = (ui: UIState): RootState => {
-  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, characters: { items: [], status: "idle", error: null }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} }, systemScene: { sceneMode: "system", showWarpLayer: false, warpLayerOpacity: 0, warpLayerActive: false, warpExitBlankActive: false, renderableLocation: null, transitionPhase: "idle", transitionReason: null, transitionSceneKey: null, sceneReady: true }, hud: initialHudState, plugins: { demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } };
+  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} }, systemScene: { sceneMode: "system", showWarpLayer: false, warpLayerOpacity: 0, warpLayerActive: false, warpExitBlankActive: false, renderableLocation: null, transitionPhase: "idle", transitionReason: null, transitionSceneKey: null, sceneReady: true }, hud: initialHudState, plugins: { characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } };
 }
 
 describe("uiSlice reducers", () => {
@@ -86,7 +82,7 @@ describe("uiSlice reducers", () => {
   describe("closeModal", () => {
     it("clears activeModal and previousModal", () => {
       const state = uiReducer(
-        { ...initialState, activeModal: "search", previousModal: "characterList" },
+        { ...initialState, activeModal: "search", previousModal: "notifications" },
         closeModal()
       );
       expect(state.activeModal).toBeNull();
@@ -97,41 +93,11 @@ describe("uiSlice reducers", () => {
   describe("goBack", () => {
     it("restores previousModal as activeModal", () => {
       const state = uiReducer(
-        { ...initialState, activeModal: "characterProfile", previousModal: "characterList" },
+        { ...initialState, activeModal: "systemDetail", previousModal: "map" },
         goBack()
       );
-      expect(state.activeModal).toBe("characterList");
+      expect(state.activeModal).toBe("map");
       expect(state.previousModal).toBeNull();
-    });
-  });
-
-  describe("openCharacterList", () => {
-    it("opens characterList modal and preserves activeCharacterId", () => {
-      const state = uiReducer(
-        { ...initialState, activeCharacterId: "abc123" },
-        openCharacterList()
-      );
-      expect(state.activeModal).toBe("characterList");
-      expect(state.activeCharacterId).toBe("abc123");
-    });
-  });
-
-  describe("openCharacterProfile", () => {
-    it("sets activeModal to characterProfile and stores characterId", () => {
-      const state = uiReducer(initialState, openCharacterProfile("char-1"));
-      expect(state.activeModal).toBe("characterProfile");
-      expect(state.activeCharacterId).toBe("char-1");
-    });
-  });
-
-  describe("openCharacterCreate", () => {
-    it("sets activeModal to characterCreate and clears activeCharacterId", () => {
-      const state = uiReducer(
-        { ...initialState, activeCharacterId: "old" },
-        openCharacterCreate()
-      );
-      expect(state.activeModal).toBe("characterCreate");
-      expect(state.activeCharacterId).toBeNull();
     });
   });
 
@@ -241,12 +207,11 @@ describe("ui selectors", () => {
     isOwnProfile: true,
     searchFilter: "worlds",
     searchQuery: "Regina",
-    previousModal: "characterList",
+    previousModal: "notifications",
     showGalaxyMiniMap: false,
     showSectorMiniMap: true,
     showSubsectorMiniMap: false,
     showMainWorldHud: true,
-    showCharacterProfileHud: false,
   });
 
   it("selectActiveModal", () => expect(selectActiveModal(root)).toBe("search"));
@@ -259,12 +224,11 @@ describe("ui selectors", () => {
   it("selectIsOwnProfile", () => expect(selectIsOwnProfile(root)).toBe(true));
   it("selectSearchFilter", () => expect(selectSearchFilter(root)).toBe("worlds"));
   it("selectSearchQuery", () => expect(selectSearchQuery(root)).toBe("Regina"));
-  it("selectPreviousModal", () => expect(selectPreviousModal(root)).toBe("characterList"));
+  it("selectPreviousModal", () => expect(selectPreviousModal(root)).toBe("notifications"));
   it("selectShowGalaxyMiniMap", () => expect(selectShowGalaxyMiniMap(root)).toBe(false));
   it("selectShowSectorMiniMap", () => expect(selectShowSectorMiniMap(root)).toBe(true));
   it("selectShowSubsectorMiniMap", () => expect(selectShowSubsectorMiniMap(root)).toBe(false));
   it("selectShowMainWorldHud", () => expect(selectShowMainWorldHud(root)).toBe(true));
-  it("selectShowCharacterProfileHud", () => expect(selectShowCharacterProfileHud(root)).toBe(false));
 });
 
 describe("ui workflow thunks", () => {

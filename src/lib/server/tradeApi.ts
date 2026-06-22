@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/devAuth";
+import {
+  creditCharacterCreditsForUser,
+  debitCharacterCreditsForUser,
+  getCharacterCreditsForUser,
+  getCharactersForUserByIds,
+} from "@/plugins/characters/server/characterService";
 import shipTypes from "@/data/classic/ships.json";
 import {
   calculateWorldPairSalePrice,
@@ -53,14 +59,7 @@ export const getTradeMarket = async () => {
         crew: {
           where:  { characterId: { not: null } },
           select: {
-            character: {
-              select: {
-                skills: {
-                  where:  { name: { in: TRADE_SKILL_NAMES } },
-                  select: { name: true, level: true },
-                },
-              },
-            },
+            characterId: true,
           },
         },
       },
@@ -85,7 +84,12 @@ export const getTradeMarket = async () => {
     const remainingCapacity = cargoCapacity - usedTons;
 
     const tradeCodes        = filterTradeCodes(world.remarks);
-    const allSkills         = ship.crew.flatMap(c => c.character?.skills ?? []);
+    const characters        = await getCharactersForUserByIds(
+      dbUser.id,
+      ship.crew.flatMap(c => c.characterId ? [c.characterId] : []),
+    );
+    const allSkills         = characters.flatMap(c => c.skills)
+      .filter((skill) => TRADE_SKILL_NAMES.includes(skill.name));
     const tradeSkills       = getTradeSkills(allSkills);
     const basePricePerTon   = deriveWorldPricePerTon(tradeCodes, world.starport, world.techLevel);
     const skillModifier     = deriveSkillPriceModifier(tradeSkills);
@@ -131,14 +135,6 @@ export const buyTradeCargo = async (request: Request) => {
           select: {
             characterId:     true,
             isOwnerOperator: true,
-            character: {
-              select: {
-                skills: {
-                  where:  { name: { in: TRADE_SKILL_NAMES } },
-                  select: { name: true, level: true },
-                },
-              },
-            },
           },
         },
       },
@@ -179,22 +175,28 @@ export const buyTradeCargo = async (request: Request) => {
     }
 
     const tradeCodes = filterTradeCodes(world.remarks);
-    const allSkills  = ship.crew.flatMap(c => c.character?.skills ?? []);
+    const characters = await getCharactersForUserByIds(
+      dbUser.id,
+      ship.crew.flatMap(c => c.characterId ? [c.characterId] : []),
+    );
+    const allSkills  = characters.flatMap(c => c.skills)
+      .filter((skill) => TRADE_SKILL_NAMES.includes(skill.name));
     const pricePerTon = Math.round(
       deriveWorldPricePerTon(tradeCodes, world.starport, world.techLevel) *
       deriveSkillPriceModifier(getTradeSkills(allSkills)),
     );
     const totalCost = pricePerTon * tons;
 
-    const result = await prisma.$transaction(async (tx) => {
-      const owner = await tx.character.findUnique({
-        where:  { id: ownerCharacterId },
-        select: { credits: true },
-      });
-      if (!owner)                   throw new Error("Insufficient credits");
-      if (owner.credits < totalCost) throw new Error("Insufficient credits");
+    const debitedOwner = await debitCharacterCreditsForUser({
+      userId:      dbUser.id,
+      characterId: ownerCharacterId,
+      amount:      totalCost,
+    });
+    if (!debitedOwner) throw new Error("Insufficient credits");
 
-      const lot = await tx.cargoLot.create({
+    let lot: Awaited<ReturnType<typeof prisma.cargoLot.create>>;
+    try {
+      lot = await prisma.cargoLot.create({
         data: {
           shipId:         ship.id,
           commodity,
@@ -203,26 +205,25 @@ export const buyTradeCargo = async (request: Request) => {
           originLocation: ship.currentLocation!,
         },
       });
-
-      const updated = await tx.character.update({
-        where:  { id: ownerCharacterId },
-        data:   { credits: { decrement: totalCost } },
-        select: { credits: true },
+    } catch (err) {
+      await creditCharacterCreditsForUser({
+        userId:      dbUser.id,
+        characterId: ownerCharacterId,
+        amount:      totalCost,
       });
-
-      return { lot, newCredits: updated.credits };
-    });
+      throw err;
+    }
 
     return NextResponse.json({
       cargoLot: {
-        id:              result.lot.id,
-        commodity:       result.lot.commodity,
+        id:              lot.id,
+        commodity:       lot.commodity,
         origin:          ship.currentLocation,
         originWorldName: world.name,
-        tons:            result.lot.tons,
-        purchasePrice:   result.lot.purchasePrice,
+        tons:            lot.tons,
+        purchasePrice:   lot.purchasePrice,
       },
-      newCredits: result.newCredits,
+      newCredits: debitedOwner.credits,
     }, { status: 201 });
   } catch (err) {
     if (err instanceof Error && err.message === "Insufficient credits") {
@@ -251,6 +252,7 @@ export const sellTradeCargo = async (_req: Request, { params }: SellTradeCargoPa
         commodity:      true,
         originLocation: true,
         shipId:         true,
+        acquiredAt:     true,
       },
     });
 
@@ -298,17 +300,35 @@ export const sellTradeCargo = async (_req: Request, { params }: SellTradeCargoPa
     const ownerCharacterId = ship.crew[0]?.characterId ?? null;
     if (!ownerCharacterId) return NextResponse.json({ error: "No owner-operator found" }, { status: 400 });
 
+    const owner = await getCharacterCreditsForUser(dbUser.id, ownerCharacterId);
+    if (!owner) return NextResponse.json({ error: "Owner character not found" }, { status: 400 });
+
     const salePricePerTon = calculateWorldPairSalePrice(originWorld, currentWorld);
     const saleProceeds    = Math.round(salePricePerTon * lot.tons);
     const profitLoss      = saleProceeds - lot.purchasePrice;
 
-    await prisma.$transaction(async (tx) => {
-      await tx.cargoLot.delete({ where: { id: lotId } });
-      await tx.character.update({
-        where: { id: ownerCharacterId },
-        data:  { credits: { increment: saleProceeds } },
-      });
+    await prisma.cargoLot.delete({ where: { id: lotId } });
+
+    const creditedOwner = await creditCharacterCreditsForUser({
+      userId:      dbUser.id,
+      characterId: ownerCharacterId,
+      amount:      saleProceeds,
     });
+
+    if (!creditedOwner) {
+      await prisma.cargoLot.create({
+        data: {
+          id:             lot.id,
+          shipId:         lot.shipId,
+          commodity:      lot.commodity,
+          tons:           lot.tons,
+          purchasePrice:  lot.purchasePrice,
+          originLocation: lot.originLocation,
+          acquiredAt:     lot.acquiredAt,
+        },
+      });
+      return NextResponse.json({ error: "Owner character not found" }, { status: 400 });
+    }
 
     return NextResponse.json({ saleProceeds, salePricePerTon: Math.round(salePricePerTon), profitLoss });
   } catch (err) {

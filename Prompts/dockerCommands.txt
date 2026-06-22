@@ -1,0 +1,4 @@
+docker run --name charted-space-db -e POSTGRES_USER=traveller -e POSTGRES_PASSWORD=traveller -e POSTGRES_DB=charted_space -p 5432:5432 -d postgres:16
+
+
+docker run --name character-space-db -e POSTGRES_USER=traveller -e POSTGRES_PASSWORD=traveller -e POSTGRES_DB=character_space -p 5433:5432 -d postgres:16

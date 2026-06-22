@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { LegacyMonthlyExpenseObservation } from "@/plugin-api/workflows";
 import type { RootState } from "@/store";
-import { fetchCharacters, invalidateCharacters } from "@/store/slices/characterSlice";
+import { fetchCharacters, invalidateCharacters } from "@/plugins/characters";
 
 export interface EconomyLedgerEntryLog {
   accountId: string;
@@ -163,7 +163,7 @@ export const commitEconomyLedgerRequestToCredits = createAsyncThunk(
       throw new Error("Ledger request has no owner credit debit");
     }
 
-    const character = state.characters.items.find(
+    const character = state.plugins.characters.items.find(
       (candidate) => candidate.id === debit.characterId,
     );
     if (!character) {

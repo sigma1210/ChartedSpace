@@ -1,5 +1,5 @@
 import type { ShipSummary } from "@/plugins/ship";
-import type { CharacterSummary } from "@/store/slices/characterSlice";
+import type { CharacterSummary } from "@/plugins/characters";
 
 export interface TurnEventContext {
   currentTurn: number;

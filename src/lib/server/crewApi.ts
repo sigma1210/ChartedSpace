@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/devAuth";
 import { calculateSalary, ROLE_REQUIRED_SKILL } from "@/lib/crew";
 import { roll2d6 } from "@/lib/dice";
+import {
+  getCharacterCreditsForUser,
+  setCharacterCreditsForUser,
+} from "@/plugins/characters/server/characterService";
 import shipTypes from "@/data/classic/ships.json";
 
 export const hireCrewMember = async (req: Request) => {
@@ -163,10 +167,7 @@ export const settleCrewWages = async () => {
       return NextResponse.json({ error: "No owner-operator found" }, { status: 400 });
     }
 
-    const owner = await prisma.character.findUnique({
-      where:  { id: ownerEntry.characterId },
-      select: { credits: true },
-    });
+    const owner = await getCharacterCreditsForUser(user.id, ownerEntry.characterId);
     if (!owner) return NextResponse.json({ error: "Owner character not found" }, { status: 404 });
 
     const typeData = (shipTypes as Array<{ type: string; monthlyMortgage?: number }>)
@@ -204,11 +205,6 @@ export const settleCrewWages = async () => {
           .map(c => c.npcName ?? "Unknown");
 
     await prisma.$transaction(async (tx) => {
-      await tx.character.update({
-        where: { id: ownerEntry.characterId! },
-        data:  { credits: newCredits },
-      });
-
       if (canPay) {
         if (npcCrew.length > 0) {
           await tx.shipCrew.updateMany({
@@ -230,9 +226,16 @@ export const settleCrewWages = async () => {
       }
     });
 
+    const updatedOwner = await setCharacterCreditsForUser({
+      userId:      user.id,
+      characterId: ownerEntry.characterId,
+      credits:     newCredits,
+    });
+    if (!updatedOwner) return NextResponse.json({ error: "Owner character not found" }, { status: 404 });
+
     return NextResponse.json({
       total,
-      newCredits,
+      newCredits:  updatedOwner.credits,
       quit:       quitNames,
       unpaidCrew: unpaidNames,
     });

@@ -7,7 +7,6 @@ import galaxyReducer from "../slices/galaxySlice";
 import turnReducer from "../slices/turnSlice";
 import uiReducer from "../slices/uiSlice";
 import notificationsReducer from "../slices/notificationsSlice";
-import characterReducer from "../slices/characterSlice";
 import availableCrewReducer from "../slices/availableCrewSlice";
 import systemSceneReducer from "../slices/systemSceneSlice";
 import hudReducer from "../slices/hudSlice";
@@ -35,7 +34,6 @@ const makeStore = () =>
       ui: uiReducer,
       notifications: notificationsReducer,
       galaxy: galaxyReducer,
-      characters: characterReducer,
       turn: turnReducer,
       availableCrew: availableCrewReducer,
       system: systemReducer,

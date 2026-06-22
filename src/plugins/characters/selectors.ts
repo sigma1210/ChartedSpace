@@ -1,6 +1,6 @@
-import type { RootState } from "../index";
-import type { CharacterSummary } from "../slices/characterSlice";
-import { selectOwnerOperatorCharacterId, selectShipLocation } from "../../plugins/ship";
+import type { RootState } from "@/store";
+import type { CharacterSummary } from "./charactersSlice";
+import { selectOwnerOperatorCharacterId, selectShipLocation } from "@/plugins/ship";
 
 export interface CharacterProfileLocation {
   worldName: string | null;
@@ -9,29 +9,29 @@ export interface CharacterProfileLocation {
 }
 
 export const selectCharacters = (state: RootState): CharacterSummary[] =>
-  state.characters.items;
+  state.plugins.characters.items;
 
 export const selectCharactersStatus = (state: RootState) =>
-  state.characters.status;
+  state.plugins.characters.status;
 
 export const selectCurrentCharacter = (state: RootState): CharacterSummary | null => {
   const id = state.ui.activeCharacterId;
   if (!id) return null;
-  return state.characters.items.find(c => c.id === id) ?? null;
+  return state.plugins.characters.items.find(c => c.id === id) ?? null;
 };
 
 export const selectOwnerOperatorCharacter = (state: RootState): CharacterSummary | null => {
   const id = selectOwnerOperatorCharacterId(state);
   if (!id) return null;
-  return state.characters.items.find((character) => character.id === id) ?? null;
+  return state.plugins.characters.items.find((character) => character.id === id) ?? null;
 };
 
 export const selectOwnerOperatorCredits = (state: RootState): number | null =>
   selectOwnerOperatorCharacter(state)?.credits ?? null;
 
 export const selectFallbackCharacter = (state: RootState): CharacterSummary | null =>
-  state.characters.items.find((character) => character.sectorAbbr && character.hex) ??
-  state.characters.items[0] ??
+  state.plugins.characters.items.find((character) => character.sectorAbbr && character.hex) ??
+  state.plugins.characters.items[0] ??
   null;
 
 export const selectEffectiveCharacterProfile = (state: RootState): CharacterSummary | null =>

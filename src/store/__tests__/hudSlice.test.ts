@@ -10,6 +10,12 @@ import { stayInLocationNextTurnHudId } from "../../plugins/stayInLocation/hudMet
 import { expenseScenarioHudId } from "../../plugins/expenseScenario/hudMetadata";
 import { navigationSelectHudId } from "../../plugins/navigation";
 import { tradeHudId } from "../../plugins/trade";
+import {
+  characterActionsHudId,
+  characterCreateHudId,
+  characterListHudId,
+  characterProfileHudId,
+} from "../../plugins/characters";
 
 describe("hudSlice reducers", () => {
   it("returns initial HUD layout state", () => {
@@ -43,10 +49,25 @@ describe("hudSlice reducers", () => {
       pinned: true,
       offset: { x: 0.2, y: -0.1 },
     });
-    expect(initialHudState.layouts.characterProfile).toEqual({
+    expect(initialHudState.layouts[characterActionsHudId]).toEqual({
+      visible: false,
+      pinned: true,
+      offset: { x: -0.22, y: 0.16 },
+    });
+    expect(initialHudState.layouts[characterProfileHudId]).toEqual({
       visible: false,
       pinned: true,
       offset: { x: -0.18, y: 0.1 },
+    });
+    expect(initialHudState.layouts[characterListHudId]).toEqual({
+      visible: false,
+      pinned: true,
+      offset: { x: -0.34, y: 0.04 },
+    });
+    expect(initialHudState.layouts[characterCreateHudId]).toEqual({
+      visible: false,
+      pinned: true,
+      offset: { x: 0.12, y: 0.02 },
     });
     expect(initialHudState.layouts[stayInLocationNextTurnHudId]).toEqual({
       visible: false,

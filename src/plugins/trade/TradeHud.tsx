@@ -20,7 +20,7 @@ import {
   type WorldLocation,
 } from "@/store/selectors/galaxy.selectors";
 import { selectCurrentTurn } from "@/store/selectors/turn.selectors";
-import { selectOwnerOperatorCredits } from "@/store/selectors/character.selectors";
+import { selectOwnerOperatorCredits } from "@/plugins/characters";
 import { buyCargoAndRefresh, sellCargoAndRefresh } from "./actions";
 import { selectCurrentMarketData, type CurrentMarketData } from "./selectors";
 

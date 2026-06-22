@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { shallowEqual, useSelector, useStore } from "react-redux";
 import { Canvas, useFrame, useThree, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { Globe2, Grid3X3, Map, Navigation, Radar, User } from "lucide-react";
+import { Globe2, Grid3X3, Map, Navigation, Radar } from "lucide-react";
 import * as THREE from "three";
 import type { World } from "../../types";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
@@ -47,13 +47,18 @@ import {
   markSceneReady,
   type SystemSceneTransitionPhase,
 } from "../../store/slices/systemSceneSlice";
-import { CharacterProfileHudContent } from "./CharacterProfileHud";
 import { MainWorldHud } from "./MainWorldHud";
 import { SubsectorMiniMapHudContent } from "../map/SubsectorMiniMap";
 import { SectorMiniMapHudContent } from "../map/SectorMiniMap";
 import { GalaxyMiniMapHudContent } from "../map/GalaxyMiniMap";
 import { registeredPluginHudLayouts } from "../../plugins/hudLayouts";
 import { registeredPluginHudRenderers } from "../../plugins/hudRenderers";
+import { CharacterCreateHudContent } from "../../plugins/characters/CharacterCreateHud";
+import { CharacterListHudContent } from "../../plugins/characters/CharacterListHud";
+import {
+  selectCharacters,
+  selectCharactersStatus,
+} from "../../plugins/characters";
 import { navigationSelectHudId } from "../../plugins/navigation";
 import type {
   PluginHudRendererRegistration,
@@ -1820,8 +1825,6 @@ const CameraPinnedSystemHud = ({
   onOpenNavigationHud,
   mainWorldHudVisible,
   onOpenMainWorldHud,
-  characterProfileHudVisible,
-  onOpenCharacterProfileHud,
   pluginHudButtons,
 }: {
   world: World;
@@ -1834,8 +1837,6 @@ const CameraPinnedSystemHud = ({
   onOpenNavigationHud: () => void;
   mainWorldHudVisible: boolean;
   onOpenMainWorldHud: () => void;
-  characterProfileHudVisible: boolean;
-  onOpenCharacterProfileHud: () => void;
   pluginHudButtons: Array<{
     id: string;
     openTitle: string;
@@ -1930,12 +1931,6 @@ const CameraPinnedSystemHud = ({
                 onClick={onOpenMainWorldHud}
               >
                 <Globe2 size={13} aria-hidden="true" />
-              </HudIconButton>
-              <HudIconButton
-                title={characterProfileHudVisible ? "Character profile visible" : "Open character profile"}
-                onClick={onOpenCharacterProfileHud}
-              >
-                <User size={13} aria-hidden="true" />
               </HudIconButton>
               {pluginHudButtons.map(({ id, openTitle, visibleTitle, visible, Icon, onOpen }) => (
                 <HudIconButton
@@ -2044,80 +2039,6 @@ const CameraPinnedMainWorldHud = ({
   );
 };
 
-const CameraPinnedCharacterProfileHud = ({
-  visible,
-  characterProfileHud,
-  store,
-  onClose,
-}: {
-  visible: boolean;
-  characterProfileHud: ReactNode;
-  store: AppStore;
-  onClose: () => void;
-}) => {
-  const dispatch = useAppDispatch();
-  const layout = useAppSelector(selectHudLayout("characterProfile"));
-  const offset = layout.offset;
-  const pinned = layout.pinned;
-  const groupRef = useRef<THREE.Group>(null);
-  const { camera, size } = useThree();
-  const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
-    id: "characterProfile",
-    pinned,
-    offset,
-    size,
-    dispatch,
-  });
-
-  useFrame(() => {
-    const group = groupRef.current;
-    if (!group || !visible) return;
-
-    const distance = 4.8;
-    const perspective = camera as THREE.PerspectiveCamera;
-    const fov = perspective.isPerspectiveCamera ? perspective.fov : 50;
-    const height = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * distance;
-    const width = height * (size.width / Math.max(1, size.height));
-    const forward = new THREE.Vector3();
-    const right = new THREE.Vector3();
-    const up = new THREE.Vector3();
-
-    camera.getWorldDirection(forward);
-    right.setFromMatrixColumn(camera.matrixWorld, 0);
-    up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
-
-    group.position
-      .copy(camera.position)
-      .addScaledVector(forward, distance)
-      .addScaledVector(right, activeOffset.x * width * 0.5)
-      .addScaledVector(up, activeOffset.y * height * 0.5);
-    group.quaternion.copy(camera.quaternion);
-  });
-
-  if (!visible) return null;
-
-  return (
-    <group ref={groupRef}>
-      <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
-          <HudHeader
-            title="Character"
-            pinned={pinned}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "characterProfile", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close character profile HUD"
-          />
-          <StoreBridge store={store}>
-            {characterProfileHud}
-          </StoreBridge>
-        </HudPanel>
-      </Html>
-    </group>
-  );
-};
-
 const CameraPinnedPluginHud = ({
   visible,
   registration,
@@ -2176,7 +2097,7 @@ const CameraPinnedPluginHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
+        <HudPanel className={registration.panelClassName}>
           <HudHeader
             title={registration.title}
             pinned={pinned}
@@ -2456,10 +2377,6 @@ type StarSystemViewSceneProps = {
   onCloseMainWorldHud?: () => void;
   mainWorldHud?: ReactNode;
   mainWorldHudInJump?: boolean;
-  characterProfileHudVisible?: boolean;
-  onOpenCharacterProfileHud?: () => void;
-  onCloseCharacterProfileHud?: () => void;
-  characterProfileHud?: ReactNode;
   pluginHuds?: readonly PluginRenderableHudRegistration[];
   pluginHudVisibility?: Record<string, boolean>;
   navigationHudVisible?: boolean;
@@ -2500,10 +2417,6 @@ export const StarSystemViewScene = ({
   onCloseMainWorldHud = () => {},
   mainWorldHud = null,
   mainWorldHudInJump = false,
-  characterProfileHudVisible = false,
-  onOpenCharacterProfileHud = () => {},
-  onCloseCharacterProfileHud = () => {},
-  characterProfileHud = null,
   pluginHuds = [],
   pluginHudVisibility = {},
   navigationHudVisible = false,
@@ -2678,10 +2591,11 @@ export const StarSystemViewScene = ({
                 onOpenNavigationHud={onOpenNavigationHud}
                 mainWorldHudVisible={mainWorldHudVisible}
                 onOpenMainWorldHud={onOpenMainWorldHud}
-                characterProfileHudVisible={characterProfileHudVisible}
-                onOpenCharacterProfileHud={onOpenCharacterProfileHud}
                 pluginHudButtons={pluginHuds
-                  .filter((registration) => registration.id !== navigationSelectHudId)
+                  .filter((registration) => (
+                    registration.id !== navigationSelectHudId
+                    && registration.showInHudControls !== false
+                  ))
                   .map((registration) => ({
                     id: registration.id,
                     openTitle: registration.openTitle,
@@ -2699,14 +2613,6 @@ export const StarSystemViewScene = ({
               world={world}
               inJump={mainWorldHudInJump}
               onClose={onCloseMainWorldHud}
-            />
-          )}
-          {showHudControls && characterProfileHud && (
-            <CameraPinnedCharacterProfileHud
-              visible={characterProfileHudVisible}
-              characterProfileHud={characterProfileHud}
-              store={reduxStore}
-              onClose={onCloseCharacterProfileHud}
             />
           )}
           {showHudControls && pluginHuds.map((registration) => (
@@ -2941,13 +2847,14 @@ const StarSystemView = () => {
   const router = useRouter();
   const shipStatus = useAppSelector(selectShipStatus);
   const ship = useAppSelector(selectShip);
+  const characters = useAppSelector(selectCharacters);
+  const charactersStatus = useAppSelector(selectCharactersStatus);
   const activeTradeWorld = useAppSelector(selectActiveWorld);
   const miniMapVisible = useAppSelector(selectHudVisible("subsectorMap"));
   const sectorMiniMapVisible = useAppSelector(selectHudVisible("sectorMap"));
   const galaxyMiniMapVisible = useAppSelector(selectHudVisible("galaxyMap"));
   const navigationHudVisible = useAppSelector(selectHudVisible(navigationSelectHudId));
   const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
-  const characterProfileHudVisible = useAppSelector(selectHudVisible("characterProfile"));
   const pluginHudVisibility = useAppSelector(
     (state) =>
       Object.fromEntries(
@@ -2994,15 +2901,31 @@ const StarSystemView = () => {
   const inJump = ship?.status === "in_jump";
   const visibleRenderableLocation = activeScene.renderableLocation;
   const mainWorldHud = <MainWorldHud world={visibleRenderableLocation?.world ?? null} inJump={inJump} />;
+  const unavailableMessage =
+    shipStatus === "loading" || sectorStatus === "loading"
+      ? "Loading current system"
+      : shipStatus === "loaded" && !ship
+        ? "No active ship. Start a character to begin."
+        : "Current ship system unavailable";
 
   if (!visibleRenderableLocation) {
+    const showCharacterStart =
+      shipStatus === "loaded" && !ship && charactersStatus === "loaded";
+
     return (
-      <div className="relative flex h-full items-center justify-center">
-        <span className="font-mono text-xs uppercase tracking-widest text-(--hud-text-dim)">
-          {shipStatus === "loading" || sectorStatus === "loading"
-            ? "Loading current system"
-            : "Current ship system unavailable"}
-        </span>
+      <div className="relative flex h-full items-center justify-center p-4">
+        <div className="flex max-h-[90vh] max-w-[92vw] flex-col items-center gap-3 overflow-hidden">
+          <span className="font-mono text-xs uppercase tracking-widest text-(--hud-text-dim)">
+            {unavailableMessage}
+          </span>
+          {showCharacterStart && (
+            <div className="max-h-[78vh] overflow-y-auto border border-(--hud-border) bg-(--hud-bg)/90 p-2 shadow-[0_0_24px_rgba(34,211,238,0.14)] backdrop-blur-md">
+              {characters.length > 0
+                ? <CharacterListHudContent />
+                : <CharacterCreateHudContent />}
+            </div>
+          )}
+        </div>
         {SHOW_SCENE_TRANSITION_OVERLAY && (
           <SceneTransitionOverlay
             phase={transitionPhase}
@@ -3052,10 +2975,6 @@ const StarSystemView = () => {
           onCloseMainWorldHud={() => dispatch(setHudVisible({ id: "mainWorld", visible: false }))}
           mainWorldHud={mainWorldHud}
           mainWorldHudInJump={inJump}
-          characterProfileHudVisible={characterProfileHudVisible}
-          onOpenCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: true }))}
-          onCloseCharacterProfileHud={() => dispatch(setHudVisible({ id: "characterProfile", visible: false }))}
-          characterProfileHud={<CharacterProfileHudContent />}
           pluginHuds={registeredRenderablePluginHuds}
           pluginHudVisibility={pluginHudVisibility}
         />

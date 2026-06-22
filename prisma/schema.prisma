@@ -10,48 +10,9 @@ model User {
   id          String      @id @default(cuid())
   clerkId     String      @unique
   username    String?
-  characters  Character[]
   ship        Ship?
   currentTurn Int         @default(1)
   createdAt   DateTime    @default(now())
-}
-
-model Character {
-  id              String           @id @default(cuid())
-  name            String
-  userId          String?
-  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  strength        Int
-  dexterity       Int
-  endurance       Int
-  intelligence    Int
-  education       Int
-  socialStanding  Int
-  credits         Int              @default(0)
-  sheet           Json?
-  currentLocation String?
-  skills          CharacterSkill[]
-  locationLog     LocationLog[]
-  crewAssignment  ShipCrew?
-  shipPassage     ShipPassenger?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-}
-
-model CharacterSkill {
-  id          String    @id @default(cuid())
-  characterId String
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  name        String
-  level       Int
-}
-
-model LocationLog {
-  id          String    @id @default(cuid())
-  characterId String
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  location    String
-  arrivedAt   DateTime  @default(now())
 }
 
 model Sector {
@@ -122,7 +83,6 @@ model Ship {
   userId              String?         @unique
   user                User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   crew                ShipCrew[]
-  passengers          ShipPassenger[]
   cargo               CargoLot[]
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
@@ -133,7 +93,6 @@ model ShipCrew {
   shipId          String
   ship            Ship       @relation(fields: [shipId], references: [id], onDelete: Cascade)
   characterId     String?    @unique
-  character       Character? @relation(fields: [characterId], references: [id], onDelete: Cascade)
   npcName         String?
   role            String
   isOwnerOperator Boolean    @default(false)
@@ -141,15 +100,6 @@ model ShipCrew {
   keySkillName    String?
   keySkillLevel   Int        @default(0)
   unpaidTurns     Int        @default(0)
-}
-
-model ShipPassenger {
-  id          String    @id @default(cuid())
-  shipId      String
-  ship        Ship      @relation(fields: [shipId], references: [id], onDelete: Cascade)
-  characterId String    @unique
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  passage     String
 }
 
 model CargoLot {

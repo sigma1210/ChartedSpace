@@ -9,7 +9,7 @@ import type {
   PluginEffectResolution,
 } from "../../plugins/types";
 import type { RootState } from "../../store";
-import { fetchCharacters, invalidateCharacters } from "../../store/slices/characterSlice";
+import { fetchCharacters, invalidateCharacters } from "../../plugins/characters";
 import { fetchShip, invalidateShip, selectActiveShip } from "../../plugins/ship";
 import { getSystemData } from "../../store/slices/systemSlice";
 import { advanceTurn, type AdvanceTurnPayload } from "../../store/slices/turnSlice";
@@ -263,7 +263,7 @@ const buildTurnContext = (state: RootState): TurnEventContext | null => {
   const ownerCharacterId =
     ship.crew.find((member) => member.isOwnerOperator)?.characterId ?? null;
   const ownerCharacter = ownerCharacterId
-    ? state.characters.items.find((character) => character.id === ownerCharacterId) ?? null
+    ? state.plugins.characters.items.find((character) => character.id === ownerCharacterId) ?? null
     : null;
 
   return {
@@ -320,7 +320,7 @@ const ownerCharacterForFuel = (state: RootState) => {
     ship.crew.find((member) => member.isOwnerOperator)?.characterId ?? null;
   if (!ownerCharacterId) return null;
 
-  return state.characters.items.find((character) => character.id === ownerCharacterId) ?? null;
+  return state.plugins.characters.items.find((character) => character.id === ownerCharacterId) ?? null;
 };
 
 const buildJumpFuelEffect = (

@@ -2,7 +2,6 @@ import { configureStore } from "@reduxjs/toolkit";
 import uiReducer from "./slices/uiSlice";
 import notificationsReducer from "./slices/notificationsSlice";
 import galaxyReducer from "./slices/galaxySlice";
-import characterReducer from "./slices/characterSlice";
 import turnReducer from "./slices/turnSlice";
 import availableCrewReducer from "./slices/availableCrewSlice";
 import systemReducer from "./slices/systemSlice";
@@ -22,7 +21,6 @@ export const store = configureStore({
     ui: uiReducer,
     notifications: notificationsReducer,
     galaxy: galaxyReducer,
-    characters: characterReducer,
     turn: turnReducer,
     availableCrew: availableCrewReducer,
     system: systemReducer,

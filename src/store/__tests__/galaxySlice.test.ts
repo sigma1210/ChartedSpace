@@ -15,6 +15,7 @@ import {
 import type { GalaxyState, SectorDetail, World } from "../../types";
 import type { RootState } from "../index";
 import { initialHudState } from "../slices/hudSlice";
+import { initialCharactersState } from "../../plugins/characters";
 import { initialDemographicsState } from "../../plugins/demographics";
 import {
   getAllegianceColor,
@@ -72,7 +73,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   });
 
 const makeRoot = (galaxy: GalaxyState): RootState =>
-  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], characters: {} as RootState["characters"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } });
+  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } });
 
 describe("galaxySlice reducers", () => {
   it("populates sectors from the index on initialization", () => {

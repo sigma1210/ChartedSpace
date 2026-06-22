@@ -1,19 +1,22 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma as CharacterDbPrisma } from "@/generated/character-prisma";
+import { characterPrisma } from "@/plugins/characters/server/characterPrisma";
 import type { CharacterSheet } from "@/lib/characters/types";
 import { getCurrentUser, isDevAuthMode } from "@/lib/devAuth";
-import spawnPoints from "@/data/spawnPoints.json";
-import shipTypes from "@/data/classic/ships.json";
-
 
 const toHex = (n: number) => Math.min(15, Math.max(0, n)).toString(16).toUpperCase();
 
-const REQUIRED_CREW = ["pilot", "navigator", "engineer", "steward"] as const;
-type CrewRole = typeof REQUIRED_CREW[number];
-
-const pickRandom = <T>(arr: readonly T[] | T[]): T =>
-  arr[Math.floor(Math.random() * arr.length)];
+const normalizeSkills = (skills: CharacterSheet["skills"]) => {
+  if (!Array.isArray(skills)) return [];
+  const byName = new Map<string, number>();
+  for (const skill of skills) {
+    if (!skill || typeof skill.name !== "string" || !Number.isFinite(skill.level)) continue;
+    const name = skill.name.trim();
+    if (!name) continue;
+    byName.set(name, Math.max(byName.get(name) ?? skill.level, skill.level));
+  }
+  return [...byName.entries()].map(([name, level]) => ({ name, level }));
+};
 
 const errorResponse = (err: unknown) => {
   const detail = err instanceof Error ? err.message : String(err);
@@ -26,55 +29,12 @@ const errorResponse = (err: unknown) => {
   );
 };
 
-const createShipForNewPlayer = async (
-  tx: Prisma.TransactionClient,
-  userId: string,
-  characterId: string,
-  role: CrewRole,
-) => {
-  const spawn = pickRandom(spawnPoints);
-  const freeTrader = shipTypes[0];
-  if (!freeTrader) {
-    console.warn("[createShipForNewPlayer] no ship types configured");
-    return;
-  }
-
-  const spawnLocation = `${spawn.sectorAbbr}:${spawn.hex}`;
-
-  const ship = await tx.ship.create({
-    data: {
-      name:            "Free Trader",
-      type:            freeTrader.type,
-      jumpRating:      freeTrader.jumpRating,
-      isMortgaged:     true,
-      status:          "docked",
-      currentLocation: spawnLocation,
-      userId,
-    },
-  });
-
-  await tx.shipCrew.create({
-    data: {
-      shipId:          ship.id,
-      characterId,
-      role,
-      isOwnerOperator: true,
-      monthlySalary:   0,
-    },
-  });
-
-  await tx.character.update({
-    where: { id: characterId },
-    data:  { currentLocation: spawnLocation },
-  });
-};
-
 export const GET = async () => {
   try {
     const dbUser = await getCurrentUser();
     if (!dbUser) return NextResponse.json({ items: [] });
 
-    const rows = await prisma.character.findMany({
+    const rows = await characterPrisma.character.findMany({
       where:   { userId: dbUser.id },
       orderBy: { updatedAt: "desc" },
       select: {
@@ -126,7 +86,7 @@ export const POST = async (request: Request) => {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Failed to resolve user" }, { status: 500 });
 
-    const body: { sheet: CharacterSheet; name?: string; role?: string } = await request.json();
+    const body: { sheet: CharacterSheet; name?: string } = await request.json();
     const sheet: CharacterSheet = body.sheet;
 
     if (!sheet?.upp || !sheet?.careers?.length) {
@@ -134,14 +94,11 @@ export const POST = async (request: Request) => {
     }
 
     const name = (body.name?.trim() || sheet.name || "Unnamed Traveller").trim();
-    const role = REQUIRED_CREW.includes(body.role as CrewRole) ? (body.role as CrewRole) : null;
-    const skills = Array.isArray(sheet.skills)
-      ? sheet.skills.filter(s => s && typeof s.name === "string" && Number.isFinite(s.level))
-      : [];
+    const skills = normalizeSkills(sheet.skills);
     const credits = Number.isFinite(sheet.credits) ? sheet.credits : 0;
 
-    const character = await prisma.$transaction(async (tx) => {
-      const data = {
+    const character = await characterPrisma.$transaction(async (tx) => {
+      const data: CharacterDbPrisma.CharacterCreateInput = {
         name,
         userId:         user.id,
         strength:       sheet.upp.str,
@@ -151,8 +108,8 @@ export const POST = async (request: Request) => {
         education:      sheet.upp.edu,
         socialStanding: sheet.upp.soc,
         credits,
-        sheet: sheet as unknown as Prisma.InputJsonValue,
-      } as unknown as Prisma.CharacterUncheckedCreateInput;
+        sheet:          sheet as unknown as CharacterDbPrisma.InputJsonValue,
+      };
 
       const created = await tx.character.create({ data });
 
@@ -164,13 +121,6 @@ export const POST = async (request: Request) => {
             level:       s.level,
           })),
         });
-      }
-
-      if (role) {
-        const existingShip = await tx.ship.findUnique({ where: { userId: user.id } });
-        if (!existingShip) {
-          await createShipForNewPlayer(tx, user.id, created.id, role);
-        }
       }
 
       return created;

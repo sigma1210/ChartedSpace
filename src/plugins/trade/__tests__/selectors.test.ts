@@ -1,5 +1,6 @@
 import type { RootState } from "@/store";
 import { initialHudState } from "@/store/slices/hudSlice";
+import { initialCharactersState } from "@/plugins/characters";
 import { initialDemographicsState } from "@/plugins/demographics";
 import { initialEconomyState } from "@/plugins/economy";
 import { initialExpenseScenarioState } from "@/plugins/expenseScenario";
@@ -99,13 +100,13 @@ const makeRoot = (mainWorld: World): RootState => ({
     targetWorldHex: null,
     targetWorldSectorAbbr: null,
   },
-  characters: { items: [], status: "idle", error: null },
   turn: { currentTurn: 1, status: "idle", error: null },
   availableCrew: { poolSize: 20, crew: [] },
   system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} },
   systemScene: {} as RootState["systemScene"],
   hud: initialHudState,
   plugins: {
+    characters: initialCharactersState,
     demographics: initialDemographicsState,
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,

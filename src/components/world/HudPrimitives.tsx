@@ -12,18 +12,23 @@ export const HudIconButton = ({
   title,
   onClick,
   disabled = false,
+  variant = "default",
 }: {
   children: ReactNode;
   title: string;
   onClick?: () => void;
   disabled?: boolean;
+  variant?: "default" | "danger";
 }) => (
   <button
     type="button"
     aria-label={title}
     onClick={onClick}
     disabled={disabled}
-    className={hudIconButtonClass}
+    className={[
+      hudIconButtonClass,
+      variant === "danger" ? "hover:border-(--hud-error) hover:text-(--hud-error) focus-visible:border-(--hud-error)" : "",
+    ].join(" ")}
   >
     {children}
     <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 whitespace-nowrap border border-(--hud-accent)/70 bg-(--hud-bg)/95 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-accent) shadow-[0_0_12px_rgba(34,211,238,0.18)] group-hover:block group-focus-visible:block">

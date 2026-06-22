@@ -13,6 +13,8 @@ export interface PluginHudLayoutRegistration {
   title: string;
   openTitle: string;
   visibleTitle: string;
+  showInHudControls?: boolean;
+  panelClassName?: string;
   defaultLayout: {
     visible: boolean;
     pinned: boolean;

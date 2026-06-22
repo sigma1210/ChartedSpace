@@ -1,5 +1,5 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { fetchCharacters, invalidateCharacters } from "@/store/slices/characterSlice";
+import { fetchCharacters, invalidateCharacters } from "@/plugins/characters";
 import {
   fetchShip,
   invalidateShip,

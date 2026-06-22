@@ -15,4 +15,3 @@ export const selectShowGalaxyMiniMap = (state: RootState) => state.ui.showGalaxy
 export const selectShowSectorMiniMap = (state: RootState) => state.ui.showSectorMiniMap;
 export const selectShowSubsectorMiniMap = (state: RootState) => state.ui.showSubsectorMiniMap;
 export const selectShowMainWorldHud = (state: RootState) => state.ui.showMainWorldHud;
-export const selectShowCharacterProfileHud = (state: RootState) => state.ui.showCharacterProfileHud;

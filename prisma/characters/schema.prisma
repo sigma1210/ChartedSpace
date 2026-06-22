@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/generated/character-prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Character {
+  id              String           @id @default(cuid())
+  userId          String?
+  name            String
+  strength        Int
+  dexterity       Int
+  endurance       Int
+  intelligence    Int
+  education       Int
+  socialStanding  Int
+  credits         Int              @default(0)
+  sheet           Json?
+  currentLocation String?
+  currentShipId   String?
+  currentShipRole String?
+  skills          CharacterSkill[]
+  locationLog     LocationLog[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([currentLocation])
+  @@index([currentShipId])
+}
+
+model CharacterSkill {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  name        String
+  level       Int
+
+  @@index([characterId])
+  @@unique([characterId, name])
+}
+
+model LocationLog {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  location    String
+  arrivedAt   DateTime  @default(now())
+
+  @@index([characterId])
+  @@index([location])
+}

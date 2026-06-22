@@ -1,7 +1,4 @@
 export type ModalType =
-  | "characterList"
-  | "characterProfile"
-  | "characterCreate"
   | "search"
   | "notifications"
   | "map"
@@ -39,7 +36,6 @@ export interface UIState {
   showSectorMiniMap: boolean;
   showSubsectorMiniMap: boolean;
   showMainWorldHud: boolean;
-  showCharacterProfileHud: boolean;
 }
 
 export interface NotificationsState {

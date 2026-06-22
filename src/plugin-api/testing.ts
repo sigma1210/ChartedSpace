@@ -1,4 +1,5 @@
 import type { RootState } from "../store";
+import { initialCharactersState } from "../plugins/characters";
 import { initialDemographicsState } from "../plugins/demographics";
 import { initialEconomyState } from "../plugins/economy";
 import { initialExpenseScenarioState } from "../plugins/expenseScenario";
@@ -19,32 +20,32 @@ export const createPluginTestRootState = ({
   ui: {} as RootState["ui"],
   notifications: { items: [] },
   galaxy: {} as RootState["galaxy"],
-  characters: {
-    items: [{
-      id: "owner-1",
-      name: "Owner",
-      upp: "777777",
-      strength: 7,
-      dexterity: 7,
-      endurance: 7,
-      intelligence: 7,
-      education: 7,
-      socialStanding: 7,
-      credits: 100000,
-      skills: [],
-      worldName: null,
-      sectorAbbr: null,
-      hex: null,
-    }],
-    status: "loaded",
-    error: null,
-  },
   turn: { currentTurn, status: "loaded", error: null },
   availableCrew: {} as RootState["availableCrew"],
   system: {} as RootState["system"],
   systemScene: {} as RootState["systemScene"],
   hud: {} as RootState["hud"],
   plugins: {
+    characters: {
+      ...initialCharactersState,
+      items: [{
+        id: "owner-1",
+        name: "Owner",
+        upp: "777777",
+        strength: 7,
+        dexterity: 7,
+        endurance: 7,
+        intelligence: 7,
+        education: 7,
+        socialStanding: 7,
+        credits: 100000,
+        skills: [],
+        worldName: null,
+        sectorAbbr: null,
+        hex: null,
+      }],
+      status: "loaded",
+    },
     demographics: initialDemographicsState,
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,

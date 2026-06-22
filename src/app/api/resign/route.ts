@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/devAuth";
+import {
+  clearCharacterShipAssignment,
+  countCharactersForUser,
+} from "@/plugins/characters/server/characterService";
 
 // ─── POST /api/resign ─────────────────────────────────────────────────────────
-// Player-initiated restart. Deletes the captain and ship, resets turn to 1.
+// Player-initiated restart. Clears the active ship assignment, deletes the ship,
+// and resets turn to 1.
 // Returns { remainingCharacters } so the client knows whether to show the
 // character list (pick or generate) or go straight to character creation.
 
@@ -15,8 +20,13 @@ export const POST = async () => {
     const ship = await prisma.ship.findFirst({
       where: { userId: user.id },
       select: {
-        id:   true,
-        crew: { where: { isOwnerOperator: true }, select: { characterId: true }, take: 1 },
+        id:              true,
+        currentLocation: true,
+        crew: {
+          where:  { isOwnerOperator: true },
+          select: { characterId: true },
+          take:   1,
+        },
       },
     });
 
@@ -27,10 +37,6 @@ export const POST = async () => {
       if (ship) {
         await tx.ship.delete({ where: { id: ship.id } });
       }
-      // Delete the captain character (cascades to CharacterSkill, LocationLog)
-      if (captainId) {
-        await tx.character.delete({ where: { id: captainId } });
-      }
       // Reset turn counter
       await tx.user.update({
         where: { id: user.id },
@@ -38,7 +44,15 @@ export const POST = async () => {
       });
     });
 
-    const remaining = await prisma.character.count({ where: { userId: user.id } });
+    if (captainId) {
+      await clearCharacterShipAssignment({
+        characterId: captainId,
+        userId:      user.id,
+        location:    ship?.currentLocation ?? null,
+      });
+    }
+
+    const remaining = await countCharactersForUser(user.id);
 
     return NextResponse.json({ remainingCharacters: remaining });
   } catch (err) {

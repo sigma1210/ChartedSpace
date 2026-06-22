@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useAppDispatch } from "../../store/hooks";
-import { fetchCharacters } from "../../store/slices/characterSlice";
+import { fetchCharacters } from "../../plugins/characters";
 import { preloadGalaxySectors } from "../../store/slices/galaxySlice";
 import { fetchShip } from "../../plugins/ship";
 import { fetchTurn } from "../../store/slices/turnSlice";

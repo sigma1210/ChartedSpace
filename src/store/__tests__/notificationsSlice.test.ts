@@ -11,6 +11,7 @@ import {
 import type { NotificationsState } from "../../types";
 import type { RootState } from "../index";
 import { initialHudState } from "../slices/hudSlice";
+import { initialCharactersState } from "../../plugins/characters";
 import { initialDemographicsState } from "../../plugins/demographics";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
@@ -39,11 +40,9 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       showSectorMiniMap: true,
       showSubsectorMiniMap: true,
       showMainWorldHud: false,
-      showCharacterProfileHud: false,
     },
     notifications,
     galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null },
-    characters: { items: [], status: "idle", error: null },
     turn: { currentTurn: 1, status: "idle", error: null },
     availableCrew: { poolSize: 20, crew: [] },
     system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} },
@@ -60,7 +59,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       sceneReady: true,
     },
     hud: initialHudState,
-    plugins: { demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
+    plugins: { characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
   };
 }
 

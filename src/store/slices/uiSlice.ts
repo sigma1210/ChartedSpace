@@ -23,7 +23,6 @@ const initialState: UIState = {
   showSectorMiniMap: true,
   showSubsectorMiniMap: true,
   showMainWorldHud: false,
-  showCharacterProfileHud: false,
 };
 
 const uiSlice = createSlice({
@@ -41,20 +40,6 @@ const uiSlice = createSlice({
     goBack(state) {
       state.activeModal = state.previousModal;
       state.previousModal = null;
-    },
-    openCharacterList(state) {
-      state.previousModal = state.activeModal;
-      state.activeModal = "characterList";
-    },
-    openCharacterProfile(state, action: PayloadAction<string>) {
-      state.previousModal = state.activeModal;
-      state.activeModal = "characterProfile";
-      state.activeCharacterId = action.payload;
-    },
-    openCharacterCreate(state) {
-      state.previousModal = state.activeModal;
-      state.activeModal = "characterCreate";
-      state.activeCharacterId = null;
     },
     setActiveCharacter(state, action: PayloadAction<string>) {
       state.activeCharacterId = action.payload;
@@ -136,9 +121,6 @@ const uiSlice = createSlice({
     setMainWorldHudVisible(state, action: PayloadAction<boolean>) {
       state.showMainWorldHud = action.payload;
     },
-    setCharacterProfileHudVisible(state, action: PayloadAction<boolean>) {
-      state.showCharacterProfileHud = action.payload;
-    },
   },
 });
 
@@ -146,9 +128,6 @@ export const {
   openModal,
   closeModal,
   goBack,
-  openCharacterList,
-  openCharacterProfile,
-  openCharacterCreate,
   setActiveCharacter,
   openMap,
   setMapView,
@@ -170,7 +149,6 @@ export const {
   setSubsectorMiniMapVisible,
   setSectorMiniMapVisible,
   setMainWorldHudVisible,
-  setCharacterProfileHudVisible,
 } = uiSlice.actions;
 
 export const openSelectedWorldSystemDetail = createAsyncThunk(

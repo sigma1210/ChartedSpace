@@ -1,11 +1,6 @@
 import Link from "next/link";
 import DevLogoutButton from "./DevLogoutButton";
 import MapInitializer from "./MapInitializer";
-import CreateCharacterButton from "./CreateCharacterButton";
-import CharacterListButton from "./CharacterListButton";
-import ResignButton from "./ResignButton";
-import CharacterCreateModal from "./CharacterCreateModal";
-import CharacterListModal from "../../components/modals/CharacterListModal";
 import CurrentWorldMapPanel from "./CurrentWorldMapPanel";
 
 const isDevMode = process.env.DEV_MODE === "true";
@@ -21,15 +16,12 @@ const MapPage = () => {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <ResignButton />
             <Link
               href="/map/system"
               className="font-mono text-xs uppercase tracking-widest px-3 py-1.5 border border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) transition-colors"
             >
               System
             </Link>
-            <CharacterListButton />
-            <CreateCharacterButton />
             {isDevMode && <DevLogoutButton />}
           </div>
         </div>
@@ -39,8 +31,6 @@ const MapPage = () => {
         <MapInitializer />
         <CurrentWorldMapPanel />
       </main>
-      <CharacterCreateModal />
-      <CharacterListModal />
     </div>
   );
 };
