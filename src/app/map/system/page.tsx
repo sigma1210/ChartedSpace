@@ -1,13 +1,7 @@
-import CurrentSystemPageClient from "./SystemPageClient";
-import SystemDetailModal from "../../../components/modals/SystemDetailModal";
+import { redirect } from "next/navigation";
 
 const CurrentSystemPage = () => {
-  return (
-    <>
-      <CurrentSystemPageClient />
-      <SystemDetailModal />
-    </>
-  );
+  redirect("/system");
 };
 
 export default CurrentSystemPage;

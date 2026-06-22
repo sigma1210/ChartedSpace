@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { invalidateCharacters, fetchCharacters } from "./charactersSlice";
 import { selectCharacters } from "./selectors";
@@ -206,10 +206,6 @@ export const CharacterCreateHudContent = () => {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<CrewRoleId | null>(null);
   const providerRef = useRef<HumanDecisionProvider | null>(null);
-
-  useEffect(() => {
-    dispatch(fetchCharacters());
-  }, [dispatch]);
 
   const isFirstCharacter = characters.length === 0;
 

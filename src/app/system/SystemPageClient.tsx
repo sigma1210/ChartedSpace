@@ -2,22 +2,22 @@
 
 import "@/lib/turns/index";
 import { useEffect, useRef } from "react";
-import StarSystemView from "../../../components/world/StarSystemView";
-import { WarpSceneLifecycle } from "../../../components/world/WarpSceneLifecycle";
-import { SystemLocationLifecycle } from "../../../components/world/SystemLocationLifecycle";
+import StarSystemView from "@/components/world/StarSystemView";
+import { WarpSceneLifecycle } from "@/components/world/WarpSceneLifecycle";
+import { SystemLocationLifecycle } from "@/components/world/SystemLocationLifecycle";
 import {
   characterActionsHudId,
   characterCreateHudId,
   characterListHudId,
   selectCharacters,
   selectCharactersStatus,
-} from "../../../plugins/characters";
+} from "@/plugins/characters";
 import {
   selectActiveShip,
   selectShipStatus,
-} from "../../../plugins/ship";
-import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { setHudVisible } from "../../../store/slices/hudSlice";
+} from "@/plugins/ship";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setHudVisible } from "@/store/slices/hudSlice";
 
 const CharacterStartLifecycle = () => {
   const dispatch = useAppDispatch();
@@ -44,7 +44,7 @@ const CharacterStartLifecycle = () => {
   return null;
 };
 
-const CurrentSystemPageClient = () => {
+const SystemPageClient = () => {
   return (
     <div className="starfield h-screen w-screen overflow-hidden">
       <WarpSceneLifecycle />
@@ -55,4 +55,4 @@ const CurrentSystemPageClient = () => {
   );
 };
 
-export default CurrentSystemPageClient;
+export default SystemPageClient;

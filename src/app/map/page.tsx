@@ -17,7 +17,7 @@ const MapPage = () => {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/map/system"
+              href="/system"
               className="font-mono text-xs uppercase tracking-widest px-3 py-1.5 border border-(--hud-border) text-(--hud-text-dim) hover:border-(--hud-accent) hover:text-(--hud-accent) transition-colors"
             >
               System

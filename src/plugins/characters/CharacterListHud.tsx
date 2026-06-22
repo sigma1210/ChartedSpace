@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Loader2 } from "lucide-react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { setHudVisible } from "@/store/slices/hudSlice";
@@ -63,10 +63,6 @@ export const CharacterListHudContent = () => {
   const status = usePluginSelector(selectCharactersStatus);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
-
-  useEffect(() => {
-    dispatch(fetchCharacters());
-  }, [dispatch]);
 
   const handleStartCharacter = async (characterId: string) => {
     if (startingId) return;
