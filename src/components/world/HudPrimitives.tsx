@@ -45,7 +45,7 @@ export const HudPanel = ({
   className?: string;
 }) => (
   <div
-    className={`select-none border border-(--hud-accent)/65 bg-(--hud-bg)/82 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[0_0_24px_rgba(34,211,238,0.16)] backdrop-blur-md ${className}`}
+    className={`select-none border border-cyan-100/35 bg-(--hud-bg)/42 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-text) shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(34,211,238,0.10),0_0_30px_rgba(34,211,238,0.20)] backdrop-blur-xl [--hud-accent:#c7e8ef] [--hud-border:#4f6974] [--hud-text:#e7f2f4] [--hud-text-dim:#91aab3] ${className}`}
     style={{ pointerEvents: "auto" }}
     onPointerDown={(event) => event.stopPropagation()}
   >

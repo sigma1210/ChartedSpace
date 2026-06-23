@@ -402,7 +402,7 @@ export const CharacterCreateHudContent = () => {
 
             {/* Decision log */}
             {log.length > 0 && (
-              <div className="flex flex-col gap-0.5 border-t border-(--hud-border)/40 pt-1">
+              <div className="flex max-h-20 flex-col gap-0.5 overflow-y-auto border-t border-(--hud-border)/40 pt-1 pr-1">
                 {log.map((entry, i) => (
                   <span key={i} className="font-mono text-[8px] text-(--hud-text-dim)">
                     {entry}

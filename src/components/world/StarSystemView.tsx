@@ -256,11 +256,11 @@ const Starfield = () => {
 };
 
 const sceneLabelClassName =
-  "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-accent)";
+  "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-[#e7f2f4]";
 const sceneSecondaryLabelClassName =
-  "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-text-dim)";
+  "select-none whitespace-nowrap font-mono text-[8px] uppercase leading-none tracking-wider text-[#91aab3]";
 const sceneHoverTagClassName =
-  "select-none whitespace-nowrap border border-(--hud-accent)/60 bg-(--hud-bg)/88 px-1.5 py-0.5 font-mono text-[8px] uppercase leading-none tracking-wider text-(--hud-accent) shadow-[0_0_12px_rgba(34,211,238,0.14)] backdrop-blur-sm";
+  "select-none whitespace-nowrap border border-cyan-100/35 bg-(--hud-bg)/55 px-1.5 py-0.5 font-mono text-[8px] uppercase leading-none tracking-wider text-[#e7f2f4] shadow-[0_0_12px_rgba(34,211,238,0.14)] backdrop-blur-xl";
 type FocusBodyHandler = (id: string) => void;
 
 // ─── Orbital ring ─────────────────────────────────────────────────────────────
@@ -1467,7 +1467,7 @@ const JumpSpaceScene = ({
     const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.32);
     const tubeGeo = new THREE.TubeGeometry(curve, 1400, 1.05, 24, false);
     const wallMat = new THREE.MeshBasicMaterial({
-      color: "#0891b2",
+      color: "#91aab3",
       transparent: true,
       opacity: 0.1,
       side: THREE.BackSide,
@@ -1477,9 +1477,9 @@ const JumpSpaceScene = ({
     const wallMesh = new THREE.Mesh(tubeGeo, wallMat);
     const wireGeo = new THREE.WireframeGeometry(tubeGeo);
     const lineMat = new THREE.LineBasicMaterial({
-      color: "#22d3ee",
+      color: "#c7e8ef",
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.76,
       blending: THREE.AdditiveBlending,
     });
     const tunnelLines = new THREE.LineSegments(wireGeo, lineMat);
@@ -1523,7 +1523,7 @@ const JumpSpaceScene = ({
         positions[index * 3 + 1] = point.y;
         positions[index * 3 + 2] = point.z;
 
-        color.setHSL(THREE.MathUtils.euclideanModulo(0.54 + t * 0.86 + index * 0.003, 1), 1, lightness);
+        color.setHSL(THREE.MathUtils.euclideanModulo(0.55 + t * 0.34 + index * 0.0015, 1), 0.38, lightness);
         colors[index * 3] = color.r;
         colors[index * 3 + 1] = color.g;
         colors[index * 3 + 2] = color.b;
@@ -1690,8 +1690,8 @@ const JumpSpaceScene = ({
       {accents.map((accent, index) => (
         <primitive key={index} object={accent} />
       ))}
-      <pointLight ref={tunnelLightRef} color="#22d3ee" intensity={2.4 * opacity} distance={12} position={[0, 0, 0]} />
-      <pointLight ref={accentLightRef} color="#22d3ee" intensity={1.8 * opacity} distance={14} position={[3, 2, -8]} />
+      <pointLight ref={tunnelLightRef} color="#c7e8ef" intensity={2.2 * opacity} distance={12} position={[0, 0, 0]} />
+      <pointLight ref={accentLightRef} color="#e7f2f4" intensity={1.45 * opacity} distance={14} position={[3, 2, -8]} />
     </>
   );
 };
@@ -1960,7 +1960,7 @@ const CameraPinnedSystemHud = ({
             onClick={() => dispatch(setHudVisible({ id: "hudControls", visible: true }))}
             title="Show HUD"
             aria-label="Show HUD"
-            className="select-none border border-(--hud-accent)/70 bg-(--hud-bg)/80 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) shadow-[0_0_18px_rgba(34,211,238,0.18)] backdrop-blur-md transition-colors hover:bg-(--hud-accent) hover:text-(--hud-bg)"
+            className="select-none border border-cyan-100/35 bg-(--hud-bg)/42 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(34,211,238,0.10),0_0_24px_rgba(34,211,238,0.18)] backdrop-blur-xl transition-colors [--hud-accent:#c7e8ef] [--hud-bg:#020c14] [--hud-text:#e7f2f4] hover:bg-(--hud-bg)/55 hover:text-(--hud-text)"
             style={{ pointerEvents: "auto" }}
           >
             HUD
@@ -2108,7 +2108,7 @@ const CameraPinnedPluginHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel className={registration.panelClassName}>
+        <HudPanel className={`flex max-h-[72vh] flex-col ${registration.panelClassName ?? ""}`}>
           <HudHeader
             title={registration.title}
             pinned={pinned}
@@ -2117,9 +2117,11 @@ const CameraPinnedPluginHud = ({
             onDragStart={startDrag}
             closeTitle={`Close ${registration.title} HUD`}
           />
-          <StoreBridge store={store}>
-            <PluginHudContent />
-          </StoreBridge>
+          <div className="min-h-0 overflow-y-auto overflow-x-hidden">
+            <StoreBridge store={store}>
+              <PluginHudContent />
+            </StoreBridge>
+          </div>
         </HudPanel>
       </Html>
     </group>
@@ -2263,7 +2265,7 @@ const CameraPinnedWorldMapHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.6}>
-        <HudPanel className="flex h-[310px] max-h-[72vh] w-[430px] max-w-[84vw] flex-col !bg-(--hud-bg)/55">
+        <HudPanel className="flex h-[310px] max-h-[72vh] w-[430px] max-w-[84vw] flex-col">
           <HudHeader
             title="World Map"
             pinned={pinned}
@@ -2776,7 +2778,7 @@ type DisplayedSceneSnapshot = {
 const TRANSITION_REVEAL_MS = 420;
 const SHOW_SCENE_TRANSITION_OVERLAY = false;
 const TRANSITION_STATIC_IMAGE =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='4' seed='13'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 .06 0 0 0 0 .68 0 0 0 0 .76 0 0 0 .38 0'/%3E%3C/filter%3E%3Crect width='160' height='160' fill='%2306161d'/%3E%3Crect width='160' height='160' filter='url(%23noise)' opacity='.95'/%3E%3C/svg%3E\")";
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='4' seed='13'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 .48 0 0 0 0 .62 0 0 0 0 .66 0 0 0 .34 0'/%3E%3C/filter%3E%3Crect width='160' height='160' fill='%2306161d'/%3E%3Crect width='160' height='160' filter='url(%23noise)' opacity='.95'/%3E%3C/svg%3E\")";
 
 const sceneSnapshotKey = (
   renderableLocation: RenderableSystemLocation | null,
@@ -2820,12 +2822,12 @@ const sceneTransitionClass = (
 const sceneTransitionStyle: CSSProperties = {
   backgroundColor: "#06161d",
   backgroundImage: [
-    "radial-gradient(circle at 50% 45%, rgba(63, 221, 230, 0.18), rgba(6, 22, 29, 0.12) 34%, rgba(6, 22, 29, 0.88) 74%)",
-    "linear-gradient(rgba(81, 221, 226, 0.12) 1px, transparent 1px)",
+    "radial-gradient(circle at 50% 45%, rgba(199, 232, 239, 0.14), rgba(6, 22, 29, 0.12) 34%, rgba(6, 22, 29, 0.88) 74%)",
+    "linear-gradient(rgba(199, 232, 239, 0.08) 1px, transparent 1px)",
     TRANSITION_STATIC_IMAGE,
   ].join(", "),
   backgroundSize: "100% 100%, 100% 4px, 160px 160px",
-  boxShadow: "inset 0 0 80px rgba(0, 229, 255, 0.16)",
+  boxShadow: "inset 0 0 80px rgba(199, 232, 239, 0.12)",
 };
 
 const terminalInstructionLines = [
@@ -2882,14 +2884,14 @@ const SceneTransitionOverlay = ({
       `}
     </style>
     <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute inset-x-[10%] top-8 z-10 font-mono text-[10px] uppercase leading-7 tracking-[0.2em] text-cyan-50/90 sm:inset-x-[18%] sm:text-[11px]">
+      <div className="absolute inset-x-[10%] top-8 z-10 font-mono text-[10px] uppercase leading-7 tracking-[0.2em] text-[#e7f2f4]/90 sm:inset-x-[18%] sm:text-[11px]">
         {terminalStaticLines.map((line) => (
           <div key={line} className="h-7">
             {line}
           </div>
         ))}
       </div>
-      <div className="absolute inset-x-[10%] top-0 font-mono text-[10px] uppercase leading-7 tracking-[0.2em] text-cyan-100/80 [animation:charted-space-terminal-scroll_2.4s_linear_infinite] sm:inset-x-[18%] sm:text-[11px]">
+      <div className="absolute inset-x-[10%] top-0 font-mono text-[10px] uppercase leading-7 tracking-[0.2em] text-[#c7e8ef]/75 [animation:charted-space-terminal-scroll_2.4s_linear_infinite] sm:inset-x-[18%] sm:text-[11px]">
         {[0, 1, 2].map((group) => (
           <div key={group} className="mb-5">
             {terminalInstructionLines.map((line, index) => (
@@ -2900,7 +2902,7 @@ const SceneTransitionOverlay = ({
                 <span
                   className={[
                     "inline-block max-w-full overflow-hidden whitespace-nowrap opacity-0",
-                    line.includes("acquiring signal") ? "text-cyan-50" : "",
+                    line.includes("acquiring signal") ? "text-[#e7f2f4]" : "",
                   ].join(" ")}
                   style={{
                     animation: `charted-space-terminal-type ${TERMINAL_TYPE_MS}ms steps(${line.length}, end) ${
