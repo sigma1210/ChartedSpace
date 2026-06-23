@@ -58,7 +58,8 @@ export const characterCreateHudMetadata = {
   openTitle: "Open character generator",
   visibleTitle: "Character generator visible",
   showInHudControls: false,
-  panelClassName: "px-1.5 py-1 text-[8px] tracking-normal",
+  panelClassName: "flex max-h-[72vh] flex-col px-1.5 py-1 text-[8px] tracking-normal",
+  contentClassName: "min-h-0 overflow-y-auto overflow-x-hidden",
   defaultLayout: {
     visible: false,
     pinned: true,

@@ -2108,7 +2108,7 @@ const CameraPinnedPluginHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel className={`flex max-h-[72vh] flex-col ${registration.panelClassName ?? ""}`}>
+        <HudPanel className={registration.panelClassName}>
           <HudHeader
             title={registration.title}
             pinned={pinned}
@@ -2117,11 +2117,17 @@ const CameraPinnedPluginHud = ({
             onDragStart={startDrag}
             closeTitle={`Close ${registration.title} HUD`}
           />
-          <div className="min-h-0 overflow-y-auto overflow-x-hidden">
+          {registration.contentClassName ? (
+          <div className={registration.contentClassName}>
             <StoreBridge store={store}>
               <PluginHudContent />
             </StoreBridge>
           </div>
+          ) : (
+            <StoreBridge store={store}>
+              <PluginHudContent />
+            </StoreBridge>
+          )}
         </HudPanel>
       </Html>
     </group>
