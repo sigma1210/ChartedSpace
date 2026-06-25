@@ -6,10 +6,68 @@ export {
   type ClassicTravellerGeneratorState,
 } from "./classicTravellerGenerator";
 export {
+  applyLifepathAction,
+  createInitialLifepathState,
+  getCurrentLifepathStep,
+  resolveLifepathTerm,
+  type LifepathPendingChoice,
+  type LifepathRollProvider,
+  type LifepathRollRequest,
+  type LifepathRuntimeCharacteristics,
+  type LifepathRuntimeAction,
+  type LifepathRuntimeInjury,
+  type LifepathRuntimePhase,
+  type LifepathRuntimeRelationship,
+  type LifepathRuntimeSkill,
+  type LifepathRuntimeState,
+} from "./lifepathRunner";
+export {
+  buildLifepathDraft,
+  lifepathDraftToCharacterSheet,
+  type LifepathCareerDraft,
+  type LifepathDraft,
+} from "./lifepathDraft";
+export {
+  getLifepathDefinition,
   getCharacterGenerator,
+  registeredLifepathDefinitions,
   registeredCharacterGenerators,
 } from "./registry";
+export {
+  basicHumanLifepathDefinition,
+} from "./basicHumanLifepathDefinition";
 export type {
+  LifepathAssignmentDefinition,
+  LifepathCareerDefinition,
+  LifepathCharacteristicDefinition,
+  LifepathCharacteristicId,
+  LifepathCheckDefinition,
+  LifepathCompletionRulesDefinition,
+  LifepathEffect,
+  LifepathGeneratorDefinition,
+  LifepathRankDefinition,
+  LifepathRelationshipDefinition,
+  LifepathRelationshipType,
+  LifepathStandardEffectType,
+  LifepathStartingRulesDefinition,
+  LifepathTableDefinition,
+  LifepathTableEntry,
+  LifepathTableScope,
+  LifepathTermDefinition,
+  LifepathTermPhase,
+} from "./lifepathTypes";
+export type {
+  GenerationAction,
+  GenerationChoiceOption,
+  GenerationEffect,
+  GenerationLogEntry,
+  GenerationPayload,
+  GenerationPrimitiveValue,
+  GenerationRunResult,
+  GenerationState,
+  GenerationStep,
+  GenerationTable,
+  GenerationTableEntry,
   CharacterGenerationLogEvent,
   CharacterGenerationRunResult,
   CharacterGenerationStep,

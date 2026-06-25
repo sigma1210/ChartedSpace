@@ -9,6 +9,8 @@ import type {
   CharacterGenerationLogEvent,
   CharacterGeneratorContext,
   CharacterGeneratorPlugin,
+  GenerationAction,
+  GenerationEffect,
 } from "./types";
 
 export const classicTravellerGeneratorId = "classic-traveller" as const;
@@ -25,6 +27,8 @@ export interface ClassicTravellerGeneratorState {
   status: "idle" | "complete";
   mode: CharacterGeneratorContext["mode"];
   draft: CharacterSheet | null;
+  actions: GenerationAction[];
+  effects: GenerationEffect[];
   logEvents: CharacterGenerationLogEvent[];
 }
 
@@ -56,6 +60,8 @@ export const classicTravellerGenerator = {
       status: "idle",
       mode: context.mode,
       draft: null,
+      actions: [],
+      effects: [],
       logEvents: [],
     };
   },
@@ -67,6 +73,8 @@ export const classicTravellerGenerator = {
           ...state,
           status: "complete",
           draft: action.payload.draft,
+          actions: [],
+          effects: [],
           logEvents: characterSheetToLogEvents(action.payload.draft),
         };
       default:
@@ -105,9 +113,19 @@ export const classicTravellerGenerator = {
 
   async run(name, provider, context) {
     const draft = await generateCharacter(name, provider, context.options ?? { mode: context.mode });
+    const logEvents = characterSheetToLogEvents(draft);
+
     return {
+      generatorId: classicTravellerGeneratorId,
       draft,
-      logEvents: characterSheetToLogEvents(draft),
+      log: logEvents,
+      logEvents,
+      actions: [],
+      effects: [],
+      metadata: {
+        ruleset: draft.generation.ruleset,
+        mode: draft.generation.mode,
+      },
     };
   },
 } satisfies CharacterGeneratorPlugin<

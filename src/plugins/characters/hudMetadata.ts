@@ -58,12 +58,18 @@ export const characterCreateHudMetadata = {
   openTitle: "Open character generator",
   visibleTitle: "Character generator visible",
   showInHudControls: false,
-  panelClassName: "flex max-h-[72vh] flex-col px-1.5 py-1 text-[8px] tracking-normal",
-  contentClassName: "min-h-0 overflow-y-auto overflow-x-hidden",
+  panelClassName: "flex h-[min(34vh,260px)] w-[390px] max-w-[82vw] flex-col px-1.5 py-1 text-[8px] tracking-normal",
+  contentClassName: "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+  offsetBounds: {
+    minX: -0.55,
+    maxX: 0.55,
+    minY: -0.46,
+    maxY: 0.02,
+  },
   defaultLayout: {
     visible: false,
     pinned: true,
-    offset: { x: 0.12, y: 0.02 },
+    offset: { x: 0.12, y: -0.14 },
   },
 } as const;
 

@@ -11,6 +11,18 @@ import {
   GenerationCancelledError,
 } from "@/lib/characters/providers/human";
 import type { CharacterSheet, DecisionPoint } from "@/lib/characters/types";
+import {
+  applyLifepathAction,
+  buildLifepathDraft,
+  createInitialLifepathState,
+  getCurrentLifepathStep,
+  lifepathDraftToCharacterSheet,
+  registeredLifepathDefinitions,
+  type LifepathRollProvider,
+  type LifepathRuntimeState,
+} from "./generation";
+
+const basicHumanLifepathDefinition = registeredLifepathDefinitions[0];
 
 // ─── Display helpers ──────────────────────────────────────────────────────────
 
@@ -87,6 +99,7 @@ const makeLogEntry = (point: DecisionPoint, id: string): string => {
 
 const SheetDisplay = ({ sheet }: { sheet: CharacterSheet }) => {
   const career = sheet.careers[0];
+  const history = getLifepathHistory(sheet);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-0.5">
@@ -139,6 +152,25 @@ const SheetDisplay = ({ sheet }: { sheet: CharacterSheet }) => {
         </div>
       )}
 
+      {history.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim)">Lifepath</span>
+          <div className="flex max-h-24 flex-col gap-0.5 overflow-y-auto border border-(--hud-border)/40 p-1 pr-1">
+            {history.slice(-8).map((entry, index) => (
+              <div key={`${entry.type}-${entry.term ?? "none"}-${index}`} className="flex flex-col gap-0.5">
+                <span className="font-mono text-[8px] text-(--hud-text)">
+                  {entry.term ? `T${entry.term} - ` : ""}
+                  {entry.label}
+                </span>
+                {entry.detail && (
+                  <span className="font-mono text-[7px] text-(--hud-text-dim)">{entry.detail}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         <div className="flex flex-col gap-0.5">
           <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim)">Credits</span>
@@ -179,6 +211,251 @@ const SheetDisplay = ({ sheet }: { sheet: CharacterSheet }) => {
   );
 };
 
+const getLifepathHistory = (sheet: CharacterSheet) => {
+  const history = sheet.generation.metadata?.history;
+  if (!Array.isArray(history)) return [];
+
+  return history.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const record = entry as Record<string, unknown>;
+    if (typeof record.label !== "string" || typeof record.type !== "string") return [];
+    return [{
+      type: record.type,
+      label: record.label,
+      detail: typeof record.detail === "string" ? record.detail : null,
+      term: typeof record.term === "number" ? record.term : null,
+    }];
+  });
+};
+
+const LifepathPanel = ({
+  state,
+  onChoice,
+  onResolve,
+  onReset,
+}: {
+  state: LifepathRuntimeState;
+  onChoice: (choiceId: string) => void;
+  onResolve: () => void;
+  onReset: () => void;
+}) => {
+  const step = getCurrentLifepathStep(state, basicHumanLifepathDefinition);
+  const currentCareer = basicHumanLifepathDefinition.careers.find(
+    (career) => career.id === state.selectedCareerId,
+  );
+  const currentAssignment = currentCareer?.assignments.find(
+    (assignment) => assignment.id === state.selectedAssignmentId,
+  );
+  const isGenerationComplete = state.phase === "generation-complete";
+  const draft = isGenerationComplete
+    ? buildLifepathDraft(state, basicHumanLifepathDefinition)
+    : null;
+  const upp = lifepathUpp(state);
+  const rollFormula = rollFormulaText(step);
+
+  return (
+    <div className="flex max-h-[62vh] flex-col gap-2 overflow-hidden">
+      <div className="grid grid-cols-4 gap-1 border border-(--hud-border)/50 bg-(--hud-surface-2)/50 p-1">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Age</span>
+          <span className="font-mono text-[9px] text-(--hud-text)">{state.age}</span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Term</span>
+          <span className="font-mono text-[9px] text-(--hud-text)">{state.term}</span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Rank</span>
+          <span className="font-mono text-[9px] text-(--hud-text)">{state.careerRank}</span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Phase</span>
+          <span className="font-mono text-[9px] text-(--hud-text)">{state.phase}</span>
+        </div>
+      </div>
+
+      {upp && (
+        <div className="flex flex-col gap-1 border border-(--hud-border)/40 p-1">
+          <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">UPP</span>
+          <span className="font-mono text-[10px] tracking-[0.14em] text-(--hud-accent)">{upp}</span>
+          <div className="grid grid-cols-6 gap-1">
+            {basicHumanLifepathDefinition.characteristics.map((characteristic) => (
+              <div key={characteristic.id} className="flex flex-col gap-0.5">
+                <span className="font-mono text-[7px] uppercase text-(--hud-text-dim)">
+                  {characteristic.abbreviation}
+                </span>
+                <span className="font-mono text-[8px] text-(--hud-text)">
+                  {state.characteristics[characteristic.id] ?? "-"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text)">
+            {step.title}
+          </span>
+          {step.kind === "choice" && step.prompt && (
+            <span className="font-mono text-[8px] text-(--hud-text-dim)">{step.prompt}</span>
+          )}
+          {(currentCareer || currentAssignment) && (
+            <span className="font-mono text-[8px] text-(--hud-text-dim)">
+              {[currentCareer?.label, currentAssignment?.label].filter(Boolean).join(" / ")}
+            </span>
+          )}
+        </div>
+
+        {step.kind === "choice" && (
+          <div className="grid grid-cols-2 gap-1">
+            {step.options.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => onChoice(option.id)}
+                disabled={option.disabled}
+                className="flex min-h-9 flex-col gap-0.5 border border-(--hud-border) px-2 py-1 text-left transition-colors hover:border-(--hud-accent) hover:bg-(--hud-accent)/5 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+                  {option.label}
+                </span>
+                {option.description && (
+                  <span className="font-mono text-[7px] leading-snug text-(--hud-text-dim)">
+                    {option.description}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {rollFormula && (
+          <span className="font-mono text-[8px] text-(--hud-text-dim)">
+            {rollFormula}
+          </span>
+        )}
+
+        {(step.kind === "roll" || step.kind === "table" || step.kind === "running") && !isGenerationComplete && (
+          <button
+            onClick={onResolve}
+            className="h-6 self-start border border-(--hud-accent) px-2 font-mono text-[8px] uppercase tracking-wider text-(--hud-accent) transition-colors hover:bg-(--hud-accent)/10"
+          >
+            {step.kind === "running" ? "Apply" : "Resolve"}
+            {step.kind === "roll" && ` ${step.notation}`}
+            {step.kind === "roll" && step.target !== undefined && ` / ${step.target}+`}
+          </button>
+        )}
+
+        {isGenerationComplete && (
+          <>
+            <div className="flex flex-col gap-1 border border-(--hud-accent)/40 bg-(--hud-accent)/5 px-2 py-1">
+              <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-accent)">
+                Draft Review
+              </span>
+              <span className="font-mono text-[8px] text-(--hud-text-dim)">
+                This path is not saved yet. It uses starter lifepath tables.
+              </span>
+            </div>
+            {draft && (
+              <div className="grid grid-cols-2 gap-1 border border-(--hud-border)/40 p-1">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Name</span>
+                  <span className="font-mono text-[9px] text-(--hud-text)">{draft.name}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Terms</span>
+                  <span className="font-mono text-[9px] text-(--hud-text)">{draft.completedTerms}</span>
+                </div>
+                <div className="col-span-2 flex flex-col gap-1">
+                  <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Career History</span>
+                  {draft.careers.length === 0 ? (
+                    <span className="font-mono text-[8px] text-(--hud-text-dim)">No completed career terms.</span>
+                  ) : draft.careers.map((career) => (
+                    <span
+                      key={`${career.careerId}-${career.assignmentId ?? "none"}`}
+                      className="font-mono text-[8px] text-(--hud-text)"
+                    >
+                      {career.careerLabel}
+                      {career.assignmentLabel ? ` / ${career.assignmentLabel}` : ""}
+                      {` · ${career.terms} term${career.terms === 1 ? "" : "s"}`}
+                      {career.finalRankTitle
+                        ? ` · ${career.finalRankTitle}`
+                        : career.finalRank > 0
+                          ? ` · Rank ${career.finalRank}`
+                          : ""}
+                      {career.commissioned ? " · Commissioned" : ""}
+                    </span>
+                  ))}
+                </div>
+                {draft.injuries.length > 0 && (
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Injuries</span>
+                    {draft.injuries.map((injury, index) => (
+                      <span key={`${injury.severity}-${index}`} className="font-mono text-[8px] text-(--hud-text)">
+                        {injury.severity}
+                        {injury.label ? `: ${injury.label}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-1">
+        <div className="flex min-h-16 flex-col gap-1 border border-(--hud-border)/40 p-1">
+          <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Skills</span>
+          <div className="flex flex-wrap gap-1">
+            {state.skills.length === 0 ? (
+              <span className="font-mono text-[8px] text-(--hud-text-dim)">None</span>
+            ) : state.skills.map((skill) => (
+              <span key={skill.name} className="border border-(--hud-border) px-1 py-0.5 font-mono text-[8px] text-(--hud-text)">
+                {skill.name}-{skill.level}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex min-h-16 flex-col gap-1 border border-(--hud-border)/40 p-1">
+          <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">Relationships</span>
+          <div className="flex flex-col gap-0.5">
+            {state.relationships.length === 0 ? (
+              <span className="font-mono text-[8px] text-(--hud-text-dim)">None</span>
+            ) : state.relationships.map((relationship, index) => (
+              <span key={`${relationship.type}-${relationship.label}-${index}`} className="font-mono text-[8px] text-(--hud-text)">
+                {relationship.type}: {relationship.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="min-h-0 overflow-y-auto border-t border-(--hud-border)/40 pt-1 pr-1">
+        <div className="flex flex-col gap-0.5">
+          {state.log.length === 0 ? (
+            <span className="font-mono text-[8px] text-(--hud-text-dim)">No lifepath events yet.</span>
+          ) : state.log.map((entry) => (
+            <span key={entry.sequence} className="font-mono text-[8px] text-(--hud-text-dim)">
+              {entry.term ? `T${entry.term} · ` : ""}
+              {entry.label}
+              {payloadText(entry.data.roll) ? ` (${payloadText(entry.data.roll)})` : ""}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={onReset}
+        className="self-start font-mono text-[8px] text-(--hud-text-dim) transition-colors hover:text-(--hud-error)"
+      >
+        Cancel Lifepath
+      </button>
+    </div>
+  );
+};
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 const CREW_ROLES = [
@@ -191,6 +468,62 @@ const CREW_ROLES = [
 type CrewRoleId = typeof CREW_ROLES[number]["id"];
 type Phase = "idle" | "running" | "deciding" | "complete" | "dead";
 type SaveState = "idle" | "saving" | "saved" | "error";
+type CreateMode = "classic" | "lifepath";
+
+const rollNotation = (notation: string) => {
+  const match = /^(\d+)d(\d+)$/i.exec(notation.trim());
+  if (!match) return 0;
+  const count = Number(match[1]);
+  const sides = Number(match[2]);
+  let total = 0;
+  for (let i = 0; i < count; i += 1) {
+    total += Math.floor(Math.random() * sides) + 1;
+  }
+  return total;
+};
+
+const randomLifepathRollProvider: LifepathRollProvider = {
+  roll: ({ notation }) => rollNotation(notation),
+};
+
+const payloadText = (value: unknown) =>
+  typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : null;
+
+const payloadNumber = (value: unknown) => typeof value === "number" ? value : null;
+const payloadString = (value: unknown) => typeof value === "string" ? value : null;
+const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
+
+const rollFormulaText = (step: ReturnType<typeof getCurrentLifepathStep>) => {
+  if (step.kind !== "roll") return null;
+  const data = step.data ?? {};
+  const targetText = step.target === undefined ? "" : ` vs ${step.target}+`;
+  const characteristicId = payloadString(data.characteristicId);
+  const characteristicModifier = payloadNumber(data.characteristicModifier);
+  const skillName = payloadString(data.skillName);
+  const skillLevel = payloadNumber(data.skillLevel);
+  const skillModifier = payloadNumber(data.skillModifier);
+  const parts = [step.notation];
+
+  if (characteristicId && characteristicModifier !== null) {
+    parts.push(`${characteristicId.toUpperCase()} ${signed(characteristicModifier)}`);
+  }
+  if (skillName && skillModifier !== null) {
+    parts.push(skillLevel === null
+      ? `${skillName} untrained ${signed(skillModifier)}`
+      : `${skillName}-${skillLevel} ${signed(skillModifier)}`);
+  }
+
+  return `${parts.join(" ")}${targetText}`;
+};
+
+const lifepathUpp = (state: LifepathRuntimeState) =>
+  basicHumanLifepathDefinition.characteristics
+    .map((characteristic) => state.characteristics[characteristic.id])
+    .filter((value): value is number => typeof value === "number")
+    .map((value) => Math.min(15, value).toString(16).toUpperCase())
+    .join("");
 
 export const CharacterCreateHudContent = () => {
   const dispatch = usePluginDispatch();
@@ -205,6 +538,8 @@ export const CharacterCreateHudContent = () => {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [savedId, setSavedId] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<CrewRoleId | null>(null);
+  const [createMode, setCreateMode] = useState<CreateMode>("classic");
+  const [lifepathState, setLifepathState] = useState<LifepathRuntimeState | null>(null);
   const providerRef = useRef<HumanDecisionProvider | null>(null);
 
   const isFirstCharacter = characters.length === 0;
@@ -221,6 +556,8 @@ export const CharacterCreateHudContent = () => {
     setSaveState("idle");
     setSavedId(null);
     setSelectedRole(null);
+    setLifepathState(null);
+    setCreateMode("classic");
   };
 
   // ── Random mode ─────────────────────────────────────────────────────────────
@@ -308,8 +645,210 @@ export const CharacterCreateHudContent = () => {
     providerRef.current.choose(id);
   };
 
+  const startLifepath = () => {
+    reset();
+    setCreateMode("lifepath");
+    setLifepathState(createInitialLifepathState(basicHumanLifepathDefinition));
+  };
+
+  const updateLifepath = (next: LifepathRuntimeState) => {
+    setLifepathState(next);
+  };
+
+  const handleLifepathChoice = (choiceId: string) => {
+    if (!lifepathState) return;
+    const step = getCurrentLifepathStep(lifepathState, basicHumanLifepathDefinition);
+    if (step.id === "lifepath.background-skill" && step.kind === "choice") {
+      const option = step.options.find((item) => item.id === choiceId);
+      const tableId = typeof option?.data?.tableId === "string" ? option.data.tableId : null;
+      const entryId = typeof option?.data?.entryId === "string" ? option.data.entryId : null;
+      if (!tableId || !entryId) return;
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "background.skill.select", tableId, entryId },
+      ));
+      return;
+    }
+    if (step.id === "lifepath.choose-career") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "career.select", careerId: choiceId },
+      ));
+      return;
+    }
+    if (step.id === "lifepath.choose-assignment") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "assignment.select", assignmentId: choiceId },
+      ));
+      return;
+    }
+    if (step.id === "lifepath.qualification-failed") {
+      const selectedOption = step.kind === "choice"
+        ? step.options.find((option) => option.id === choiceId)
+        : null;
+      const selectedCareerId = typeof selectedOption?.data?.careerId === "string"
+        ? selectedOption.data.careerId
+        : undefined;
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        choiceId === "choose-another-career"
+          ? { type: "qualification.choose-career" }
+          : { type: "qualification.fallback", careerId: selectedCareerId },
+      ));
+      return;
+    }
+    if (step.id === "lifepath.muster-out-benefit-choice") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "muster-out.benefit.select", tableId: choiceId },
+      ));
+      return;
+    }
+    if (lifepathState.pendingChoice) {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "table.choice.select", choiceId },
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term-complete") {
+      if (choiceId === "continue-career") {
+        updateLifepath(applyLifepathAction(
+          lifepathState,
+          basicHumanLifepathDefinition,
+          { type: "term.continue" },
+        ));
+        return;
+      }
+      if (choiceId === "change-career") {
+        updateLifepath(applyLifepathAction(
+          lifepathState,
+          basicHumanLifepathDefinition,
+          { type: "career.change" },
+        ));
+        return;
+      }
+      if (choiceId === "muster-out") {
+        const next = applyLifepathAction(
+          lifepathState,
+          basicHumanLifepathDefinition,
+          { type: "generation.muster-out" },
+        );
+        updateLifepath(next);
+      }
+    }
+  };
+
+  const handleLifepathResolve = () => {
+    if (!lifepathState) return;
+    const step = getCurrentLifepathStep(lifepathState, basicHumanLifepathDefinition);
+    if (step.id === "lifepath.characteristics") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "characteristics.roll" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.career.qualification") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "career.qualification.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.commission") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.commission.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.survival") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.survival.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.skill") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.skill.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.event") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.event.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.mishap") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.mishap.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.advancement") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.advancement.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.aging") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.aging.resolve" },
+      ));
+      return;
+    }
+    if (step.id === "lifepath.muster-out") {
+      const next = applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "muster-out.resolve" },
+        randomLifepathRollProvider,
+      );
+      updateLifepath(next);
+      if (next.phase === "generation-complete") {
+        const draft = buildLifepathDraft(next, basicHumanLifepathDefinition, charName);
+        setSheet(lifepathDraftToCharacterSheet(draft));
+        setPhase("complete");
+      }
+    }
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────────
-  const title = phase === "idle"
+  const title = createMode === "lifepath"
+    ? "Basic Human Lifepath"
+    : phase === "idle"
     ? "Character Generation"
     : phase === "deciding" || phase === "running"
     ? "Character Generation — In Progress"
@@ -318,37 +857,42 @@ export const CharacterCreateHudContent = () => {
     : "Character Generation";
 
   return (
-    <div className="flex max-h-[50vh] w-[420px] flex-col gap-2 overflow-y-auto p-0.5">
+    <div className="flex w-full flex-col gap-2 p-0.5">
       <div className="font-mono text-[8px] font-bold uppercase tracking-wider text-(--hud-text)">
         {title}
       </div>
 
         {/* ── Idle: mode selection ───────────────────────────────────────────── */}
-        {phase === "idle" && (
-          <div className="flex gap-2">
+        {phase === "idle" && createMode === "classic" && (
+          <div className="grid grid-cols-3 gap-1">
             <button
               onClick={handleRandom}
-              className="group flex flex-1 flex-col gap-0.5 border border-(--hud-border) px-2 py-1.5 text-left transition-colors hover:border-(--hud-accent)"
+              className="h-5 flex-1 border border-(--hud-border) px-2 font-mono text-[8px] uppercase tracking-wider text-(--hud-text) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
             >
-              <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text) transition-colors group-hover:text-(--hud-accent)">
-                Random
-              </span>
-              <span className="font-mono text-[8px] text-(--hud-text-dim)">
-                Instant lifepath
-              </span>
+              Random
             </button>
             <button
               onClick={handleGuided}
-              className="group flex flex-1 flex-col gap-0.5 border border-(--hud-border) px-2 py-1.5 text-left transition-colors hover:border-(--hud-accent)"
+              className="h-5 flex-1 border border-(--hud-border) px-2 font-mono text-[8px] uppercase tracking-wider text-(--hud-text) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
             >
-              <span className="font-mono text-[9px] uppercase tracking-wider text-(--hud-text) transition-colors group-hover:text-(--hud-accent)">
-                Guided
-              </span>
-              <span className="font-mono text-[8px] text-(--hud-text-dim)">
-                Step-by-step
-              </span>
+              Guided
+            </button>
+            <button
+              onClick={startLifepath}
+              className="h-5 flex-1 border border-(--hud-border) px-2 font-mono text-[8px] uppercase tracking-wider text-(--hud-text) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
+            >
+              Lifepath
             </button>
           </div>
+        )}
+
+        {createMode === "lifepath" && lifepathState && (
+          <LifepathPanel
+            state={lifepathState}
+            onChoice={handleLifepathChoice}
+            onResolve={handleLifepathResolve}
+            onReset={reset}
+          />
         )}
 
         {/* ── Running: random generating ────────────────────────────────────── */}
@@ -444,6 +988,11 @@ export const CharacterCreateHudContent = () => {
         {/* ── Complete: character sheet ──────────────────────────────────────── */}
         {phase === "complete" && sheet && (
           <div className="flex flex-col gap-2">
+            {sheet.generation.ruleset === "lifepath" && (
+              <div className="border border-(--hud-accent)/40 bg-(--hud-accent)/5 px-2 py-1 font-mono text-[8px] text-(--hud-text-dim)">
+                Basic lifepath rules: benefit tables are starter data.
+              </div>
+            )}
             <SheetDisplay sheet={sheet} />
 
             {/* Save controls */}

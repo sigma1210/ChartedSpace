@@ -26,6 +26,16 @@ export interface HudState {
   layouts: Record<HudId, HudLayout>;
 }
 
+export const clampHudOffset = (value: HudOffset): HudOffset => ({
+  x: Math.max(-0.78, Math.min(0.78, value.x)),
+  y: Math.max(-0.58, Math.min(0.58, value.y)),
+});
+
+const clampHudLayout = (layout: HudLayout): HudLayout => ({
+  ...layout,
+  offset: clampHudOffset(layout.offset),
+});
+
 const pluginHudLayouts = Object.fromEntries(
   registeredPluginHudLayouts.map((hud) => [hud.id, hud.defaultLayout]),
 ) as Record<string, HudLayout>;
@@ -73,7 +83,7 @@ const hudSlice = createSlice({
     hydrateHudLayouts(state, action: PayloadAction<Record<string, HudLayout>>) {
       for (const [id, layout] of Object.entries(action.payload)) {
         if (!state.layouts[id]) continue;
-        state.layouts[id] = layout;
+        state.layouts[id] = clampHudLayout(layout);
       }
     },
     setHudVisible(state, action: PayloadAction<{ id: HudId; visible: boolean }>) {
@@ -87,7 +97,7 @@ const hudSlice = createSlice({
       state.layouts[action.payload.id].pinned = action.payload.pinned;
     },
     setHudOffset(state, action: PayloadAction<{ id: HudId; offset: HudOffset }>) {
-      state.layouts[action.payload.id].offset = action.payload.offset;
+      state.layouts[action.payload.id].offset = clampHudOffset(action.payload.offset);
     },
   },
 });

@@ -3,6 +3,8 @@ import {
   classicTravellerGenerator,
   classicTravellerGeneratorId,
 } from "../classicTravellerGenerator";
+import { getCharacterGenerator } from "../registry";
+import { RandomDecisionProvider } from "@/lib/characters/providers/random";
 import type { CharacterSheet } from "@/lib/characters/types";
 
 const sheet: CharacterSheet = {
@@ -79,5 +81,33 @@ describe("classicTravellerGenerator", () => {
         },
       },
     ]);
+  });
+
+  it("is available from the character generation registry", () => {
+    expect(getCharacterGenerator(classicTravellerGeneratorId)).toBe(classicTravellerGenerator);
+  });
+
+  it("returns the generic generation result envelope", async () => {
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(0.99);
+    let result: Awaited<ReturnType<typeof classicTravellerGenerator.run>>;
+
+    try {
+      result = await classicTravellerGenerator.run(
+        "Generated Traveller",
+        new RandomDecisionProvider(),
+        { mode: "random" },
+      );
+    } finally {
+      randomSpy.mockRestore();
+    }
+
+    expect(result.generatorId).toBe(classicTravellerGeneratorId);
+    expect(result.draft.name).toBe("Generated Traveller");
+    expect(result.log).toEqual(result.logEvents);
+    expect(result.log.length).toBeGreaterThan(0);
+    expect(result.metadata).toEqual({
+      ruleset: result.draft.generation.ruleset,
+      mode: result.draft.generation.mode,
+    });
   });
 });

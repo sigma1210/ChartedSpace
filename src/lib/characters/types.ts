@@ -1,4 +1,5 @@
 export type CareerName = "navy" | "marines" | "army" | "scouts" | "merchants" | "other";
+export type GenerationRuleset = "classic" | "lifepath";
 export type GenerationMode = "random" | "guided" | "directed";
 export type DecisionMadeBy = "random" | "human" | "directed";
 export type DecisionStep =
@@ -14,7 +15,8 @@ export type DecisionStep =
   | "aging_roll"
   | "reenlistment_decision"
   | "muster_roll_type"
-  | "muster_roll";
+  | "muster_roll"
+  | "lifepath_event";
 
 export interface UPP {
   str: number;
@@ -61,10 +63,11 @@ export interface DecisionRecord {
 }
 
 export interface Generation {
-  ruleset: "classic";
+  ruleset: GenerationRuleset;
   mode: GenerationMode;
   targetRole: string | null;
   decisions: DecisionRecord[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface CharacterSheet {

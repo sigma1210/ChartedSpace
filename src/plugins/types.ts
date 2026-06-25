@@ -16,6 +16,12 @@ export interface PluginHudLayoutRegistration {
   showInHudControls?: boolean;
   panelClassName?: string;
   contentClassName?: string;
+  offsetBounds?: {
+    minX?: number;
+    maxX?: number;
+    minY?: number;
+    maxY?: number;
+  };
   defaultLayout: {
     visible: boolean;
     pinned: boolean;

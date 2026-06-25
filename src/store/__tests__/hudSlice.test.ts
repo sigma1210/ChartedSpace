@@ -72,7 +72,7 @@ describe("hudSlice reducers", () => {
     expect(initialHudState.layouts[characterCreateHudId]).toEqual({
       visible: false,
       pinned: true,
-      offset: { x: 0.12, y: 0.02 },
+      offset: { x: 0.12, y: -0.14 },
     });
     expect(initialHudState.layouts[stayInLocationNextTurnHudId]).toEqual({
       visible: false,
@@ -112,12 +112,21 @@ describe("hudSlice reducers", () => {
     expect(state.layouts.sectorMap.offset).toEqual({ x: -0.25, y: 0.15 });
   });
 
+  it("clamps HUD offsets when set", () => {
+    const state = hudReducer(initialHudState, setHudOffset({
+      id: characterCreateHudId,
+      offset: { x: 4, y: 4 },
+    }));
+
+    expect(state.layouts[characterCreateHudId].offset).toEqual({ x: 0.78, y: 0.58 });
+  });
+
   it("hydrates persisted known HUD layouts", () => {
     const state = hudReducer(initialHudState, hydrateHudLayouts({
       [navigationSelectHudId]: {
         visible: true,
         pinned: false,
-        offset: { x: 0.12, y: -0.2 },
+        offset: { x: 2, y: -2 },
       },
       staleHud: {
         visible: true,
@@ -129,7 +138,7 @@ describe("hudSlice reducers", () => {
     expect(state.layouts[navigationSelectHudId]).toEqual({
       visible: true,
       pinned: false,
-      offset: { x: 0.12, y: -0.2 },
+      offset: { x: 0.78, y: -0.58 },
     });
     expect(state.layouts.staleHud).toBeUndefined();
   });

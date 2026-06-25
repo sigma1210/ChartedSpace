@@ -28,7 +28,7 @@ import { HudHeader, HudIconButton, HudPanel } from "./HudPrimitives";
 import StoreBridge from "../StoreBridge";
 import type { AppDispatch, AppStore } from "../../store";
 import { openSelectedWorldSystemDetail } from "../../store/slices/uiSlice";
-import { setHudOffset, setHudPinned, setHudVisible, type HudId } from "../../store/slices/hudSlice";
+import { clampHudOffset, setHudOffset, setHudPinned, setHudVisible, type HudId } from "../../store/slices/hudSlice";
 import { selectHudLayout, selectHudVisible } from "../../store/selectors/hud.selectors";
 import {
   selectActiveWorld,
@@ -1743,11 +1743,25 @@ const AutoRotatingSystemGroup = ({
 // ─── Camera-pinned 3D HUD ────────────────────────────────────────────────────
 
 type HudOffset = { x: number; y: number };
+type HudOffsetBounds = {
+  minX?: number;
+  maxX?: number;
+  minY?: number;
+  maxY?: number;
+};
 
-const clampHudOffset = (value: HudOffset): HudOffset => ({
-  x: Math.max(-0.78, Math.min(0.78, value.x)),
-  y: Math.max(-0.58, Math.min(0.58, value.y)),
-});
+const clampHudOffsetToBounds = (
+  value: HudOffset,
+  bounds?: HudOffsetBounds,
+): HudOffset => {
+  const clamped = clampHudOffset(value);
+  if (!bounds) return clamped;
+
+  return {
+    x: Math.max(bounds.minX ?? -0.78, Math.min(bounds.maxX ?? 0.78, clamped.x)),
+    y: Math.max(bounds.minY ?? -0.58, Math.min(bounds.maxY ?? 0.58, clamped.y)),
+  };
+};
 
 const sameHudOffset = (left: HudOffset, right: HudOffset) =>
   Math.abs(left.x - right.x) < 0.0001 &&
@@ -1757,12 +1771,14 @@ const useCameraPinnedHudDrag = ({
   id,
   pinned,
   offset,
+  offsetBounds,
   size,
   dispatch,
 }: {
   id: HudId;
   pinned: boolean;
   offset: HudOffset;
+  offsetBounds?: HudOffsetBounds;
   size: { width: number; height: number };
   dispatch: AppDispatch;
 }) => {
@@ -1783,10 +1799,10 @@ const useCameraPinnedHudDrag = ({
       if (!dragRef.current) return;
       const dx = ((event.clientX - dragRef.current.startX) / Math.max(1, size.width)) * 2;
       const dy = -((event.clientY - dragRef.current.startY) / Math.max(1, size.height)) * 2;
-      const nextOffset = clampHudOffset({
+      const nextOffset = clampHudOffsetToBounds({
         x: dragRef.current.origin.x + dx,
         y: dragRef.current.origin.y + dy,
-      });
+      }, offsetBounds);
       pendingOffsetRef.current = nextOffset;
       dragOffsetRef.current = nextOffset;
     };
@@ -1806,7 +1822,7 @@ const useCameraPinnedHudDrag = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [dispatch, id, size.height, size.width]);
+  }, [dispatch, id, offsetBounds, size.height, size.width]);
 
   const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1815,10 +1831,10 @@ const useCameraPinnedHudDrag = ({
     dragRef.current = {
       startX: event.clientX,
       startY: event.clientY,
-      origin: offset,
+      origin: clampHudOffsetToBounds(offset, offsetBounds),
     };
-    pendingOffsetRef.current = offset;
-  }, [offset, pinned]);
+    pendingOffsetRef.current = clampHudOffsetToBounds(offset, offsetBounds);
+  }, [offset, offsetBounds, pinned]);
 
   return { dragOffsetRef, startDrag };
 };
@@ -1888,7 +1904,7 @@ const CameraPinnedSystemHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
+    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
 
     group.position
       .copy(camera.position)
@@ -2014,7 +2030,7 @@ const CameraPinnedMainWorldHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
+    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
 
     group.position
       .copy(camera.position)
@@ -2071,6 +2087,7 @@ const CameraPinnedPluginHud = ({
     id: registration.id,
     pinned,
     offset,
+    offsetBounds: registration.offsetBounds,
     size,
     dispatch,
   });
@@ -2091,7 +2108,12 @@ const CameraPinnedPluginHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
+    const safeOffset = clampHudOffsetToBounds(offset, registration.offsetBounds);
+    if (registration.offsetBounds && !sameHudOffset(safeOffset, offset)) {
+      dragOffsetRef.current = safeOffset;
+      dispatch(setHudOffset({ id: registration.id, offset: safeOffset }));
+    }
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, registration.offsetBounds);
 
     group.position
       .copy(camera.position)
@@ -2177,7 +2199,7 @@ const CameraPinnedSubsectorMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
+    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
 
     group.position
       .copy(camera.position)
@@ -2256,7 +2278,7 @@ const CameraPinnedWorldMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
+    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
 
     group.position
       .copy(camera.position)
@@ -2334,7 +2356,7 @@ const CameraPinnedSectorMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
+    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
 
     group.position
       .copy(camera.position)
@@ -2413,7 +2435,7 @@ const CameraPinnedGalaxyMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = dragOffsetRef.current ?? offset;
+    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
 
     group.position
       .copy(camera.position)
