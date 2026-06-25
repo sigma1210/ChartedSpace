@@ -82,20 +82,58 @@ export interface LifepathAssignmentDefinition {
   data?: GenerationPayload;
 }
 
+export interface LifepathQualificationModifierDefinition {
+  id: string;
+  label: string;
+  modifier: number;
+  when: "hasCareerHistory" | "previousCareer" | "sameCareer" | "preCareerEducation";
+  careerIds?: readonly string[];
+  educationIds?: readonly string[];
+  survived?: boolean;
+  graduated?: boolean;
+  honorsGraduated?: boolean;
+  minimumTerms?: number;
+  maximumTerms?: number;
+  successEffects?: readonly LifepathEffect[];
+  failureEffects?: readonly LifepathEffect[];
+  data?: GenerationPayload;
+}
+
 export interface LifepathCareerDefinition {
   id: string;
   label: string;
   description?: string;
+  eligibility?: {
+    minimumCharacteristics?: Partial<Record<LifepathCharacteristicId, number>>;
+    disallowAfterFailedReenlistment?: boolean;
+  };
   qualification?: LifepathCheckDefinition;
+  qualificationModifiers?: readonly LifepathQualificationModifierDefinition[];
+  commissionModifiers?: readonly LifepathQualificationModifierDefinition[];
   assignments: readonly LifepathAssignmentDefinition[];
   ranks?: readonly LifepathRankDefinition[];
   skillTableIds: readonly string[];
   survival: LifepathCheckDefinition;
   advancement?: LifepathCheckDefinition;
   commission?: LifepathCheckDefinition;
+  reenlistment?: LifepathCheckDefinition;
   eventTableId: string;
   mishapTableId: string;
   benefitTableIds: readonly string[];
+  data?: GenerationPayload;
+}
+
+export interface LifepathPreCareerEducationDefinition {
+  id: string;
+  label: string;
+  description?: string;
+  qualification?: LifepathCheckDefinition;
+  graduation?: LifepathCheckDefinition;
+  honorsTarget?: number;
+  skillTableIds?: readonly string[];
+  successEffects?: readonly LifepathEffect[];
+  failureEffects?: readonly LifepathEffect[];
+  honorsEffects?: readonly LifepathEffect[];
   data?: GenerationPayload;
 }
 
@@ -159,6 +197,13 @@ export interface LifepathStartingRulesDefinition {
   characteristicRollNotation: string;
   backgroundSkillTableIds?: readonly string[];
   startingEffects?: readonly LifepathEffect[];
+  agingRules?: {
+    startsAtAge: number;
+    frequencyYears?: number;
+    characteristicId?: LifepathCharacteristicId;
+    characteristicCycle?: readonly LifepathCharacteristicId[];
+    modifier: number;
+  };
 }
 
 export interface LifepathCompletionRulesDefinition {
@@ -173,6 +218,7 @@ export interface LifepathGeneratorDefinition {
   sophontId: string;
   characteristics: readonly LifepathCharacteristicDefinition[];
   startingRules: LifepathStartingRulesDefinition;
+  preCareerEducation?: readonly LifepathPreCareerEducationDefinition[];
   term: LifepathTermDefinition;
   careers: readonly LifepathCareerDefinition[];
   tables: readonly LifepathTableDefinition[];

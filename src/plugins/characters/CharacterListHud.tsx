@@ -1,24 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Loader2 } from "lucide-react";
+import { Eye, Plus, Loader2 } from "lucide-react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { setHudVisible } from "@/store/slices/hudSlice";
-import { fetchCharacters } from "./charactersSlice";
+import { fetchCharacters, setSelectedProfileCharacter } from "./charactersSlice";
 import { fetchShip, invalidateShip } from "@/plugins/ship";
 import {
   selectCharacters,
   selectCharactersStatus,
 } from "./selectors";
 import type { CharacterSummary } from "./charactersSlice";
-import { characterCreateHudId } from "./metadata";
+import { characterCreateHudId, characterProfileHudId } from "./metadata";
 
 const CharacterCard = ({
   character,
+  onProfile,
   onStart,
   starting,
 }: {
   character: CharacterSummary;
+  onProfile: (characterId: string) => void;
   onStart: (characterId: string) => void;
   starting: boolean;
 }) => {
@@ -45,14 +47,25 @@ const CharacterCard = ({
         <span className="text-(--hud-accent)">{character.upp}</span>
         <span>Skills: {character.skills.length}</span>
       </div>
-      <button
-        type="button"
-        onClick={() => onStart(character.id)}
-        disabled={starting}
-        className="mt-1 h-5 border border-(--hud-accent) px-1.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-accent) transition-colors hover:bg-(--hud-accent)/10 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {starting ? "Starting..." : "Start"}
-      </button>
+      <div className="mt-1 flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onProfile(character.id)}
+          className="flex h-5 items-center gap-1 border border-(--hud-border) px-1.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+          title={`View ${character.name}`}
+        >
+          <Eye size={10} aria-hidden="true" />
+          Profile
+        </button>
+        <button
+          type="button"
+          onClick={() => onStart(character.id)}
+          disabled={starting}
+          className="h-5 border border-(--hud-accent) px-1.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-accent) transition-colors hover:bg-(--hud-accent)/10 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {starting ? "Starting..." : "Start"}
+        </button>
+      </div>
     </div>
   );
 };
@@ -84,6 +97,11 @@ export const CharacterListHudContent = () => {
     } finally {
       setStartingId(null);
     }
+  };
+
+  const handleViewProfile = (characterId: string) => {
+    dispatch(setSelectedProfileCharacter(characterId));
+    dispatch(setHudVisible({ id: characterProfileHudId, visible: true }));
   };
 
   const headerRight = (
@@ -145,6 +163,7 @@ export const CharacterListHudContent = () => {
               <CharacterCard
                 key={c.id}
                 character={c}
+                onProfile={handleViewProfile}
                 onStart={handleStartCharacter}
                 starting={startingId === c.id}
               />

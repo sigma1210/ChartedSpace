@@ -103,7 +103,7 @@ describe("character profile selectors", () => {
       ui: { ...makeRoot().ui, activeCharacterId: active.id },
       plugins: {
         ...makeRoot().plugins,
-        characters: { items: [owner, active, fallback], status: "loaded", error: null },
+        characters: { ...initialCharactersState, items: [owner, active, fallback], status: "loaded", error: null },
         shipPlugin: {
           ...initialShipPluginState,
           ship: { crew: [{ characterId: owner.id, isOwnerOperator: true }] } as unknown as ShipSummary,
@@ -115,11 +115,29 @@ describe("character profile selectors", () => {
     expect(selectEffectiveCharacterProfile(root)).toBe(active);
   });
 
+  it("selects the inspected profile character before the active character", () => {
+    const inspected = makeCharacter("inspected");
+    const root = makeRoot({
+      ui: { ...makeRoot().ui, activeCharacterId: active.id },
+      plugins: {
+        ...makeRoot().plugins,
+        characters: {
+          ...initialCharactersState,
+          items: [owner, active, inspected],
+          status: "loaded",
+          selectedProfileCharacterId: inspected.id,
+        },
+      },
+    });
+
+    expect(selectEffectiveCharacterProfile(root)).toBe(inspected);
+  });
+
   it("falls back to the owner operator when there is no active character", () => {
     const root = makeRoot({
       plugins: {
         ...makeRoot().plugins,
-        characters: { items: [owner, fallback], status: "loaded", error: null },
+        characters: { ...initialCharactersState, items: [owner, fallback], status: "loaded", error: null },
         shipPlugin: {
           ...initialShipPluginState,
           ship: { crew: [{ characterId: owner.id, isOwnerOperator: true }] } as unknown as ShipSummary,
@@ -137,10 +155,10 @@ describe("character profile selectors", () => {
   it("falls back to the first located character, then the first character", () => {
     const unlocated = makeCharacter("unlocated");
     const rootWithLocated = makeRoot({
-      plugins: { ...makeRoot().plugins, characters: { items: [unlocated, fallback], status: "loaded", error: null } },
+      plugins: { ...makeRoot().plugins, characters: { ...initialCharactersState, items: [unlocated, fallback], status: "loaded", error: null } },
     });
     const rootWithoutLocated = makeRoot({
-      plugins: { ...makeRoot().plugins, characters: { items: [unlocated, owner], status: "loaded", error: null } },
+      plugins: { ...makeRoot().plugins, characters: { ...initialCharactersState, items: [unlocated, owner], status: "loaded", error: null } },
     });
 
     expect(selectFallbackCharacter(rootWithLocated)).toBe(fallback);
@@ -153,7 +171,7 @@ describe("character profile selectors", () => {
     const root = makeRoot({
       plugins: {
         ...makeRoot().plugins,
-        characters: { items: [fallback], status: "loaded", error: null },
+        characters: { ...initialCharactersState, items: [fallback], status: "loaded", error: null },
         shipPlugin: {
           ...initialShipPluginState,
           ship: {
@@ -176,7 +194,7 @@ describe("character profile selectors", () => {
 
   it("uses character location when ship location is unavailable", () => {
     const root = makeRoot({
-      plugins: { ...makeRoot().plugins, characters: { items: [fallback], status: "loaded", error: null } },
+      plugins: { ...makeRoot().plugins, characters: { ...initialCharactersState, items: [fallback], status: "loaded", error: null } },
     });
 
     expect(selectEffectiveCharacterProfileLocation(root)).toEqual({

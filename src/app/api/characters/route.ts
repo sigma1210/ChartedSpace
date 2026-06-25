@@ -18,6 +18,91 @@ const normalizeSkills = (skills: CharacterSheet["skills"]) => {
   return [...byName.entries()].map(([name, level]) => ({ name, level }));
 };
 
+const normalizeHistory = (sheet: CharacterSheet | null) => {
+  const history = sheet?.generation?.metadata?.history;
+  if (!Array.isArray(history)) return [];
+
+  return history.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const record = entry as Record<string, unknown>;
+    if (typeof record.label !== "string" || typeof record.type !== "string") return [];
+    return [{
+      type: record.type,
+      label: record.label,
+      detail: typeof record.detail === "string" ? record.detail : null,
+      term: typeof record.term === "number" ? record.term : null,
+      roll: typeof record.roll === "number" ? record.roll : null,
+    }];
+  });
+};
+
+const educationLabelFromHistory = (label: string) =>
+  label.replace(/^Selected pre-career education:\s*/i, "").trim();
+
+const skillLabelFromHistory = (label: string) => {
+  const [, result] = label.split(":");
+  return (result ?? label).trim();
+};
+
+const normalizeEducation = (history: ReturnType<typeof normalizeHistory>) => {
+  const selectedIndex = history.findIndex((entry) => entry.type === "preCareer.select");
+  if (selectedIndex === -1) return null;
+
+  const careerStartIndex = history.findIndex((entry, index) =>
+    index > selectedIndex && entry.type === "career.select");
+  const educationEntries = history.slice(
+    selectedIndex,
+    careerStartIndex === -1 ? undefined : careerStartIndex,
+  );
+  const selected = educationEntries.find((entry) => entry.type === "preCareer.select");
+  if (!selected) return null;
+
+  const admission = educationEntries.find((entry) => entry.type === "preCareer.qualification.roll");
+  const graduation = educationEntries.find((entry) => entry.type === "preCareer.graduation.roll");
+  const skills = educationEntries
+    .filter((entry) => entry.type === "skill.roll")
+    .map((entry) => skillLabelFromHistory(entry.label));
+
+  return {
+    label: educationLabelFromHistory(selected.label),
+    admission: admission?.detail?.includes("not admitted")
+      ? "not-admitted"
+      : admission?.detail?.includes("admitted")
+        ? "admitted"
+        : "unknown",
+    graduation: graduation?.detail?.includes("graduated with honors")
+      ? "honors"
+      : graduation?.detail?.includes("did not graduate")
+        ? "not-graduated"
+        : graduation?.detail?.includes("graduated")
+          ? "graduated"
+          : "unknown",
+    skills,
+  };
+};
+
+const normalizeCareers = (sheet: CharacterSheet | null) => {
+  const careers = sheet?.generation?.metadata?.careers;
+  if (!Array.isArray(careers)) return [];
+
+  return careers.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const record = entry as Record<string, unknown>;
+    const careerId = typeof record.careerId === "string" ? record.careerId : null;
+    const careerLabel = typeof record.careerLabel === "string" ? record.careerLabel : null;
+    if (!careerId || !careerLabel) return [];
+    return [{
+      careerId,
+      careerLabel,
+      assignmentLabel: typeof record.assignmentLabel === "string" ? record.assignmentLabel : null,
+      terms: typeof record.terms === "number" ? record.terms : 0,
+      finalRank: typeof record.finalRank === "number" ? record.finalRank : 0,
+      finalRankTitle: typeof record.finalRankTitle === "string" ? record.finalRankTitle : null,
+      commissioned: typeof record.commissioned === "boolean" ? record.commissioned : false,
+    }];
+  });
+};
+
 const errorResponse = (err: unknown) => {
   const detail = err instanceof Error ? err.message : String(err);
   return NextResponse.json(
@@ -49,6 +134,7 @@ export const GET = async () => {
         credits:        true,
         skills:          { select: { name: true, level: true } },
         currentLocation: true,
+        sheet:           true,
       },
     });
 
@@ -56,6 +142,8 @@ export const GET = async () => {
       const colonIdx = c.currentLocation?.indexOf(":") ?? -1;
       const sectorAbbr = colonIdx !== -1 ? c.currentLocation!.slice(0, colonIdx) : null;
       const hex        = colonIdx !== -1 ? c.currentLocation!.slice(colonIdx + 1) : null;
+      const sheet = c.sheet as CharacterSheet | null;
+      const history = normalizeHistory(sheet);
       return {
         id:             c.id,
         name:           c.name,
@@ -71,6 +159,9 @@ export const GET = async () => {
         worldName:      null,
         sectorAbbr,
         hex,
+        educationHistory: normalizeEducation(history),
+        careers:        normalizeCareers(sheet),
+        history,
       };
     });
 

@@ -11,6 +11,7 @@ import type {
   LifepathCharacteristicId,
   LifepathEffect,
   LifepathGeneratorDefinition,
+  LifepathQualificationModifierDefinition,
   LifepathTableDefinition,
   LifepathTableEntry,
 } from "./lifepathTypes";
@@ -18,6 +19,10 @@ import type {
 export type LifepathRuntimePhase =
   | "roll-characteristics"
   | "background"
+  | "pre-career-choice"
+  | "pre-career-qualification"
+  | "pre-career-graduation"
+  | "pre-career-skill"
   | "choose-career"
   | "qualification"
   | "qualification-failed"
@@ -31,6 +36,7 @@ export type LifepathRuntimePhase =
   | "advancement"
   | "aging"
   | "term-complete"
+  | "reenlistment"
   | "muster-out"
   | "generation-complete";
 
@@ -40,8 +46,17 @@ export interface LifepathRuntimeSkill {
 }
 
 export interface LifepathRuntimeRelationship {
+  id?: string;
   type: string;
   label: string;
+  source?: string;
+  careerId?: string;
+  term?: number;
+  notes?: string;
+  characterId?: string;
+  role?: string;
+  eventId?: string;
+  eventType?: string;
 }
 
 export interface LifepathRuntimeInjury {
@@ -65,9 +80,31 @@ export interface LifepathRuntimeBenefits {
   retirementPay: number | null;
 }
 
+export interface LifepathEffectContext {
+  eventId?: string;
+  eventType?: string;
+  careerId?: string;
+  term?: number;
+}
+
 export interface LifepathMusterOutTerm {
   term: number;
   careerId: string;
+}
+
+export interface LifepathCareerHistoryEntry {
+  term: number;
+  careerId: string;
+  assignmentId: string | null;
+  survived: boolean;
+  rank: number;
+  commissioned: boolean;
+}
+
+export interface LifepathPreCareerEducationOutcome {
+  educationId: string;
+  graduated: boolean;
+  honorsGraduated: boolean;
 }
 
 export interface LifepathMusterOutState {
@@ -94,6 +131,10 @@ export interface LifepathRuntimeState {
   phase: LifepathRuntimePhase;
   term: number;
   age: number;
+  selectedPreCareerEducationId: string | null;
+  preCareerEducationOutcomes: LifepathPreCareerEducationOutcome[];
+  preCareerHonorsGraduated: boolean;
+  pendingPreCareerSkillRolls: number;
   selectedCareerId: string | null;
   selectedAssignmentId: string | null;
   termSurvived: boolean | null;
@@ -102,6 +143,7 @@ export interface LifepathRuntimeState {
   characteristics: LifepathRuntimeCharacteristics;
   careerRank: number;
   completedTerms: number;
+  careerHistory: LifepathCareerHistoryEntry[];
   skills: LifepathRuntimeSkill[];
   relationships: LifepathRuntimeRelationship[];
   injuries: LifepathRuntimeInjury[];
@@ -128,6 +170,24 @@ export type LifepathRuntimeAction =
       tableId: string;
       entryId: string;
       source?: GenerationAction["source"];
+    }
+  | {
+      type: "preCareer.skip";
+      source?: GenerationAction["source"];
+    }
+  | {
+      type: "preCareer.select";
+      educationId: string;
+      source?: GenerationAction["source"];
+    }
+  | {
+      type: "preCareer.qualification.resolve";
+    }
+  | {
+      type: "preCareer.graduation.resolve";
+    }
+  | {
+      type: "preCareer.skill.resolve";
     }
   | {
       type: "assignment.select";
@@ -166,6 +226,9 @@ export type LifepathRuntimeAction =
     }
   | {
       type: "term.aging.resolve";
+    }
+  | {
+      type: "term.reenlistment.resolve";
     }
   | {
       type: "table.choice.select";
@@ -210,6 +273,10 @@ export const createInitialLifepathState = (
   phase: "roll-characteristics",
   term: 1,
   age: definition.startingRules.age,
+  selectedPreCareerEducationId: null,
+  preCareerEducationOutcomes: [],
+  preCareerHonorsGraduated: false,
+  pendingPreCareerSkillRolls: 0,
   selectedCareerId: null,
   selectedAssignmentId: null,
   termSurvived: null,
@@ -218,6 +285,7 @@ export const createInitialLifepathState = (
   characteristics: {},
   careerRank: 0,
   completedTerms: 0,
+  careerHistory: [],
   skills: [],
   relationships: [],
   injuries: [],
@@ -319,6 +387,19 @@ const payloadNumber = (
   return typeof value === "number" ? value : null;
 };
 
+const payloadBoolean = (
+  payload: GenerationPayload | undefined,
+  key: string,
+): boolean | null => {
+  const value = payload?.[key];
+  return typeof value === "boolean" ? value : null;
+};
+
+const postBackgroundPhase = (
+  definition: LifepathGeneratorDefinition,
+): LifepathRuntimePhase =>
+  definition.preCareerEducation?.length ? "pre-career-choice" : "choose-career";
+
 const promotedRankFromEffects = (
   state: LifepathRuntimeState,
   effects: readonly LifepathEffect[] | undefined,
@@ -351,6 +432,122 @@ const termStartPhase = (
   commissioned: boolean,
 ): LifepathRuntimePhase => career.commission && !commissioned ? "commission" : "ready-for-term";
 
+const hasFailedReenlistment = (
+  state: LifepathRuntimeState,
+  careerId: string,
+) => state.log.some((entry) =>
+  entry.type === "reenlistment.roll"
+  && entry.data.careerId === careerId
+  && entry.data.reenlisted === false);
+
+const careerEligibilityReason = (
+  state: LifepathRuntimeState,
+  career: LifepathCareerDefinition,
+): string | null => {
+  if (career.eligibility?.disallowAfterFailedReenlistment && hasFailedReenlistment(state, career.id)) {
+    return `Not retained by ${career.label}`;
+  }
+
+  const minimumCharacteristics = career.eligibility?.minimumCharacteristics ?? {};
+  for (const [characteristicId, minimum] of Object.entries(minimumCharacteristics)) {
+    if (typeof minimum !== "number") continue;
+    const score = state.characteristics[characteristicId] ?? 0;
+    if (score < minimum) return `Requires ${characteristicId.toUpperCase()} ${minimum}+`;
+  }
+  return null;
+};
+
+const matchingCheckModifiers = (
+  state: LifepathRuntimeState,
+  career: LifepathCareerDefinition,
+  modifiers: readonly LifepathQualificationModifierDefinition[] = [],
+): readonly LifepathQualificationModifierDefinition[] => {
+  const survivalMatchedHistory = (modifier: LifepathQualificationModifierDefinition) =>
+    state.careerHistory.filter((entry) =>
+      typeof modifier.survived === "boolean" ? entry.survived === modifier.survived : true);
+  const termCountMatches = (
+    modifier: LifepathQualificationModifierDefinition,
+    count: number,
+  ) => {
+    if (typeof modifier.minimumTerms === "number" && count < modifier.minimumTerms) return false;
+    if (typeof modifier.maximumTerms === "number" && count > modifier.maximumTerms) return false;
+    return count > 0;
+  };
+  const preCareerOutcomeMatches = (modifier: LifepathQualificationModifierDefinition) => {
+    const educationIds = modifier.educationIds ?? [];
+    return state.preCareerEducationOutcomes.some((outcome) => {
+      if (educationIds.length > 0 && !educationIds.includes(outcome.educationId)) return false;
+      if (typeof modifier.graduated === "boolean" && outcome.graduated !== modifier.graduated) return false;
+      if (
+        typeof modifier.honorsGraduated === "boolean"
+        && outcome.honorsGraduated !== modifier.honorsGraduated
+      ) {
+        return false;
+      }
+      return true;
+    });
+  };
+
+  return modifiers.filter((modifier) => {
+    if (modifier.when === "preCareerEducation") return preCareerOutcomeMatches(modifier);
+    const history = survivalMatchedHistory(modifier);
+    if (modifier.when === "hasCareerHistory") return termCountMatches(modifier, history.length);
+    if (modifier.when === "sameCareer") {
+      const count = history.filter((entry) => entry.careerId === career.id).length;
+      return termCountMatches(modifier, count);
+    }
+    if (modifier.when === "previousCareer") {
+      const careerIds = modifier.careerIds ?? [];
+      if (careerIds.length === 0) {
+        const count = history.filter((entry) => entry.careerId !== career.id).length;
+        return termCountMatches(modifier, count);
+      }
+      const count = history.filter((entry) => careerIds.includes(entry.careerId)).length;
+      return termCountMatches(modifier, count);
+    }
+    return false;
+  });
+};
+
+const qualificationHistoryModifiers = (
+  state: LifepathRuntimeState,
+  career: LifepathCareerDefinition,
+): readonly LifepathQualificationModifierDefinition[] =>
+  matchingCheckModifiers(state, career, career.qualificationModifiers ?? []);
+
+const commissionHistoryModifiers = (
+  state: LifepathRuntimeState,
+  career: LifepathCareerDefinition,
+): readonly LifepathQualificationModifierDefinition[] =>
+  matchingCheckModifiers(state, career, career.commissionModifiers ?? []);
+
+const termHistoryFromState = (
+  state: LifepathRuntimeState,
+): LifepathCareerHistoryEntry | null => {
+  const survivalEntry = [...state.log]
+    .reverse()
+    .find((entry) => entry.type === "survival.roll" && entry.term === state.term);
+  const careerId = state.selectedCareerId
+    ?? (survivalEntry ? payloadString(survivalEntry.data, "careerId") : null);
+  if (!careerId) return null;
+  const assignmentId = state.selectedAssignmentId
+    ?? (survivalEntry ? payloadString(survivalEntry.data, "assignmentId") : null);
+  const survived = typeof state.termSurvived === "boolean"
+    ? state.termSurvived
+    : survivalEntry
+      ? payloadBoolean(survivalEntry.data, "survived") ?? false
+      : false;
+
+  return {
+    term: state.term,
+    careerId,
+    assignmentId,
+    survived,
+    rank: state.careerRank,
+    commissioned: state.commissioned,
+  };
+};
+
 export const characteristicDm = (score: number): number => {
   if (score <= 0) return -3;
   if (score <= 2) return -2;
@@ -367,6 +564,7 @@ export const skillDm = (level: number | null | undefined): number =>
 const resolveCheckRoll = ({
   state,
   check,
+  modifiers = [],
   rollProvider,
   reason,
 }: {
@@ -378,6 +576,7 @@ const resolveCheckRoll = ({
     characteristicModifier?: LifepathCharacteristicId;
     skillModifier?: string;
   };
+  modifiers?: readonly LifepathQualificationModifierDefinition[];
   rollProvider: LifepathRollProvider;
   reason: string;
 }) => {
@@ -397,7 +596,8 @@ const resolveCheckRoll = ({
     ? state.skills.find((skill) => skill.name === check.skillModifier)?.level ?? null
     : null;
   const skillModifier = check.skillModifier ? skillDm(skillLevel) : 0;
-  const total = roll + characteristicModifier + skillModifier;
+  const modifierTotal = modifiers.reduce((total, modifier) => total + modifier.modifier, 0);
+  const total = roll + characteristicModifier + skillModifier + modifierTotal;
 
   return {
     roll,
@@ -408,6 +608,8 @@ const resolveCheckRoll = ({
     skillName: check.skillModifier ?? null,
     skillLevel,
     skillModifier,
+    modifiers,
+    modifierTotal,
     target: check.target,
     passed: total >= check.target,
   };
@@ -422,6 +624,7 @@ const checkModifierData = (
     characteristicModifier?: LifepathCharacteristicId;
     skillModifier?: string;
   } | undefined,
+  modifiers: readonly LifepathQualificationModifierDefinition[] = [],
 ): GenerationPayload => {
   if (!check) return {};
   const characteristicId = check.characteristicModifier ?? null;
@@ -436,6 +639,7 @@ const checkModifierData = (
     ? state.skills.find((skill) => skill.name === skillName)?.level ?? null
     : null;
   const skillModifier = skillName ? skillDm(skillLevel) : 0;
+  const extraModifierTotal = modifiers.reduce((total, modifier) => total + modifier.modifier, 0);
 
   return {
     characteristicId,
@@ -444,7 +648,13 @@ const checkModifierData = (
     skillName,
     skillLevel,
     skillModifier,
-    modifierTotal: characteristicModifier + skillModifier,
+    modifiers: modifiers.map((modifier) => ({
+      id: modifier.id,
+      label: modifier.label,
+      modifier: modifier.modifier,
+    })),
+    extraModifierTotal,
+    modifierTotal: characteristicModifier + skillModifier + extraModifierTotal,
   };
 };
 
@@ -466,6 +676,7 @@ const addOrIncreaseSkill = (
 const applyLifepathEffects = (
   state: LifepathRuntimeState,
   effects: readonly LifepathEffect[],
+  context: LifepathEffectContext = {},
 ): LifepathRuntimeState => {
   let next = {
     ...state,
@@ -493,6 +704,19 @@ const applyLifepathEffects = (
         next = {
           ...next,
           careerRank: next.careerRank + (payloadNumber(effect.payload, "ranks") ?? 1),
+        };
+        break;
+      }
+      case "characteristic.modify": {
+        const characteristicId = payloadString(effect.payload, "characteristicId");
+        if (!characteristicId) break;
+        const current = next.characteristics[characteristicId] ?? 0;
+        next = {
+          ...next,
+          characteristics: {
+            ...next.characteristics,
+            [characteristicId]: Math.max(0, current + (payloadNumber(effect.payload, "modifier") ?? 0)),
+          },
         };
         break;
       }
@@ -602,13 +826,31 @@ const applyLifepathEffects = (
         break;
       }
       case "relationship.add": {
+        const id = payloadString(effect.payload, "relationshipId") ?? payloadString(effect.payload, "id");
+        const source = payloadString(effect.payload, "source");
+        const careerId = payloadString(effect.payload, "careerId") ?? context.careerId;
+        const term = payloadNumber(effect.payload, "term") ?? context.term ?? null;
+        const notes = payloadString(effect.payload, "notes");
+        const characterId = payloadString(effect.payload, "characterId");
+        const role = payloadString(effect.payload, "role");
+        const eventId = payloadString(effect.payload, "eventId") ?? context.eventId;
+        const eventType = payloadString(effect.payload, "eventType") ?? context.eventType;
         next = {
           ...next,
           relationships: [
             ...next.relationships,
             {
+              ...(id ? { id } : {}),
               type: payloadString(effect.payload, "relationshipType") ?? "contact",
               label: payloadString(effect.payload, "label") ?? "Unknown",
+              ...(source ? { source } : {}),
+              ...(careerId ? { careerId } : {}),
+              ...(term !== null ? { term } : {}),
+              ...(notes ? { notes } : {}),
+              ...(characterId ? { characterId } : {}),
+              ...(role ? { role } : {}),
+              ...(eventId ? { eventId } : {}),
+              ...(eventType ? { eventType } : {}),
             },
           ],
         };
@@ -694,6 +936,79 @@ export const getCurrentLifepathStep = (
     };
   }
 
+  if (state.phase === "pre-career-choice") {
+    return {
+      kind: "choice",
+      id: "lifepath.pre-career-choice",
+      title: "Choose Pre-Career Path",
+      prompt: "Choose pre-career education or enter a career directly.",
+      options: [
+        {
+          id: "enter-career",
+          label: "Enter Career",
+          description: "Skip pre-career education and choose a career.",
+        },
+        ...(definition.preCareerEducation ?? []).map((education) => ({
+          id: education.id,
+          label: education.label,
+          description: education.description,
+          data: {
+            educationId: education.id,
+          },
+        })),
+      ],
+    };
+  }
+
+  if (state.phase === "pre-career-qualification") {
+    const education = definition.preCareerEducation
+      ?.find((candidate) => candidate.id === state.selectedPreCareerEducationId);
+
+    return {
+      kind: "roll",
+      id: "lifepath.pre-career.qualification",
+      title: "Resolve Pre-Career Admission",
+      notation: education?.qualification?.notation ?? "2d6",
+      target: education?.qualification?.target,
+      data: {
+        educationId: state.selectedPreCareerEducationId,
+        ...checkModifierData(state, education?.qualification),
+      },
+    };
+  }
+
+  if (state.phase === "pre-career-graduation") {
+    const education = definition.preCareerEducation
+      ?.find((candidate) => candidate.id === state.selectedPreCareerEducationId);
+
+    return {
+      kind: "roll",
+      id: "lifepath.pre-career.graduation",
+      title: "Resolve Pre-Career Graduation",
+      notation: education?.graduation?.notation ?? "2d6",
+      target: education?.graduation?.target,
+      data: {
+        educationId: state.selectedPreCareerEducationId,
+        ...checkModifierData(state, education?.graduation),
+      },
+    };
+  }
+
+  if (state.phase === "pre-career-skill") {
+    const education = definition.preCareerEducation
+      ?.find((candidate) => candidate.id === state.selectedPreCareerEducationId);
+
+    return {
+      kind: "table",
+      id: "lifepath.pre-career.skill",
+      title: "Resolve Pre-Career Skill",
+      tableId: education?.skillTableIds?.[0] ?? "",
+      data: {
+        educationId: state.selectedPreCareerEducationId,
+      },
+    };
+  }
+
   if (state.phase === "choose-career") {
     return {
       kind: "choice",
@@ -702,11 +1017,16 @@ export const getCurrentLifepathStep = (
       prompt: "Select the career path this character will attempt to enter.",
       options: definition.careers
         .filter((career) => career.data?.hideFromCareerSelection !== true)
-        .map((career) => ({
-          id: career.id,
-          label: career.label,
-          description: career.description,
-        })),
+        .map((career) => {
+          const ineligibleReason = careerEligibilityReason(state, career);
+          return {
+            id: career.id,
+            label: career.label,
+            description: ineligibleReason ?? career.description,
+            disabled: Boolean(ineligibleReason),
+            data: ineligibleReason ? { ineligibleReason } : undefined,
+          };
+        }),
     };
   }
 
@@ -737,6 +1057,7 @@ export const getCurrentLifepathStep = (
     const career = state.selectedCareerId
       ? findCareer(definition, state.selectedCareerId)
       : null;
+    const modifiers = career ? qualificationHistoryModifiers(state, career) : [];
 
     return {
       kind: "roll",
@@ -747,7 +1068,7 @@ export const getCurrentLifepathStep = (
       data: {
         careerId: state.selectedCareerId,
         term: state.term,
-        ...checkModifierData(state, career?.qualification),
+        ...checkModifierData(state, career?.qualification, modifiers),
       },
     };
   }
@@ -835,6 +1156,7 @@ export const getCurrentLifepathStep = (
     const career = state.selectedCareerId
       ? findCareer(definition, state.selectedCareerId)
       : null;
+    const modifiers = career ? commissionHistoryModifiers(state, career) : [];
 
     return {
       kind: "roll",
@@ -846,7 +1168,7 @@ export const getCurrentLifepathStep = (
         careerId: state.selectedCareerId,
         assignmentId: state.selectedAssignmentId,
         term: state.term,
-        ...checkModifierData(state, career?.commission),
+        ...checkModifierData(state, career?.commission, modifiers),
       },
     };
   }
@@ -966,6 +1288,26 @@ export const getCurrentLifepathStep = (
     };
   }
 
+  if (state.phase === "reenlistment") {
+    const career = state.selectedCareerId
+      ? findCareer(definition, state.selectedCareerId)
+      : null;
+
+    return {
+      kind: "roll",
+      id: "lifepath.term.reenlistment",
+      title: "Resolve Reenlistment",
+      notation: career?.reenlistment?.notation ?? "2d6",
+      target: career?.reenlistment?.target,
+      data: {
+        careerId: state.selectedCareerId,
+        assignmentId: state.selectedAssignmentId,
+        term: state.term,
+        ...checkModifierData(state, career?.reenlistment),
+      },
+    };
+  }
+
   if (state.phase === "muster-out") {
     const currentBenefit = getCurrentMusterOutBenefit(state, definition);
     if (currentBenefit && !currentBenefit.tableId && currentBenefit.tables.length > 1) {
@@ -1039,6 +1381,38 @@ export const applyLifepathAction = (
         runtimeAction.source,
       );
 
+    case "preCareer.skip":
+      return skipPreCareerEducation(state, runtimeAction.source);
+
+    case "preCareer.select":
+      return selectPreCareerEducation(
+        state,
+        definition,
+        runtimeAction.educationId,
+        runtimeAction.source,
+      );
+
+    case "preCareer.qualification.resolve":
+      return resolvePreCareerQualificationPhase(
+        state,
+        definition,
+        requireRollProvider(rollProvider),
+      );
+
+    case "preCareer.graduation.resolve":
+      return resolvePreCareerGraduationPhase(
+        state,
+        definition,
+        requireRollProvider(rollProvider),
+      );
+
+    case "preCareer.skill.resolve":
+      return resolvePreCareerSkillPhase(
+        state,
+        definition,
+        requireRollProvider(rollProvider),
+      );
+
     case "career.select": {
       if (state.phase !== "choose-career") {
         throw new Error(`Cannot select a career during ${state.phase}.`);
@@ -1046,6 +1420,10 @@ export const applyLifepathAction = (
 
       const career = findCareer(definition, runtimeAction.careerId);
       if (!career) throw new Error(`Unknown lifepath career: ${runtimeAction.careerId}`);
+      const ineligibleReason = careerEligibilityReason(state, career);
+      if (ineligibleReason) {
+        throw new Error(`Cannot select ${career.label}: ${ineligibleReason}`);
+      }
 
       const action: GenerationAction = {
         id: `term-${state.term}.career.select`,
@@ -1156,13 +1534,16 @@ export const applyLifepathAction = (
       return resolveAdvancementPhase(state, definition, requireRollProvider(rollProvider));
 
     case "term.aging.resolve":
-      return resolveAgingPhase(state);
+      return resolveAgingPhase(state, definition);
+
+    case "term.reenlistment.resolve":
+      return resolveReenlistmentPhase(state, definition, requireRollProvider(rollProvider));
 
     case "table.choice.select":
       return selectPendingChoice(state, runtimeAction.choiceId, runtimeAction.source);
 
     case "term.continue":
-      return continueLifepathCareer(state, runtimeAction.source);
+      return continueLifepathCareer(definition, state, runtimeAction.source);
 
     case "career.change":
       return changeLifepathCareer(state, runtimeAction.source);
@@ -1243,7 +1624,7 @@ const rollCharacteristicsPhase = (
 
   return {
     ...tracked,
-    phase: definition.startingRules.backgroundSkillTableIds?.length ? "background" : "choose-career",
+    phase: definition.startingRules.backgroundSkillTableIds?.length ? "background" : postBackgroundPhase(definition),
     characteristics,
   };
 };
@@ -1288,7 +1669,306 @@ const selectBackgroundSkill = (
 
   return {
     ...applyLifepathEffects(tracked, entry.effects),
+    phase: postBackgroundPhase(definition),
+  };
+};
+
+const skipPreCareerEducation = (
+  state: LifepathRuntimeState,
+  source: GenerationAction["source"] = "player",
+): LifepathRuntimeState => {
+  if (state.phase !== "pre-career-choice") {
+    throw new Error(`Cannot skip pre-career education during ${state.phase}.`);
+  }
+
+  const action: GenerationAction = {
+    id: "pre-career.skip",
+    type: "preCareer.skip",
+    source,
+    stepId: "lifepath.pre-career-choice",
+    term: null,
+    payload: {},
+  };
+  const tracked = appendTrackedAction({
+    state,
+    action,
+    label: "Pre-Career: Enter Career",
+  });
+
+  return {
+    ...tracked,
     phase: "choose-career",
+  };
+};
+
+const selectPreCareerEducation = (
+  state: LifepathRuntimeState,
+  definition: LifepathGeneratorDefinition,
+  educationId: string,
+  source: GenerationAction["source"] = "player",
+): LifepathRuntimeState => {
+  if (state.phase !== "pre-career-choice") {
+    throw new Error(`Cannot select pre-career education during ${state.phase}.`);
+  }
+  const education = definition.preCareerEducation?.find((candidate) => candidate.id === educationId);
+  if (!education) throw new Error(`Unknown pre-career education: ${educationId}`);
+
+  const action: GenerationAction = {
+    id: `pre-career.${education.id}.select`,
+    type: "preCareer.select",
+    source,
+    stepId: "lifepath.pre-career-choice",
+    term: null,
+    payload: {
+      educationId: education.id,
+    },
+  };
+  const tracked = appendTrackedAction({
+    state,
+    action,
+    label: `Pre-Career: ${education.label}`,
+    data: {
+      educationId: education.id,
+      educationLabel: education.label,
+    },
+  });
+
+  return {
+    ...tracked,
+    selectedPreCareerEducationId: education.id,
+    phase: education.qualification ? "pre-career-qualification" : "choose-career",
+  };
+};
+
+const resolvePreCareerQualificationPhase = (
+  state: LifepathRuntimeState,
+  definition: LifepathGeneratorDefinition,
+  rollProvider: LifepathRollProvider,
+): LifepathRuntimeState => {
+  if (state.phase !== "pre-career-qualification") {
+    throw new Error(`Cannot resolve pre-career qualification during ${state.phase}.`);
+  }
+  if (!state.selectedPreCareerEducationId) {
+    throw new Error("Cannot resolve pre-career qualification without an education path.");
+  }
+
+  const education = definition.preCareerEducation
+    ?.find((candidate) => candidate.id === state.selectedPreCareerEducationId);
+  if (!education) {
+    throw new Error(`Unknown pre-career education: ${state.selectedPreCareerEducationId}`);
+  }
+  if (!education.qualification) return { ...state, phase: "choose-career" };
+
+  const check = resolveCheckRoll({
+    state,
+    check: education.qualification,
+    rollProvider,
+    reason: "pre-career qualification",
+  });
+  const admitted = check.passed;
+  const action: GenerationAction = {
+    id: `pre-career.${education.id}.qualification`,
+    type: "preCareer.qualification.roll",
+    source: "system",
+    stepId: "lifepath.pre-career.qualification",
+    term: null,
+    roll: check.roll,
+    payload: {
+      educationId: education.id,
+      roll: check.roll,
+      total: check.total,
+      target: education.qualification.target,
+      characteristicId: check.characteristicId,
+      characteristicScore: check.characteristicScore,
+      characteristicModifier: check.characteristicModifier,
+      skillName: check.skillName,
+      skillLevel: check.skillLevel,
+      skillModifier: check.skillModifier,
+      admitted,
+    },
+  };
+  const tracked = appendTrackedAction({
+    state,
+    action,
+    label: `${education.qualification.label}: ${admitted ? "Admitted" : "Not admitted"}`,
+    data: {
+      educationId: education.id,
+      educationLabel: education.label,
+      roll: check.roll,
+      total: check.total,
+      target: education.qualification.target,
+      characteristicId: check.characteristicId,
+      characteristicScore: check.characteristicScore,
+      characteristicModifier: check.characteristicModifier,
+      skillName: check.skillName,
+      skillLevel: check.skillLevel,
+      skillModifier: check.skillModifier,
+      admitted,
+    },
+  });
+  const withEffects = applyLifepathEffects(
+    tracked,
+    admitted ? education.successEffects ?? [] : education.failureEffects ?? [],
+    {
+      eventId: action.id,
+      eventType: action.type,
+    },
+  );
+
+  return {
+    ...withEffects,
+    phase: admitted && education.graduation ? "pre-career-graduation" : "choose-career",
+  };
+};
+
+const resolvePreCareerGraduationPhase = (
+  state: LifepathRuntimeState,
+  definition: LifepathGeneratorDefinition,
+  rollProvider: LifepathRollProvider,
+): LifepathRuntimeState => {
+  if (state.phase !== "pre-career-graduation") {
+    throw new Error(`Cannot resolve pre-career graduation during ${state.phase}.`);
+  }
+  if (!state.selectedPreCareerEducationId) {
+    throw new Error("Cannot resolve pre-career graduation without an education path.");
+  }
+
+  const education = definition.preCareerEducation
+    ?.find((candidate) => candidate.id === state.selectedPreCareerEducationId);
+  if (!education) {
+    throw new Error(`Unknown pre-career education: ${state.selectedPreCareerEducationId}`);
+  }
+  if (!education.graduation) return { ...state, phase: "choose-career" };
+
+  const check = resolveCheckRoll({
+    state,
+    check: education.graduation,
+    rollProvider,
+    reason: "pre-career graduation",
+  });
+  const graduated = check.passed;
+  const honorsGraduated = graduated
+    && typeof education.honorsTarget === "number"
+    && check.total >= education.honorsTarget;
+  const action: GenerationAction = {
+    id: `pre-career.${education.id}.graduation`,
+    type: "preCareer.graduation.roll",
+    source: "system",
+    stepId: "lifepath.pre-career.graduation",
+    term: null,
+    roll: check.roll,
+    payload: {
+      educationId: education.id,
+      roll: check.roll,
+      total: check.total,
+      target: education.graduation.target,
+      characteristicId: check.characteristicId,
+      characteristicScore: check.characteristicScore,
+      characteristicModifier: check.characteristicModifier,
+      skillName: check.skillName,
+      skillLevel: check.skillLevel,
+      skillModifier: check.skillModifier,
+      graduated,
+      honorsTarget: education.honorsTarget ?? null,
+      honorsGraduated,
+    },
+  };
+  const tracked = appendTrackedAction({
+    state,
+    action,
+    label: `${education.graduation.label}: ${
+      honorsGraduated
+        ? "Graduated with Honors"
+        : graduated
+          ? "Graduated"
+          : "Did not graduate"
+    }`,
+    data: {
+      educationId: education.id,
+      educationLabel: education.label,
+      roll: check.roll,
+      total: check.total,
+      target: education.graduation.target,
+      characteristicId: check.characteristicId,
+      characteristicScore: check.characteristicScore,
+      characteristicModifier: check.characteristicModifier,
+      skillName: check.skillName,
+      skillLevel: check.skillLevel,
+      skillModifier: check.skillModifier,
+      graduated,
+      honorsTarget: education.honorsTarget ?? null,
+      honorsGraduated,
+    },
+  });
+  const withEffects = applyLifepathEffects(
+    tracked,
+    [
+      ...(graduated
+        ? education.graduation.successEffects ?? []
+        : education.graduation.failureEffects ?? []),
+      ...(honorsGraduated ? education.honorsEffects ?? [] : []),
+    ],
+    {
+      eventId: action.id,
+      eventType: action.type,
+    },
+  );
+
+  return {
+    ...withEffects,
+    preCareerEducationOutcomes: [
+      ...withEffects.preCareerEducationOutcomes.filter((outcome) => outcome.educationId !== education.id),
+      {
+        educationId: education.id,
+        graduated,
+        honorsGraduated,
+      },
+    ],
+    preCareerHonorsGraduated: honorsGraduated,
+    pendingPreCareerSkillRolls: graduated && education.skillTableIds?.[0]
+      ? honorsGraduated ? 2 : 1
+      : 0,
+    phase: graduated && education.skillTableIds?.[0] ? "pre-career-skill" : "choose-career",
+  };
+};
+
+const resolvePreCareerSkillPhase = (
+  state: LifepathRuntimeState,
+  definition: LifepathGeneratorDefinition,
+  rollProvider: LifepathRollProvider,
+): LifepathRuntimeState => {
+  if (state.phase !== "pre-career-skill") {
+    throw new Error(`Cannot resolve pre-career skill during ${state.phase}.`);
+  }
+  if (!state.selectedPreCareerEducationId) {
+    throw new Error("Cannot resolve pre-career skill without an education path.");
+  }
+
+  const education = definition.preCareerEducation
+    ?.find((candidate) => candidate.id === state.selectedPreCareerEducationId);
+  if (!education) {
+    throw new Error(`Unknown pre-career education: ${state.selectedPreCareerEducationId}`);
+  }
+  const tableId = education.skillTableIds?.[0];
+  if (!tableId) return { ...state, phase: "choose-career" };
+
+  const next = resolveTable({
+    state,
+    definition,
+    tableId,
+    rollProvider,
+    reason: "pre-career skill",
+    resumePhase: "choose-career",
+  });
+
+  return {
+    ...next,
+    pendingPreCareerSkillRolls: Math.max(0, state.pendingPreCareerSkillRolls - 1),
+    phase: next.pendingChoice
+      ? state.phase
+      : state.pendingPreCareerSkillRolls > 1
+        ? "pre-career-skill"
+        : "choose-career",
   };
 };
 
@@ -1343,7 +2023,12 @@ const resolveTable = ({
     },
   });
 
-  const withEntryEffects = applyLifepathEffects(tracked, entry.effects);
+  const withEntryEffects = applyLifepathEffects(tracked, entry.effects, {
+    eventId: action.id,
+    eventType: action.type,
+    careerId: state.selectedCareerId ?? undefined,
+    term: state.term,
+  });
   if (!entry.choices || entry.choices.length === 0) return withEntryEffects;
 
   return {
@@ -1371,10 +2056,12 @@ const resolveCommissionPhase = (
   const career = findCareer(definition, state.selectedCareerId);
   if (!career) throw new Error(`Unknown lifepath career: ${state.selectedCareerId}`);
   if (!career.commission) return { ...state, phase: "ready-for-term" };
+  const modifiers = commissionHistoryModifiers(state, career);
 
   const check = resolveCheckRoll({
     state,
     check: career.commission,
+    modifiers,
     rollProvider,
     reason: "commission",
   });
@@ -1398,6 +2085,12 @@ const resolveCommissionPhase = (
       skillName: check.skillName,
       skillLevel: check.skillLevel,
       skillModifier: check.skillModifier,
+      modifiers: check.modifiers.map((modifier) => ({
+        id: modifier.id,
+        label: modifier.label,
+        modifier: modifier.modifier,
+      })),
+      extraModifierTotal: check.modifierTotal,
       commissioned,
     },
   };
@@ -1417,6 +2110,12 @@ const resolveCommissionPhase = (
       skillName: check.skillName,
       skillLevel: check.skillLevel,
       skillModifier: check.skillModifier,
+      modifiers: check.modifiers.map((modifier) => ({
+        id: modifier.id,
+        label: modifier.label,
+        modifier: modifier.modifier,
+      })),
+      extraModifierTotal: check.modifierTotal,
       commissioned,
     },
   });
@@ -1521,10 +2220,12 @@ const resolveQualificationPhase = (
   const career = findCareer(definition, state.selectedCareerId);
   if (!career) throw new Error(`Unknown lifepath career: ${state.selectedCareerId}`);
   if (!career.qualification) return { ...state, phase: "choose-assignment" };
+  const modifiers = qualificationHistoryModifiers(state, career);
 
   const check = resolveCheckRoll({
     state,
     check: career.qualification,
+    modifiers,
     rollProvider,
     reason: "qualification",
   });
@@ -1547,6 +2248,12 @@ const resolveQualificationPhase = (
       skillName: check.skillName,
       skillLevel: check.skillLevel,
       skillModifier: check.skillModifier,
+      modifiers: check.modifiers.map((modifier) => ({
+        id: modifier.id,
+        label: modifier.label,
+        modifier: modifier.modifier,
+      })),
+      extraModifierTotal: check.modifierTotal,
       qualified,
     },
   };
@@ -1565,14 +2272,30 @@ const resolveQualificationPhase = (
       skillName: check.skillName,
       skillLevel: check.skillLevel,
       skillModifier: check.skillModifier,
+      modifiers: check.modifiers.map((modifier) => ({
+        id: modifier.id,
+        label: modifier.label,
+        modifier: modifier.modifier,
+      })),
+      extraModifierTotal: check.modifierTotal,
       qualified,
     },
   });
   const withEffects = applyLifepathEffects(
     tracked,
-    qualified
-      ? career.qualification.successEffects ?? []
-      : career.qualification.failureEffects ?? [],
+    [
+      ...(qualified
+        ? career.qualification.successEffects ?? []
+        : career.qualification.failureEffects ?? []),
+      ...modifiers.flatMap((modifier) =>
+        qualified ? modifier.successEffects ?? [] : modifier.failureEffects ?? []),
+    ],
+    {
+      eventId: action.id,
+      eventType: action.type,
+      careerId: career.id,
+      term: state.term,
+    },
   );
 
   return {
@@ -1877,20 +2600,85 @@ const resolveAdvancementPhase = (
   };
 };
 
-const resolveAgingPhase = (state: LifepathRuntimeState): LifepathRuntimeState => {
+const resolveAgingPhase = (
+  state: LifepathRuntimeState,
+  definition: LifepathGeneratorDefinition,
+): LifepathRuntimeState => {
   if (state.phase !== "aging") throw new Error(`Cannot resolve aging during ${state.phase}.`);
-  const next = applyLifepathEffects(state, [
+  let next = applyLifepathEffects(state, [
     {
       id: `term-${state.term}.age`,
       type: "age.add",
       payload: { years: 4 },
     },
   ]);
+  const agingRules = definition.startingRules.agingRules;
+  if (agingRules) {
+    const frequencyYears = agingRules.frequencyYears ?? 4;
+    const crossedAges: number[] = [];
+    for (let age = agingRules.startsAtAge; age <= next.age; age += frequencyYears) {
+      if (state.age < age) crossedAges.push(age);
+    }
 
+    for (const agingAge of crossedAges) {
+      const agingIndex = Math.floor((agingAge - agingRules.startsAtAge) / frequencyYears);
+      const characteristicId = agingRules.characteristicCycle?.length
+        ? agingRules.characteristicCycle[agingIndex % agingRules.characteristicCycle.length]
+        : agingRules.characteristicId;
+      if (!characteristicId) continue;
+
+      const before = next.characteristics[characteristicId] ?? 0;
+      const after = Math.max(0, before + agingRules.modifier);
+      const agingAction: GenerationAction = {
+        id: `term-${state.term}.aging.${characteristicId}.${agingAge}`,
+        type: "aging.effect",
+        source: "system",
+        stepId: "lifepath.term.aging",
+        term: state.term,
+        payload: {
+          age: agingAge,
+          characteristicId,
+          modifier: agingRules.modifier,
+          before,
+          after,
+        },
+      };
+      const withAgingLog = appendTrackedAction({
+        state: next,
+        action: agingAction,
+        label: `Aging: ${characteristicId.toUpperCase()} ${agingRules.modifier}`,
+        data: {
+          age: agingAge,
+          characteristicId,
+          modifier: agingRules.modifier,
+          before,
+          after,
+        },
+      });
+      next = applyLifepathEffects(withAgingLog, [
+        {
+          id: `term-${state.term}.aging.${characteristicId}.${agingAge}.effect`,
+          type: "characteristic.modify",
+          payload: {
+            characteristicId,
+            modifier: agingRules.modifier,
+          },
+        },
+      ]);
+    }
+  }
+
+  const careerHistoryEntry = termHistoryFromState(next);
   return {
     ...next,
     phase: "term-complete",
     completedTerms: next.completedTerms + 1,
+    careerHistory: careerHistoryEntry
+      ? [
+          ...next.careerHistory.filter((entry) => entry.term !== careerHistoryEntry.term),
+          careerHistoryEntry,
+        ]
+      : next.careerHistory,
   };
 };
 
@@ -1922,7 +2710,12 @@ const selectPendingChoice = (
       choiceLabel: choice.label,
     },
   });
-  const withEffects = applyLifepathEffects(tracked, choice.effects);
+  const withEffects = applyLifepathEffects(tracked, choice.effects, {
+    eventId: action.id,
+    eventType: action.type,
+    careerId: state.selectedCareerId ?? undefined,
+    term: state.term,
+  });
 
   return {
     ...withEffects,
@@ -1961,6 +2754,7 @@ const appendLifecycleChoice = (
 };
 
 const continueLifepathCareer = (
+  definition: LifepathGeneratorDefinition,
   state: LifepathRuntimeState,
   source: GenerationAction["source"] = "player",
 ): LifepathRuntimeState => {
@@ -1972,10 +2766,109 @@ const continueLifepathCareer = (
   }
 
   const tracked = appendLifecycleChoice(state, "term.continue", "Continue Career", source);
+  const career = findCareer(definition, state.selectedCareerId);
   return {
     ...tracked,
-    phase: "ready-for-term",
+    phase: career?.reenlistment ? "reenlistment" : "ready-for-term",
+    term: career?.reenlistment ? state.term : state.term + 1,
+    termSurvived: null,
+  };
+};
+
+const resolveReenlistmentPhase = (
+  state: LifepathRuntimeState,
+  definition: LifepathGeneratorDefinition,
+  rollProvider: LifepathRollProvider,
+): LifepathRuntimeState => {
+  if (state.phase !== "reenlistment") {
+    throw new Error(`Cannot resolve reenlistment during ${state.phase}.`);
+  }
+  if (!state.selectedCareerId || !state.selectedAssignmentId) {
+    throw new Error("Cannot resolve reenlistment without an active career and assignment.");
+  }
+
+  const career = findCareer(definition, state.selectedCareerId);
+  if (!career) throw new Error(`Unknown lifepath career: ${state.selectedCareerId}`);
+  if (!career.reenlistment) {
+    return {
+      ...state,
+      phase: "ready-for-term",
+      term: state.term + 1,
+    };
+  }
+
+  const check = resolveCheckRoll({
+    state,
+    check: career.reenlistment,
+    rollProvider,
+    reason: "reenlistment",
+  });
+  const reenlisted = check.passed;
+  const successOutcome = payloadString(career.reenlistment.data, "successOutcome") ?? "may-continue";
+  const failureOutcome = payloadString(career.reenlistment.data, "failureOutcome") ?? "not-retained";
+  const outcome = reenlisted ? successOutcome : failureOutcome;
+  const action: GenerationAction = {
+    id: `term-${state.term}.reenlistment`,
+    type: "reenlistment.roll",
+    source: "system",
+    stepId: "lifepath.term.reenlistment",
+    term: state.term,
+    roll: check.roll,
+    payload: {
+      careerId: career.id,
+      careerLabel: career.label,
+      roll: check.roll,
+      total: check.total,
+      target: career.reenlistment.target,
+      characteristicId: check.characteristicId,
+      characteristicScore: check.characteristicScore,
+      characteristicModifier: check.characteristicModifier,
+      skillName: check.skillName,
+      skillLevel: check.skillLevel,
+      skillModifier: check.skillModifier,
+      reenlisted,
+      outcome,
+      successOutcome,
+      failureOutcome,
+    },
+  };
+  const tracked = appendTrackedAction({
+    state,
+    action,
+    label: `${career.reenlistment.label}: ${reenlisted ? "Continued" : "Not retained"}`,
+    data: {
+      careerId: career.id,
+      careerLabel: career.label,
+      roll: check.roll,
+      total: check.total,
+      target: career.reenlistment.target,
+      characteristicId: check.characteristicId,
+      characteristicScore: check.characteristicScore,
+      characteristicModifier: check.characteristicModifier,
+      skillName: check.skillName,
+      skillLevel: check.skillLevel,
+      skillModifier: check.skillModifier,
+      reenlisted,
+      outcome,
+      successOutcome,
+      failureOutcome,
+    },
+  });
+  const withEffects = applyLifepathEffects(
+    tracked,
+    reenlisted
+      ? career.reenlistment.successEffects ?? []
+      : career.reenlistment.failureEffects ?? [],
+  );
+
+  return {
+    ...withEffects,
+    phase: reenlisted ? "ready-for-term" : "choose-career",
     term: state.term + 1,
+    selectedCareerId: reenlisted ? state.selectedCareerId : null,
+    selectedAssignmentId: reenlisted ? state.selectedAssignmentId : null,
+    careerRank: reenlisted ? state.careerRank : 0,
+    commissioned: reenlisted ? state.commissioned : false,
     termSurvived: null,
   };
 };
@@ -2023,12 +2916,10 @@ const musterOutLifepath = (
 const getCompletedCareerTerms = (
   state: LifepathRuntimeState,
 ): LifepathMusterOutTerm[] =>
-  state.log.flatMap((entry) => {
-    if (entry.type !== "survival.roll" || entry.term === null) return [];
-    const careerId = payloadString(entry.data, "careerId");
-    if (!careerId) return [];
-    return [{ term: entry.term, careerId }];
-  });
+  state.careerHistory.map((entry) => ({
+    term: entry.term,
+    careerId: entry.careerId,
+  }));
 
 const getCurrentMusterOutBenefit = (
   state: LifepathRuntimeState,

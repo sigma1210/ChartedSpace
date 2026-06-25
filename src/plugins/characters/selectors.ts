@@ -20,6 +20,12 @@ export const selectCurrentCharacter = (state: RootState): CharacterSummary | nul
   return state.plugins.characters.items.find(c => c.id === id) ?? null;
 };
 
+export const selectSelectedProfileCharacter = (state: RootState): CharacterSummary | null => {
+  const id = state.plugins.characters.selectedProfileCharacterId;
+  if (!id) return null;
+  return state.plugins.characters.items.find(c => c.id === id) ?? null;
+};
+
 export const selectOwnerOperatorCharacter = (state: RootState): CharacterSummary | null => {
   const id = selectOwnerOperatorCharacterId(state);
   if (!id) return null;
@@ -35,6 +41,7 @@ export const selectFallbackCharacter = (state: RootState): CharacterSummary | nu
   null;
 
 export const selectEffectiveCharacterProfile = (state: RootState): CharacterSummary | null =>
+  selectSelectedProfileCharacter(state) ??
   selectCurrentCharacter(state) ??
   selectOwnerOperatorCharacter(state) ??
   selectFallbackCharacter(state);

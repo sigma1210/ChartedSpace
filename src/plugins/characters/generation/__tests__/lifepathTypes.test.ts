@@ -25,6 +25,42 @@ const sampleLifepathDefinition = {
       },
     ],
   },
+  preCareerEducation: [
+    {
+      id: "sample-university",
+      label: "University",
+      description: "A pre-career education path used to prove the lifepath schema.",
+      qualification: {
+        id: "sample-university.qualification",
+        label: "University Admission",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "edu",
+      },
+      graduation: {
+        id: "sample-university.graduation",
+        label: "University Graduation",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "int",
+      },
+      skillTableIds: ["sample-university.skills"],
+      successEffects: [
+        {
+          id: "sample-university-age",
+          type: "age.add",
+          payload: { years: 4 },
+        },
+      ],
+      failureEffects: [
+        {
+          id: "sample-university-contact",
+          type: "relationship.add",
+          payload: { relationshipType: "contact", label: "Admissions tutor" },
+        },
+      ],
+    },
+  ],
   term: {
     id: "sample.term",
     label: "Four Year Term",
@@ -295,6 +331,16 @@ describe("LifepathGeneratorDefinition", () => {
     expect(sampleLifepathDefinition.term.phases).toContain("survival");
     expect(sampleLifepathDefinition.term.phases).toContain("event");
     expect(sampleLifepathDefinition.term.phases).toContain("benefits");
+    expect(sampleLifepathDefinition.preCareerEducation?.[0]).toMatchObject({
+      id: "sample-university",
+      qualification: {
+        target: 7,
+      },
+      graduation: {
+        characteristicModifier: "int",
+      },
+      skillTableIds: ["sample-university.skills"],
+    });
     expect(career.assignments.map((assignment) => assignment.id)).toEqual([
       "sample-scout.field",
       "sample-scout.analysis",

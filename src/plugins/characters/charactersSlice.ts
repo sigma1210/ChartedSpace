@@ -16,18 +16,48 @@ export interface CharacterSummary {
   worldName: string | null;
   sectorAbbr: string | null;
   hex: string | null;
+  educationHistory?: CharacterEducationSummary | null;
+  careers?: CharacterCareerSummary[];
+  history?: CharacterHistoryEntry[];
+}
+
+export interface CharacterEducationSummary {
+  label: string;
+  admission: "admitted" | "not-admitted" | "unknown";
+  graduation: "graduated" | "honors" | "not-graduated" | "unknown";
+  skills: string[];
+}
+
+export interface CharacterCareerSummary {
+  careerId: string;
+  careerLabel: string;
+  assignmentLabel: string | null;
+  terms: number;
+  finalRank: number;
+  finalRankTitle: string | null;
+  commissioned: boolean;
+}
+
+export interface CharacterHistoryEntry {
+  type: string;
+  label: string;
+  detail: string | null;
+  term: number | null;
+  roll?: number | null;
 }
 
 export interface CharacterState {
   items: CharacterSummary[];
   status: "idle" | "loading" | "loaded" | "error";
   error: string | null;
+  selectedProfileCharacterId: string | null;
 }
 
 export const initialCharactersState: CharacterState = {
   items: [],
   status: "idle",
   error: null,
+  selectedProfileCharacterId: null,
 };
 
 export const fetchCharacters = createAsyncThunk(
@@ -57,6 +87,9 @@ const characterSlice = createSlice({
       const item = state.items.find(c => c.id === action.payload.id);
       if (item) item.name = action.payload.name;
     },
+    setSelectedProfileCharacter(state, action: PayloadAction<string | null>) {
+      state.selectedProfileCharacterId = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -67,6 +100,12 @@ const characterSlice = createSlice({
       .addCase(fetchCharacters.fulfilled, (state, action) => {
         state.status = "loaded";
         state.items = action.payload;
+        if (
+          state.selectedProfileCharacterId &&
+          !action.payload.some((character) => character.id === state.selectedProfileCharacterId)
+        ) {
+          state.selectedProfileCharacterId = null;
+        }
       })
       .addCase(fetchCharacters.rejected, (state, action) => {
         state.status = "error";
@@ -75,5 +114,9 @@ const characterSlice = createSlice({
   },
 });
 
-export const { invalidateCharacters, updateCharacterInList } = characterSlice.actions;
+export const {
+  invalidateCharacters,
+  setSelectedProfileCharacter,
+  updateCharacterInList,
+} = characterSlice.actions;
 export default characterSlice.reducer;

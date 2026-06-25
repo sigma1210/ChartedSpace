@@ -2,6 +2,7 @@ import type { GenerationLogEntry, GenerationPayload } from "./types";
 import type { CareerName, CharacterSheet, DecisionRecord } from "@/lib/characters/types";
 import type { LifepathGeneratorDefinition } from "./lifepathTypes";
 import type {
+  LifepathCareerHistoryEntry,
   LifepathRuntimeInjury,
   LifepathRuntimeCharacteristics,
   LifepathRuntimeBenefits,
@@ -42,6 +43,7 @@ export interface LifepathDraft {
   injuries: readonly LifepathRuntimeInjury[];
   credits: number;
   benefits: LifepathRuntimeBenefits;
+  careerHistory: readonly LifepathCareerHistoryEntry[];
   careers: readonly LifepathCareerDraft[];
   history: readonly LifepathHistoryEntry[];
   log: readonly GenerationLogEntry[];
@@ -126,9 +128,13 @@ const buildHistoryDetail = (entry: GenerationLogEntry): string | undefined => {
   const skillLevel = payloadNumber(entry.data, "skillLevel");
   const skillModifier = payloadNumber(entry.data, "skillModifier") ?? 0;
   const qualified = payloadBoolean(entry.data, "qualified");
+  const admitted = payloadBoolean(entry.data, "admitted");
+  const graduated = payloadBoolean(entry.data, "graduated");
+  const honorsGraduated = payloadBoolean(entry.data, "honorsGraduated");
   const survived = payloadBoolean(entry.data, "survived");
   const commissioned = payloadBoolean(entry.data, "commissioned");
   const advanced = payloadBoolean(entry.data, "advanced");
+  const reenlisted = payloadBoolean(entry.data, "reenlisted");
   const modifierParts = [
     ...(characteristicId && characteristicModifier !== 0
       ? [`${characteristicModifier > 0 ? "+" : ""}${characteristicModifier} ${characteristicId.toUpperCase()}`]
@@ -146,6 +152,13 @@ const buildHistoryDetail = (entry: GenerationLogEntry): string | undefined => {
   if (typeof qualified === "boolean" && rollText && target !== null) {
     return `${rollText} vs ${target}+; ${qualified ? "qualified" : "not qualified"}.`;
   }
+  if (typeof admitted === "boolean" && rollText && target !== null) {
+    return `${rollText} vs ${target}+; ${admitted ? "admitted" : "not admitted"}.`;
+  }
+  if (typeof graduated === "boolean" && rollText && target !== null) {
+    const outcome = honorsGraduated ? "graduated with honors" : graduated ? "graduated" : "did not graduate";
+    return `${rollText} vs ${target}+; ${outcome}.`;
+  }
   if (typeof survived === "boolean" && rollText && target !== null) {
     return `${rollText} vs ${target}+; ${survived ? "survived" : "mishap"}.`;
   }
@@ -156,6 +169,10 @@ const buildHistoryDetail = (entry: GenerationLogEntry): string | undefined => {
     const rankText = advanced ? advancementRankText(entry) : null;
     return `${rollText} vs ${target}+; ${advanced ? `advanced${rankText ? ` to ${rankText}` : ""}` : "no advancement"}.`;
   }
+  if (typeof reenlisted === "boolean" && rollText && target !== null) {
+    const outcome = payloadString(entry.data, "outcome");
+    return `${rollText} vs ${target}+; ${reenlisted ? "continued" : "not retained"}${outcome ? ` (${outcome})` : ""}.`;
+  }
   if (rollText) return `${rollText}.`;
   return undefined;
 };
@@ -164,6 +181,22 @@ const historyLabel = (entry: GenerationLogEntry): string => {
   switch (entry.type) {
     case "background.skill.select":
       return `Background skill: ${payloadString(entry.data, "entryLabel") ?? entry.label}`;
+    case "preCareer.skip":
+      return "Skipped pre-career education";
+    case "preCareer.select":
+      return `Selected pre-career education: ${payloadString(entry.data, "educationLabel") ?? entry.label}`;
+    case "preCareer.qualification.roll": {
+      const admitted = payloadBoolean(entry.data, "admitted");
+      return admitted === false
+        ? `Failed admission: ${payloadString(entry.data, "educationLabel") ?? entry.label}`
+        : entry.label;
+    }
+    case "preCareer.graduation.roll": {
+      const graduated = payloadBoolean(entry.data, "graduated");
+      return graduated === false
+        ? `Failed graduation: ${payloadString(entry.data, "educationLabel") ?? entry.label}`
+        : entry.label;
+    }
     case "career.select":
       return `Attempted ${payloadString(entry.data, "careerLabel") ?? entry.label}`;
     case "qualification.roll": {
@@ -180,10 +213,14 @@ const historyLabel = (entry: GenerationLogEntry): string => {
       return `Assignment: ${payloadString(entry.data, "assignmentLabel") ?? entry.label}`;
     case "commission.roll":
       return entry.label;
+    case "reenlistment.roll":
+      return entry.label;
     case "benefit.choice":
       return `Muster-out choice: ${payloadString(entry.data, "tableLabel") ?? entry.label}`;
     case "rank.benefit":
       return `Rank benefit: ${payloadString(entry.data, "rankTitle") ?? entry.label}`;
+    case "aging.effect":
+      return entry.label;
     default:
       return entry.label;
   }
@@ -195,6 +232,10 @@ const buildLifepathHistory = (
   log
     .filter((entry) => [
       "career.select",
+      "preCareer.skip",
+      "preCareer.select",
+      "preCareer.qualification.roll",
+      "preCareer.graduation.roll",
       "background.skill.select",
       "qualification.roll",
       "qualification.choose-career",
@@ -208,7 +249,9 @@ const buildLifepathHistory = (
       "commission.roll",
       "advancement.roll",
       "rank.benefit",
+      "aging.effect",
       "term.continue",
+      "reenlistment.roll",
       "career.change",
       "generation.muster-out",
       "benefit.choice",
@@ -234,20 +277,24 @@ export const buildLifepathDraft = (
     careerId: string;
     assignmentId: string | null;
     terms: Set<number>;
+    finalRank: number;
+    commissioned: boolean;
   }>();
 
-  for (const entry of state.log) {
-    if (entry.type !== "survival.roll" || entry.term === null) continue;
-    const careerId = payloadString(entry.data, "careerId");
-    if (!careerId) continue;
-    const assignmentId = payloadString(entry.data, "assignmentId");
+  for (const entry of state.careerHistory) {
+    const careerId = entry.careerId;
+    const assignmentId = entry.assignmentId;
     const key = `${careerId}:${assignmentId ?? ""}`;
     const record = careerTerms.get(key) ?? {
       careerId,
       assignmentId,
       terms: new Set<number>(),
+      finalRank: entry.rank,
+      commissioned: entry.commissioned,
     };
     record.terms.add(entry.term);
+    record.finalRank = entry.rank;
+    record.commissioned = entry.commissioned;
     careerTerms.set(key, record);
   }
 
@@ -263,18 +310,17 @@ export const buildLifepathDraft = (
     injuries: state.injuries,
     credits: state.credits,
     benefits: state.benefits,
+    careerHistory: state.careerHistory,
     careers: Array.from(careerTerms.values()).map((record) => {
-      const finalRank = state.selectedCareerId === record.careerId ? state.careerRank : 0;
-      const commissioned = state.selectedCareerId === record.careerId ? state.commissioned : false;
       return {
         careerId: record.careerId,
         careerLabel: careerLabel(definition, record.careerId),
         assignmentId: record.assignmentId,
         assignmentLabel: assignmentLabel(definition, record.careerId, record.assignmentId),
         terms: record.terms.size,
-        finalRank,
-        finalRankTitle: careerRankTitle(definition, record.careerId, finalRank, commissioned),
-        commissioned,
+        finalRank: record.finalRank,
+        finalRankTitle: careerRankTitle(definition, record.careerId, record.finalRank, record.commissioned),
+        commissioned: record.commissioned,
       };
     }),
     history,
@@ -352,6 +398,7 @@ export const lifepathDraftToCharacterSheet = (
       benefits: draft.benefits,
       relationships: draft.relationships,
       injuries: draft.injuries,
+      careerHistory: draft.careerHistory,
       careers: draft.careers,
       history: draft.history,
     },

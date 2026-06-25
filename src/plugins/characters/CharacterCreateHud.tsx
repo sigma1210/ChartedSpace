@@ -495,6 +495,18 @@ const payloadNumber = (value: unknown) => typeof value === "number" ? value : nu
 const payloadString = (value: unknown) => typeof value === "string" ? value : null;
 const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
 
+const payloadModifiers = (value: unknown) => {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const label = payloadString(record.label);
+    const modifier = payloadNumber(record.modifier);
+    if (!label || modifier === null) return [];
+    return [{ label, modifier }];
+  });
+};
+
 const rollFormulaText = (step: ReturnType<typeof getCurrentLifepathStep>) => {
   if (step.kind !== "roll") return null;
   const data = step.data ?? {};
@@ -504,6 +516,7 @@ const rollFormulaText = (step: ReturnType<typeof getCurrentLifepathStep>) => {
   const skillName = payloadString(data.skillName);
   const skillLevel = payloadNumber(data.skillLevel);
   const skillModifier = payloadNumber(data.skillModifier);
+  const modifiers = payloadModifiers(data.modifiers);
   const parts = [step.notation];
 
   if (characteristicId && characteristicModifier !== null) {
@@ -513,6 +526,9 @@ const rollFormulaText = (step: ReturnType<typeof getCurrentLifepathStep>) => {
     parts.push(skillLevel === null
       ? `${skillName} untrained ${signed(skillModifier)}`
       : `${skillName}-${skillLevel} ${signed(skillModifier)}`);
+  }
+  for (const modifier of modifiers) {
+    parts.push(`${modifier.label} ${signed(modifier.modifier)}`);
   }
 
   return `${parts.join(" ")}${targetText}`;
@@ -670,6 +686,16 @@ export const CharacterCreateHudContent = () => {
       ));
       return;
     }
+    if (step.id === "lifepath.pre-career-choice") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        choiceId === "enter-career"
+          ? { type: "preCareer.skip" }
+          : { type: "preCareer.select", educationId: choiceId },
+      ));
+      return;
+    }
     if (step.id === "lifepath.choose-career") {
       updateLifepath(applyLifepathAction(
         lifepathState,
@@ -767,6 +793,33 @@ export const CharacterCreateHudContent = () => {
       ));
       return;
     }
+    if (step.id === "lifepath.pre-career.qualification") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "preCareer.qualification.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.pre-career.graduation") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "preCareer.graduation.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
+    if (step.id === "lifepath.pre-career.skill") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "preCareer.skill.resolve" },
+        randomLifepathRollProvider,
+      ));
+      return;
+    }
     if (step.id === "lifepath.term.commission") {
       updateLifepath(applyLifepathAction(
         lifepathState,
@@ -826,6 +879,15 @@ export const CharacterCreateHudContent = () => {
         lifepathState,
         basicHumanLifepathDefinition,
         { type: "term.aging.resolve" },
+      ));
+      return;
+    }
+    if (step.id === "lifepath.term.reenlistment") {
+      updateLifepath(applyLifepathAction(
+        lifepathState,
+        basicHumanLifepathDefinition,
+        { type: "term.reenlistment.resolve" },
+        randomLifepathRollProvider,
       ));
       return;
     }

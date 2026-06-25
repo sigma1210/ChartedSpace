@@ -22,7 +22,92 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
     age: 18,
     characteristicRollNotation: "2d6",
     backgroundSkillTableIds: ["basic-human.background-skills"],
+    agingRules: {
+      startsAtAge: 34,
+      characteristicCycle: ["end", "str", "dex"],
+      modifier: -1,
+    },
   },
+  preCareerEducation: [
+    {
+      id: "university",
+      label: "University",
+      description: "Four years of formal education before entering a career.",
+      qualification: {
+        id: "university.qualification",
+        label: "University Admission",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "edu",
+      },
+      graduation: {
+        id: "university.graduation",
+        label: "University Graduation",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "int",
+      },
+      honorsTarget: 11,
+      skillTableIds: ["basic-human.university-skills"],
+      successEffects: [
+        {
+          id: "university.age",
+          type: "age.add",
+          payload: { years: 4 },
+        },
+      ],
+      failureEffects: [
+        {
+          id: "university.admissions-contact",
+          type: "relationship.add",
+          payload: {
+            relationshipType: "contact",
+            label: "Admissions tutor",
+            source: "pre-career-education",
+          },
+        },
+      ],
+    },
+    {
+      id: "military-academy",
+      label: "Military Academy",
+      description: "Four years of officer training, discipline, and command preparation.",
+      qualification: {
+        id: "military-academy.qualification",
+        label: "Military Academy Admission",
+        notation: "2d6",
+        target: 8,
+        characteristicModifier: "edu",
+      },
+      graduation: {
+        id: "military-academy.graduation",
+        label: "Military Academy Graduation",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "end",
+      },
+      honorsTarget: 11,
+      skillTableIds: ["basic-human.military-academy-skills"],
+      successEffects: [
+        {
+          id: "military-academy.age",
+          type: "age.add",
+          payload: { years: 4 },
+        },
+      ],
+      failureEffects: [
+        {
+          id: "military-academy-recruiter",
+          type: "relationship.add",
+          payload: {
+            relationshipType: "contact",
+            label: "Academy recruiter",
+            source: "pre-career-education",
+          },
+        },
+      ],
+    },
+  ],
   term: {
     id: "basic-human.term",
     label: "Term",
@@ -80,7 +165,39 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
         notation: "2d6",
         target: 4,
         characteristicModifier: "soc",
+        failureEffects: [
+          {
+            id: "free-trader.qualification-rival",
+            type: "relationship.add",
+            payload: { relationshipType: "rival", label: "Port broker" },
+          },
+        ],
       },
+      qualificationModifiers: [
+        {
+          id: "free-trader.university-graduate",
+          label: "University graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "free-trader.university-honors",
+          label: "University honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          honorsGraduated: true,
+        },
+        {
+          id: "free-trader.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
       survival: {
         id: "free-trader.survival",
         label: "Survival",
@@ -116,11 +233,569 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
       benefitTableIds: ["free-trader.cash-benefits", "free-trader.material-benefits"],
     },
     {
+      id: "navy",
+      label: "Navy",
+      description: "Starship service, fleet discipline, and hard vacuum operations.",
+      assignments: [
+        { id: "navy.line", label: "Line Crew", description: "Shipboard duty, watches, and combat stations." },
+        { id: "navy.engineering", label: "Engineering", description: "Power plants, drives, and damage control." },
+        { id: "navy.flight", label: "Flight", description: "Small craft, helm time, and tactical manoeuvres." },
+      ],
+      ranks: [
+        { rank: 0, title: "Crewman", track: "enlisted" },
+        {
+          rank: 1,
+          title: "Spacer",
+          track: "enlisted",
+          effects: [
+            {
+              id: "navy.rank-1-vacc-suit",
+              type: "skill.add",
+              payload: { skill: "Vacc Suit", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 2,
+          title: "Petty Officer",
+          track: "enlisted",
+          effects: [
+            {
+              id: "navy.rank-2-leadership",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Chief",
+          track: "enlisted",
+          effects: [
+            {
+              id: "navy.rank-3-mechanic",
+              type: "skill.add",
+              payload: { skill: "Mechanic", level: 1 },
+            },
+          ],
+        },
+        { rank: 1, title: "Ensign", track: "officer" },
+        {
+          rank: 2,
+          title: "Lieutenant",
+          track: "officer",
+          effects: [
+            {
+              id: "navy.officer-rank-2-leadership",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Commander",
+          track: "officer",
+          effects: [
+            {
+              id: "navy.officer-rank-3-tactics",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+      ],
+      skillTableIds: ["navy.skills"],
+      qualification: {
+        id: "navy.qualification",
+        label: "Navy Qualification",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "edu",
+        failureEffects: [
+          {
+            id: "navy-recruiter-contact",
+            type: "relationship.add",
+            payload: { relationshipType: "contact", label: "Navy recruiter" },
+          },
+        ],
+      },
+      qualificationModifiers: [
+        {
+          id: "navy.military-academy-graduate",
+          label: "Military Academy graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "navy.military-academy-honors",
+          label: "Military Academy honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          honorsGraduated: true,
+        },
+        {
+          id: "navy.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
+      commission: {
+        id: "navy.commission",
+        label: "Navy Commission",
+        notation: "2d6",
+        target: 8,
+        characteristicModifier: "soc",
+      },
+      commissionModifiers: [
+        {
+          id: "navy.commission.military-academy-graduate",
+          label: "Military Academy graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "navy.commission.military-academy-honors",
+          label: "Military Academy honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          honorsGraduated: true,
+        },
+      ],
+      survival: {
+        id: "navy.survival",
+        label: "Survival",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "int",
+        skillModifier: "Vacc Suit",
+        failureEffects: [
+          {
+            id: "navy-mishap-injury",
+            type: "injury.add",
+            payload: { severity: "minor", label: "Shipboard accident" },
+          },
+        ],
+      },
+      advancement: {
+        id: "navy.advancement",
+        label: "Advancement",
+        notation: "2d6",
+        target: 8,
+        characteristicModifier: "edu",
+        skillModifier: "Leadership",
+        successEffects: [
+          {
+            id: "navy-rank",
+            type: "career.promote",
+            payload: { ranks: 1 },
+          },
+        ],
+      },
+      reenlistment: {
+        id: "navy.reenlistment",
+        label: "Navy Reenlistment",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "edu",
+        data: {
+          successOutcome: "may-continue",
+          failureOutcome: "not-retained",
+        },
+      },
+      eventTableId: "navy.events",
+      mishapTableId: "navy.mishaps",
+      benefitTableIds: ["navy.benefits"],
+    },
+    {
+      id: "army",
+      label: "Army",
+      description: "Ground campaigns, garrison duty, and planetary operations.",
+      assignments: [
+        { id: "army.infantry", label: "Infantry", description: "Front-line combat and patrol work." },
+        { id: "army.armor", label: "Armor", description: "Vehicle crews, heavy weapons, and breakthrough operations." },
+        { id: "army.support", label: "Support", description: "Logistics, field engineering, and operational planning." },
+      ],
+      ranks: [
+        { rank: 0, title: "Trooper", track: "enlisted" },
+        {
+          rank: 1,
+          title: "Corporal",
+          track: "enlisted",
+          effects: [
+            {
+              id: "army.rank-1-gun-combat",
+              type: "skill.add",
+              payload: { skill: "Gun Combat", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 2,
+          title: "Sergeant",
+          track: "enlisted",
+          effects: [
+            {
+              id: "army.rank-2-leadership",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Sergeant Major",
+          track: "enlisted",
+          effects: [
+            {
+              id: "army.rank-3-tactics",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+        { rank: 1, title: "Lieutenant", track: "officer" },
+        {
+          rank: 2,
+          title: "Captain",
+          track: "officer",
+          effects: [
+            {
+              id: "army.officer-rank-2-leadership",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Major",
+          track: "officer",
+          effects: [
+            {
+              id: "army.officer-rank-3-tactics",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+      ],
+      skillTableIds: ["army.skills"],
+      qualification: {
+        id: "army.qualification",
+        label: "Army Qualification",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "end",
+        failureEffects: [
+          {
+            id: "army-recruiter-contact",
+            type: "relationship.add",
+            payload: { relationshipType: "contact", label: "Army recruiter" },
+          },
+        ],
+      },
+      qualificationModifiers: [
+        {
+          id: "army.military-academy-graduate",
+          label: "Military Academy graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "army.military-academy-honors",
+          label: "Military Academy honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          honorsGraduated: true,
+        },
+        {
+          id: "army.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
+      commission: {
+        id: "army.commission",
+        label: "Army Commission",
+        notation: "2d6",
+        target: 8,
+        characteristicModifier: "edu",
+      },
+      commissionModifiers: [
+        {
+          id: "army.commission.military-academy-graduate",
+          label: "Military Academy graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "army.commission.military-academy-honors",
+          label: "Military Academy honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          honorsGraduated: true,
+        },
+      ],
+      survival: {
+        id: "army.survival",
+        label: "Survival",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "end",
+        skillModifier: "Recon",
+        failureEffects: [
+          {
+            id: "army-mishap-injury",
+            type: "injury.add",
+            payload: { severity: "minor", label: "Field injury" },
+          },
+        ],
+      },
+      advancement: {
+        id: "army.advancement",
+        label: "Advancement",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "edu",
+        skillModifier: "Leadership",
+        successEffects: [
+          {
+            id: "army-rank",
+            type: "career.promote",
+            payload: { ranks: 1 },
+          },
+        ],
+      },
+      reenlistment: {
+        id: "army.reenlistment",
+        label: "Army Reenlistment",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "edu",
+        data: {
+          successOutcome: "may-continue",
+          failureOutcome: "not-retained",
+        },
+      },
+      eventTableId: "army.events",
+      mishapTableId: "army.mishaps",
+      benefitTableIds: ["army.benefits"],
+    },
+    {
+      id: "marines",
+      label: "Marines",
+      description: "Shipboard assault troops, boarding actions, and hostile landings.",
+      assignments: [
+        { id: "marines.assault", label: "Assault", description: "Boarding actions and spearhead drops." },
+        { id: "marines.security", label: "Security", description: "Shipboard security, patrols, and hard-point defense." },
+        { id: "marines.recon", label: "Recon", description: "Forward observation and dangerous scouting." },
+      ],
+      ranks: [
+        { rank: 0, title: "Marine", track: "enlisted" },
+        {
+          rank: 1,
+          title: "Lance Corporal",
+          track: "enlisted",
+          effects: [
+            {
+              id: "marines.rank-1-gun-combat",
+              type: "skill.add",
+              payload: { skill: "Gun Combat", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 2,
+          title: "Sergeant",
+          track: "enlisted",
+          effects: [
+            {
+              id: "marines.rank-2-leadership",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Gunnery Sergeant",
+          track: "enlisted",
+          effects: [
+            {
+              id: "marines.rank-3-tactics",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+        { rank: 1, title: "Lieutenant", track: "officer" },
+        {
+          rank: 2,
+          title: "Captain",
+          track: "officer",
+          effects: [
+            {
+              id: "marines.officer-rank-2-tactics",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Major",
+          track: "officer",
+          effects: [
+            {
+              id: "marines.officer-rank-3-leadership",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+      ],
+      skillTableIds: ["marines.skills"],
+      qualification: {
+        id: "marines.qualification",
+        label: "Marines Qualification",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "end",
+        failureEffects: [
+          {
+            id: "marines-recruiter-contact",
+            type: "relationship.add",
+            payload: { relationshipType: "contact", label: "Marine recruiter" },
+          },
+        ],
+      },
+      qualificationModifiers: [
+        {
+          id: "marines.military-academy-graduate",
+          label: "Military Academy graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "marines.military-academy-honors",
+          label: "Military Academy honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          honorsGraduated: true,
+        },
+        {
+          id: "marines.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
+      commission: {
+        id: "marines.commission",
+        label: "Marines Commission",
+        notation: "2d6",
+        target: 9,
+        characteristicModifier: "edu",
+      },
+      commissionModifiers: [
+        {
+          id: "marines.commission.military-academy-graduate",
+          label: "Military Academy graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "marines.commission.military-academy-honors",
+          label: "Military Academy honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["military-academy"],
+          honorsGraduated: true,
+        },
+      ],
+      survival: {
+        id: "marines.survival",
+        label: "Survival",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "end",
+        skillModifier: "Gun Combat",
+        failureEffects: [
+          {
+            id: "marines-mishap-injury",
+            type: "injury.add",
+            payload: { severity: "minor", label: "Combat wound" },
+          },
+        ],
+      },
+      advancement: {
+        id: "marines.advancement",
+        label: "Advancement",
+        notation: "2d6",
+        target: 8,
+        characteristicModifier: "edu",
+        skillModifier: "Tactics",
+        successEffects: [
+          {
+            id: "marines-rank",
+            type: "career.promote",
+            payload: { ranks: 1 },
+          },
+        ],
+      },
+      reenlistment: {
+        id: "marines.reenlistment",
+        label: "Marines Reenlistment",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "edu",
+        data: {
+          successOutcome: "may-continue",
+          failureOutcome: "not-retained",
+        },
+      },
+      eventTableId: "marines.events",
+      mishapTableId: "marines.mishaps",
+      benefitTableIds: ["marines.benefits"],
+    },
+    {
       id: "survey-scout",
       label: "Survey Scout",
       description: "Frontier survey, courier work, and field improvisation.",
       data: {
         qualificationFailureCareerIds: ["free-trader"],
+      },
+      eligibility: {
+        disallowAfterFailedReenlistment: true,
+        minimumCharacteristics: {
+          int: 6,
+        },
       },
       assignments: [
         { id: "survey-scout.field", label: "Field", description: "Unknown worlds and rough landings." },
@@ -208,7 +883,22 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
         notation: "2d6",
         target: 5,
         characteristicModifier: "int",
+        failureEffects: [
+          {
+            id: "survey-scout.qualification-contact",
+            type: "relationship.add",
+            payload: { relationshipType: "contact", label: "Scout recruiter" },
+          },
+        ],
       },
+      qualificationModifiers: [
+        {
+          id: "survey-scout.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
       commission: {
         id: "survey-scout.commission",
         label: "Survey Scout Commission",
@@ -245,6 +935,17 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
             payload: { ranks: 1 },
           },
         ],
+      },
+      reenlistment: {
+        id: "survey-scout.reenlistment",
+        label: "Survey Scout Reenlistment",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "edu",
+        data: {
+          successOutcome: "may-continue",
+          failureOutcome: "forced-out",
+        },
       },
       eventTableId: "survey-scout.events",
       mishapTableId: "survey-scout.mishaps",
@@ -373,6 +1074,168 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
               id: "background-survival.effect",
               type: "skill.add",
               payload: { skill: "Survival", level: 0 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "basic-human.university-skills",
+      label: "University Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "university.skill-admin",
+          label: "Admin",
+          range: [1, 1],
+          effects: [
+            {
+              id: "university.skill-admin.effect",
+              type: "skill.add",
+              payload: { skill: "Admin", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "university.skill-science",
+          label: "Science",
+          range: [2, 2],
+          effects: [
+            {
+              id: "university.skill-science.effect",
+              type: "skill.add",
+              payload: { skill: "Science", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "university.skill-medic",
+          label: "Medic",
+          range: [3, 3],
+          effects: [
+            {
+              id: "university.skill-medic.effect",
+              type: "skill.add",
+              payload: { skill: "Medic", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "university.skill-electronics",
+          label: "Electronics",
+          range: [4, 4],
+          effects: [
+            {
+              id: "university.skill-electronics.effect",
+              type: "skill.add",
+              payload: { skill: "Electronics", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "university.skill-diplomat",
+          label: "Diplomat",
+          range: [5, 5],
+          effects: [
+            {
+              id: "university.skill-diplomat.effect",
+              type: "skill.add",
+              payload: { skill: "Diplomat", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "university.skill-advocate",
+          label: "Advocate",
+          range: [6, 6],
+          effects: [
+            {
+              id: "university.skill-advocate.effect",
+              type: "skill.add",
+              payload: { skill: "Advocate", level: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "basic-human.military-academy-skills",
+      label: "Military Academy Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "military-academy.skill-tactics",
+          label: "Tactics",
+          range: [1, 1],
+          effects: [
+            {
+              id: "military-academy.skill-tactics.effect",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "military-academy.skill-leadership",
+          label: "Leadership",
+          range: [2, 2],
+          effects: [
+            {
+              id: "military-academy.skill-leadership.effect",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "military-academy.skill-gun-combat",
+          label: "Gun Combat",
+          range: [3, 3],
+          effects: [
+            {
+              id: "military-academy.skill-gun-combat.effect",
+              type: "skill.add",
+              payload: { skill: "Gun Combat", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "military-academy.skill-athletics",
+          label: "Athletics",
+          range: [4, 4],
+          effects: [
+            {
+              id: "military-academy.skill-athletics.effect",
+              type: "skill.add",
+              payload: { skill: "Athletics", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "military-academy.skill-pilot",
+          label: "Pilot",
+          range: [5, 5],
+          effects: [
+            {
+              id: "military-academy.skill-pilot.effect",
+              type: "skill.add",
+              payload: { skill: "Pilot", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "military-academy.skill-mechanic",
+          label: "Mechanic",
+          range: [6, 6],
+          effects: [
+            {
+              id: "military-academy.skill-mechanic.effect",
+              type: "skill.add",
+              payload: { skill: "Mechanic", level: 1 },
             },
           ],
         },
@@ -650,6 +1513,684 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
               id: "free-trader.ship-share.effect",
               type: "benefit.add",
               payload: { benefitType: "ship", value: "free_trader" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "navy.skills",
+      label: "Navy Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "navy.skill-vacc-suit",
+          label: "Vacc Suit",
+          range: [1, 1],
+          effects: [
+            {
+              id: "navy.skill-vacc-suit.effect",
+              type: "skill.add",
+              payload: { skill: "Vacc Suit", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "navy.skill-gunner",
+          label: "Gunner",
+          range: [2, 2],
+          effects: [
+            {
+              id: "navy.skill-gunner.effect",
+              type: "skill.add",
+              payload: { skill: "Gunner", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "navy.skill-mechanic",
+          label: "Mechanic",
+          range: [3, 3],
+          effects: [
+            {
+              id: "navy.skill-mechanic.effect",
+              type: "skill.add",
+              payload: { skill: "Mechanic", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "navy.skill-electronics",
+          label: "Electronics",
+          range: [4, 4],
+          effects: [
+            {
+              id: "navy.skill-electronics.effect",
+              type: "skill.add",
+              payload: { skill: "Electronics", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "navy.skill-pilot",
+          label: "Pilot",
+          range: [5, 5],
+          effects: [
+            {
+              id: "navy.skill-pilot.effect",
+              type: "skill.add",
+              payload: { skill: "Pilot", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "navy.skill-tactics",
+          label: "Tactics",
+          range: [6, 6],
+          effects: [
+            {
+              id: "navy.skill-tactics.effect",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "navy.events",
+      label: "Navy Events",
+      kind: "roll",
+      scope: "career-event",
+      notation: "2d6",
+      entries: [
+        {
+          id: "navy-contact",
+          label: "Fleet Contact",
+          range: [2, 6],
+          effects: [
+            {
+              id: "navy-contact.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Fleet quartermaster" },
+            },
+          ],
+        },
+        {
+          id: "navy-duty-lesson",
+          label: "Hard Duty Lesson",
+          range: [7, 9],
+          effects: [
+            {
+              id: "navy-duty-lesson.effect",
+              type: "skill.add",
+              payload: { skill: "Vacc Suit", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "navy-command-attention",
+          label: "Command Attention",
+          range: [10, 12],
+          effects: [
+            {
+              id: "navy-command-attention.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "patron", label: "Senior naval officer" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "navy.mishaps",
+      label: "Navy Mishaps",
+      kind: "roll",
+      scope: "mishap",
+      notation: "1d6",
+      entries: [
+        {
+          id: "navy-injury",
+          label: "Damage Control Casualty",
+          range: [1, 3],
+          effects: [
+            {
+              id: "navy-injury.effect",
+              type: "injury.add",
+              payload: { severity: "minor", label: "Damage control injury" },
+            },
+            {
+              id: "navy-injury.leave",
+              type: "career.leave",
+              payload: { careerId: "navy" },
+            },
+          ],
+        },
+        {
+          id: "navy-rival",
+          label: "Blamed for an Incident",
+          range: [4, 6],
+          effects: [
+            {
+              id: "navy-rival.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "rival", label: "Former watch officer" },
+            },
+            {
+              id: "navy-rival.leave",
+              type: "career.leave",
+              payload: { careerId: "navy" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "navy.benefits",
+      label: "Navy Benefits",
+      kind: "roll",
+      scope: "benefit",
+      notation: "1d6",
+      entries: [
+        {
+          id: "navy-cash",
+          label: "Mustering Pay",
+          range: [1, 2],
+          effects: [
+            {
+              id: "navy-cash.effect",
+              type: "credit.add",
+              payload: { amount: 12000 },
+            },
+          ],
+        },
+        {
+          id: "navy-weapon",
+          label: "Service Weapon",
+          range: [3, 4],
+          effects: [
+            {
+              id: "navy-weapon.effect",
+              type: "benefit.add",
+              payload: { benefitType: "weapon", value: "service pistol" },
+            },
+          ],
+        },
+        {
+          id: "navy-passage",
+          label: "High Passage",
+          range: [5, 5],
+          effects: [
+            {
+              id: "navy-passage.effect",
+              type: "benefit.add",
+              payload: { benefitType: "high-passage", amount: 1 },
+            },
+          ],
+        },
+        {
+          id: "navy-ship-share",
+          label: "Ship Share",
+          range: [6, 6],
+          effects: [
+            {
+              id: "navy-ship-share.effect",
+              type: "benefit.add",
+              payload: { benefitType: "ship", value: "naval_prize_share" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "army.skills",
+      label: "Army Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "army.skill-gun-combat",
+          label: "Gun Combat",
+          range: [1, 1],
+          effects: [
+            {
+              id: "army.skill-gun-combat.effect",
+              type: "skill.add",
+              payload: { skill: "Gun Combat", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "army.skill-recon",
+          label: "Recon",
+          range: [2, 2],
+          effects: [
+            {
+              id: "army.skill-recon.effect",
+              type: "skill.add",
+              payload: { skill: "Recon", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "army.skill-athletics",
+          label: "Athletics",
+          range: [3, 3],
+          effects: [
+            {
+              id: "army.skill-athletics.effect",
+              type: "skill.add",
+              payload: { skill: "Athletics", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "army.skill-heavy-weapons",
+          label: "Heavy Weapons",
+          range: [4, 4],
+          effects: [
+            {
+              id: "army.skill-heavy-weapons.effect",
+              type: "skill.add",
+              payload: { skill: "Heavy Weapons", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "army.skill-leadership",
+          label: "Leadership",
+          range: [5, 5],
+          effects: [
+            {
+              id: "army.skill-leadership.effect",
+              type: "skill.add",
+              payload: { skill: "Leadership", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "army.skill-tactics",
+          label: "Tactics",
+          range: [6, 6],
+          effects: [
+            {
+              id: "army.skill-tactics.effect",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "army.events",
+      label: "Army Events",
+      kind: "roll",
+      scope: "career-event",
+      notation: "2d6",
+      entries: [
+        {
+          id: "army-contact",
+          label: "Unit Contact",
+          range: [2, 6],
+          effects: [
+            {
+              id: "army-contact.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Former squadmate" },
+            },
+          ],
+        },
+        {
+          id: "army-field-lesson",
+          label: "Field Lesson",
+          range: [7, 9],
+          effects: [
+            {
+              id: "army-field-lesson.effect",
+              type: "skill.add",
+              payload: { skill: "Recon", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "army-command-patron",
+          label: "Command Notice",
+          range: [10, 12],
+          effects: [
+            {
+              id: "army-command-patron.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "patron", label: "Army commander" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "army.mishaps",
+      label: "Army Mishaps",
+      kind: "roll",
+      scope: "mishap",
+      notation: "1d6",
+      entries: [
+        {
+          id: "army-injury",
+          label: "Combat Injury",
+          range: [1, 3],
+          effects: [
+            {
+              id: "army-injury.effect",
+              type: "injury.add",
+              payload: { severity: "minor", label: "Combat injury" },
+            },
+            {
+              id: "army-injury.leave",
+              type: "career.leave",
+              payload: { careerId: "army" },
+            },
+          ],
+        },
+        {
+          id: "army-rival",
+          label: "Command Dispute",
+          range: [4, 6],
+          effects: [
+            {
+              id: "army-rival.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "rival", label: "Former platoon leader" },
+            },
+            {
+              id: "army-rival.leave",
+              type: "career.leave",
+              payload: { careerId: "army" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "army.benefits",
+      label: "Army Benefits",
+      kind: "roll",
+      scope: "benefit",
+      notation: "1d6",
+      entries: [
+        {
+          id: "army-cash",
+          label: "Mustering Pay",
+          range: [1, 2],
+          effects: [
+            {
+              id: "army-cash.effect",
+              type: "credit.add",
+              payload: { amount: 10000 },
+            },
+          ],
+        },
+        {
+          id: "army-weapon",
+          label: "Service Weapon",
+          range: [3, 4],
+          effects: [
+            {
+              id: "army-weapon.effect",
+              type: "benefit.add",
+              payload: { benefitType: "weapon", value: "service rifle" },
+            },
+          ],
+        },
+        {
+          id: "army-passage",
+          label: "Middle Passage",
+          range: [5, 5],
+          effects: [
+            {
+              id: "army-passage.effect",
+              type: "benefit.add",
+              payload: { benefitType: "middle-passage", amount: 1 },
+            },
+          ],
+        },
+        {
+          id: "army-society",
+          label: "Veterans Society",
+          range: [6, 6],
+          effects: [
+            {
+              id: "army-society.effect",
+              type: "benefit.add",
+              payload: { benefitType: "society", value: "army veterans network" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "marines.skills",
+      label: "Marines Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "marines.skill-gun-combat",
+          label: "Gun Combat",
+          range: [1, 1],
+          effects: [
+            {
+              id: "marines.skill-gun-combat.effect",
+              type: "skill.add",
+              payload: { skill: "Gun Combat", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "marines.skill-vacc-suit",
+          label: "Vacc Suit",
+          range: [2, 2],
+          effects: [
+            {
+              id: "marines.skill-vacc-suit.effect",
+              type: "skill.add",
+              payload: { skill: "Vacc Suit", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "marines.skill-athletics",
+          label: "Athletics",
+          range: [3, 3],
+          effects: [
+            {
+              id: "marines.skill-athletics.effect",
+              type: "skill.add",
+              payload: { skill: "Athletics", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "marines.skill-melee",
+          label: "Melee",
+          range: [4, 4],
+          effects: [
+            {
+              id: "marines.skill-melee.effect",
+              type: "skill.add",
+              payload: { skill: "Melee", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "marines.skill-recon",
+          label: "Recon",
+          range: [5, 5],
+          effects: [
+            {
+              id: "marines.skill-recon.effect",
+              type: "skill.add",
+              payload: { skill: "Recon", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "marines.skill-tactics",
+          label: "Tactics",
+          range: [6, 6],
+          effects: [
+            {
+              id: "marines.skill-tactics.effect",
+              type: "skill.add",
+              payload: { skill: "Tactics", level: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "marines.events",
+      label: "Marines Events",
+      kind: "roll",
+      scope: "career-event",
+      notation: "2d6",
+      entries: [
+        {
+          id: "marines-contact",
+          label: "Unit Contact",
+          range: [2, 6],
+          effects: [
+            {
+              id: "marines-contact.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Marine sergeant" },
+            },
+          ],
+        },
+        {
+          id: "marines-hard-lesson",
+          label: "Hard Fight",
+          range: [7, 9],
+          effects: [
+            {
+              id: "marines-hard-lesson.effect",
+              type: "skill.add",
+              payload: { skill: "Gun Combat", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "marines-patron",
+          label: "Officer's Notice",
+          range: [10, 12],
+          effects: [
+            {
+              id: "marines-patron.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "patron", label: "Marine officer" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "marines.mishaps",
+      label: "Marines Mishaps",
+      kind: "roll",
+      scope: "mishap",
+      notation: "1d6",
+      entries: [
+        {
+          id: "marines-injury",
+          label: "Assault Casualty",
+          range: [1, 3],
+          effects: [
+            {
+              id: "marines-injury.effect",
+              type: "injury.add",
+              payload: { severity: "minor", label: "Assault casualty" },
+            },
+            {
+              id: "marines-injury.leave",
+              type: "career.leave",
+              payload: { careerId: "marines" },
+            },
+          ],
+        },
+        {
+          id: "marines-enemy",
+          label: "Enemy Made",
+          range: [4, 6],
+          effects: [
+            {
+              id: "marines-enemy.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "enemy", label: "Former opposing commander" },
+            },
+            {
+              id: "marines-enemy.leave",
+              type: "career.leave",
+              payload: { careerId: "marines" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "marines.benefits",
+      label: "Marines Benefits",
+      kind: "roll",
+      scope: "benefit",
+      notation: "1d6",
+      entries: [
+        {
+          id: "marines-cash",
+          label: "Mustering Pay",
+          range: [1, 2],
+          effects: [
+            {
+              id: "marines-cash.effect",
+              type: "credit.add",
+              payload: { amount: 9000 },
+            },
+          ],
+        },
+        {
+          id: "marines-weapon",
+          label: "Service Weapon",
+          range: [3, 4],
+          effects: [
+            {
+              id: "marines-weapon.effect",
+              type: "benefit.add",
+              payload: { benefitType: "weapon", value: "marine combat rifle" },
+            },
+          ],
+        },
+        {
+          id: "marines-passage",
+          label: "Middle Passage",
+          range: [5, 5],
+          effects: [
+            {
+              id: "marines-passage.effect",
+              type: "benefit.add",
+              payload: { benefitType: "middle-passage", amount: 1 },
+            },
+          ],
+        },
+        {
+          id: "marines-contact-benefit",
+          label: "Veteran Contact",
+          range: [6, 6],
+          effects: [
+            {
+              id: "marines-contact-benefit.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Marine veteran" },
             },
           ],
         },
