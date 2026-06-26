@@ -549,6 +549,234 @@ describe("buildLifepathDraft", () => {
     expect(resolvedBenefits.credits).toBeGreaterThanOrEqual(9000);
   });
 
+  it("offers Agent as a Basic Human career option", () => {
+    expect(getCurrentLifepathStep(careerChoiceState(), basicHumanLifepathDefinition)).toMatchObject({
+      id: "lifepath.choose-career",
+      options: expect.arrayContaining([
+        expect.objectContaining({
+          id: "agent",
+          label: "Agent",
+        }),
+      ]),
+    });
+  });
+
+  it("shows University graduate DMs when entering Agent", () => {
+    const career = applyLifepathAction(
+      universityGraduateCareerChoiceState(),
+      basicHumanLifepathDefinition,
+      { type: "career.select", careerId: "agent" },
+    );
+
+    expect(getCurrentLifepathStep(career, basicHumanLifepathDefinition)).toMatchObject({
+      id: "lifepath.career.qualification",
+      data: {
+        careerId: "agent",
+        modifiers: [
+          {
+            id: "agent.university-graduate",
+            label: "University graduate",
+            modifier: 1,
+          },
+        ],
+        extraModifierTotal: 1,
+      },
+    });
+  });
+
+  it("can resolve a first Agent term and muster out", () => {
+    const career = applyLifepathAction(
+      careerChoiceState(),
+      basicHumanLifepathDefinition,
+      { type: "career.select", careerId: "agent" },
+    );
+    const qualified = applyLifepathAction(
+      career,
+      basicHumanLifepathDefinition,
+      { type: "career.qualification.resolve" },
+      queuedRolls(6),
+    );
+    const assigned = applyLifepathAction(
+      qualified,
+      basicHumanLifepathDefinition,
+      { type: "assignment.select", assignmentId: "agent.intelligence" },
+    );
+    const completed = resolveLifepathTerm(
+      assigned,
+      basicHumanLifepathDefinition,
+      queuedRolls(8, 1, 2, 8, 8),
+    );
+    const musteringOut = applyLifepathAction(
+      completed,
+      basicHumanLifepathDefinition,
+      { type: "generation.muster-out" },
+    );
+    const resolvedBenefits = resolveMusterOutBenefit(musteringOut, "agent.benefits", 1);
+
+    expect(completed.phase).toBe("term-complete");
+    expect(completed.careerHistory).toEqual([
+      expect.objectContaining({
+        careerId: "agent",
+        assignmentId: "agent.intelligence",
+        survived: true,
+      }),
+    ]);
+    expect(resolvedBenefits.phase).toBe("generation-complete");
+    expect(resolvedBenefits.credits).toBeGreaterThanOrEqual(12000);
+  });
+
+  it("offers Scholar as a Basic Human career option", () => {
+    expect(getCurrentLifepathStep(careerChoiceState(), basicHumanLifepathDefinition)).toMatchObject({
+      id: "lifepath.choose-career",
+      options: expect.arrayContaining([
+        expect.objectContaining({
+          id: "scholar",
+          label: "Scholar",
+        }),
+      ]),
+    });
+  });
+
+  it("shows University graduate DMs when entering Scholar", () => {
+    const career = applyLifepathAction(
+      universityGraduateCareerChoiceState(),
+      basicHumanLifepathDefinition,
+      { type: "career.select", careerId: "scholar" },
+    );
+
+    expect(getCurrentLifepathStep(career, basicHumanLifepathDefinition)).toMatchObject({
+      id: "lifepath.career.qualification",
+      data: {
+        careerId: "scholar",
+        modifiers: [
+          {
+            id: "scholar.university-graduate",
+            label: "University graduate",
+            modifier: 1,
+          },
+        ],
+        extraModifierTotal: 1,
+      },
+    });
+  });
+
+  it("can resolve a first Scholar term and muster out", () => {
+    const career = applyLifepathAction(
+      careerChoiceState(),
+      basicHumanLifepathDefinition,
+      { type: "career.select", careerId: "scholar" },
+    );
+    const qualified = applyLifepathAction(
+      career,
+      basicHumanLifepathDefinition,
+      { type: "career.qualification.resolve" },
+      queuedRolls(6),
+    );
+    const assigned = applyLifepathAction(
+      qualified,
+      basicHumanLifepathDefinition,
+      { type: "assignment.select", assignmentId: "scholar.researcher" },
+    );
+    const completed = resolveLifepathTerm(
+      assigned,
+      basicHumanLifepathDefinition,
+      queuedRolls(8, 1, 2, 8, 8),
+    );
+    const musteringOut = applyLifepathAction(
+      completed,
+      basicHumanLifepathDefinition,
+      { type: "generation.muster-out" },
+    );
+    const resolvedBenefits = resolveMusterOutBenefit(musteringOut, "scholar.benefits", 1);
+
+    expect(completed.phase).toBe("term-complete");
+    expect(completed.careerHistory).toEqual([
+      expect.objectContaining({
+        careerId: "scholar",
+        assignmentId: "scholar.researcher",
+        survived: true,
+      }),
+    ]);
+    expect(resolvedBenefits.phase).toBe("generation-complete");
+    expect(resolvedBenefits.credits).toBeGreaterThanOrEqual(8000);
+  });
+
+  it("offers Entertainer as a Basic Human career option", () => {
+    expect(getCurrentLifepathStep(careerChoiceState(), basicHumanLifepathDefinition)).toMatchObject({
+      id: "lifepath.choose-career",
+      options: expect.arrayContaining([
+        expect.objectContaining({
+          id: "entertainer",
+          label: "Entertainer",
+        }),
+      ]),
+    });
+  });
+
+  it("shows University graduate DMs when entering Entertainer", () => {
+    const career = applyLifepathAction(
+      universityGraduateCareerChoiceState(),
+      basicHumanLifepathDefinition,
+      { type: "career.select", careerId: "entertainer" },
+    );
+
+    expect(getCurrentLifepathStep(career, basicHumanLifepathDefinition)).toMatchObject({
+      id: "lifepath.career.qualification",
+      data: {
+        careerId: "entertainer",
+        modifiers: [
+          {
+            id: "entertainer.university-graduate",
+            label: "University graduate",
+            modifier: 1,
+          },
+        ],
+        extraModifierTotal: 1,
+      },
+    });
+  });
+
+  it("can resolve a first Entertainer term and muster out", () => {
+    const career = applyLifepathAction(
+      careerChoiceState(),
+      basicHumanLifepathDefinition,
+      { type: "career.select", careerId: "entertainer" },
+    );
+    const qualified = applyLifepathAction(
+      career,
+      basicHumanLifepathDefinition,
+      { type: "career.qualification.resolve" },
+      queuedRolls(6),
+    );
+    const assigned = applyLifepathAction(
+      qualified,
+      basicHumanLifepathDefinition,
+      { type: "assignment.select", assignmentId: "entertainer.performer" },
+    );
+    const completed = resolveLifepathTerm(
+      assigned,
+      basicHumanLifepathDefinition,
+      queuedRolls(8, 1, 2, 8, 8),
+    );
+    const musteringOut = applyLifepathAction(
+      completed,
+      basicHumanLifepathDefinition,
+      { type: "generation.muster-out" },
+    );
+    const resolvedBenefits = resolveMusterOutBenefit(musteringOut, "entertainer.benefits", 1);
+
+    expect(completed.phase).toBe("term-complete");
+    expect(completed.careerHistory).toEqual([
+      expect.objectContaining({
+        careerId: "entertainer",
+        assignmentId: "entertainer.performer",
+        survived: true,
+      }),
+    ]);
+    expect(resolvedBenefits.phase).toBe("generation-complete");
+    expect(resolvedBenefits.credits).toBeGreaterThanOrEqual(10000);
+  });
+
   it("shows University graduate DMs when entering Free Trader", () => {
     const career = applyLifepathAction(
       universityGraduateCareerChoiceState(),

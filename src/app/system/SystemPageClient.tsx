@@ -7,7 +7,6 @@ import { WarpSceneLifecycle } from "@/components/world/WarpSceneLifecycle";
 import { SystemLocationLifecycle } from "@/components/world/SystemLocationLifecycle";
 import {
   characterActionsHudId,
-  characterCreateHudId,
   characterListHudId,
   selectCharacters,
   selectCharactersStatus,
@@ -18,6 +17,7 @@ import {
 } from "@/plugins/ship";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setHudVisible } from "@/store/slices/hudSlice";
+import { openModal } from "@/store/slices/uiSlice";
 
 const CharacterStartLifecycle = () => {
   const dispatch = useAppDispatch();
@@ -35,10 +35,11 @@ const CharacterStartLifecycle = () => {
 
     opened.current = true;
     dispatch(setHudVisible({ id: characterActionsHudId, visible: true }));
-    dispatch(setHudVisible({
-      id: characters.length > 0 ? characterListHudId : characterCreateHudId,
-      visible: true,
-    }));
+    if (characters.length > 0) {
+      dispatch(setHudVisible({ id: characterListHudId, visible: true }));
+    } else {
+      dispatch(openModal("characterGeneration"));
+    }
   }, [characters.length, charactersStatus, dispatch, ship, shipStatus]);
 
   return null;

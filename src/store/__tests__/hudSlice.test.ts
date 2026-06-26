@@ -12,7 +12,6 @@ import { navigationSelectHudId } from "../../plugins/navigation";
 import { tradeHudId } from "../../plugins/trade";
 import {
   characterActionsHudId,
-  characterCreateHudId,
   characterListHudId,
   characterProfileHudId,
 } from "../../plugins/characters";
@@ -69,11 +68,6 @@ describe("hudSlice reducers", () => {
       pinned: true,
       offset: { x: -0.34, y: 0.04 },
     });
-    expect(initialHudState.layouts[characterCreateHudId]).toEqual({
-      visible: false,
-      pinned: true,
-      offset: { x: 0.12, y: -0.14 },
-    });
     expect(initialHudState.layouts[stayInLocationNextTurnHudId]).toEqual({
       visible: false,
       pinned: true,
@@ -114,11 +108,11 @@ describe("hudSlice reducers", () => {
 
   it("clamps HUD offsets when set", () => {
     const state = hudReducer(initialHudState, setHudOffset({
-      id: characterCreateHudId,
+      id: characterListHudId,
       offset: { x: 4, y: 4 },
     }));
 
-    expect(state.layouts[characterCreateHudId].offset).toEqual({ x: 0.78, y: 0.58 });
+    expect(state.layouts[characterListHudId].offset).toEqual({ x: 0.78, y: 0.58 });
   });
 
   it("hydrates persisted known HUD layouts", () => {

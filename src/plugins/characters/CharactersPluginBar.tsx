@@ -3,11 +3,11 @@ import { LogOut, User, Users, UserPlus } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectHudVisible } from "@/store/selectors/hud.selectors";
 import { setHudVisible } from "@/store/slices/hudSlice";
+import { openModal } from "@/store/slices/uiSlice";
 import { fetchShip, invalidateShip } from "@/plugins/ship";
 import { fetchTurn, invalidateTurn } from "@/store/slices/turnSlice";
 import { HudIconButton } from "@/components/world/HudPrimitives";
 import {
-  characterCreateHudId,
   characterListHudId,
   characterProfileHudId,
 } from "./metadata";
@@ -24,10 +24,13 @@ export const CharactersPluginBar = () => {
   const [resignError, setResignError] = useState<string | null>(null);
   const profileVisible = useAppSelector(selectHudVisible(characterProfileHudId));
   const listVisible = useAppSelector(selectHudVisible(characterListHudId));
-  const createVisible = useAppSelector(selectHudVisible(characterCreateHudId));
 
   const openHud = (id: string) => {
     dispatch(setHudVisible({ id, visible: true }));
+  };
+
+  const openCharacterGeneration = () => {
+    dispatch(openModal("characterGeneration"));
   };
 
   const handleConfirmResign = async () => {
@@ -56,7 +59,7 @@ export const CharactersPluginBar = () => {
       if (remainingCharacters > 0) {
         openHud(characterListHudId);
       } else {
-        openHud(characterCreateHudId);
+        openCharacterGeneration();
       }
     } finally {
       setResignStep("idle");
@@ -111,8 +114,8 @@ export const CharactersPluginBar = () => {
           <Users size={13} aria-hidden="true" />
         </HudIconButton>
         <HudIconButton
-          title={createVisible ? "Character generator visible" : "Open character generator"}
-          onClick={() => openHud(characterCreateHudId)}
+          title="Open character generator"
+          onClick={openCharacterGeneration}
         >
           <UserPlus size={13} aria-hidden="true" />
         </HudIconButton>

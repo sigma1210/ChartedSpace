@@ -1,12 +1,10 @@
 import type { PluginHudRendererRegistration } from "@/plugin-api/types";
-import { User, Users, UserPlus } from "lucide-react";
-import { CharacterCreateHudContent } from "./CharacterCreateHud";
+import { User, Users } from "lucide-react";
 import { CharacterListHudContent } from "./CharacterListHud";
 import { CharacterProfileHudContent } from "./CharacterProfileHud";
 import { CharactersPluginBar } from "./CharactersPluginBar";
 import {
   characterActionsHudId,
-  characterCreateHudId,
   characterListHudId,
   characterProfileHudId,
 } from "./metadata";
@@ -29,15 +27,8 @@ export const characterListHudRenderer = {
   Component: CharacterListHudContent,
 } satisfies PluginHudRendererRegistration;
 
-export const characterCreateHudRenderer = {
-  id: characterCreateHudId,
-  Icon: UserPlus,
-  Component: CharacterCreateHudContent,
-} satisfies PluginHudRendererRegistration;
-
 export const characterHudRenderers = [
   characterActionsHudRenderer,
   characterProfileHudRenderer,
   characterListHudRenderer,
-  characterCreateHudRenderer,
 ] as const;

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Eye, Plus, Loader2 } from "lucide-react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { setHudVisible } from "@/store/slices/hudSlice";
+import { openModal } from "@/store/slices/uiSlice";
 import { fetchCharacters, setSelectedProfileCharacter } from "./charactersSlice";
 import { fetchShip, invalidateShip } from "@/plugins/ship";
 import {
@@ -11,7 +12,7 @@ import {
   selectCharactersStatus,
 } from "./selectors";
 import type { CharacterSummary } from "./charactersSlice";
-import { characterCreateHudId, characterProfileHudId } from "./metadata";
+import { characterProfileHudId } from "./metadata";
 
 const CharacterCard = ({
   character,
@@ -106,7 +107,7 @@ export const CharacterListHudContent = () => {
 
   const headerRight = (
     <button
-      onClick={() => dispatch(setHudVisible({ id: characterCreateHudId, visible: true }))}
+      onClick={() => dispatch(openModal("characterGeneration"))}
       className="flex h-5 items-center gap-1 border border-(--hud-border) px-1.5 text-[8px] uppercase tracking-wider text-(--hud-text) transition-colors hover:border-(--hud-accent)"
     >
       <Plus size={10} />
@@ -149,7 +150,7 @@ export const CharacterListHudContent = () => {
               No characters yet
             </p>
             <button
-              onClick={() => dispatch(setHudVisible({ id: characterCreateHudId, visible: true }))}
+              onClick={() => dispatch(openModal("characterGeneration"))}
               className="mt-2 border border-(--hud-border) px-2 py-1 text-[8px] uppercase tracking-wider text-(--hud-text) transition-colors hover:border-(--hud-accent)"
             >
               Create character

@@ -233,6 +233,396 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
       benefitTableIds: ["free-trader.cash-benefits", "free-trader.material-benefits"],
     },
     {
+      id: "agent",
+      label: "Agent",
+      description: "Investigations, intelligence work, security contracts, and quiet leverage.",
+      assignments: [
+        { id: "agent.law-enforcement", label: "Law Enforcement", description: "Local investigations, warrants, and public order." },
+        { id: "agent.intelligence", label: "Intelligence", description: "Analysis, tradecraft, and covert contact networks." },
+        { id: "agent.corporate", label: "Corporate", description: "Security audits, internal investigations, and deniable errands." },
+      ],
+      ranks: [
+        { rank: 0, title: "Probationary Agent" },
+        {
+          rank: 1,
+          title: "Agent",
+          effects: [
+            {
+              id: "agent.rank-1-investigate",
+              type: "skill.add",
+              payload: { skill: "Investigate", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 2,
+          title: "Special Agent",
+          effects: [
+            {
+              id: "agent.rank-2-streetwise",
+              type: "skill.add",
+              payload: { skill: "Streetwise", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Case Officer",
+          effects: [
+            {
+              id: "agent.rank-3-deception",
+              type: "skill.add",
+              payload: { skill: "Deception", level: 1 },
+            },
+          ],
+        },
+      ],
+      skillTableIds: ["agent.skills"],
+      qualification: {
+        id: "agent.qualification",
+        label: "Agent Qualification",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "int",
+        failureEffects: [
+          {
+            id: "agent-screening-contact",
+            type: "relationship.add",
+            payload: { relationshipType: "contact", label: "Agency screener" },
+          },
+        ],
+      },
+      qualificationModifiers: [
+        {
+          id: "agent.university-graduate",
+          label: "University graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "agent.university-honors",
+          label: "University honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          honorsGraduated: true,
+        },
+        {
+          id: "agent.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
+      survival: {
+        id: "agent.survival",
+        label: "Survival",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "int",
+        skillModifier: "Streetwise",
+        failureEffects: [
+          {
+            id: "agent-mishap-injury",
+            type: "injury.add",
+            payload: { severity: "minor", label: "Compromised operation" },
+          },
+        ],
+      },
+      advancement: {
+        id: "agent.advancement",
+        label: "Advancement",
+        notation: "2d6",
+        target: 8,
+        characteristicModifier: "edu",
+        skillModifier: "Investigate",
+        successEffects: [
+          {
+            id: "agent-rank",
+            type: "career.promote",
+            payload: { ranks: 1 },
+          },
+        ],
+      },
+      reenlistment: {
+        id: "agent.reenlistment",
+        label: "Agent Reenlistment",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "int",
+        data: {
+          successOutcome: "may-continue",
+          failureOutcome: "burned",
+        },
+      },
+      eventTableId: "agent.events",
+      mishapTableId: "agent.mishaps",
+      benefitTableIds: ["agent.benefits"],
+    },
+    {
+      id: "scholar",
+      label: "Scholar",
+      description: "Research, medicine, field science, and institutional politics.",
+      assignments: [
+        { id: "scholar.researcher", label: "Researcher", description: "Laboratories, archives, grants, and peer review." },
+        { id: "scholar.physician", label: "Physician", description: "Clinics, trauma wards, and public health duty." },
+        { id: "scholar.field-scientist", label: "Field Scientist", description: "Expeditions, surveys, and uncomfortable evidence." },
+      ],
+      ranks: [
+        { rank: 0, title: "Assistant" },
+        {
+          rank: 1,
+          title: "Researcher",
+          effects: [
+            {
+              id: "scholar.rank-1-science",
+              type: "skill.add",
+              payload: { skill: "Science", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 2,
+          title: "Senior Scholar",
+          effects: [
+            {
+              id: "scholar.rank-2-admin",
+              type: "skill.add",
+              payload: { skill: "Admin", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Professor",
+          effects: [
+            {
+              id: "scholar.rank-3-diplomat",
+              type: "skill.add",
+              payload: { skill: "Diplomat", level: 1 },
+            },
+          ],
+        },
+      ],
+      skillTableIds: ["scholar.skills"],
+      qualification: {
+        id: "scholar.qualification",
+        label: "Scholar Qualification",
+        notation: "2d6",
+        target: 6,
+        characteristicModifier: "edu",
+        failureEffects: [
+          {
+            id: "scholar-admissions-contact",
+            type: "relationship.add",
+            payload: { relationshipType: "contact", label: "Academic advisor" },
+          },
+        ],
+      },
+      qualificationModifiers: [
+        {
+          id: "scholar.university-graduate",
+          label: "University graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "scholar.university-honors",
+          label: "University honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          honorsGraduated: true,
+        },
+        {
+          id: "scholar.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
+      survival: {
+        id: "scholar.survival",
+        label: "Survival",
+        notation: "2d6",
+        target: 5,
+        characteristicModifier: "edu",
+        skillModifier: "Science",
+        failureEffects: [
+          {
+            id: "scholar-mishap-injury",
+            type: "injury.add",
+            payload: { severity: "minor", label: "Research accident" },
+          },
+        ],
+      },
+      advancement: {
+        id: "scholar.advancement",
+        label: "Advancement",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "int",
+        skillModifier: "Admin",
+        successEffects: [
+          {
+            id: "scholar-rank",
+            type: "career.promote",
+            payload: { ranks: 1 },
+          },
+        ],
+      },
+      reenlistment: {
+        id: "scholar.reenlistment",
+        label: "Scholar Reappointment",
+        notation: "2d6",
+        target: 5,
+        characteristicModifier: "edu",
+        data: {
+          successOutcome: "may-continue",
+          failureOutcome: "grant-ended",
+        },
+      },
+      eventTableId: "scholar.events",
+      mishapTableId: "scholar.mishaps",
+      benefitTableIds: ["scholar.benefits"],
+    },
+    {
+      id: "entertainer",
+      label: "Entertainer",
+      description: "Performance, media, celebrity circles, scandal, and patronage.",
+      assignments: [
+        { id: "entertainer.performer", label: "Performer", description: "Stage, screen, recordings, and public spectacle." },
+        { id: "entertainer.journalist", label: "Journalist", description: "Newsrooms, investigations, interviews, and spin." },
+        { id: "entertainer.socialite", label: "Socialite", description: "Parties, patrons, fashion, and influence networks." },
+      ],
+      ranks: [
+        { rank: 0, title: "Unknown" },
+        {
+          rank: 1,
+          title: "Working Talent",
+          effects: [
+            {
+              id: "entertainer.rank-1-art",
+              type: "skill.add",
+              payload: { skill: "Art", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 2,
+          title: "Recognized Name",
+          effects: [
+            {
+              id: "entertainer.rank-2-persuade",
+              type: "skill.add",
+              payload: { skill: "Persuade", level: 1 },
+            },
+          ],
+        },
+        {
+          rank: 3,
+          title: "Star",
+          effects: [
+            {
+              id: "entertainer.rank-3-carouse",
+              type: "skill.add",
+              payload: { skill: "Carouse", level: 1 },
+            },
+          ],
+        },
+      ],
+      skillTableIds: ["entertainer.skills"],
+      qualification: {
+        id: "entertainer.qualification",
+        label: "Entertainer Qualification",
+        notation: "2d6",
+        target: 5,
+        characteristicModifier: "soc",
+        failureEffects: [
+          {
+            id: "entertainer-audition-contact",
+            type: "relationship.add",
+            payload: { relationshipType: "contact", label: "Casting assistant" },
+          },
+        ],
+      },
+      qualificationModifiers: [
+        {
+          id: "entertainer.university-graduate",
+          label: "University graduate",
+          modifier: 1,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          graduated: true,
+          honorsGraduated: false,
+        },
+        {
+          id: "entertainer.university-honors",
+          label: "University honors graduate",
+          modifier: 2,
+          when: "preCareerEducation",
+          educationIds: ["university"],
+          honorsGraduated: true,
+        },
+        {
+          id: "entertainer.prior-career",
+          label: "Prior career",
+          modifier: -1,
+          when: "hasCareerHistory",
+        },
+      ],
+      survival: {
+        id: "entertainer.survival",
+        label: "Survival",
+        notation: "2d6",
+        target: 5,
+        characteristicModifier: "soc",
+        skillModifier: "Streetwise",
+        failureEffects: [
+          {
+            id: "entertainer-mishap-injury",
+            type: "injury.add",
+            payload: { severity: "minor", label: "Public scandal" },
+          },
+        ],
+      },
+      advancement: {
+        id: "entertainer.advancement",
+        label: "Advancement",
+        notation: "2d6",
+        target: 7,
+        characteristicModifier: "int",
+        skillModifier: "Art",
+        successEffects: [
+          {
+            id: "entertainer-rank",
+            type: "career.promote",
+            payload: { ranks: 1 },
+          },
+        ],
+      },
+      reenlistment: {
+        id: "entertainer.reenlistment",
+        label: "Entertainer Contract Renewal",
+        notation: "2d6",
+        target: 5,
+        characteristicModifier: "soc",
+        data: {
+          successOutcome: "may-continue",
+          failureOutcome: "contract-ended",
+        },
+      },
+      eventTableId: "entertainer.events",
+      mishapTableId: "entertainer.mishaps",
+      benefitTableIds: ["entertainer.benefits"],
+    },
+    {
       id: "navy",
       label: "Navy",
       description: "Starship service, fleet discipline, and hard vacuum operations.",
@@ -1513,6 +1903,858 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
               id: "free-trader.ship-share.effect",
               type: "benefit.add",
               payload: { benefitType: "ship", value: "free_trader" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "agent.skills",
+      label: "Agent Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "agent.skill-investigate",
+          label: "Investigate",
+          range: [1, 1],
+          effects: [
+            {
+              id: "agent.skill-investigate.effect",
+              type: "skill.add",
+              payload: { skill: "Investigate", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "agent.skill-streetwise",
+          label: "Streetwise",
+          range: [2, 2],
+          effects: [
+            {
+              id: "agent.skill-streetwise.effect",
+              type: "skill.add",
+              payload: { skill: "Streetwise", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "agent.skill-deception",
+          label: "Deception",
+          range: [3, 3],
+          effects: [
+            {
+              id: "agent.skill-deception.effect",
+              type: "skill.add",
+              payload: { skill: "Deception", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "agent.skill-recon",
+          label: "Recon",
+          range: [4, 4],
+          effects: [
+            {
+              id: "agent.skill-recon.effect",
+              type: "skill.add",
+              payload: { skill: "Recon", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "agent.skill-admin",
+          label: "Admin",
+          range: [5, 5],
+          effects: [
+            {
+              id: "agent.skill-admin.effect",
+              type: "skill.add",
+              payload: { skill: "Admin", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "agent.skill-gun-combat",
+          label: "Gun Combat",
+          range: [6, 6],
+          effects: [
+            {
+              id: "agent.skill-gun-combat.effect",
+              type: "skill.add",
+              payload: { skill: "Gun Combat", level: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "agent.events",
+      label: "Agent Events",
+      kind: "roll",
+      scope: "career-event",
+      notation: "2d6",
+      entries: [
+        {
+          id: "agent-contact",
+          label: "Useful Informant",
+          range: [2, 6],
+          effects: [
+            {
+              id: "agent-contact.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Confidential informant" },
+            },
+          ],
+        },
+        {
+          id: "agent-social-choice",
+          label: "Complicated Source",
+          range: [7, 7],
+          effects: [],
+          choicePrompt: "Choose what the source became.",
+          choices: [
+            {
+              id: "source-contact",
+              label: "Contact",
+              description: "The source remains useful but transactional.",
+              effects: [
+                {
+                  id: "agent.source-contact.effect",
+                  type: "relationship.add",
+                  payload: { relationshipType: "contact", label: "Complicated source" },
+                },
+              ],
+            },
+            {
+              id: "source-ally",
+              label: "Ally",
+              description: "The source became a trusted partner.",
+              effects: [
+                {
+                  id: "agent.source-ally.effect",
+                  type: "relationship.add",
+                  payload: { relationshipType: "ally", label: "Trusted source" },
+                },
+              ],
+            },
+            {
+              id: "source-enemy",
+              label: "Enemy",
+              description: "The source believes you burned them.",
+              effects: [
+                {
+                  id: "agent.source-enemy.effect",
+                  type: "relationship.add",
+                  payload: { relationshipType: "enemy", label: "Burned source" },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "agent-casework",
+          label: "Difficult Case",
+          range: [8, 11],
+          effects: [],
+          choicePrompt: "Choose the technique that carried the case.",
+          choices: [
+            {
+              id: "choose-investigate",
+              label: "Investigate",
+              description: "You learned how to follow a trail.",
+              effects: [
+                {
+                  id: "agent.investigate.skill",
+                  type: "skill.add",
+                  payload: { skill: "Investigate", level: 1 },
+                },
+              ],
+            },
+            {
+              id: "choose-deception",
+              label: "Deception",
+              description: "You learned how to run a cover story.",
+              effects: [
+                {
+                  id: "agent.deception.skill",
+                  type: "skill.add",
+                  payload: { skill: "Deception", level: 1 },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "agent-patron",
+          label: "Powerful Handler",
+          range: [12, 12],
+          effects: [
+            {
+              id: "agent-patron.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "patron", label: "Agency handler" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "agent.mishaps",
+      label: "Agent Mishaps",
+      kind: "roll",
+      scope: "mishap",
+      notation: "1d6",
+      entries: [
+        {
+          id: "agent-injury",
+          label: "Operation Went Bad",
+          range: [1, 3],
+          effects: [
+            {
+              id: "agent-injury.effect",
+              type: "injury.add",
+              payload: { severity: "minor", label: "Botched operation" },
+            },
+            {
+              id: "agent-injury.leave",
+              type: "career.leave",
+              payload: { careerId: "agent" },
+            },
+          ],
+        },
+        {
+          id: "agent-burned",
+          label: "Cover Blown",
+          range: [4, 6],
+          effects: [
+            {
+              id: "agent-burned.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "enemy", label: "Exposed target" },
+            },
+            {
+              id: "agent-burned.leave",
+              type: "career.leave",
+              payload: { careerId: "agent" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "agent.benefits",
+      label: "Agent Benefits",
+      kind: "roll",
+      scope: "benefit",
+      notation: "1d6",
+      entries: [
+        {
+          id: "agent-cash",
+          label: "Discretionary Funds",
+          range: [1, 2],
+          effects: [
+            {
+              id: "agent-cash.effect",
+              type: "credit.add",
+              payload: { amount: 12000 },
+            },
+          ],
+        },
+        {
+          id: "agent-weapon",
+          label: "Concealed Weapon",
+          range: [3, 4],
+          effects: [
+            {
+              id: "agent-weapon.effect",
+              type: "benefit.add",
+              payload: { benefitType: "weapon", value: "concealed pistol" },
+            },
+          ],
+        },
+        {
+          id: "agent-passage",
+          label: "High Passage",
+          range: [5, 5],
+          effects: [
+            {
+              id: "agent-passage.effect",
+              type: "benefit.add",
+              payload: { benefitType: "high-passage", amount: 1 },
+            },
+          ],
+        },
+        {
+          id: "agent-contact-benefit",
+          label: "Black File",
+          range: [6, 6],
+          effects: [
+            {
+              id: "agent-contact-benefit.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Protected source" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "scholar.skills",
+      label: "Scholar Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "scholar.skill-science",
+          label: "Science",
+          range: [1, 1],
+          effects: [
+            {
+              id: "scholar.skill-science.effect",
+              type: "skill.add",
+              payload: { skill: "Science", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "scholar.skill-medic",
+          label: "Medic",
+          range: [2, 2],
+          effects: [
+            {
+              id: "scholar.skill-medic.effect",
+              type: "skill.add",
+              payload: { skill: "Medic", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "scholar.skill-investigate",
+          label: "Investigate",
+          range: [3, 3],
+          effects: [
+            {
+              id: "scholar.skill-investigate.effect",
+              type: "skill.add",
+              payload: { skill: "Investigate", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "scholar.skill-electronics",
+          label: "Electronics",
+          range: [4, 4],
+          effects: [
+            {
+              id: "scholar.skill-electronics.effect",
+              type: "skill.add",
+              payload: { skill: "Electronics", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "scholar.skill-admin",
+          label: "Admin",
+          range: [5, 5],
+          effects: [
+            {
+              id: "scholar.skill-admin.effect",
+              type: "skill.add",
+              payload: { skill: "Admin", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "scholar.skill-diplomat",
+          label: "Diplomat",
+          range: [6, 6],
+          effects: [
+            {
+              id: "scholar.skill-diplomat.effect",
+              type: "skill.add",
+              payload: { skill: "Diplomat", level: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "scholar.events",
+      label: "Scholar Events",
+      kind: "roll",
+      scope: "career-event",
+      notation: "2d6",
+      entries: [
+        {
+          id: "scholar-contact",
+          label: "Academic Contact",
+          range: [2, 6],
+          effects: [
+            {
+              id: "scholar-contact.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Academic colleague" },
+            },
+          ],
+        },
+        {
+          id: "scholar-discovery-choice",
+          label: "Contested Discovery",
+          range: [7, 7],
+          effects: [],
+          choicePrompt: "Choose what the discovery created.",
+          choices: [
+            {
+              id: "discovery-patron",
+              label: "Patron",
+              description: "A sponsor wants more of your work.",
+              effects: [
+                {
+                  id: "scholar.discovery-patron.effect",
+                  type: "relationship.add",
+                  payload: { relationshipType: "patron", label: "Research sponsor" },
+                },
+              ],
+            },
+            {
+              id: "discovery-rival",
+              label: "Rival",
+              description: "Another scholar disputes your claim.",
+              effects: [
+                {
+                  id: "scholar.discovery-rival.effect",
+                  type: "relationship.add",
+                  payload: { relationshipType: "rival", label: "Academic rival" },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "scholar-breakthrough",
+          label: "Useful Breakthrough",
+          range: [8, 11],
+          effects: [],
+          choicePrompt: "Choose the expertise strengthened by the work.",
+          choices: [
+            {
+              id: "choose-science",
+              label: "Science",
+              description: "The research deepened your scientific training.",
+              effects: [
+                {
+                  id: "scholar.science.skill",
+                  type: "skill.add",
+                  payload: { skill: "Science", level: 1 },
+                },
+              ],
+            },
+            {
+              id: "choose-medic",
+              label: "Medic",
+              description: "The work sharpened your medical knowledge.",
+              effects: [
+                {
+                  id: "scholar.medic.skill",
+                  type: "skill.add",
+                  payload: { skill: "Medic", level: 1 },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "scholar-renowned",
+          label: "Institutional Patronage",
+          range: [12, 12],
+          effects: [
+            {
+              id: "scholar-renowned.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "patron", label: "Research institute" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "scholar.mishaps",
+      label: "Scholar Mishaps",
+      kind: "roll",
+      scope: "mishap",
+      notation: "1d6",
+      entries: [
+        {
+          id: "scholar-accident",
+          label: "Research Accident",
+          range: [1, 3],
+          effects: [
+            {
+              id: "scholar-accident.effect",
+              type: "injury.add",
+              payload: { severity: "minor", label: "Laboratory accident" },
+            },
+            {
+              id: "scholar-accident.leave",
+              type: "career.leave",
+              payload: { careerId: "scholar" },
+            },
+          ],
+        },
+        {
+          id: "scholar-disgrace",
+          label: "Institutional Dispute",
+          range: [4, 6],
+          effects: [
+            {
+              id: "scholar-disgrace.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "rival", label: "Hostile review board" },
+            },
+            {
+              id: "scholar-disgrace.leave",
+              type: "career.leave",
+              payload: { careerId: "scholar" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "scholar.benefits",
+      label: "Scholar Benefits",
+      kind: "roll",
+      scope: "benefit",
+      notation: "1d6",
+      entries: [
+        {
+          id: "scholar-cash",
+          label: "Grant Remainder",
+          range: [1, 2],
+          effects: [
+            {
+              id: "scholar-cash.effect",
+              type: "credit.add",
+              payload: { amount: 8000 },
+            },
+          ],
+        },
+        {
+          id: "scholar-equipment",
+          label: "Research Equipment",
+          range: [3, 4],
+          effects: [
+            {
+              id: "scholar-equipment.effect",
+              type: "benefit.add",
+              payload: { benefitType: "weapon", value: "scientific instrument kit" },
+            },
+          ],
+        },
+        {
+          id: "scholar-passage",
+          label: "Middle Passage",
+          range: [5, 5],
+          effects: [
+            {
+              id: "scholar-passage.effect",
+              type: "benefit.add",
+              payload: { benefitType: "middle-passage", amount: 1 },
+            },
+          ],
+        },
+        {
+          id: "scholar-society",
+          label: "Academic Society",
+          range: [6, 6],
+          effects: [
+            {
+              id: "scholar-society.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Academic society" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "entertainer.skills",
+      label: "Entertainer Skills",
+      kind: "roll",
+      scope: "skill",
+      notation: "1d6",
+      entries: [
+        {
+          id: "entertainer.skill-art",
+          label: "Art",
+          range: [1, 1],
+          effects: [
+            {
+              id: "entertainer.skill-art.effect",
+              type: "skill.add",
+              payload: { skill: "Art", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "entertainer.skill-persuade",
+          label: "Persuade",
+          range: [2, 2],
+          effects: [
+            {
+              id: "entertainer.skill-persuade.effect",
+              type: "skill.add",
+              payload: { skill: "Persuade", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "entertainer.skill-carouse",
+          label: "Carouse",
+          range: [3, 3],
+          effects: [
+            {
+              id: "entertainer.skill-carouse.effect",
+              type: "skill.add",
+              payload: { skill: "Carouse", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "entertainer.skill-deception",
+          label: "Deception",
+          range: [4, 4],
+          effects: [
+            {
+              id: "entertainer.skill-deception.effect",
+              type: "skill.add",
+              payload: { skill: "Deception", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "entertainer.skill-streetwise",
+          label: "Streetwise",
+          range: [5, 5],
+          effects: [
+            {
+              id: "entertainer.skill-streetwise.effect",
+              type: "skill.add",
+              payload: { skill: "Streetwise", level: 1 },
+            },
+          ],
+        },
+        {
+          id: "entertainer.skill-diplomat",
+          label: "Diplomat",
+          range: [6, 6],
+          effects: [
+            {
+              id: "entertainer.skill-diplomat.effect",
+              type: "skill.add",
+              payload: { skill: "Diplomat", level: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "entertainer.events",
+      label: "Entertainer Events",
+      kind: "roll",
+      scope: "career-event",
+      notation: "2d6",
+      entries: [
+        {
+          id: "entertainer-contact",
+          label: "Devoted Contact",
+          range: [2, 6],
+          effects: [
+            {
+              id: "entertainer-contact.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Industry contact" },
+            },
+          ],
+        },
+        {
+          id: "entertainer-scandal-choice",
+          label: "Public Scandal",
+          range: [7, 7],
+          effects: [],
+          choicePrompt: "Choose what the scandal left behind.",
+          choices: [
+            {
+              id: "scandal-rival",
+              label: "Rival",
+              description: "Someone used the scandal against you.",
+              effects: [
+                {
+                  id: "entertainer.scandal-rival.effect",
+                  type: "relationship.add",
+                  payload: { relationshipType: "rival", label: "Media rival" },
+                },
+              ],
+            },
+            {
+              id: "scandal-patron",
+              label: "Patron",
+              description: "A powerful figure protected your reputation.",
+              effects: [
+                {
+                  id: "entertainer.scandal-patron.effect",
+                  type: "relationship.add",
+                  payload: { relationshipType: "patron", label: "Image fixer" },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "entertainer-breakout",
+          label: "Breakout Success",
+          range: [8, 11],
+          effects: [],
+          choicePrompt: "Choose what the success taught you.",
+          choices: [
+            {
+              id: "choose-art",
+              label: "Art",
+              description: "The work sharpened your craft.",
+              effects: [
+                {
+                  id: "entertainer.art.skill",
+                  type: "skill.add",
+                  payload: { skill: "Art", level: 1 },
+                },
+              ],
+            },
+            {
+              id: "choose-persuade",
+              label: "Persuade",
+              description: "You learned how to move an audience.",
+              effects: [
+                {
+                  id: "entertainer.persuade.skill",
+                  type: "skill.add",
+                  payload: { skill: "Persuade", level: 1 },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "entertainer-celebrity-patron",
+          label: "Celebrity Patron",
+          range: [12, 12],
+          effects: [
+            {
+              id: "entertainer-celebrity-patron.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "patron", label: "Celebrity patron" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "entertainer.mishaps",
+      label: "Entertainer Mishaps",
+      kind: "roll",
+      scope: "mishap",
+      notation: "1d6",
+      entries: [
+        {
+          id: "entertainer-blacklisted",
+          label: "Blacklisted",
+          range: [1, 3],
+          effects: [
+            {
+              id: "entertainer-blacklisted.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "enemy", label: "Studio executive" },
+            },
+            {
+              id: "entertainer-blacklisted.leave",
+              type: "career.leave",
+              payload: { careerId: "entertainer" },
+            },
+          ],
+        },
+        {
+          id: "entertainer-dangerous-patron",
+          label: "Dangerous Patron",
+          range: [4, 6],
+          effects: [
+            {
+              id: "entertainer-dangerous-patron.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "enemy", label: "Dangerous patron" },
+            },
+            {
+              id: "entertainer-dangerous-patron.leave",
+              type: "career.leave",
+              payload: { careerId: "entertainer" },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "entertainer.benefits",
+      label: "Entertainer Benefits",
+      kind: "roll",
+      scope: "benefit",
+      notation: "1d6",
+      entries: [
+        {
+          id: "entertainer-cash",
+          label: "Royalties",
+          range: [1, 2],
+          effects: [
+            {
+              id: "entertainer-cash.effect",
+              type: "credit.add",
+              payload: { amount: 10000 },
+            },
+          ],
+        },
+        {
+          id: "entertainer-passage",
+          label: "High Passage",
+          range: [3, 4],
+          effects: [
+            {
+              id: "entertainer-passage.effect",
+              type: "benefit.add",
+              payload: { benefitType: "high-passage", amount: 1 },
+            },
+          ],
+        },
+        {
+          id: "entertainer-society",
+          label: "Society Contact",
+          range: [5, 5],
+          effects: [
+            {
+              id: "entertainer-society.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "contact", label: "Society host" },
+            },
+          ],
+        },
+        {
+          id: "entertainer-patron-benefit",
+          label: "Patron",
+          range: [6, 6],
+          effects: [
+            {
+              id: "entertainer-patron-benefit.effect",
+              type: "relationship.add",
+              payload: { relationshipType: "patron", label: "Media patron" },
             },
           ],
         },

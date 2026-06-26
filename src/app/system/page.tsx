@@ -1,4 +1,5 @@
 import SystemDetailModal from "@/components/modals/SystemDetailModal";
+import CharacterGenerationModal from "@/plugins/characters/CharacterGenerationModal";
 import SystemPageClient from "./SystemPageClient";
 
 const SystemPage = () => {
@@ -6,6 +7,7 @@ const SystemPage = () => {
     <>
       <SystemPageClient />
       <SystemDetailModal />
+      <CharacterGenerationModal />
     </>
   );
 };

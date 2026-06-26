@@ -27,7 +27,7 @@ import type { GasGiantType as SystemGasGiantType, SystemData, WorldBody as Syste
 import { HudHeader, HudIconButton, HudPanel } from "./HudPrimitives";
 import StoreBridge from "../StoreBridge";
 import type { AppDispatch, AppStore } from "../../store";
-import { openSelectedWorldSystemDetail } from "../../store/slices/uiSlice";
+import { openModal, openSelectedWorldSystemDetail } from "../../store/slices/uiSlice";
 import { clampHudOffset, setHudOffset, setHudPinned, setHudVisible, type HudId } from "../../store/slices/hudSlice";
 import { selectHudLayout, selectHudVisible } from "../../store/selectors/hud.selectors";
 import {
@@ -53,7 +53,6 @@ import { GalaxyMiniMapHudContent } from "../map/GalaxyMiniMap";
 import CurrentWorldMapPanel from "./CurrentWorldMapPanel";
 import { registeredPluginHudLayouts } from "../../plugins/hudLayouts";
 import { registeredPluginHudRenderers } from "../../plugins/hudRenderers";
-import { CharacterCreateHudContent } from "../../plugins/characters/CharacterCreateHud";
 import { CharacterListHudContent } from "../../plugins/characters/CharacterListHud";
 import {
   selectCharacters,
@@ -3052,9 +3051,17 @@ const StarSystemView = () => {
           </span>
           {showCharacterStart && (
             <div className="max-h-[78vh] overflow-y-auto border border-(--hud-border) bg-(--hud-bg)/90 p-2 shadow-[0_0_24px_rgba(34,211,238,0.14)] backdrop-blur-md">
-              {characters.length > 0
-                ? <CharacterListHudContent />
-                : <CharacterCreateHudContent />}
+              {characters.length > 0 ? (
+                <CharacterListHudContent />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => dispatch(openModal("characterGeneration"))}
+                  className="border border-(--hud-accent) px-3 py-1.5 font-mono text-[9px] uppercase tracking-wider text-(--hud-accent) transition-colors hover:bg-(--hud-accent)/10"
+                >
+                  Generate Character
+                </button>
+              )}
             </div>
           )}
         </div>
