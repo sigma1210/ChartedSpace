@@ -1,7 +1,7 @@
 import {
   classicTravellerGenerator,
 } from "./classicTravellerGenerator";
-import { basicHumanLifepathDefinition } from "./basicHumanLifepathDefinition";
+import { basicHumanLifepathDefinition } from "./basicHuman";
 
 export const registeredCharacterGenerators = [
   classicTravellerGenerator,

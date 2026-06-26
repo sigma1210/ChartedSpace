@@ -7,7 +7,7 @@ import {
   resolveLifepathTerm,
   type LifepathRollProvider,
 } from "../";
-import { basicHumanLifepathDefinition } from "../basicHumanLifepathDefinition";
+import { basicHumanLifepathDefinition } from "../basicHuman";
 
 const queuedRolls = (...rolls: number[]): LifepathRollProvider => {
   const queue = [...rolls];

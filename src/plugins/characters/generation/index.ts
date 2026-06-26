@@ -35,7 +35,7 @@ export {
 } from "./registry";
 export {
   basicHumanLifepathDefinition,
-} from "./basicHumanLifepathDefinition";
+} from "./basicHuman";
 export type {
   LifepathAssignmentDefinition,
   LifepathCareerDefinition,
