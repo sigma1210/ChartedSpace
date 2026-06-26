@@ -224,6 +224,7 @@ const getLifepathHistory = (sheet: CharacterSheet) => {
       label: record.label,
       detail: typeof record.detail === "string" ? record.detail : null,
       term: typeof record.term === "number" ? record.term : null,
+      stage: typeof record.stage === "string" ? record.stage : null,
     }];
   });
 };

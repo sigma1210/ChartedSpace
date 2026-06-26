@@ -866,6 +866,11 @@ describe("buildLifepathDraft", () => {
         type: "background.skill.select",
         label: "Background skill: Broker",
       }),
+      expect.objectContaining({
+        type: "rank.benefit",
+        label: "Rank benefit: Senior Crew",
+        detail: "Gained Admin-1",
+      }),
     ]));
     expect(draft.log.at(-1)).toMatchObject({
       type: "benefit.roll",
@@ -1183,7 +1188,7 @@ describe("buildLifepathDraft", () => {
         expect.objectContaining({
           type: "qualification.roll",
           label: "Failed qualification: Survey Scout Qualification: Not qualified",
-          detail: "Roll 3 +1 INT = 4 vs 5+; not qualified.",
+          detail: "Roll 3 +1 INT = 4 vs 5+; not qualified; Met Scout recruiter.",
           careerId: "survey-scout",
         }),
         expect.objectContaining({

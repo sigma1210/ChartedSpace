@@ -28,12 +28,31 @@ const educationStatusLabel = (status: string) => {
   }
 };
 
+const preCareerHistoryTypes = new Set([
+  "preCareer.skip",
+  "preCareer.select",
+  "preCareer.qualification.roll",
+  "preCareer.graduation.roll",
+]);
+
+const historyStageLabel = (
+  entry: CharacterHistoryEntry,
+) => {
+  if (entry.stage === "preCareer") return "Pre-Career";
+  if (entry.stage === "musterOut") return "Muster-Out";
+  if (entry.stage === "background") return "Background";
+  if (entry.term !== null) return `Term ${entry.term}`;
+  return preCareerHistoryTypes.has(entry.type) ? "Pre-Career" : "Background";
+};
+
 const groupHistoryByTerm = (history: readonly CharacterHistoryEntry[]) => {
   const groups = new Map<string, { label: string; entries: CharacterHistoryEntry[] }>();
 
   for (const entry of history) {
-    const key = entry.term === null ? "background" : `term-${entry.term}`;
-    const label = entry.term === null ? "Background" : `Term ${entry.term}`;
+    const label = historyStageLabel(entry);
+    const key = entry.stage === "careerTerm" && entry.term !== null
+      ? `term-${entry.term}`
+      : entry.stage ?? label;
     const group = groups.get(key) ?? { label, entries: [] };
     group.entries.push(entry);
     groups.set(key, group);

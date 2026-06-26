@@ -40,6 +40,7 @@ export interface CharacterCareerSummary {
 
 export interface CharacterHistoryEntry {
   type: string;
+  stage?: "background" | "preCareer" | "careerTerm" | "musterOut";
   label: string;
   detail: string | null;
   term: number | null;

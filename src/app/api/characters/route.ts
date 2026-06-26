@@ -18,6 +18,37 @@ const normalizeSkills = (skills: CharacterSheet["skills"]) => {
   return [...byName.entries()].map(([name, level]) => ({ name, level }));
 };
 
+const preCareerHistoryTypes = new Set([
+  "preCareer.skip",
+  "preCareer.select",
+  "preCareer.qualification.roll",
+  "preCareer.graduation.roll",
+]);
+
+const musterOutHistoryTypes = new Set([
+  "generation.muster-out",
+  "benefit.choice",
+  "benefit.roll",
+]);
+
+const normalizeHistoryStage = (
+  record: Record<string, unknown>,
+): "background" | "preCareer" | "careerTerm" | "musterOut" => {
+  if (
+    record.stage === "background"
+    || record.stage === "preCareer"
+    || record.stage === "careerTerm"
+    || record.stage === "musterOut"
+  ) {
+    return record.stage;
+  }
+
+  const type = typeof record.type === "string" ? record.type : "";
+  if (preCareerHistoryTypes.has(type)) return "preCareer";
+  if (musterOutHistoryTypes.has(type)) return "musterOut";
+  return typeof record.term === "number" ? "careerTerm" : "background";
+};
+
 const normalizeHistory = (sheet: CharacterSheet | null) => {
   const history = sheet?.generation?.metadata?.history;
   if (!Array.isArray(history)) return [];
@@ -28,6 +59,7 @@ const normalizeHistory = (sheet: CharacterSheet | null) => {
     if (typeof record.label !== "string" || typeof record.type !== "string") return [];
     return [{
       type: record.type,
+      stage: normalizeHistoryStage(record),
       label: record.label,
       detail: typeof record.detail === "string" ? record.detail : null,
       term: typeof record.term === "number" ? record.term : null,

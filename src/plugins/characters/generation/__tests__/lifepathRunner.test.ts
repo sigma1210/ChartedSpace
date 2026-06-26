@@ -2562,6 +2562,9 @@ describe("lifepathRunner", () => {
     expect(advanced.log.at(-1)).toMatchObject({
       type: "rank.benefit",
       label: "Rank Benefit: Mission Officer",
+      data: {
+        effectSummary: ["Gained Leadership-1"],
+      },
     });
   });
 
@@ -3117,6 +3120,7 @@ describe("lifepathRunner", () => {
         careerId: "scout",
         rank: 1,
         rankTitle: "Senior Scout",
+        effectSummary: ["Gained Admin-1"],
       },
     });
   });

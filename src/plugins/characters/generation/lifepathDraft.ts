@@ -24,6 +24,7 @@ export interface LifepathCareerDraft {
 
 export interface LifepathHistoryEntry {
   type: string;
+  stage: "background" | "preCareer" | "careerTerm" | "musterOut";
   term: number | null;
   label: string;
   detail?: string;
@@ -77,6 +78,16 @@ const payloadNumber = (
 ): number | null => {
   const value = payload[key];
   return typeof value === "number" ? value : null;
+};
+
+const payloadStringList = (
+  payload: GenerationPayload,
+  key: string,
+): string[] => {
+  const value = payload[key];
+  if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 };
 
 const careerLabel = (
@@ -135,6 +146,10 @@ const buildHistoryDetail = (entry: GenerationLogEntry): string | undefined => {
   const commissioned = payloadBoolean(entry.data, "commissioned");
   const advanced = payloadBoolean(entry.data, "advanced");
   const reenlisted = payloadBoolean(entry.data, "reenlisted");
+  const effectSummary = payloadStringList(entry.data, "effectSummary");
+  const effectText = effectSummary.length > 0 ? effectSummary.join("; ") : null;
+  const appendEffectText = (detail: string) =>
+    effectText ? `${detail.replace(/\.$/, "")}; ${effectText}.` : detail;
   const modifierParts = [
     ...(characteristicId && characteristicModifier !== 0
       ? [`${characteristicModifier > 0 ? "+" : ""}${characteristicModifier} ${characteristicId.toUpperCase()}`]
@@ -150,30 +165,33 @@ const buildHistoryDetail = (entry: GenerationLogEntry): string | undefined => {
       : null;
 
   if (typeof qualified === "boolean" && rollText && target !== null) {
-    return `${rollText} vs ${target}+; ${qualified ? "qualified" : "not qualified"}.`;
+    return appendEffectText(`${rollText} vs ${target}+; ${qualified ? "qualified" : "not qualified"}.`);
   }
   if (typeof admitted === "boolean" && rollText && target !== null) {
-    return `${rollText} vs ${target}+; ${admitted ? "admitted" : "not admitted"}.`;
+    return appendEffectText(`${rollText} vs ${target}+; ${admitted ? "admitted" : "not admitted"}.`);
   }
   if (typeof graduated === "boolean" && rollText && target !== null) {
     const outcome = honorsGraduated ? "graduated with honors" : graduated ? "graduated" : "did not graduate";
-    return `${rollText} vs ${target}+; ${outcome}.`;
+    return appendEffectText(`${rollText} vs ${target}+; ${outcome}.`);
   }
   if (typeof survived === "boolean" && rollText && target !== null) {
-    return `${rollText} vs ${target}+; ${survived ? "survived" : "mishap"}.`;
+    return appendEffectText(`${rollText} vs ${target}+; ${survived ? "survived" : "mishap"}.`);
   }
   if (typeof commissioned === "boolean" && rollText && target !== null) {
-    return `${rollText} vs ${target}+; ${commissioned ? "commissioned" : "not commissioned"}.`;
+    return appendEffectText(`${rollText} vs ${target}+; ${commissioned ? "commissioned" : "not commissioned"}.`);
   }
   if (typeof advanced === "boolean" && rollText && target !== null) {
     const rankText = advanced ? advancementRankText(entry) : null;
-    return `${rollText} vs ${target}+; ${advanced ? `advanced${rankText ? ` to ${rankText}` : ""}` : "no advancement"}.`;
+    return appendEffectText(`${rollText} vs ${target}+; ${advanced ? `advanced${rankText ? ` to ${rankText}` : ""}` : "no advancement"}.`);
   }
   if (typeof reenlisted === "boolean" && rollText && target !== null) {
     const outcome = payloadString(entry.data, "outcome");
-    return `${rollText} vs ${target}+; ${reenlisted ? "continued" : "not retained"}${outcome ? ` (${outcome})` : ""}.`;
+    return appendEffectText(`${rollText} vs ${target}+; ${reenlisted ? "continued" : "not retained"}${outcome ? ` (${outcome})` : ""}.`);
   }
-  if (rollText) return `${rollText}.`;
+  if (effectText) {
+    return effectText;
+  }
+  if (rollText) return appendEffectText(`${rollText}.`);
   return undefined;
 };
 
@@ -226,6 +244,37 @@ const historyLabel = (entry: GenerationLogEntry): string => {
   }
 };
 
+const preCareerHistoryTypes = new Set([
+  "preCareer.skip",
+  "preCareer.select",
+  "preCareer.qualification.roll",
+  "preCareer.graduation.roll",
+]);
+
+const musterOutHistoryTypes = new Set([
+  "generation.muster-out",
+  "benefit.choice",
+  "benefit.roll",
+]);
+
+const historyStage = (
+  entry: GenerationLogEntry,
+): LifepathHistoryEntry["stage"] => {
+  const explicitStage = payloadString(entry.data, "historyStage");
+  if (
+    explicitStage === "background"
+    || explicitStage === "preCareer"
+    || explicitStage === "careerTerm"
+    || explicitStage === "musterOut"
+  ) {
+    return explicitStage;
+  }
+  if (preCareerHistoryTypes.has(entry.type)) return "preCareer";
+  if (musterOutHistoryTypes.has(entry.type)) return "musterOut";
+  if (entry.term === null) return "background";
+  return "careerTerm";
+};
+
 const buildLifepathHistory = (
   log: readonly GenerationLogEntry[],
 ): LifepathHistoryEntry[] =>
@@ -259,6 +308,7 @@ const buildLifepathHistory = (
     ].includes(entry.type))
     .map((entry) => ({
       type: entry.type,
+      stage: historyStage(entry),
       term: entry.term,
       label: historyLabel(entry),
       detail: buildHistoryDetail(entry),
