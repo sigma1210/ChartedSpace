@@ -21,6 +21,9 @@ const genderLabel = (gender: CharacterSummary["gender"]) => {
   return null;
 };
 
+const kindLabel = (kind: CharacterSummary["kind"]) =>
+  kind === "npc" ? "NPC" : "Player";
+
 const CharacterCard = ({
   character,
   onProfile,
@@ -35,9 +38,14 @@ const CharacterCard = ({
   return (
     <div className="w-full border border-(--hud-border-subtle) bg-(--hud-surface-2)/70 px-1.5 py-1 text-left">
       <div className="flex items-center justify-between gap-1">
-        <span className="truncate font-mono text-[9px] font-semibold leading-tight text-(--hud-text)">
-          {character.name}
-        </span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="truncate font-mono text-[9px] font-semibold leading-tight text-(--hud-text)">
+            {character.name}
+          </span>
+          <span className="shrink-0 border border-(--hud-border-subtle) px-1 font-mono text-[7px] leading-tight text-(--hud-text-dim)">
+            {kindLabel(character.kind)}
+          </span>
+        </div>
         <span className="shrink-0 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
           Cr {character.credits.toLocaleString()}
         </span>

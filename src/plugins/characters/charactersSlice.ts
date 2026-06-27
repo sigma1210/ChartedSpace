@@ -4,6 +4,7 @@ import type { CharacterGender } from "@/lib/characters/types";
 
 export interface CharacterSummary {
   id: string;
+  kind?: "player" | "npc" | string;
   name: string;
   gender?: CharacterGender | null;
   upp: string;
@@ -21,6 +22,7 @@ export interface CharacterSummary {
   educationHistory?: CharacterEducationSummary | null;
   careers?: CharacterCareerSummary[];
   history?: CharacterHistoryEntry[];
+  relationships?: CharacterRelationshipSummary[];
 }
 
 export interface CharacterEducationSummary {
@@ -47,6 +49,16 @@ export interface CharacterHistoryEntry {
   detail: string | null;
   term: number | null;
   roll?: number | null;
+}
+
+export interface CharacterRelationshipSummary {
+  id: string;
+  type: string;
+  attitude: number;
+  notes?: string | null;
+  source?: string | null;
+  toCharacterId: string;
+  toCharacterName: string;
 }
 
 export interface CharacterState {

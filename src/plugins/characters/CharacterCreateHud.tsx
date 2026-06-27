@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { invalidateCharacters, fetchCharacters } from "./charactersSlice";
 import { selectCharacters } from "./selectors";
@@ -10,7 +10,7 @@ import {
   HumanDecisionProvider,
   GenerationCancelledError,
 } from "@/lib/characters/providers/human";
-import { characterGenders, generateHumanName } from "@/lib/characters/names";
+import { characterGenders, generateHumanName, type GeneratedCharacterName } from "@/lib/characters/names";
 import type { CharacterGender, CharacterSheet, DecisionPoint } from "@/lib/characters/types";
 import {
   applyLifepathAction,
@@ -24,6 +24,12 @@ import {
 } from "./generation";
 
 const basicHumanLifepathDefinition = registeredLifepathDefinitions[0];
+const placeholderIdentity: GeneratedCharacterName = {
+  gender: "nonbinary",
+  givenName: "",
+  familyName: "",
+  name: "Unnamed Traveller",
+} as const;
 
 // ─── Display helpers ──────────────────────────────────────────────────────────
 
@@ -579,22 +585,30 @@ const lifepathUpp = (state: LifepathRuntimeState) =>
 export const CharacterCreateHudContent = () => {
   const dispatch = usePluginDispatch();
   const characters = usePluginSelector(selectCharacters);
-  const [identity, setIdentity] = useState(() => generateHumanName());
+  const [identity, setIdentity] = useState<GeneratedCharacterName>(placeholderIdentity);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
   const [deathMsg, setDeathMsg] = useState<string | null>(null);
   const [pendingPoint, setPendingPoint] = useState<DecisionPoint | null>(null);
   const [log, setLog] = useState<string[]>([]);
-  const [charName, setCharName] = useState(identity.name);
+  const [charName, setCharName] = useState<string>(identity.name);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [savedGeneratedContacts, setSavedGeneratedContacts] = useState(0);
   const [selectedRole, setSelectedRole] = useState<CrewRoleId | null>(null);
   const [createMode, setCreateMode] = useState<CreateMode>("classic");
   const [lifepathState, setLifepathState] = useState<LifepathRuntimeState | null>(null);
   const providerRef = useRef<HumanDecisionProvider | null>(null);
 
   const isFirstCharacter = characters.length === 0;
+
+  useEffect(() => {
+    if (phase !== "idle" || charName !== placeholderIdentity.name) return;
+    const nextIdentity = generateHumanName();
+    setIdentity(nextIdentity);
+    setCharName(nextIdentity.name);
+  }, [charName, phase]);
 
   const reset = (nextIdentity = generateHumanName()) => {
     providerRef.current?.cancel();
@@ -608,6 +622,7 @@ export const CharacterCreateHudContent = () => {
     setCharName(nextIdentity.name);
     setSaveState("idle");
     setSavedId(null);
+    setSavedGeneratedContacts(0);
     setSelectedRole(null);
     setLifepathState(null);
     setCreateMode("classic");
@@ -696,8 +711,9 @@ export const CharacterCreateHudContent = () => {
         setSaveState("error");
         return;
       }
-      const data: { id: string; name: string } = await res.json();
+      const data: { id: string; name: string; generatedContacts?: number } = await res.json();
       setSavedId(data.id);
+      setSavedGeneratedContacts(data.generatedContacts ?? 0);
       setSaveState("saved");
       dispatch(invalidateCharacters());
       await dispatch(fetchCharacters());
@@ -1217,6 +1233,11 @@ export const CharacterCreateHudContent = () => {
                     </span>
                     {savedId && (
                       <span className="font-mono text-[8px] text-(--hud-text-dim)">{savedId}</span>
+                    )}
+                    {savedGeneratedContacts > 0 && (
+                      <span className="font-mono text-[8px] text-(--hud-text-dim)">
+                        {savedGeneratedContacts} contact{savedGeneratedContacts === 1 ? "" : "s"} generated
+                      </span>
                     )}
                   </div>
                   <button

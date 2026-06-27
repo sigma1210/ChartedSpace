@@ -10,6 +10,7 @@ datasource db {
 model Character {
   id              String           @id @default(cuid())
   userId          String?
+  kind            String           @default("player")
   name            String
   strength        Int
   dexterity       Int
@@ -24,10 +25,13 @@ model Character {
   currentShipRole String?
   skills          CharacterSkill[]
   locationLog     LocationLog[]
+  relationshipsFrom CharacterRelationship[] @relation("RelationshipFrom")
+  relationshipsTo   CharacterRelationship[] @relation("RelationshipTo")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
   @@index([userId])
+  @@index([kind])
   @@index([currentLocation])
   @@index([currentShipId])
 }
@@ -52,4 +56,22 @@ model LocationLog {
 
   @@index([characterId])
   @@index([location])
+}
+
+model CharacterRelationship {
+  id              String    @id @default(cuid())
+  fromCharacterId String
+  toCharacterId   String
+  fromCharacter   Character @relation("RelationshipFrom", fields: [fromCharacterId], references: [id], onDelete: Cascade)
+  toCharacter     Character @relation("RelationshipTo", fields: [toCharacterId], references: [id], onDelete: Cascade)
+  type            String
+  attitude        Int
+  notes           String?
+  source          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([fromCharacterId])
+  @@index([toCharacterId])
+  @@index([type])
 }

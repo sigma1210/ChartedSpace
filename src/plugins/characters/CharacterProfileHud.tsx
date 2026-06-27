@@ -1,6 +1,7 @@
-import { useState } from "react";
-import type { CharacterHistoryEntry, CharacterSummary } from "./charactersSlice";
-import { usePluginSelector } from "@/plugin-api";
+import { useEffect, useState } from "react";
+import type { CharacterHistoryEntry, CharacterRelationshipSummary, CharacterSummary } from "./charactersSlice";
+import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
+import { fetchCharacters, invalidateCharacters, setSelectedProfileCharacter } from "./charactersSlice";
 import {
   selectEffectiveCharacterProfile,
   selectEffectiveCharacterProfileLocation,
@@ -9,7 +10,8 @@ import {
 
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
-type CharacterProfileTab = "profile" | "skills" | "education" | "careers" | "history";
+type CharacterProfileTab = "profile" | "skills" | "education" | "careers" | "contacts" | "history";
+type ContactGenerationState = "idle" | "generating" | "error";
 
 const educationStatusLabel = (status: string) => {
   switch (status) {
@@ -34,6 +36,38 @@ const genderLabel = (gender: CharacterSummary["gender"]) => {
   if (gender === "nonbinary") return "Nonbinary";
   return "Unknown";
 };
+
+const kindLabel = (kind: CharacterSummary["kind"]) =>
+  kind === "npc" ? "Non-Player Character" : "Player Character";
+
+const attitudeLabel = (attitude: number) => {
+  if (attitude >= 75) return "Devoted";
+  if (attitude >= 40) return "Friendly";
+  if (attitude > 10) return "Warm";
+  if (attitude >= -10) return "Neutral";
+  if (attitude > -40) return "Cool";
+  if (attitude > -75) return "Hostile";
+  return "Bitter";
+};
+
+const formatRelationshipType = (type: string) =>
+  type
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+
+const formatRelationshipSource = (source: string) =>
+  source
+    .split(/[:._-]+/)
+    .filter((part) => part && !/^\d+$/.test(part))
+    .slice(0, 4)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" / ");
+
+const relationshipOrigin = (relationship: CharacterRelationshipSummary) =>
+  relationship.notes
+  ?? (relationship.source ? formatRelationshipSource(relationship.source) : null);
 
 const preCareerHistoryTypes = new Set([
   "preCareer.skip",
@@ -88,11 +122,23 @@ const StatBar = ({ label, value }: { label: string; value: number }) => {
 export const CharacterProfileHud = ({
   character,
   currentLocation,
+  contactGenerationState,
+  contactGenerationError,
+  onGenerateContact,
+  onViewCharacter,
 }: {
   character: CharacterSummary | null;
   currentLocation: CharacterProfileLocation | null;
+  contactGenerationState?: ContactGenerationState;
+  contactGenerationError?: string | null;
+  onGenerateContact?: (characterId: string) => void;
+  onViewCharacter?: (characterId: string) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<CharacterProfileTab>("profile");
+
+  useEffect(() => {
+    setActiveTab("profile");
+  }, [character?.id]);
 
   if (!character) {
     return (
@@ -118,12 +164,14 @@ export const CharacterProfileHud = ({
   const history = character.history ?? [];
   const education = character.educationHistory ?? null;
   const careers = character.careers ?? [];
+  const relationships = character.relationships ?? [];
   const historyGroups = groupHistoryByTerm(history);
   const tabs: { id: CharacterProfileTab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "skills", label: `Skills ${character.skills.length}` },
     { id: "education", label: "Education" },
     { id: "careers", label: `Careers ${careers.length}` },
+    { id: "contacts", label: `Contacts ${relationships.length}` },
     { id: "history", label: `History ${history.length}` },
   ];
 
@@ -162,6 +210,13 @@ export const CharacterProfileHud = ({
                   <StatBar key={label} label={label} value={stats[index]} />
                 ))}
               </div>
+            </div>
+
+            <div className="border-t border-(--hud-border-subtle) pt-1">
+              <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Kind</p>
+              <p className="mt-0.5 text-[8px] text-(--hud-text)">
+                {kindLabel(character.kind)}
+              </p>
             </div>
 
             <div className="border-t border-(--hud-border-subtle) pt-1">
@@ -302,6 +357,67 @@ export const CharacterProfileHud = ({
         </div>
       )}
 
+      {activeTab === "contacts" && (
+        <div>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Contacts</p>
+            <button
+              type="button"
+              onClick={() => onGenerateContact?.(character.id)}
+              disabled={contactGenerationState === "generating"}
+              className="h-5 border border-(--hud-border-subtle) px-1.5 text-[7px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-border) hover:text-(--hud-text) disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {contactGenerationState === "generating" ? "Generating..." : "Generate"}
+            </button>
+          </div>
+          {contactGenerationError && (
+            <div className="mb-1 border border-(--hud-error)/40 bg-(--hud-error)/5 px-1.5 py-1 text-[7px] text-(--hud-error)">
+              {contactGenerationError}
+            </div>
+          )}
+          {relationships.length === 0 ? (
+            <p className="text-[7px] text-(--hud-text-dim)">No directed contacts recorded</p>
+          ) : (
+            <ul className="flex max-h-44 flex-col gap-1 overflow-y-auto pr-1">
+              {relationships.map((relationship) => (
+                <li
+                  key={relationship.id}
+                  className="border border-(--hud-border-subtle) bg-(--hud-surface-2)/50"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onViewCharacter?.(relationship.toCharacterId)}
+                    className="block w-full px-1.5 py-1 text-left transition-colors hover:bg-(--hud-surface-2)"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[8px] text-(--hud-text)">
+                        {relationship.toCharacterName}
+                      </span>
+                      <span className="shrink-0 text-[7px] text-(--hud-text-dim)">
+                        {relationship.attitude}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-between gap-2 text-(--hud-text-dim)">
+                      <span className="truncate">
+                        {formatRelationshipType(relationship.type)}
+                      </span>
+                      <span className="shrink-0">
+                        {attitudeLabel(relationship.attitude)}
+                      </span>
+                    </div>
+                    {relationshipOrigin(relationship) && (
+                      <p className="mt-0.5 truncate normal-case tracking-normal text-(--hud-text-dim)">
+                        {relationshipOrigin(relationship)}
+                      </p>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {activeTab === "history" && (
         <div>
           <p className="mb-1 text-[7px] tracking-widest text-(--hud-text-dim)">History</p>
@@ -349,13 +465,58 @@ export const CharacterProfileHud = ({
 };
 
 export const CharacterProfileHudContent = () => {
+  const dispatch = usePluginDispatch();
   const character = usePluginSelector(selectEffectiveCharacterProfile);
   const currentLocation = usePluginSelector(selectEffectiveCharacterProfileLocation);
+  const [contactGenerationState, setContactGenerationState] = useState<ContactGenerationState>("idle");
+  const [contactGenerationError, setContactGenerationError] = useState<string | null>(null);
+
+  const handleGenerateContact = async (characterId: string) => {
+    if (contactGenerationState === "generating") return;
+    setContactGenerationState("generating");
+    setContactGenerationError(null);
+
+    try {
+      const response = await fetch(`/api/characters/${characterId}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "contact",
+          attitude: 25,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setContactGenerationError(
+          typeof body.error === "string" ? body.error : "Failed to generate contact",
+        );
+        setContactGenerationState("error");
+        return;
+      }
+
+      dispatch(invalidateCharacters());
+      await dispatch(fetchCharacters());
+      setContactGenerationState("idle");
+    } catch (err) {
+      console.error("[generate contact]", err);
+      setContactGenerationError("Failed to generate contact");
+      setContactGenerationState("error");
+    }
+  };
+
+  const handleViewCharacter = (characterId: string) => {
+    dispatch(setSelectedProfileCharacter(characterId));
+  };
 
   return (
     <CharacterProfileHud
       character={character}
       currentLocation={currentLocation}
+      contactGenerationState={contactGenerationState}
+      contactGenerationError={contactGenerationError}
+      onGenerateContact={handleGenerateContact}
+      onViewCharacter={handleViewCharacter}
     />
   );
 };

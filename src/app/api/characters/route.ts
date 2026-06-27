@@ -3,6 +3,8 @@ import type { Prisma as CharacterDbPrisma } from "@/generated/character-prisma";
 import { characterPrisma } from "@/plugins/characters/server/characterPrisma";
 import type { CharacterGender, CharacterSheet } from "@/lib/characters/types";
 import { getCurrentUser, isDevAuthMode } from "@/lib/devAuth";
+import { extractPendingGeneratedContacts } from "@/plugins/characters/generation/pendingContacts";
+import { materializePendingGeneratedContacts } from "@/plugins/characters/server/contactGenerationService";
 
 const toHex = (n: number) => Math.min(15, Math.max(0, n)).toString(16).toUpperCase();
 
@@ -159,6 +161,7 @@ export const GET = async () => {
       orderBy: { updatedAt: "desc" },
       select: {
         id:             true,
+        kind:           true,
         name:           true,
         strength:       true,
         dexterity:      true,
@@ -170,6 +173,22 @@ export const GET = async () => {
         skills:          { select: { name: true, level: true } },
         currentLocation: true,
         sheet:           true,
+        relationshipsFrom: {
+          orderBy: { updatedAt: "desc" },
+          select: {
+            id: true,
+            type: true,
+            attitude: true,
+            notes: true,
+            source: true,
+            toCharacterId: true,
+            toCharacter: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -182,6 +201,7 @@ export const GET = async () => {
       const sheetMetadata = sheet?.generation?.metadata;
       return {
         id:             c.id,
+        kind:           c.kind,
         name:           c.name,
         gender:         normalizeGender(sheet?.gender ?? sheetMetadata?.gender),
         upp:            [c.strength, c.dexterity, c.endurance, c.intelligence, c.education, c.socialStanding].map(toHex).join(""),
@@ -199,6 +219,15 @@ export const GET = async () => {
         educationHistory: normalizeEducation(history),
         careers:        normalizeCareers(sheet),
         history,
+        relationships:   c.relationshipsFrom.map((relationship) => ({
+          id:              relationship.id,
+          type:            relationship.type,
+          attitude:        relationship.attitude,
+          notes:           relationship.notes,
+          source:          relationship.source,
+          toCharacterId:   relationship.toCharacterId,
+          toCharacterName: relationship.toCharacter.name,
+        })),
       };
     });
 
@@ -238,9 +267,10 @@ export const POST = async (request: Request) => {
     const skills = normalizeSkills(sheet.skills);
     const credits = Number.isFinite(sheet.credits) ? sheet.credits : 0;
 
-    const character = await characterPrisma.$transaction(async (tx) => {
+    const saved = await characterPrisma.$transaction(async (tx) => {
       const data: CharacterDbPrisma.CharacterCreateInput = {
         name,
+        kind:           "player",
         userId:         user.id,
         strength:       sheet.upp.str,
         dexterity:      sheet.upp.dex,
@@ -264,10 +294,25 @@ export const POST = async (request: Request) => {
         });
       }
 
-      return created;
+      const generatedContacts = await materializePendingGeneratedContacts({
+        tx,
+        userId: user.id,
+        sourceCharacterId: created.id,
+        currentLocation: sheetForStorage.currentLocation,
+        pendingContacts: extractPendingGeneratedContacts(sheetForStorage),
+      });
+
+      return {
+        character: created,
+        generatedContacts,
+      };
     });
 
-    return NextResponse.json({ id: character.id, name: character.name }, { status: 201 });
+    return NextResponse.json({
+      id: saved.character.id,
+      name: saved.character.name,
+      generatedContacts: saved.generatedContacts.length,
+    }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/characters]", err);
     return errorResponse(err);
