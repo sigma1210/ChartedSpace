@@ -2,6 +2,7 @@ import {
   characterActionsHudId,
   characterListHudId,
   characterProfileHudId,
+  characterProfessionalBoardHudId,
   charactersPluginId,
 } from "./metadata";
 
@@ -50,8 +51,24 @@ export const characterListHudMetadata = {
   },
 } as const;
 
+export const characterProfessionalBoardHudMetadata = {
+  id: characterProfessionalBoardHudId,
+  pluginId: charactersPluginId,
+  title: "Professional Board",
+  openTitle: "Open professional board",
+  visibleTitle: "Professional board visible",
+  showInHudControls: false,
+  panelClassName: "px-1.5 py-1 text-[8px] tracking-normal",
+  defaultLayout: {
+    visible: false,
+    pinned: true,
+    offset: { x: 0.18, y: 0.04 },
+  },
+} as const;
+
 export const characterHudMetadata = [
   characterActionsHudMetadata,
   characterProfileHudMetadata,
   characterListHudMetadata,
+  characterProfessionalBoardHudMetadata,
 ] as const;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogOut, User, Users, UserPlus } from "lucide-react";
+import { BriefcaseBusiness, LogOut, User, Users, UserPlus } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectHudVisible } from "@/store/selectors/hud.selectors";
 import { setHudVisible } from "@/store/slices/hudSlice";
@@ -9,6 +9,7 @@ import { fetchTurn, invalidateTurn } from "@/store/slices/turnSlice";
 import { HudIconButton } from "@/components/world/HudPrimitives";
 import {
   characterListHudId,
+  characterProfessionalBoardHudId,
   characterProfileHudId,
 } from "./metadata";
 import {
@@ -24,6 +25,7 @@ export const CharactersPluginBar = () => {
   const [resignError, setResignError] = useState<string | null>(null);
   const profileVisible = useAppSelector(selectHudVisible(characterProfileHudId));
   const listVisible = useAppSelector(selectHudVisible(characterListHudId));
+  const professionalBoardVisible = useAppSelector(selectHudVisible(characterProfessionalBoardHudId));
 
   const openHud = (id: string) => {
     dispatch(setHudVisible({ id, visible: true }));
@@ -112,6 +114,12 @@ export const CharactersPluginBar = () => {
           onClick={() => openHud(characterListHudId)}
         >
           <Users size={13} aria-hidden="true" />
+        </HudIconButton>
+        <HudIconButton
+          title={professionalBoardVisible ? "Professional board visible" : "Open professional board"}
+          onClick={() => openHud(characterProfessionalBoardHudId)}
+        >
+          <BriefcaseBusiness size={13} aria-hidden="true" />
         </HudIconButton>
         <HudIconButton
           title="Open character generator"
