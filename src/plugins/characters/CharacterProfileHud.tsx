@@ -28,6 +28,13 @@ const educationStatusLabel = (status: string) => {
   }
 };
 
+const genderLabel = (gender: CharacterSummary["gender"]) => {
+  if (gender === "female") return "Female";
+  if (gender === "male") return "Male";
+  if (gender === "nonbinary") return "Nonbinary";
+  return "Unknown";
+};
+
 const preCareerHistoryTypes = new Set([
   "preCareer.skip",
   "preCareer.select",
@@ -155,6 +162,13 @@ export const CharacterProfileHud = ({
                   <StatBar key={label} label={label} value={stats[index]} />
                 ))}
               </div>
+            </div>
+
+            <div className="border-t border-(--hud-border-subtle) pt-1">
+              <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Gender</p>
+              <p className="mt-0.5 text-[8px] text-(--hud-text)">
+                {genderLabel(character.gender)}
+              </p>
             </div>
 
             <div className="border-t border-(--hud-border-subtle) pt-1">

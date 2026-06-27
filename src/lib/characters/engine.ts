@@ -1,5 +1,6 @@
 import type {
   CareerName,
+  CharacterGender,
   CharacterSheet,
   DecisionMadeBy,
   DecisionPoint,
@@ -10,6 +11,7 @@ import type {
   GenerationOptions,
   UPP,
 } from "./types";
+import { generateHumanName, isPlaceholderCharacterName } from "./names";
 import {
   CAREER_NAMES,
   DRAFT_TABLE,
@@ -86,6 +88,7 @@ const benefitLabel = (e: BenefitEntry): string => {
 
 interface CharacterDraft {
   name: string;
+  gender: CharacterGender;
   upp: UPP;
   skillMap: Map<string, number>;
   career: CareerName;
@@ -172,6 +175,9 @@ export const generateCharacter = async (
   options: GenerationOptions = {}
 ): Promise<CharacterSheet> => {
   const mode: GenerationMode = options.mode ?? "random";
+  const generatedIdentity = generateHumanName(options.gender);
+  const characterName = isPlaceholderCharacterName(name) ? generatedIdentity.name : name.trim();
+  const gender = options.gender ?? generatedIdentity.gender;
   const provMadeBy: DecisionMadeBy =
     mode === "directed" ? "directed" : mode === "guided" ? "human" : "random";
 
@@ -186,7 +192,8 @@ export const generateCharacter = async (
   };
 
   const draft: CharacterDraft = {
-    name,
+    name: characterName,
+    gender,
     upp,
     skillMap: new Map(),
     career: "other",
@@ -414,6 +421,7 @@ export const generateCharacter = async (
   // Phase 7: Finalize
   return {
     name: draft.name,
+    gender: draft.gender,
     age: draft.age,
     upp: draft.upp,
     skills: Array.from(draft.skillMap.entries()).map(([n, level]) => ({ name: n, level })),
@@ -440,6 +448,9 @@ export const generateCharacter = async (
       mode,
       targetRole: options.targetRole ?? null,
       decisions: draft.decisions,
+      metadata: {
+        gender: draft.gender,
+      },
     },
   };
 };

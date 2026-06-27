@@ -1,4 +1,5 @@
 export type CareerName = "navy" | "marines" | "army" | "scouts" | "merchants" | "other";
+export type CharacterGender = "female" | "male" | "nonbinary";
 export type GenerationRuleset = "classic" | "lifepath";
 export type GenerationMode = "random" | "guided" | "directed";
 export type DecisionMadeBy = "random" | "human" | "directed";
@@ -72,6 +73,7 @@ export interface Generation {
 
 export interface CharacterSheet {
   name: string;
+  gender?: CharacterGender | null;
   age: number;
   upp: UPP;
   skills: Skill[];
@@ -106,4 +108,5 @@ export interface GenerationOptions {
   targetRole?: string;
   homeWorldId?: string;
   currentLocation?: string;
+  gender?: CharacterGender;
 }

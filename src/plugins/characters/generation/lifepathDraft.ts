@@ -1,5 +1,5 @@
 import type { GenerationLogEntry, GenerationPayload } from "./types";
-import type { CareerName, CharacterSheet, DecisionRecord } from "@/lib/characters/types";
+import type { CareerName, CharacterGender, CharacterSheet, DecisionRecord } from "@/lib/characters/types";
 import type { LifepathGeneratorDefinition } from "./lifepathTypes";
 import type {
   LifepathCareerHistoryEntry,
@@ -36,6 +36,7 @@ export interface LifepathHistoryEntry {
 
 export interface LifepathDraft {
   name: string;
+  gender?: CharacterGender | null;
   age: number;
   completedTerms: number;
   characteristics: LifepathRuntimeCharacteristics;
@@ -322,6 +323,7 @@ export const buildLifepathDraft = (
   state: LifepathRuntimeState,
   definition: LifepathGeneratorDefinition,
   name = "Unnamed Traveller",
+  gender: CharacterGender | null = null,
 ): LifepathDraft => {
   const careerTerms = new Map<string, {
     careerId: string;
@@ -352,6 +354,7 @@ export const buildLifepathDraft = (
 
   return {
     name,
+    gender,
     age: state.age,
     completedTerms: state.completedTerms,
     characteristics: state.characteristics,
@@ -405,6 +408,7 @@ export const lifepathDraftToCharacterSheet = (
   draft: LifepathDraft,
 ): CharacterSheet => ({
   name: draft.name,
+  gender: draft.gender ?? null,
   age: draft.age,
   upp: {
     str: draft.characteristics.str ?? 7,
@@ -442,6 +446,7 @@ export const lifepathDraftToCharacterSheet = (
     decisions: draft.log.map(lifepathLogToDecisionRecord),
     metadata: {
       ...draft.metadata,
+      gender: draft.gender ?? null,
       completedTerms: draft.completedTerms,
       characteristics: draft.characteristics,
       credits: draft.credits,

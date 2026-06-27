@@ -10,7 +10,8 @@ import {
   HumanDecisionProvider,
   GenerationCancelledError,
 } from "@/lib/characters/providers/human";
-import type { CharacterSheet, DecisionPoint } from "@/lib/characters/types";
+import { characterGenders, generateHumanName } from "@/lib/characters/names";
+import type { CharacterGender, CharacterSheet, DecisionPoint } from "@/lib/characters/types";
 import {
   applyLifepathAction,
   buildLifepathDraft,
@@ -95,6 +96,34 @@ const makeLogEntry = (point: DecisionPoint, id: string): string => {
   }
 };
 
+const genderLabel = (gender: CharacterGender) => {
+  switch (gender) {
+    case "female":
+      return "Female";
+    case "male":
+      return "Male";
+    case "nonbinary":
+      return "Nonbinary";
+  }
+};
+
+const addSheetIdentity = (
+  sheet: CharacterSheet,
+  name: string,
+  gender: CharacterGender,
+): CharacterSheet => ({
+  ...sheet,
+  name,
+  gender,
+  generation: {
+    ...sheet.generation,
+    metadata: {
+      ...(sheet.generation.metadata ?? {}),
+      gender,
+    },
+  },
+});
+
 // ─── Sheet display ────────────────────────────────────────────────────────────
 
 const SheetDisplay = ({ sheet }: { sheet: CharacterSheet }) => {
@@ -104,6 +133,11 @@ const SheetDisplay = ({ sheet }: { sheet: CharacterSheet }) => {
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-0.5">
         <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim)">UPP</span>
+        {sheet.gender && (
+          <span className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim)">
+            {genderLabel(sheet.gender)}
+          </span>
+        )}
         <span className="font-mono text-[11px] tracking-[0.14em] text-(--hud-accent)">{uppHex(sheet)}</span>
         <div className="mt-0.5 flex gap-2">
           {(
@@ -545,13 +579,14 @@ const lifepathUpp = (state: LifepathRuntimeState) =>
 export const CharacterCreateHudContent = () => {
   const dispatch = usePluginDispatch();
   const characters = usePluginSelector(selectCharacters);
+  const [identity, setIdentity] = useState(() => generateHumanName());
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
   const [deathMsg, setDeathMsg] = useState<string | null>(null);
   const [pendingPoint, setPendingPoint] = useState<DecisionPoint | null>(null);
   const [log, setLog] = useState<string[]>([]);
-  const [charName, setCharName] = useState("Unnamed Traveller");
+  const [charName, setCharName] = useState(identity.name);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [savedId, setSavedId] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<CrewRoleId | null>(null);
@@ -561,15 +596,16 @@ export const CharacterCreateHudContent = () => {
 
   const isFirstCharacter = characters.length === 0;
 
-  const reset = () => {
+  const reset = (nextIdentity = generateHumanName()) => {
     providerRef.current?.cancel();
     providerRef.current = null;
+    setIdentity(nextIdentity);
     setPhase("idle");
     setSheet(null);
     setDeathMsg(null);
     setPendingPoint(null);
     setLog([]);
-    setCharName("Unnamed Traveller");
+    setCharName(nextIdentity.name);
     setSaveState("idle");
     setSavedId(null);
     setSelectedRole(null);
@@ -577,18 +613,31 @@ export const CharacterCreateHudContent = () => {
     setCreateMode("classic");
   };
 
+  const setGenderAndSuggestedName = (gender: CharacterGender) => {
+    const nextIdentity = generateHumanName(gender);
+    setIdentity(nextIdentity);
+    setCharName(nextIdentity.name);
+  };
+
+  const regenerateSuggestedName = () => {
+    const nextIdentity = generateHumanName(identity.gender);
+    setIdentity(nextIdentity);
+    setCharName(nextIdentity.name);
+  };
+
   // ── Random mode ─────────────────────────────────────────────────────────────
   const handleRandom = async () => {
-    reset();
+    const nextIdentity = generateHumanName(identity.gender);
+    reset(nextIdentity);
     setPhase("running");
     try {
       const result = await generateCharacter(
-        "Unnamed Traveller",
+        nextIdentity.name,
         new RandomDecisionProvider(),
-        { mode: "random" }
+        { mode: "random", gender: nextIdentity.gender }
       );
       setSheet(result);
-      setCharName("Unnamed Traveller");
+      setCharName(result.name);
       setPhase("complete");
     } catch (e) {
       if (e instanceof CharacterDeathError) {
@@ -600,15 +649,16 @@ export const CharacterCreateHudContent = () => {
 
   // ── Guided mode ─────────────────────────────────────────────────────────────
   const handleGuided = () => {
-    reset();
+    const nextIdentity = generateHumanName(identity.gender);
+    reset(nextIdentity);
     const provider = new HumanDecisionProvider((point) => setPendingPoint(point));
     providerRef.current = provider;
     setPhase("deciding");
 
-    generateCharacter("Unnamed Traveller", provider, { mode: "guided" })
+    generateCharacter(nextIdentity.name, provider, { mode: "guided", gender: nextIdentity.gender })
       .then(result => {
         setSheet(result);
-        setCharName("Unnamed Traveller");
+        setCharName(result.name);
         setPendingPoint(null);
         setPhase("complete");
       })
@@ -627,14 +677,16 @@ export const CharacterCreateHudContent = () => {
   const handleSave = async () => {
     if (!sheet || saveState === "saving" || saveState === "saved") return;
     if (isFirstCharacter && !selectedRole) return;
+    const finalName = charName.trim();
+    const sheetForSave = addSheetIdentity(sheet, finalName, identity.gender);
     setSaveState("saving");
     try {
       const res = await fetch("/api/characters", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sheet,
-          name: charName,
+          sheet: sheetForSave,
+          name: finalName,
           ...(isFirstCharacter && selectedRole ? { role: selectedRole } : {}),
         }),
       });
@@ -663,7 +715,8 @@ export const CharacterCreateHudContent = () => {
   };
 
   const startLifepath = () => {
-    reset();
+    const nextIdentity = generateHumanName(identity.gender);
+    reset(nextIdentity);
     setCreateMode("lifepath");
     setLifepathState(createInitialLifepathState(basicHumanLifepathDefinition));
   };
@@ -901,7 +954,7 @@ export const CharacterCreateHudContent = () => {
       );
       updateLifepath(next);
       if (next.phase === "generation-complete") {
-        const draft = buildLifepathDraft(next, basicHumanLifepathDefinition, charName);
+        const draft = buildLifepathDraft(next, basicHumanLifepathDefinition, charName, identity.gender);
         setSheet(lifepathDraftToCharacterSheet(draft));
         setPhase("complete");
       }
@@ -924,6 +977,43 @@ export const CharacterCreateHudContent = () => {
       <div className="font-mono text-[8px] font-bold uppercase tracking-wider text-(--hud-text)">
         {title}
       </div>
+
+      {(phase === "idle" || phase === "complete") && (
+        <div className="flex flex-col gap-1 border border-(--hud-border-subtle) bg-(--hud-surface-2)/60 px-1.5 py-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">
+              Identity
+            </span>
+            <button
+              type="button"
+              onClick={regenerateSuggestedName}
+              className="h-4 border border-(--hud-border-subtle) px-1.5 font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-border) hover:text-(--hud-text)"
+            >
+              New Name
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {characterGenders.map((gender) => (
+              <button
+                key={gender}
+                type="button"
+                onClick={() => setGenderAndSuggestedName(gender)}
+                className={[
+                  "h-5 border px-1 font-mono text-[7px] uppercase tracking-wider transition-colors",
+                  identity.gender === gender
+                    ? "border-(--hud-accent) text-(--hud-text)"
+                    : "border-(--hud-border-subtle) text-(--hud-text-dim) hover:border-(--hud-border) hover:text-(--hud-text)",
+                ].join(" ")}
+              >
+                {genderLabel(gender)}
+              </button>
+            ))}
+          </div>
+          <div className="font-mono text-[8px] text-(--hud-text)">
+            {charName}
+          </div>
+        </div>
+      )}
 
         {/* ── Idle: mode selection ───────────────────────────────────────────── */}
         {phase === "idle" && createMode === "classic" && (
@@ -1020,7 +1110,7 @@ export const CharacterCreateHudContent = () => {
 
             {/* Cancel */}
             <button
-              onClick={reset}
+              onClick={() => reset()}
               className="self-start font-mono text-[8px] text-(--hud-text-dim) transition-colors hover:text-(--hud-error)"
             >
               Cancel
@@ -1040,7 +1130,7 @@ export const CharacterCreateHudContent = () => {
               {deathMsg} — the character is lost.
             </div>
             <button
-              onClick={reset}
+              onClick={() => reset()}
               className="self-start border border-(--hud-border) px-2 py-1 font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
             >
               Try Again
@@ -1109,7 +1199,7 @@ export const CharacterCreateHudContent = () => {
                       {saveState === "saving" ? "Saving…" : "Save Character"}
                     </button>
                     <button
-                      onClick={reset}
+                      onClick={() => reset()}
                       className="border border-(--hud-border) px-2 py-1 font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
                     >
                       Generate Another
@@ -1130,7 +1220,7 @@ export const CharacterCreateHudContent = () => {
                     )}
                   </div>
                   <button
-                    onClick={reset}
+                    onClick={() => reset()}
                     className="border border-(--hud-border) px-2 py-1 font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-accent)"
                   >
                     Generate Another

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma as CharacterDbPrisma } from "@/generated/character-prisma";
 import { characterPrisma } from "@/plugins/characters/server/characterPrisma";
-import type { CharacterSheet } from "@/lib/characters/types";
+import type { CharacterGender, CharacterSheet } from "@/lib/characters/types";
 import { getCurrentUser, isDevAuthMode } from "@/lib/devAuth";
 
 const toHex = (n: number) => Math.min(15, Math.max(0, n)).toString(16).toUpperCase();
@@ -17,6 +17,9 @@ const normalizeSkills = (skills: CharacterSheet["skills"]) => {
   }
   return [...byName.entries()].map(([name, level]) => ({ name, level }));
 };
+
+const normalizeGender = (value: unknown): CharacterGender | null =>
+  value === "female" || value === "male" || value === "nonbinary" ? value : null;
 
 const preCareerHistoryTypes = new Set([
   "preCareer.skip",
@@ -176,9 +179,11 @@ export const GET = async () => {
       const hex        = colonIdx !== -1 ? c.currentLocation!.slice(colonIdx + 1) : null;
       const sheet = c.sheet as CharacterSheet | null;
       const history = normalizeHistory(sheet);
+      const sheetMetadata = sheet?.generation?.metadata;
       return {
         id:             c.id,
         name:           c.name,
+        gender:         normalizeGender(sheet?.gender ?? sheetMetadata?.gender),
         upp:            [c.strength, c.dexterity, c.endurance, c.intelligence, c.education, c.socialStanding].map(toHex).join(""),
         strength:       c.strength,
         dexterity:      c.dexterity,
@@ -217,6 +222,19 @@ export const POST = async (request: Request) => {
     }
 
     const name = (body.name?.trim() || sheet.name || "Unnamed Traveller").trim();
+    const gender = normalizeGender(sheet.gender ?? sheet.generation?.metadata?.gender);
+    const sheetForStorage: CharacterSheet = {
+      ...sheet,
+      name,
+      gender,
+      generation: {
+        ...sheet.generation,
+        metadata: {
+          ...(sheet.generation.metadata ?? {}),
+          gender,
+        },
+      },
+    };
     const skills = normalizeSkills(sheet.skills);
     const credits = Number.isFinite(sheet.credits) ? sheet.credits : 0;
 
@@ -231,7 +249,7 @@ export const POST = async (request: Request) => {
         education:      sheet.upp.edu,
         socialStanding: sheet.upp.soc,
         credits,
-        sheet:          sheet as unknown as CharacterDbPrisma.InputJsonValue,
+        sheet:          sheetForStorage as unknown as CharacterDbPrisma.InputJsonValue,
       };
 
       const created = await tx.character.create({ data });

@@ -14,6 +14,13 @@ import {
 import type { CharacterSummary } from "./charactersSlice";
 import { characterProfileHudId } from "./metadata";
 
+const genderLabel = (gender: CharacterSummary["gender"]) => {
+  if (gender === "female") return "Female";
+  if (gender === "male") return "Male";
+  if (gender === "nonbinary") return "Nonbinary";
+  return null;
+};
+
 const CharacterCard = ({
   character,
   onProfile,
@@ -46,6 +53,7 @@ const CharacterCard = ({
       )}
       <div className="mt-0.5 flex gap-2 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
         <span className="text-(--hud-accent)">{character.upp}</span>
+        {genderLabel(character.gender) && <span>{genderLabel(character.gender)}</span>}
         <span>Skills: {character.skills.length}</span>
       </div>
       <div className="mt-1 flex items-center gap-1">
