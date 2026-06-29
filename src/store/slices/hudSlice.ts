@@ -6,6 +6,7 @@ export type CoreHudId =
   | "sectorMap"
   | "subsectorMap"
   | "galaxyMap"
+  | "systemMap"
   | "worldMap"
   | "hudControls";
 
@@ -61,6 +62,11 @@ export const initialHudState: HudState = {
       visible: true,
       pinned: true,
       offset: { x: -0.12, y: -0.06 },
+    },
+    systemMap: {
+      visible: false,
+      pinned: true,
+      offset: { x: 0.18, y: -0.18 },
     },
     worldMap: {
       visible: false,

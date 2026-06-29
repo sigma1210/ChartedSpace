@@ -6,7 +6,16 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { World } from "@/types";
 import { seededRng } from "@/lib/orbitData";
-import { WorldGlobeVisual } from "@/components/world/PlanetGlobe";
+import {
+  AtmosphereGlowMesh,
+  CloudShadowMesh,
+  PLANET_SPEED,
+  WorldGlobeVisual,
+  atmosphereGlowConfig,
+  buildCloudTextureFromKey,
+  cloudConfig,
+} from "@/components/world/PlanetGlobe";
+import { uwpVal } from "@/lib/worldMap";
 import type {
   StarSystemOrbitModel,
   StarSystemGasGiantModel,
@@ -18,6 +27,7 @@ import { buildSystemSceneGraph } from "./sceneGraph";
 export interface SystemScene3DProps {
   model: StarSystemViewModel;
   mainWorld?: World | null;
+  animationEnabled?: boolean;
   className?: string;
 }
 
@@ -42,6 +52,155 @@ const getGlowTexture = () => {
   return glowTexture;
 };
 
+const buildStarLayer = ({
+  count,
+  seed,
+  minRadius,
+  maxRadius,
+  size,
+  opacity,
+  palette,
+}: {
+  count: number;
+  seed: string;
+  minRadius: number;
+  maxRadius: number;
+  size: number;
+  opacity: number;
+  palette: string[];
+}) => {
+  const rng = seededRng(seed);
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i++) {
+    const theta = rng() * Math.PI * 2;
+    const phi = Math.acos(2 * rng() - 1);
+    const radius = minRadius + rng() * (maxRadius - minRadius);
+    const color = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
+    const intensity = 0.55 + rng() * 0.45;
+
+    positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = radius * Math.cos(phi);
+    colors[i * 3] = color.r * intensity;
+    colors[i * 3 + 1] = color.g * intensity;
+    colors[i * 3 + 2] = color.b * intensity;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+  const material = new THREE.PointsMaterial({
+    size,
+    vertexColors: true,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+  });
+
+  return new THREE.Points(geometry, material);
+};
+
+const buildSpaceHaze = () => {
+  const geometry = new THREE.SphereGeometry(96, 48, 24);
+  const material = new THREE.MeshBasicMaterial({
+    color: "#0e7490",
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0.1,
+    depthWrite: false,
+  });
+  return new THREE.Mesh(geometry, material);
+};
+
+const buildBackgroundGlowStars = () => {
+  const rng = seededRng("system-starfield-glow-stars");
+  const group = new THREE.Group();
+  const texture = getGlowTexture();
+  const palette = ["#ffffff", "#7ddcff", "#d9f7ff", "#ffd8a8", "#b8c8ff"];
+
+  for (let i = 0; i < 34; i++) {
+    const theta = rng() * Math.PI * 2;
+    const phi = Math.acos(2 * rng() - 1);
+    const radius = 66 + rng() * 34;
+    const scale = 0.55 + rng() * 1.25;
+    const color = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texture,
+      color,
+      transparent: true,
+      opacity: 0.2 + rng() * 0.28,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }));
+
+    sprite.position.set(
+      radius * Math.sin(phi) * Math.cos(theta),
+      radius * Math.sin(phi) * Math.sin(theta),
+      radius * Math.cos(phi),
+    );
+    sprite.scale.set(scale, scale, 1);
+    group.add(sprite);
+  }
+
+  return group;
+};
+
+const Starfield = () => {
+  const object = useMemo(() => {
+    const group = new THREE.Group();
+    group.add(buildSpaceHaze());
+    group.add(buildBackgroundGlowStars());
+    group.add(buildStarLayer({
+      count: 4200,
+      seed: "system-starfield-dim",
+      minRadius: 50,
+      maxRadius: 104,
+      size: 0.055,
+      opacity: 0.72,
+      palette: ["#d8f7ff", "#b9d6ff", "#ffffff", "#b8e8ff"],
+    }));
+    group.add(buildStarLayer({
+      count: 1300,
+      seed: "system-starfield-mid",
+      minRadius: 48,
+      maxRadius: 98,
+      size: 0.11,
+      opacity: 0.9,
+      palette: ["#ffffff", "#dff9ff", "#7ddcff", "#ffe3b0"],
+    }));
+    group.add(buildStarLayer({
+      count: 220,
+      seed: "system-starfield-bright",
+      minRadius: 46,
+      maxRadius: 92,
+      size: 0.24,
+      opacity: 1,
+      palette: ["#ffffff", "#67e8f9", "#d7f7ff", "#ffd18a"],
+    }));
+    return group;
+  }, []);
+
+  useEffect(() => () => {
+    object.traverse((child) => {
+      if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) child.material.forEach((material) => material.dispose());
+        else child.material.dispose();
+      } else if (child instanceof THREE.Sprite) {
+        if (Array.isArray(child.material)) child.material.forEach((material) => material.dispose());
+        else child.material.dispose();
+      }
+    });
+  }, [object]);
+
+  return <primitive object={object} />;
+};
+
 const SURFACE_COLOR: Record<string, string> = {
   barren: "#78716c",
   vacuum: "#4b5563",
@@ -62,12 +221,26 @@ const orbitColor = (orbitKind: string) => {
   return "#0e3a50";
 };
 
+const orbitOpacity = (orbitKind: StarSystemOrbitModel["orbitKind"]) => {
+  if (orbitKind === "satellite") return 0.28;
+  if (orbitKind === "companion") return 0.34;
+  return 0.32;
+};
+
 const orbitAngularSpeed = (orbit: StarSystemOrbitModel | undefined) => {
   if (!orbit) return 0;
   const radius = Math.max(0.5, orbit.sceneRadius);
   if (orbit.orbitKind === "satellite") return 0.72 / Math.sqrt(radius);
   if (orbit.orbitKind === "companion") return 0.18 / Math.pow(radius, 1.35);
   return 0.12 / Math.pow(radius, 1.5);
+};
+
+const orbitPlaneRotation = (seed: string, orbitId: number, subtle = false): [number, number, number] => {
+  const rng = seededRng(`${seed}:orbit-plane:${orbitId}`);
+  const maxInclination = subtle ? 0.055 : THREE.MathUtils.degToRad(13);
+  const inclination = (rng() * 2 - 1) * maxInclination;
+  const node = rng() * Math.PI * 2;
+  return [inclination, node, 0];
 };
 
 const sizeCodeValue = (sizeCode: string | null | undefined) => {
@@ -273,9 +446,11 @@ const StarVisual = ({ star }: { star: StarSystemViewModel["stars"][number] }) =>
 const GasGiantVisual = ({
   body,
   gasGiantIndex,
+  animationEnabled,
 }: {
   body: StarSystemRenderableBody;
   gasGiantIndex: number;
+  animationEnabled: boolean;
 }) => {
   const sphereRef = useRef<THREE.Mesh>(null);
   const hazeRef = useRef<THREE.Mesh>(null);
@@ -286,6 +461,7 @@ const GasGiantVisual = ({
   const seed = gasGiantIndex + orbitId * 0.27;
 
   useFrame((_, delta) => {
+    if (!animationEnabled) return;
     if (sphereRef.current) sphereRef.current.rotation.y += delta * (type === "hot" ? 0.16 : type === "ice" ? 0.08 : 0.11);
     if (hazeRef.current) hazeRef.current.rotation.y -= delta * (type === "hot" ? 0.08 : 0.045);
   });
@@ -373,9 +549,49 @@ const GasGiantVisual = ({
   );
 };
 
-const WorldVisual = ({ body }: { body: StarSystemRenderableBody }) => {
+const WorldVisual = ({
+  body,
+  animationEnabled,
+}: {
+  body: StarSystemRenderableBody;
+  animationEnabled: boolean;
+}) => {
+  const cloudRefs = useRef<Array<THREE.Mesh | null>>([]);
   const radius = worldRadius(body);
-  const atmosphere = body.kind === "world" && body.atmosphereCode !== null && body.atmosphereCode !== "0";
+  const atmoVal = body.kind === "world" ? uwpVal(body.atmosphereCode ?? "0") : 0;
+  const hydroVal = body.kind === "world" ? uwpVal(body.hydrographicsCode ?? "0") : 0;
+  const clouds = useMemo(
+    () => body.kind === "world" ? cloudConfig(atmoVal, hydroVal) : null,
+    [atmoVal, body.kind, hydroVal],
+  );
+  const atmosphereGlow = useMemo(
+    () => body.kind === "world" ? atmosphereGlowConfig(atmoVal) : null,
+    [atmoVal, body.kind],
+  );
+  const cloudTextures = useMemo(
+    () => clouds
+      ? clouds.layers.map((layer) => buildCloudTextureFromKey(
+        `${body.orbitId ?? "unplaced"}:${body.label ?? "world"}:${body.kind === "world" ? body.sizeCode ?? "x" : "x"}:${body.kind === "world" ? body.atmosphereCode ?? "0" : "0"}:${body.kind === "world" ? body.hydrographicsCode ?? "0" : "0"}`,
+        clouds,
+        layer,
+      ))
+      : [],
+    [body, clouds],
+  );
+
+  useEffect(
+    () => () => cloudTextures.forEach((cloudTexture) => cloudTexture.dispose()),
+    [cloudTextures],
+  );
+
+  useFrame((_, delta) => {
+    if (!animationEnabled) return;
+    if (!clouds) return;
+    clouds.layers.forEach((layer, index) => {
+      const cloudRef = cloudRefs.current[index];
+      if (cloudRef) cloudRef.rotation.y += delta * PLANET_SPEED * layer.speedMult;
+    });
+  });
 
   return (
     <>
@@ -388,32 +604,63 @@ const WorldVisual = ({ body }: { body: StarSystemRenderableBody }) => {
           emissiveIntensity={body.kind === "world" && body.surfaceType === "hellworld" ? 0.18 : body.kind === "world" && body.surfaceType === "exotic" ? 0.1 : 0}
         />
       </mesh>
-      {atmosphere && (
-        <mesh>
-          <sphereGeometry args={[radius * 1.08, 24, 16]} />
-          <meshBasicMaterial
-            color="#93c5fd"
-            transparent
-            opacity={0.1}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
+      {clouds && cloudTextures[0] && (
+        <CloudShadowMesh
+          radius={radius}
+          layer={clouds.layers[0]}
+          texture={cloudTextures[0]}
+          opacity={clouds.shadowOpacity}
+          animationEnabled={animationEnabled}
+        />
+      )}
+      {clouds && (
+        <>
+          {clouds.layers.map((layer, index) => (
+            <mesh
+              key={`${layer.radiusMult}-${index}`}
+              ref={(node) => { cloudRefs.current[index] = node; }}
+            >
+              <sphereGeometry args={[radius * layer.radiusMult, 24, 16]} />
+              <meshStandardMaterial
+                alphaMap={cloudTextures[index]}
+                color={layer.color}
+                transparent
+                opacity={layer.opacity}
+                depthWrite={false}
+                alphaTest={0.015}
+              />
+            </mesh>
+          ))}
+        </>
+      )}
+      {atmosphereGlow && (
+        <AtmosphereGlowMesh
+          radius={radius}
+          config={atmosphereGlow}
+        />
       )}
     </>
   );
 };
 
-const MainWorldVisual = ({ world }: { world: World }) => (
-  <WorldGlobeVisual world={world} radius={0.1} segments={[64, 32]} />
+const MainWorldVisual = ({
+  world,
+  animationEnabled,
+}: {
+  world: World;
+  animationEnabled: boolean;
+}) => (
+  <WorldGlobeVisual world={world} radius={0.1} segments={[64, 32]} animationEnabled={animationEnabled} />
 );
 
 const AsteroidBeltVisual = ({
   body,
   orbit,
+  animationEnabled,
 }: {
   body: StarSystemRenderableBody;
   orbit: StarSystemOrbitModel;
+  animationEnabled: boolean;
 }) => {
   const beltRef = useRef<THREE.Group>(null);
   const rocksRef = useRef<THREE.InstancedMesh>(null);
@@ -452,6 +699,7 @@ const AsteroidBeltVisual = ({
   }, [rockData]);
 
   useFrame((_, delta) => {
+    if (!animationEnabled) return;
     if (beltRef.current) beltRef.current.rotation.y += delta * (isMainWorldBelt ? 0.006 : 0.0035);
   });
 
@@ -521,12 +769,32 @@ const AsteroidBeltVisual = ({
 const AnimatedSystemPrimitives = ({
   model,
   mainWorld,
+  animationEnabled,
 }: {
   model: StarSystemViewModel;
   mainWorld?: World | null;
+  animationEnabled: boolean;
 }) => {
   const graph = useMemo(() => buildSystemSceneGraph(model), [model]);
   const bodyById = useMemo(() => new Map(model.bodies.map((body) => [body.id, body])), [model.bodies]);
+  const orbitPlaneRotationById = useMemo(() => {
+    const rotations = new Map<string, [number, number, number]>();
+    for (const orbit of model.orbits) {
+      const body = orbit.bodyId ? bodyById.get(orbit.bodyId) : null;
+      rotations.set(
+        orbit.id,
+        orbitPlaneRotation(orbit.id, orbit.orbitId, body?.isMainWorld === true),
+      );
+    }
+    return rotations;
+  }, [bodyById, model.orbits]);
+  const orbitPlaneEulerById = useMemo(() => {
+    const eulers = new Map<string, THREE.Euler>();
+    for (const [id, rotation] of orbitPlaneRotationById) {
+      eulers.set(id, new THREE.Euler(...rotation));
+    }
+    return eulers;
+  }, [orbitPlaneRotationById]);
   const gasGiantIndexById = useMemo(() => {
     const nextIndexByParent = new Map<string, number>();
     const indexById = new Map<string, number>();
@@ -547,7 +815,7 @@ const AnimatedSystemPrimitives = ({
   const bodyRefs = useRef(new Map<string, THREE.Group>());
 
   useFrame(({ clock }) => {
-    const elapsed = clock.getElapsedTime();
+    const elapsed = animationEnabled ? clock.getElapsedTime() : 0;
     const anchors = new Map<string, THREE.Vector3>([
       ["system:center", new THREE.Vector3(0, 0, 0)],
     ]);
@@ -567,13 +835,21 @@ const AnimatedSystemPrimitives = ({
       const parent = anchors.get(body.parentId) ?? anchors.get("system:center")!;
       const orbit = orbitByBodyId.get(body.id);
       const angle = body.scene.angle0 + elapsed * orbitAngularSpeed(orbit);
-      const position = new THREE.Vector3(
-        parent.x + Math.cos(angle) * body.scene.orbitRadius,
-        parent.y,
-        parent.z + Math.sin(angle) * body.scene.orbitRadius,
+      const offset = new THREE.Vector3(
+        Math.cos(angle) * body.scene.orbitRadius,
+        0,
+        Math.sin(angle) * body.scene.orbitRadius,
       );
+      const orbitPlane = orbit ? orbitPlaneEulerById.get(orbit.id) : null;
+      if (orbitPlane) offset.applyEuler(orbitPlane);
+      const position = parent.clone().add(offset);
       anchors.set(body.id, position);
-      bodyRefs.current.get(body.id)?.position.copy(position);
+      const bodyRef = bodyRefs.current.get(body.id);
+      if (bodyRef) {
+        bodyRef.position.copy(position);
+        if (orbitPlane) bodyRef.rotation.copy(orbitPlane);
+        else bodyRef.rotation.set(0, 0, 0);
+      }
     }
 
     for (const orbit of model.orbits) {
@@ -592,7 +868,8 @@ const AnimatedSystemPrimitives = ({
       {graph.orbits.map(({ orbit, x, y, z }) => {
         const body = orbit.bodyId ? bodyById.get(orbit.bodyId) : null;
         const isBelt = body?.kind === "belt";
-        const tube = orbit.orbitKind === "satellite" ? 0.006 : orbit.orbitKind === "companion" ? 0.012 : 0.01;
+        const tube = orbit.orbitKind === "satellite" ? 0.0035 : orbit.orbitKind === "companion" ? 0.007 : 0.006;
+        const planeRotation = orbitPlaneRotationById.get(orbit.id) ?? [0, 0, 0];
         return (
           <group
             key={orbit.id}
@@ -601,16 +878,17 @@ const AnimatedSystemPrimitives = ({
               else orbitRefs.current.delete(orbit.id);
             }}
             position={[x, y, z]}
+            rotation={planeRotation}
           >
             <mesh rotation={[Math.PI / 2, 0, 0]}>
               <torusGeometry args={[orbit.sceneRadius, tube, 8, 128]} />
               <meshBasicMaterial
                 color={isBelt ? "#3f3f46" : orbitColor(orbit.orbitKind)}
                 transparent
-                opacity={isBelt ? body.isMainWorld ? 0.24 : 0.14 : orbit.orbitKind === "satellite" ? 0.55 : 0.72}
+                opacity={isBelt ? body.isMainWorld ? 0.2 : 0.1 : orbitOpacity(orbit.orbitKind)}
               />
             </mesh>
-            {isBelt && <AsteroidBeltVisual body={body} orbit={orbit} />}
+            {isBelt && <AsteroidBeltVisual body={body} orbit={orbit} animationEnabled={animationEnabled} />}
           </group>
         );
       })}
@@ -630,6 +908,8 @@ const AnimatedSystemPrimitives = ({
 
       {graph.bodies.map(({ body, x, y, z }) => {
         if (body.kind === "belt") return null;
+        const orbit = orbitByBodyId.get(body.id);
+        const planeRotation = orbit ? orbitPlaneRotationById.get(orbit.id) : undefined;
         return (
           <group
             key={body.id}
@@ -638,13 +918,18 @@ const AnimatedSystemPrimitives = ({
               else bodyRefs.current.delete(body.id);
             }}
             position={[x, y, z]}
+            rotation={planeRotation}
           >
             {body.kind === "gasGiant" ? (
-              <GasGiantVisual body={body} gasGiantIndex={gasGiantIndexById.get(body.id) ?? 0} />
+              <GasGiantVisual
+                body={body}
+                gasGiantIndex={gasGiantIndexById.get(body.id) ?? 0}
+                animationEnabled={animationEnabled}
+              />
             ) : body.isMainWorld && mainWorld ? (
-              <MainWorldVisual world={mainWorld} />
+              <MainWorldVisual world={mainWorld} animationEnabled={animationEnabled} />
             ) : (
-              <WorldVisual body={body} />
+              <WorldVisual body={body} animationEnabled={animationEnabled} />
             )}
           </group>
         );
@@ -653,22 +938,32 @@ const AnimatedSystemPrimitives = ({
   );
 };
 
-export const SystemScene3D = ({ model, mainWorld = null, className = "" }: SystemScene3DProps) => {
-  const cameraDistance = Math.max(18, model.scene.cameraDistance * 1.25);
+export const SystemScene3D = ({
+  model,
+  mainWorld = null,
+  animationEnabled = false,
+  className = "",
+}: SystemScene3DProps) => {
+  const cameraDistance = model.scene.cameraDistance;
 
   return (
     <div className={`relative ${className}`}>
       <Canvas
-        camera={{ position: [0, cameraDistance * 0.75, cameraDistance], fov: 45 }}
-        gl={{ antialias: true, alpha: true }}
+        camera={{ position: [0, cameraDistance * 0.4, cameraDistance], fov: 50, far: 200 }}
+        gl={{ antialias: true, alpha: false }}
       >
         <color attach="background" args={["#020617"]} />
-        <ambientLight intensity={0.72} />
-        <pointLight position={[0, 10, 0]} intensity={1.5} />
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[2, 3, 4]} intensity={1.4} />
 
-        <AnimatedSystemPrimitives model={model} mainWorld={mainWorld} />
+        <Starfield />
+        <AnimatedSystemPrimitives
+          model={model}
+          mainWorld={mainWorld}
+          animationEnabled={animationEnabled}
+        />
 
-        <OrbitControls enablePan enableZoom enableRotate makeDefault />
+        <OrbitControls enablePan={false} minDistance={2} maxDistance={80} makeDefault />
       </Canvas>
     </div>
   );

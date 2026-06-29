@@ -166,7 +166,15 @@ const FeatureMark = ({
   }
 };
 
-const WorldMap = ({ world, compact = false }: { world: World; compact?: boolean }) => {
+const WorldMap = ({
+  world,
+  compact = false,
+  mapScale = 1,
+}: {
+  world: World;
+  compact?: boolean;
+  mapScale?: number;
+}) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const size = uwpVal(world.uwp.size);
   const { svgW, svgH } = svgDimensions(size);
@@ -259,8 +267,11 @@ const WorldMap = ({ world, compact = false }: { world: World; compact?: boolean 
       )}
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
         <div
-          className="h-full max-h-full max-w-full border border-(--hud-border)"
-          style={{ aspectRatio: `${svgW} / ${svgH}` }}
+          className="max-h-full max-w-full border border-(--hud-border)"
+          style={{
+            aspectRatio: `${svgW} / ${svgH}`,
+            height: `${Math.max(0.1, Math.min(1, mapScale)) * 100}%`,
+          }}
         >
           <svg
             ref={svgRef}

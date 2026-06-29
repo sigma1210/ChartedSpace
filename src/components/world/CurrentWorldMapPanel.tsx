@@ -9,7 +9,13 @@ import {
 } from "@/store/selectors/galaxy.selectors";
 import WorldMap from "./WorldMap";
 
-const CurrentWorldMapPanel = ({ compact = false }: { compact?: boolean }) => {
+const CurrentWorldMapPanel = ({
+  compact = false,
+  mapScale = 1,
+}: {
+  compact?: boolean;
+  mapScale?: number;
+}) => {
   const shipLocation = useAppSelector(selectShipLocation);
   const world = useAppSelector(
     selectWorldByCoord(shipLocation?.sectorAbbr, shipLocation?.hex),
@@ -71,7 +77,7 @@ const CurrentWorldMapPanel = ({ compact = false }: { compact?: boolean }) => {
         compact ? "p-1.5" : "p-4",
       ].join(" ")}>
         {world ? (
-          <WorldMap world={world} compact={compact} />
+          <WorldMap world={world} compact={compact} mapScale={mapScale} />
         ) : (
           <div className="grid h-full min-h-80 place-items-center border border-(--hud-border) bg-(--hud-bg)/45 p-6 text-center">
             <p className="font-mono text-xs uppercase tracking-widest text-(--hud-text-dim)">

@@ -1,72 +1,450 @@
 "use client";
 
-import { useEffect } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEventHandler,
+  type ReactNode,
+} from "react";
+import { CircleDot, Globe2, Grid3X3, Info, Map as MapIcon, Navigation, Radar } from "lucide-react";
+import { GalaxyMiniMapHudContent } from "@/components/map/GalaxyMiniMap";
+import { SectorMiniMapHudContent } from "@/components/map/SectorMiniMap";
+import { SubsectorMiniMapHudContent } from "@/components/map/SubsectorMiniMap";
 import { SystemScene3D, SystemTopDownMap } from "@/components/system-view-v2";
+import CurrentWorldMapPanel from "@/components/world/CurrentWorldMapPanel";
+import { HudHeader, HudIconButton, HudPanel } from "@/components/world/HudPrimitives";
+import { MainWorldHud } from "@/components/world/MainWorldHud";
 import { SystemLocationLifecycle } from "@/components/world/SystemLocationLifecycle";
-import { selectShipLocation } from "@/plugins/ship";
+import { registeredPluginHudLayouts } from "@/plugins/hudLayouts";
+import { registeredPluginHudRenderers } from "@/plugins/hudRenderers";
+import { navigationSelectHudId } from "@/plugins/navigation";
+import { NavigationHudContent } from "@/plugins/navigation/NavigationHud";
+import { selectActiveShip, selectShipLocation } from "@/plugins/ship";
+import type {
+  PluginHudRendererRegistration,
+  PluginRenderableHudRegistration,
+} from "@/plugins/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectWorldByCoord } from "@/store/selectors/galaxy.selectors";
+import { selectHudLayout, selectHudVisible } from "@/store/selectors/hud.selectors";
 import {
   selectCurrentStarSystemViewModel,
   selectSystemStatusByKey,
 } from "@/store/selectors/system.selectors";
+import { setActiveWorldHex } from "@/store/slices/galaxySlice";
+import {
+  clampHudOffset,
+  setHudOffset,
+  setHudPinned,
+  setHudVisible,
+  type HudId,
+  type HudOffset,
+} from "@/store/slices/hudSlice";
 import { getSystemData } from "@/store/slices/systemSlice";
+import { openSystemDetail } from "@/store/slices/uiSlice";
 import type { StarSystemViewModel } from "@/lib/starSystemViewModel";
+import type { World } from "@/types";
 
-const SystemHierarchySummary = ({ model }: { model: StarSystemViewModel }) => {
-  const bodyById = new Map(model.bodies.map((body) => [body.id, body]));
-  const orbitsByParent = new Map<string, typeof model.orbits>();
+const HUD_SCREEN_MARGIN = 8;
+const V2_HUD_VISUAL_SCALE = 1.6;
 
-  for (const orbit of model.orbits) {
-    const group = orbitsByParent.get(orbit.parentId) ?? [];
-    group.push(orbit);
-    orbitsByParent.set(orbit.parentId, group);
+const pluginHudRenderersById = new globalThis.Map<string, PluginHudRendererRegistration>(
+  registeredPluginHudRenderers.map((renderer) => [renderer.id, renderer]),
+);
+
+const registeredRenderablePluginHuds = registeredPluginHudLayouts.flatMap((layout) => {
+  const renderer = pluginHudRenderersById.get(layout.id);
+  return renderer ? [{ ...layout, ...renderer }] : [];
+}) satisfies PluginRenderableHudRegistration[];
+
+type HudSize = {
+  width: number;
+  height: number;
+};
+
+type DragState = {
+  startX: number;
+  startY: number;
+  origin: HudOffset;
+};
+
+type RenderableSystemSnapshot = {
+  model: StarSystemViewModel;
+  mainWorld: World | null;
+};
+
+const sameOffset = (a: HudOffset, b: HudOffset) =>
+  Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001;
+
+const viewportCenterFromOffset = (offset: HudOffset, viewport: HudSize) => ({
+  x: viewport.width / 2 + (offset.x * viewport.width) / 2,
+  y: viewport.height / 2 - (offset.y * viewport.height) / 2,
+});
+
+const offsetFromViewportCenter = (
+  center: { x: number; y: number },
+  viewport: HudSize,
+): HudOffset => ({
+  x: (center.x - viewport.width / 2) / (viewport.width / 2),
+  y: -(center.y - viewport.height / 2) / (viewport.height / 2),
+});
+
+const clampV2HudOffset = (
+  offset: HudOffset,
+  viewport: HudSize,
+  panel: HudSize,
+): HudOffset => {
+  const baseOffset = clampHudOffset(offset);
+  if (!viewport.width || !viewport.height || !panel.width || !panel.height) {
+    return baseOffset;
   }
 
+  const center = viewportCenterFromOffset(baseOffset, viewport);
+  const halfWidth = panel.width / 2;
+  const halfHeight = panel.height / 2;
+  const minCenterX = HUD_SCREEN_MARGIN + halfWidth;
+  const maxCenterX = viewport.width - HUD_SCREEN_MARGIN - halfWidth;
+  const centerX =
+    minCenterX > maxCenterX
+      ? viewport.width / 2
+      : Math.max(minCenterX, Math.min(maxCenterX, center.x));
+
+  const minCenterY = HUD_SCREEN_MARGIN + halfHeight;
+  const centerY = Math.max(minCenterY, center.y);
+
+  return clampHudOffset(offsetFromViewportCenter({ x: centerX, y: centerY }, viewport));
+};
+
+const useViewportSize = () => {
+  const [viewport, setViewport] = useState<HudSize>({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const updateViewport = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
+
+  return viewport;
+};
+
+const DraggableSystemHud = ({
+  id,
+  title,
+  actions,
+  className = "",
+  closeTitle,
+  minimizedContent,
+  visualScale = V2_HUD_VISUAL_SCALE,
+  children,
+}: {
+  id: HudId;
+  title: string;
+  actions?: ReactNode;
+  className?: string;
+  closeTitle?: string;
+  minimizedContent?: ReactNode;
+  visualScale?: number;
+  children: ReactNode;
+}) => {
+  const dispatch = useAppDispatch();
+  const layout = useAppSelector(selectHudLayout(id));
+  const viewport = useViewportSize();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const dragOffsetRef = useRef<HudOffset | null>(null);
+  const [panelSize, setPanelSize] = useState<HudSize>({ width: 0, height: 0 });
+  const [dragOffset, setDragOffset] = useState<HudOffset | null>(null);
+
+  useLayoutEffect(() => {
+    const element = panelRef.current;
+    if (!element) return;
+
+    const updatePanelSize = () => {
+      setPanelSize({ width: element.offsetWidth, height: element.offsetHeight });
+    };
+
+    updatePanelSize();
+    const resizeObserver = new ResizeObserver(updatePanelSize);
+    resizeObserver.observe(element);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  const activeOffset = dragOffset ?? layout.offset;
+  const scaledPanelSize = useMemo(
+    () => ({
+      width: panelSize.width * visualScale,
+      height: panelSize.height * visualScale,
+    }),
+    [panelSize, visualScale],
+  );
+  const safeOffset = useMemo(
+    () => clampV2HudOffset(activeOffset, viewport, scaledPanelSize),
+    [activeOffset, scaledPanelSize, viewport],
+  );
+
+  useEffect(() => {
+    if (!layout.visible || dragRef.current) return;
+    const clampedOffset = clampV2HudOffset(layout.offset, viewport, scaledPanelSize);
+    if (!sameOffset(clampedOffset, layout.offset)) {
+      dispatch(setHudOffset({ id, offset: clampedOffset }));
+    }
+  }, [dispatch, id, layout.offset, layout.visible, scaledPanelSize, viewport]);
+
+  useLayoutEffect(() => {
+    const element = panelRef.current;
+    if (!element || !viewport.width || !viewport.height) return;
+
+    const rect = element.getBoundingClientRect();
+    if (rect.top >= HUD_SCREEN_MARGIN) return;
+
+    const center = viewportCenterFromOffset(safeOffset, viewport);
+    const correctedOffset = clampHudOffset(
+      offsetFromViewportCenter(
+        { x: center.x, y: center.y + (HUD_SCREEN_MARGIN - rect.top) },
+        viewport,
+      ),
+    );
+
+    if (sameOffset(correctedOffset, safeOffset)) return;
+
+    if (dragRef.current) {
+      dragOffsetRef.current = correctedOffset;
+      setDragOffset(correctedOffset);
+      return;
+    }
+
+    dispatch(setHudOffset({ id, offset: correctedOffset }));
+  }, [dispatch, id, safeOffset, viewport]);
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      if (!dragRef.current || layout.pinned) return;
+      const dx = ((event.clientX - dragRef.current.startX) / Math.max(viewport.width, 1)) * 2;
+      const dy = -((event.clientY - dragRef.current.startY) / Math.max(viewport.height, 1)) * 2;
+      const nextOffset = clampV2HudOffset(
+        {
+          x: dragRef.current.origin.x + dx,
+          y: dragRef.current.origin.y + dy,
+        },
+        viewport,
+        scaledPanelSize,
+      );
+      dragOffsetRef.current = nextOffset;
+      setDragOffset(nextOffset);
+    };
+
+    const handleUp = () => {
+      if (!dragRef.current) return;
+      const finalOffset = dragOffsetRef.current;
+      dragRef.current = null;
+      dragOffsetRef.current = null;
+      setDragOffset(null);
+      if (finalOffset) {
+        dispatch(setHudOffset({ id, offset: finalOffset }));
+      }
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [dispatch, id, layout.pinned, scaledPanelSize, viewport]);
+
+  const startDrag = useCallback<PointerEventHandler<HTMLDivElement>>(
+    (event) => {
+      if (layout.pinned || event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragRef.current = {
+        startX: event.clientX,
+        startY: event.clientY,
+        origin: safeOffset,
+      };
+      dragOffsetRef.current = safeOffset;
+      setDragOffset(safeOffset);
+    },
+    [layout.pinned, safeOffset],
+  );
+
+  if (!layout.visible && !minimizedContent) return null;
+
   return (
-    <div className="mt-5">
-      <h2 className="mb-2 text-sm text-slate-100">Hierarchy</h2>
-      <ul className="flex max-h-48 flex-col gap-2 overflow-y-auto pr-2">
-        {model.stars.map((star) => {
-          const childOrbits = orbitsByParent.get(star.id) ?? [];
-          return (
-            <li key={star.id} className="border-b border-slate-800 pb-2">
-              <div className="flex justify-between gap-3 text-slate-200">
-                <span>{star.label}</span>
-                <span className="text-slate-500">{star.spectral}</span>
-              </div>
-              {childOrbits.length > 0 && (
-                <ul className="mt-1 flex flex-col gap-1">
-                  {childOrbits.map((orbit) => {
-                    const body = orbit.bodyId ? bodyById.get(orbit.bodyId) : null;
-                    return (
-                      <li key={orbit.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 text-[10px] text-slate-400">
-                        <span className="truncate">{orbit.label}</span>
-                        <span className="shrink-0 text-slate-500">{orbit.parentId}</span>
-                        <span className="shrink-0 text-slate-500">{body?.label ?? body?.kind ?? "empty"}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+    <div
+      ref={panelRef}
+      className="pointer-events-none absolute z-20"
+      style={{
+        left: `${50 + safeOffset.x * 50}%`,
+        top: `${50 - safeOffset.y * 50}%`,
+        transform: `translate(-50%, -50%) scale(${visualScale})`,
+      }}
+    >
+      {layout.visible ? (
+        <HudPanel className={className}>
+          <HudHeader
+            title={title}
+            actions={actions}
+            pinned={layout.pinned}
+            onTogglePinned={() => dispatch(setHudPinned({ id, pinned: !layout.pinned }))}
+            onClose={() => dispatch(setHudVisible({ id, visible: false }))}
+            onDragStart={startDrag}
+            closeTitle={closeTitle}
+          />
+          {children}
+        </HudPanel>
+      ) : (
+        minimizedContent
+      )}
     </div>
   );
 };
 
+const SystemV2HudControls = ({
+  worldName,
+  locationLabel,
+  miniMapVisible,
+  systemMapVisible,
+  worldMapVisible,
+  navigationHudVisible,
+  mainWorldVisible,
+  pluginHudButtons,
+  onOpenMiniMap,
+  onOpenSystemMap,
+  onOpenWorldMap,
+  onOpenNavigationHud,
+  onOpenSystemDetail,
+  onToggleMainWorld,
+}: {
+  worldName: string;
+  locationLabel: string;
+  miniMapVisible: boolean;
+  systemMapVisible: boolean;
+  worldMapVisible: boolean;
+  navigationHudVisible: boolean;
+  mainWorldVisible: boolean;
+  pluginHudButtons: Array<{
+    id: string;
+    openTitle: string;
+    visibleTitle: string;
+    visible: boolean;
+    Icon: PluginRenderableHudRegistration["Icon"];
+    onOpen: () => void;
+  }>;
+  onOpenMiniMap: () => void;
+  onOpenSystemMap: () => void;
+  onOpenWorldMap: () => void;
+  onOpenNavigationHud: () => void;
+  onOpenSystemDetail: () => void;
+  onToggleMainWorld: () => void;
+}) => (
+  <div className="min-w-44">
+    <div className="mb-1 flex items-start justify-between gap-3">
+      <div className="min-w-0 pt-0.5">
+        <div className="truncate text-[9px] leading-none text-(--hud-text)">{worldName}</div>
+        <div className="mt-0.5 truncate text-[8px] leading-none text-(--hud-text-dim)">{locationLabel}</div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1 pt-0.5">
+        <HudIconButton
+          title={miniMapVisible ? "Mini map visible" : "Open mini map"}
+          onClick={onOpenMiniMap}
+        >
+          <Radar size={8} aria-hidden="true" />
+        </HudIconButton>
+        <HudIconButton
+          title={systemMapVisible ? "System map visible" : "Open system map"}
+          onClick={onOpenSystemMap}
+        >
+          <CircleDot size={8} aria-hidden="true" />
+        </HudIconButton>
+        <HudIconButton
+          title={worldMapVisible ? "2D map visible" : "Open 2D map"}
+          onClick={onOpenWorldMap}
+        >
+          <MapIcon size={8} aria-hidden="true" />
+        </HudIconButton>
+        <HudIconButton title="Open system detail" onClick={onOpenSystemDetail}>
+          <Info size={8} aria-hidden="true" />
+        </HudIconButton>
+        <HudIconButton
+          title={navigationHudVisible ? "Navigation visible" : "Open navigation"}
+          onClick={onOpenNavigationHud}
+        >
+          <Navigation size={8} aria-hidden="true" />
+        </HudIconButton>
+        <HudIconButton
+          title={mainWorldVisible ? "Hide main world" : "Open main world"}
+          onClick={onToggleMainWorld}
+        >
+          <Globe2 size={8} aria-hidden="true" />
+        </HudIconButton>
+        {pluginHudButtons.map(({ id, openTitle, visibleTitle, visible, Icon, onOpen }) => (
+          <HudIconButton
+            key={id}
+            title={visible ? visibleTitle : openTitle}
+            onClick={onOpen}
+          >
+            <Icon size={8} aria-hidden="true" />
+          </HudIconButton>
+        ))}
+      </div>
+    </div>
+    <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[8px] leading-none text-(--hud-text-dim)">
+      <span>Status</span>
+      <span className="text-(--hud-accent)">System View V2</span>
+    </div>
+  </div>
+);
+
 const SystemV2PageClient = () => {
   const dispatch = useAppDispatch();
+  const ship = useAppSelector(selectActiveShip);
   const shipLocation = useAppSelector(selectShipLocation);
   const sectorAbbr = shipLocation?.sectorAbbr ?? null;
   const hex = shipLocation?.hex ?? null;
   const mainWorld = useAppSelector(selectWorldByCoord(sectorAbbr, hex));
   const model = useAppSelector(selectCurrentStarSystemViewModel);
+  const miniMapVisible = useAppSelector(selectHudVisible("subsectorMap"));
+  const systemMapVisible = useAppSelector(selectHudVisible("systemMap"));
+  const sectorMiniMapVisible = useAppSelector(selectHudVisible("sectorMap"));
+  const galaxyMiniMapVisible = useAppSelector(selectHudVisible("galaxyMap"));
+  const worldMapVisible = useAppSelector(selectHudVisible("worldMap"));
+  const navigationHudVisible = useAppSelector(selectHudVisible(navigationSelectHudId));
+  const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
+  const pluginHudVisibility = useAppSelector(
+    (state) =>
+      Object.fromEntries(
+        registeredRenderablePluginHuds.map((registration) => [
+          registration.id,
+          state.hud.layouts[registration.id]?.visible ?? false,
+        ]),
+      ) as Record<string, boolean>,
+  );
   const systemStatus = useAppSelector(
     sectorAbbr && hex ? selectSystemStatusByKey(sectorAbbr, hex) : () => "idle",
   );
+  const inJump = ship?.status === "in_jump";
+  const lastRenderableSnapshotRef = useRef<RenderableSystemSnapshot | null>(null);
+
+  if (model) {
+    lastRenderableSnapshotRef.current = {
+      model,
+      mainWorld,
+    };
+  }
+  const renderableSnapshot = model
+    ? { model, mainWorld }
+    : lastRenderableSnapshotRef.current;
 
   useEffect(() => {
     if (!sectorAbbr || !hex) return;
@@ -75,75 +453,175 @@ const SystemV2PageClient = () => {
   }, [dispatch, hex, sectorAbbr, systemStatus]);
 
   return (
-    <div className="h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
+    <div className="relative h-screen overflow-hidden bg-[#020617] text-slate-100">
       <SystemLocationLifecycle />
-      <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-4">
-        <header className="flex items-end justify-between gap-4 border-b border-slate-700 pb-3">
-          <div>
-            <h1 className="font-mono text-lg uppercase tracking-widest text-slate-100">
-              System View V2
-            </h1>
-            <p className="mt-1 font-mono text-xs uppercase tracking-wider text-slate-400">
-              Model-backed top-down prototype
-            </p>
-          </div>
-          <div className="text-right font-mono text-xs uppercase tracking-wider text-slate-400">
-            <div>{shipLocation?.worldName ?? "No ship location"}</div>
-            <div>{sectorAbbr && hex ? `${sectorAbbr} ${hex}` : "Location unavailable"}</div>
-          </div>
-        </header>
-
-        {!sectorAbbr || !hex ? (
+      {!sectorAbbr || !hex ? (
+        <div className="flex h-full items-center justify-center p-4">
           <div className="border border-slate-700 bg-slate-900/70 p-4 font-mono text-sm text-slate-300">
             No active ship location is available.
           </div>
-        ) : systemStatus === "loading" || !model ? (
-          <div className="border border-slate-700 bg-slate-900/70 p-4 font-mono text-sm text-slate-300">
-            Loading system model...
-          </div>
-        ) : (
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_360px]">
-            <div className="min-h-[360px] overflow-hidden border border-slate-700 bg-slate-900 shadow-2xl shadow-black/30">
-              <div className="flex h-full min-h-[360px] items-center justify-center">
-                <SystemTopDownMap model={model} width={560} height={560} className="h-full max-h-[min(560px,calc(100vh-120px))] w-auto max-w-full" />
-              </div>
+        </div>
+      ) : !renderableSnapshot ? (
+        <div className="h-full" />
+      ) : (
+        <>
+          <SystemScene3D
+            model={renderableSnapshot.model}
+            mainWorld={renderableSnapshot.mainWorld}
+            className="h-full w-full"
+          />
+          <DraggableSystemHud
+            id="hudControls"
+            title="System"
+            closeTitle="Hide HUD"
+            minimizedContent={(
+              <button
+                type="button"
+                onClick={() => dispatch(setHudVisible({ id: "hudControls", visible: true }))}
+                title="Show HUD"
+                aria-label="Show HUD"
+                className="select-none border border-cyan-100/35 bg-(--hud-bg)/42 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-(--hud-accent) shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(34,211,238,0.10),0_0_24px_rgba(34,211,238,0.18)] backdrop-blur-xl transition-colors [--hud-accent:#c7e8ef] [--hud-bg:#020c14] [--hud-text:#e7f2f4] hover:bg-(--hud-bg)/55 hover:text-(--hud-text)"
+                style={{ pointerEvents: "auto" }}
+              >
+                HUD
+              </button>
+            )}
+          >
+            <SystemV2HudControls
+              worldName={shipLocation?.worldName ?? renderableSnapshot.model.source.worldName}
+              locationLabel={sectorAbbr && hex ? `${sectorAbbr} ${hex}` : "Location unavailable"}
+              miniMapVisible={miniMapVisible}
+              systemMapVisible={systemMapVisible}
+              worldMapVisible={worldMapVisible}
+              navigationHudVisible={navigationHudVisible}
+              mainWorldVisible={mainWorldHudVisible}
+              pluginHudButtons={registeredRenderablePluginHuds
+                .filter((registration) => (
+                  registration.id !== navigationSelectHudId
+                  && registration.showInHudControls !== false
+                ))
+                .map((registration) => ({
+                  id: registration.id,
+                  openTitle: registration.openTitle,
+                  visibleTitle: registration.visibleTitle,
+                  visible: pluginHudVisibility[registration.id] ?? false,
+                  Icon: registration.Icon,
+                  onOpen: () => dispatch(setHudVisible({ id: registration.id, visible: true })),
+                }))}
+              onOpenMiniMap={() => dispatch(setHudVisible({ id: "subsectorMap", visible: true }))}
+              onOpenSystemMap={() => dispatch(setHudVisible({ id: "systemMap", visible: true }))}
+              onOpenWorldMap={() => dispatch(setHudVisible({ id: "worldMap", visible: true }))}
+              onOpenNavigationHud={() => dispatch(setHudVisible({ id: navigationSelectHudId, visible: true }))}
+              onOpenSystemDetail={() => {
+                if (!sectorAbbr || !hex) return;
+                dispatch(setActiveWorldHex({ sectorAbbr, hex }));
+                dispatch(openSystemDetail(hex));
+              }}
+              onToggleMainWorld={() => dispatch(setHudVisible({ id: "mainWorld", visible: !mainWorldHudVisible }))}
+            />
+          </DraggableSystemHud>
+          <DraggableSystemHud
+            id="mainWorld"
+            title="Main World"
+            closeTitle="Close main world"
+            visualScale={1}
+            className="[background:linear-gradient(to_bottom,var(--hud-bg)_0_18px,rgba(2,12,20,0.2)_18px_100%)]"
+          >
+            <MainWorldHud world={mainWorld} inJump={inJump} />
+          </DraggableSystemHud>
+          <DraggableSystemHud
+            id="systemMap"
+            title="System Map"
+            closeTitle="Close system map HUD"
+            className="flex h-[380px] max-h-[78vh] w-[380px] max-w-[84vw] flex-col"
+          >
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+              <SystemTopDownMap
+                model={renderableSnapshot.model}
+                width={520}
+                height={520}
+                className="h-full max-h-full w-auto max-w-full"
+              />
             </div>
-            <div className="h-[420px] min-h-[360px] overflow-hidden border border-slate-700 bg-slate-900 shadow-2xl shadow-black/30 xl:h-auto">
-              <SystemScene3D model={model} mainWorld={mainWorld} className="h-full w-full" />
+          </DraggableSystemHud>
+          <DraggableSystemHud
+            id="worldMap"
+            title="World Map"
+            closeTitle="Close world map HUD"
+            className="flex h-[310px] max-h-[72vh] w-[430px] max-w-[84vw] flex-col"
+          >
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <CurrentWorldMapPanel compact mapScale={0.72} />
             </div>
-            <aside className="min-h-0 border border-slate-700 bg-slate-900/70 p-4 font-mono text-xs uppercase tracking-wider text-slate-300">
-              <h2 className="mb-3 text-sm text-slate-100">Model Summary</h2>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                <dt className="text-slate-500">Stars</dt>
-                <dd>{model.counts.stars}</dd>
-                <dt className="text-slate-500">Orbits</dt>
-                <dd>{model.counts.orbits}</dd>
-                <dt className="text-slate-500">Bodies</dt>
-                <dd>{model.counts.bodies}</dd>
-                <dt className="text-slate-500">Worlds</dt>
-                <dd>{model.counts.worlds}</dd>
-                <dt className="text-slate-500">Gas Giants</dt>
-                <dd>{model.counts.gasGiants}</dd>
-                <dt className="text-slate-500">Belts</dt>
-                <dd>{model.counts.belts}</dd>
-                <dt className="text-slate-500">Outermost</dt>
-                <dd>{model.scene.outermostOrbitRadius.toFixed(2)}</dd>
-              </dl>
-
-              <h2 className="mb-2 mt-5 text-sm text-slate-100">Bodies</h2>
-              <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto pr-2">
-                {model.bodies.map((body) => (
-                  <li key={body.id} className="flex justify-between gap-3 border-b border-slate-800 py-1">
-                    <span className="truncate text-slate-300">{body.label ?? body.id}</span>
-                    <span className="shrink-0 text-slate-500">{body.kind}</span>
-                  </li>
-                ))}
-              </ul>
-              <SystemHierarchySummary model={model} />
-            </aside>
-          </div>
-        )}
-      </div>
+          </DraggableSystemHud>
+          <DraggableSystemHud
+            id="subsectorMap"
+            title="Subsector"
+            actions={(
+              <HudIconButton
+                title={sectorMiniMapVisible ? "Sector map visible" : "Open sector map"}
+                onClick={() => dispatch(setHudVisible({ id: "sectorMap", visible: true }))}
+              >
+                <Grid3X3 size={8} aria-hidden="true" />
+              </HudIconButton>
+            )}
+            closeTitle="Close subsector HUD"
+          >
+            <SubsectorMiniMapHudContent />
+          </DraggableSystemHud>
+          <DraggableSystemHud
+            id="sectorMap"
+            title="Sector"
+            actions={(
+              <HudIconButton
+                title={galaxyMiniMapVisible ? "Galaxy map visible" : "Open galaxy map"}
+                onClick={() => dispatch(setHudVisible({ id: "galaxyMap", visible: true }))}
+              >
+                <Grid3X3 size={8} aria-hidden="true" />
+              </HudIconButton>
+            )}
+            closeTitle="Close sector HUD"
+          >
+            <SectorMiniMapHudContent />
+          </DraggableSystemHud>
+          <DraggableSystemHud
+            id="galaxyMap"
+            title="Galaxy"
+            closeTitle="Close galaxy HUD"
+          >
+            <GalaxyMiniMapHudContent />
+          </DraggableSystemHud>
+          <DraggableSystemHud
+            id={navigationSelectHudId}
+            title="Navigation"
+            closeTitle="Close navigation HUD"
+          >
+            <NavigationHudContent />
+          </DraggableSystemHud>
+          {registeredRenderablePluginHuds
+            .filter((registration) => registration.id !== navigationSelectHudId)
+            .map((registration) => {
+              const PluginHudContent = registration.Component;
+              return (
+                <DraggableSystemHud
+                  key={registration.id}
+                  id={registration.id}
+                  title={registration.title}
+                  closeTitle={`Close ${registration.title} HUD`}
+                  className={registration.panelClassName}
+                >
+                  {registration.contentClassName ? (
+                    <div className={registration.contentClassName}>
+                      <PluginHudContent />
+                    </div>
+                  ) : (
+                    <PluginHudContent />
+                  )}
+                </DraggableSystemHud>
+              );
+            })}
+        </>
+      )}
     </div>
   );
 };

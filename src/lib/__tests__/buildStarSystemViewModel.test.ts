@@ -220,6 +220,85 @@ describe("buildStarSystemViewModel", () => {
     );
   });
 
+  it("parents rocky-parent moons to the rocky parent body", () => {
+    const model = buildStarSystemViewModel({
+      ...system,
+      orbits: [
+        {
+          orbitId: 5,
+          au: 2.8,
+          zone: "outer",
+          dataSource: "canonical",
+          angle0: 0.75,
+          body: {
+            kind: "world",
+            isMainWorld: false,
+            isParent: true,
+            dataSource: "canonical",
+            name: "Rocky Parent",
+            sizeCode: "A",
+            diameterKm: 16000,
+            atmosphereCode: "0",
+            atmosphereType: "none",
+            hydrographicsCode: "0",
+            surfaceType: "barren",
+            tradeCodes: [],
+            axialTilt: null,
+            rotationPeriodH: null,
+            canonicalTexture: null,
+            hasRings: null,
+            moons: [
+              {
+                kind: "world",
+                isMainWorld: true,
+                dataSource: "canonical",
+                name: "Regina",
+                sizeCode: "8",
+                diameterKm: 12800,
+                atmosphereCode: "6",
+                atmosphereType: "standard",
+                hydrographicsCode: "6",
+                surfaceType: "terran",
+                tradeCodes: ["Ri"],
+                axialTilt: null,
+                rotationPeriodH: null,
+                canonicalTexture: null,
+                moons: [],
+                hasRings: null,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(model.orbits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "orbit:5:moon:0",
+          orbitKind: "satellite",
+          parentId: "body:5",
+          bodyId: "body:5:moon:0",
+        }),
+      ]),
+    );
+    expect(model.bodies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "body:5",
+          kind: "world",
+          parentId: "star:0",
+        }),
+        expect.objectContaining({
+          id: "body:5:moon:0",
+          kind: "world",
+          isMainWorld: true,
+          parentId: "body:5",
+        }),
+      ]),
+    );
+  });
+
   it("parents companion orbits to the far companion star", () => {
     const model = buildStarSystemViewModel({
       ...system,
@@ -337,6 +416,66 @@ describe("buildStarSystemViewModel", () => {
     );
   });
 
+  it("uses legacy camera base distances for binary and trinary systems", () => {
+    const binaryModel = buildStarSystemViewModel({
+      ...system,
+      orbits: [],
+      stars: [
+        system.stars[0],
+        {
+          index: 1,
+          role: "far-companion",
+          spectral: "M3 V",
+          dataSource: "canonical",
+          stellarClass: "main-sequence",
+          color: "#ff6030",
+          radiusScale: 0.35,
+          habitableZone: null,
+          orbitId: null,
+          au: null,
+          proximity: "far",
+        },
+      ],
+    });
+
+    const trinaryModel = buildStarSystemViewModel({
+      ...system,
+      orbits: [],
+      stars: [
+        system.stars[0],
+        {
+          index: 1,
+          role: "close-companion",
+          spectral: "BD",
+          dataSource: "canonical",
+          stellarClass: "brown-dwarf",
+          color: "#6B2A00",
+          radiusScale: 0.08,
+          habitableZone: null,
+          orbitId: 0,
+          au: 0.2,
+          proximity: "close",
+        },
+        {
+          index: 2,
+          role: "far-companion",
+          spectral: "M3 V",
+          dataSource: "canonical",
+          stellarClass: "main-sequence",
+          color: "#ff6030",
+          radiusScale: 0.35,
+          habitableZone: null,
+          orbitId: null,
+          au: null,
+          proximity: "far",
+        },
+      ],
+    });
+
+    expect(binaryModel.scene.cameraDistance).toBeGreaterThanOrEqual(16);
+    expect(trinaryModel.scene.cameraDistance).toBeGreaterThanOrEqual(22);
+  });
+
   it("keeps companion-local orbits compact around the companion star", () => {
     const model = buildStarSystemViewModel({
       ...system,
@@ -444,6 +583,60 @@ describe("buildStarSystemViewModel", () => {
       expect.arrayContaining(["body:1", "companion-body:1"]),
     );
     expect(new Set(model.bodies.map((body) => body.id)).size).toBe(model.bodies.length);
+  });
+
+  it("keeps duplicate primary orbit ids unique when source orbit numbers repeat", () => {
+    const model = buildStarSystemViewModel({
+      ...system,
+      orbits: [
+        {
+          ...system.orbits[0],
+          orbitId: 0,
+          body: {
+            kind: "world",
+            isMainWorld: false,
+            dataSource: "derived",
+            name: "Inner World",
+            sizeCode: "4",
+            diameterKm: 6400,
+            atmosphereCode: "1",
+            atmosphereType: "trace",
+            hydrographicsCode: "0",
+            surfaceType: "barren",
+            tradeCodes: [],
+            axialTilt: null,
+            rotationPeriodH: null,
+            canonicalTexture: null,
+            moons: [],
+            hasRings: null,
+          },
+        },
+        {
+          ...system.orbits[1],
+          orbitId: 0,
+          body: {
+            kind: "gasGiant",
+            isMainWorld: false,
+            dataSource: "derived",
+            classification: "LGG",
+            sizeCode: null,
+            diameterMiles: 90000,
+            gravity: 2.1,
+            hasRings: null,
+            moons: [],
+          },
+        },
+      ],
+      companionOrbits: [],
+    });
+
+    expect(model.orbits.map((orbit) => orbit.id)).toEqual(["orbit:0", "orbit:0:2"]);
+    expect(new Set(model.orbits.map((orbit) => orbit.id)).size).toBe(model.orbits.length);
+    expect(model.bodies.map((body) => body.id)).toEqual(["body:0", "body:0:2"]);
+    expect(new Set(model.bodies.map((body) => body.id)).size).toBe(model.bodies.length);
+    expect(model.orbits[1]).toMatchObject({
+      bodyId: "body:0:2",
+    });
   });
 
   it("models Regina with a main world moon and far companion subsystem", () => {

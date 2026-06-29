@@ -94,6 +94,34 @@ const orbitSceneRadiusForKind = (orbitId: number, orbitKind: StarSystemOrbitKind
   return orbitKind === "companion" ? radius * companionOrbitSceneScale : radius;
 };
 
+const cameraDistanceForSystem = (
+  layout: ReturnType<typeof buildLayoutFromSystemData>,
+  outermostOrbitRadius: number,
+) => {
+  const starBase = layout.type === "single"
+    ? 10
+    : layout.type === "binary"
+      ? 16
+      : Math.max(22, layout.companionRadius * 2.8);
+  return Math.max(starBase, outermostOrbitRadius * 1.5);
+};
+
+const uniqueModelId = (baseId: string, usedIds: Set<string>) => {
+  if (!usedIds.has(baseId)) {
+    usedIds.add(baseId);
+    return baseId;
+  }
+
+  let suffix = 2;
+  let candidate = `${baseId}:${suffix}`;
+  while (usedIds.has(candidate)) {
+    suffix += 1;
+    candidate = `${baseId}:${suffix}`;
+  }
+  usedIds.add(candidate);
+  return candidate;
+};
+
 const bodyModelFromBody = ({
   body,
   id,
@@ -237,12 +265,14 @@ export const buildStarSystemViewModel = (
   const companionOrbitParentId = farCompanionStar?.id ?? "system:center";
 
   const orbits: StarSystemOrbitModel[] = [];
+  const usedOrbitIds = new Set<string>();
+  const usedBodyIds = new Set<string>();
 
   for (const { orbit, orbitKind } of allOrbits) {
     const orbitIdPrefix = orbitKind === "companion" ? "companion-orbit" : "orbit";
     const bodyIdPrefix = orbitKind === "companion" ? "companion-body" : "body";
-    const id = `${orbitIdPrefix}:${orbit.orbitId}`;
-    const bodyId = `${bodyIdPrefix}:${orbit.orbitId}`;
+    const id = uniqueModelId(`${orbitIdPrefix}:${orbit.orbitId}`, usedOrbitIds);
+    const bodyId = uniqueModelId(`${bodyIdPrefix}:${orbit.orbitId}`, usedBodyIds);
     const sceneRadius = orbitSceneRadiusForKind(orbit.orbitId, orbitKind);
     const parentId = orbitKind === "companion" ? companionOrbitParentId : primaryOrbitParentId;
     bodies.push(bodyModelFromBody({
@@ -341,7 +371,7 @@ export const buildStarSystemViewModel = (
     unplacedBodies,
     scene: {
       center: origin,
-      cameraDistance: Math.max(10, outermostOrbitRadius * 1.5),
+      cameraDistance: cameraDistanceForSystem(layout, outermostOrbitRadius),
       outermostOrbitRadius,
     },
     counts: {

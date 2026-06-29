@@ -1,7 +1,9 @@
 "use client";
 
+import { Canvas } from "@react-three/fiber";
 import type { World } from "../../types";
 import { isAsteroid, uwpVal } from "../../lib/worldMap";
+import { WorldGlobeVisual } from "./PlanetGlobe";
 
 const uppRows = (world: World) => [
   ["Starport", world.uwp.starport, STARPORT[world.uwp.starport] ?? "Unknown"],
@@ -135,6 +137,14 @@ const MainWorldGlobePreview = ({ world }: { world: World }) => {
 
   return (
     <div className="relative aspect-square w-44 border border-(--hud-border) bg-black/15">
+      <Canvas
+        camera={{ position: [0, 0, 2.4], fov: 42 }}
+        gl={{ antialias: true, alpha: true }}
+      >
+        <ambientLight intensity={0.66} />
+        <directionalLight position={[2, 2, 3]} intensity={1.35} />
+        <WorldGlobeVisual world={world} radius={0.72} animationEnabled={false} />
+      </Canvas>
       <span className="absolute left-1 top-1 max-w-[9rem] truncate text-[8px] tracking-widest text-(--hud-accent)">
         {world.name}
       </span>

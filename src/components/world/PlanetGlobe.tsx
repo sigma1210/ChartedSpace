@@ -683,14 +683,19 @@ export const CloudShadowMesh = ({
   layer,
   texture,
   opacity,
+  animationEnabled = true,
 }: {
   radius: number;
   layer: CloudLayerConfig;
   texture: THREE.Texture;
   opacity: number;
+  animationEnabled?: boolean;
 }) => {
   const ref = useRef<THREE.Mesh>(null);
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * PLANET_SPEED * layer.speedMult; });
+  useFrame((_, dt) => {
+    if (!animationEnabled) return;
+    if (ref.current) ref.current.rotation.y += dt * PLANET_SPEED * layer.speedMult;
+  });
   return (
     <mesh ref={ref}>
       <sphereGeometry args={[radius * 1.006, 48, 24]} />
@@ -711,6 +716,7 @@ export interface WorldGlobeVisualProps {
   radius?: number;
   segments?: [number, number];
   onSurfaceClick?: (event: ThreeEvent<MouseEvent>) => void;
+  animationEnabled?: boolean;
 }
 
 export const WorldGlobeVisual = ({
@@ -718,6 +724,7 @@ export const WorldGlobeVisual = ({
   radius = 1,
   segments = [64, 32],
   onSurfaceClick,
+  animationEnabled = true,
 }: WorldGlobeVisualProps) => {
   const asteroid = isAsteroid(world);
   const atmo = uwpVal(world.uwp.atmosphere);
@@ -748,6 +755,7 @@ export const WorldGlobeVisual = ({
   );
 
   useFrame((_, dt) => {
+    if (!animationEnabled) return;
     if (spinRef.current) spinRef.current.rotation.y += dt * PLANET_SPEED;
     if (clouds) {
       clouds.layers.forEach((layer, index) => {
@@ -774,6 +782,7 @@ export const WorldGlobeVisual = ({
           layer={clouds.layers[0]}
           texture={cloudTextures[0]}
           opacity={clouds.shadowOpacity}
+          animationEnabled={animationEnabled}
         />
       )}
       {clouds && (
