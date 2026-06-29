@@ -1749,6 +1749,11 @@ type HudOffsetBounds = {
   maxY?: number;
 };
 
+type HudElementSize = { width: number; height: number };
+
+const HUD_SCREEN_MARGIN_PX = 16;
+const HUD_TOP_OFFSET_LIMIT = 0.42;
+
 const clampHudOffsetToBounds = (
   value: HudOffset,
   bounds?: HudOffsetBounds,
@@ -1765,6 +1770,93 @@ const clampHudOffsetToBounds = (
 const sameHudOffset = (left: HudOffset, right: HudOffset) =>
   Math.abs(left.x - right.x) < 0.0001 &&
   Math.abs(left.y - right.y) < 0.0001;
+
+const hudBoundsForElementSize = ({
+  canvasSize,
+  elementSize,
+  bounds,
+}: {
+  canvasSize: { width: number; height: number };
+  elementSize: HudElementSize;
+  bounds?: HudOffsetBounds;
+}): HudOffsetBounds => {
+  const baseBounds = {
+    minX: bounds?.minX ?? -0.78,
+    maxX: bounds?.maxX ?? 0.78,
+    minY: bounds?.minY ?? -0.58,
+    maxY: bounds?.maxY ?? 0.58,
+  };
+
+  if (elementSize.width <= 0 || elementSize.height <= 0) {
+    return {
+      ...baseBounds,
+      maxY: Math.min(baseBounds.maxY, HUD_TOP_OFFSET_LIMIT),
+    };
+  }
+
+  const widthRatio = (elementSize.width + HUD_SCREEN_MARGIN_PX * 2) / Math.max(1, canvasSize.width);
+  const heightRatio = (elementSize.height + HUD_SCREEN_MARGIN_PX * 2) / Math.max(1, canvasSize.height);
+  let minX = Math.max(baseBounds.minX, -1 + widthRatio);
+  let maxX = Math.min(baseBounds.maxX, 1 - widthRatio);
+  const topSafeMaxY = Math.min(HUD_TOP_OFFSET_LIMIT, 1 - heightRatio);
+  let minY = baseBounds.minY;
+  let maxY = Math.min(baseBounds.maxY, topSafeMaxY);
+
+  if (minX > maxX) {
+    minX = 0;
+    maxX = 0;
+  }
+  if (minY > maxY) {
+    minY = maxY;
+  }
+
+  return { minX, maxX, minY, maxY };
+};
+
+const useMeasuredHudBounds = ({
+  size,
+  offsetBounds,
+}: {
+  size: { width: number; height: number };
+  offsetBounds?: HudOffsetBounds;
+}) => {
+  const elementRef = useRef<HTMLDivElement>(null);
+  const [elementSize, setElementSize] = useState<HudElementSize>({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setElementSize((previous) => {
+        if (
+          Math.abs(previous.width - rect.width) < 0.5 &&
+          Math.abs(previous.height - rect.height) < 0.5
+        ) {
+          return previous;
+        }
+        return { width: rect.width, height: rect.height };
+      });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const measuredBounds = useMemo(
+    () => hudBoundsForElementSize({
+      canvasSize: size,
+      elementSize,
+      bounds: offsetBounds,
+    }),
+    [elementSize, offsetBounds, size.height, size.width],
+  );
+
+  return { elementRef, measuredBounds };
+};
 
 const useCameraPinnedHudDrag = ({
   id,
@@ -1879,10 +1971,12 @@ const CameraPinnedSystemHud = ({
   const visible = layout.visible;
   const groupRef = useRef<THREE.Group>(null);
   const { camera, size } = useThree();
+  const { elementRef, measuredBounds } = useMeasuredHudBounds({ size });
   const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
     id: "hudControls",
     pinned,
     offset,
+    offsetBounds: measuredBounds,
     size,
     dispatch,
   });
@@ -1903,7 +1997,12 @@ const CameraPinnedSystemHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
+    const safeOffset = clampHudOffsetToBounds(offset, measuredBounds);
+    if (visible && !sameHudOffset(safeOffset, offset)) {
+      dragOffsetRef.current = safeOffset;
+      dispatch(setHudOffset({ id: "hudControls", offset: safeOffset }));
+    }
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, measuredBounds);
 
     group.position
       .copy(camera.position)
@@ -1916,6 +2015,7 @@ const CameraPinnedSystemHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.5}>
+        <div ref={elementRef}>
         {visible ? (
           <HudPanel className="min-w-40">
             <HudHeader
@@ -1981,6 +2081,7 @@ const CameraPinnedSystemHud = ({
             HUD
           </button>
         )}
+        </div>
       </Html>
     </group>
   );
@@ -2005,10 +2106,12 @@ const CameraPinnedMainWorldHud = ({
   const pinned = layout.pinned;
   const groupRef = useRef<THREE.Group>(null);
   const { camera, size } = useThree();
+  const { elementRef, measuredBounds } = useMeasuredHudBounds({ size });
   const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
     id: "mainWorld",
     pinned,
     offset,
+    offsetBounds: measuredBounds,
     size,
     dispatch,
   });
@@ -2029,7 +2132,12 @@ const CameraPinnedMainWorldHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
+    const safeOffset = clampHudOffsetToBounds(offset, measuredBounds);
+    if (!sameHudOffset(safeOffset, offset)) {
+      dragOffsetRef.current = safeOffset;
+      dispatch(setHudOffset({ id: "mainWorld", offset: safeOffset }));
+    }
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, measuredBounds);
 
     group.position
       .copy(camera.position)
@@ -2049,17 +2157,19 @@ const CameraPinnedMainWorldHud = ({
         </group>
       )}
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel className="[background:linear-gradient(to_bottom,var(--hud-bg)_0_18px,rgba(2,12,20,0.2)_18px_100%)]">
-          <HudHeader
-            title="Main World"
-            pinned={pinned}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "mainWorld", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close main world HUD"
-          />
-          {mainWorldHud}
-        </HudPanel>
+        <div ref={elementRef}>
+          <HudPanel className="[background:linear-gradient(to_bottom,var(--hud-bg)_0_18px,rgba(2,12,20,0.2)_18px_100%)]">
+            <HudHeader
+              title="Main World"
+              pinned={pinned}
+              onTogglePinned={() => dispatch(setHudPinned({ id: "mainWorld", pinned: !pinned }))}
+              onClose={onClose}
+              onDragStart={startDrag}
+              closeTitle="Close main world HUD"
+            />
+            {mainWorldHud}
+          </HudPanel>
+        </div>
       </Html>
     </group>
   );
@@ -2082,11 +2192,15 @@ const CameraPinnedPluginHud = ({
   const pinned = layout.pinned;
   const groupRef = useRef<THREE.Group>(null);
   const { camera, size } = useThree();
+  const { elementRef, measuredBounds } = useMeasuredHudBounds({
+    size,
+    offsetBounds: registration.offsetBounds,
+  });
   const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
     id: registration.id,
     pinned,
     offset,
-    offsetBounds: registration.offsetBounds,
+    offsetBounds: measuredBounds,
     size,
     dispatch,
   });
@@ -2107,12 +2221,12 @@ const CameraPinnedPluginHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const safeOffset = clampHudOffsetToBounds(offset, registration.offsetBounds);
-    if (registration.offsetBounds && !sameHudOffset(safeOffset, offset)) {
+    const safeOffset = clampHudOffsetToBounds(offset, measuredBounds);
+    if (!sameHudOffset(safeOffset, offset)) {
       dragOffsetRef.current = safeOffset;
       dispatch(setHudOffset({ id: registration.id, offset: safeOffset }));
     }
-    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, registration.offsetBounds);
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, measuredBounds);
 
     group.position
       .copy(camera.position)
@@ -2129,27 +2243,29 @@ const CameraPinnedPluginHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel className={registration.panelClassName}>
-          <HudHeader
-            title={registration.title}
-            pinned={pinned}
-            onTogglePinned={() => dispatch(setHudPinned({ id: registration.id, pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle={`Close ${registration.title} HUD`}
-          />
-          {registration.contentClassName ? (
-          <div className={registration.contentClassName}>
-            <StoreBridge store={store}>
-              <PluginHudContent />
-            </StoreBridge>
-          </div>
-          ) : (
-            <StoreBridge store={store}>
-              <PluginHudContent />
-            </StoreBridge>
-          )}
-        </HudPanel>
+        <div ref={elementRef}>
+          <HudPanel className={registration.panelClassName}>
+            <HudHeader
+              title={registration.title}
+              pinned={pinned}
+              onTogglePinned={() => dispatch(setHudPinned({ id: registration.id, pinned: !pinned }))}
+              onClose={onClose}
+              onDragStart={startDrag}
+              closeTitle={`Close ${registration.title} HUD`}
+            />
+            {registration.contentClassName ? (
+            <div className={registration.contentClassName}>
+              <StoreBridge store={store}>
+                <PluginHudContent />
+              </StoreBridge>
+            </div>
+            ) : (
+              <StoreBridge store={store}>
+                <PluginHudContent />
+              </StoreBridge>
+            )}
+          </HudPanel>
+        </div>
       </Html>
     </group>
   );
@@ -2174,10 +2290,12 @@ const CameraPinnedSubsectorMiniMapHud = ({
   const pinned = layout.pinned;
   const groupRef = useRef<THREE.Group>(null);
   const { camera, size } = useThree();
+  const { elementRef, measuredBounds } = useMeasuredHudBounds({ size });
   const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
     id: "subsectorMap",
     pinned,
     offset,
+    offsetBounds: measuredBounds,
     size,
     dispatch,
   });
@@ -2198,7 +2316,12 @@ const CameraPinnedSubsectorMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
+    const safeOffset = clampHudOffsetToBounds(offset, measuredBounds);
+    if (!sameHudOffset(safeOffset, offset)) {
+      dragOffsetRef.current = safeOffset;
+      dispatch(setHudOffset({ id: "subsectorMap", offset: safeOffset }));
+    }
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, measuredBounds);
 
     group.position
       .copy(camera.position)
@@ -2213,24 +2336,26 @@ const CameraPinnedSubsectorMiniMapHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
-          <HudHeader
-            title="Subsector"
-            pinned={pinned}
-            actions={(
-              <HudIconButton title="Open sector map" onClick={onOpenSectorMap}>
-                <Grid3X3 size={8} aria-hidden="true" />
-              </HudIconButton>
-            )}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "subsectorMap", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close subsector HUD"
-          />
-          <StoreBridge store={store}>
-            {miniMap}
-          </StoreBridge>
-        </HudPanel>
+        <div ref={elementRef}>
+          <HudPanel>
+            <HudHeader
+              title="Subsector"
+              pinned={pinned}
+              actions={(
+                <HudIconButton title="Open sector map" onClick={onOpenSectorMap}>
+                  <Grid3X3 size={8} aria-hidden="true" />
+                </HudIconButton>
+              )}
+              onTogglePinned={() => dispatch(setHudPinned({ id: "subsectorMap", pinned: !pinned }))}
+              onClose={onClose}
+              onDragStart={startDrag}
+              closeTitle="Close subsector HUD"
+            />
+            <StoreBridge store={store}>
+              {miniMap}
+            </StoreBridge>
+          </HudPanel>
+        </div>
       </Html>
     </group>
   );
@@ -2253,10 +2378,12 @@ const CameraPinnedWorldMapHud = ({
   const pinned = layout.pinned;
   const groupRef = useRef<THREE.Group>(null);
   const { camera, size } = useThree();
+  const { elementRef, measuredBounds } = useMeasuredHudBounds({ size });
   const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
     id: "worldMap",
     pinned,
     offset,
+    offsetBounds: measuredBounds,
     size,
     dispatch,
   });
@@ -2277,7 +2404,12 @@ const CameraPinnedWorldMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
+    const safeOffset = clampHudOffsetToBounds(offset, measuredBounds);
+    if (!sameHudOffset(safeOffset, offset)) {
+      dragOffsetRef.current = safeOffset;
+      dispatch(setHudOffset({ id: "worldMap", offset: safeOffset }));
+    }
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, measuredBounds);
 
     group.position
       .copy(camera.position)
@@ -2292,21 +2424,23 @@ const CameraPinnedWorldMapHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.6}>
-        <HudPanel className="flex h-[310px] max-h-[72vh] w-[430px] max-w-[84vw] flex-col">
-          <HudHeader
-            title="World Map"
-            pinned={pinned}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "worldMap", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close world map HUD"
-          />
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <StoreBridge store={store}>
-              {worldMap}
-            </StoreBridge>
-          </div>
-        </HudPanel>
+        <div ref={elementRef}>
+          <HudPanel className="flex h-[310px] max-h-[72vh] w-[430px] max-w-[84vw] flex-col">
+            <HudHeader
+              title="World Map"
+              pinned={pinned}
+              onTogglePinned={() => dispatch(setHudPinned({ id: "worldMap", pinned: !pinned }))}
+              onClose={onClose}
+              onDragStart={startDrag}
+              closeTitle="Close world map HUD"
+            />
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <StoreBridge store={store}>
+                {worldMap}
+              </StoreBridge>
+            </div>
+          </HudPanel>
+        </div>
       </Html>
     </group>
   );
@@ -2331,10 +2465,12 @@ const CameraPinnedSectorMiniMapHud = ({
   const pinned = layout.pinned;
   const groupRef = useRef<THREE.Group>(null);
   const { camera, size } = useThree();
+  const { elementRef, measuredBounds } = useMeasuredHudBounds({ size });
   const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
     id: "sectorMap",
     pinned,
     offset,
+    offsetBounds: measuredBounds,
     size,
     dispatch,
   });
@@ -2355,7 +2491,12 @@ const CameraPinnedSectorMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
+    const safeOffset = clampHudOffsetToBounds(offset, measuredBounds);
+    if (!sameHudOffset(safeOffset, offset)) {
+      dragOffsetRef.current = safeOffset;
+      dispatch(setHudOffset({ id: "sectorMap", offset: safeOffset }));
+    }
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, measuredBounds);
 
     group.position
       .copy(camera.position)
@@ -2370,24 +2511,26 @@ const CameraPinnedSectorMiniMapHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
-          <HudHeader
-            title="Sector"
-            pinned={pinned}
-            actions={(
-              <HudIconButton title="Open galaxy map" onClick={onOpenGalaxyMap}>
-                <Grid3X3 size={8} aria-hidden="true" />
-              </HudIconButton>
-            )}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "sectorMap", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close sector HUD"
-          />
-          <StoreBridge store={store}>
-            {sectorMiniMap}
-          </StoreBridge>
-        </HudPanel>
+        <div ref={elementRef}>
+          <HudPanel>
+            <HudHeader
+              title="Sector"
+              pinned={pinned}
+              actions={(
+                <HudIconButton title="Open galaxy map" onClick={onOpenGalaxyMap}>
+                  <Grid3X3 size={8} aria-hidden="true" />
+                </HudIconButton>
+              )}
+              onTogglePinned={() => dispatch(setHudPinned({ id: "sectorMap", pinned: !pinned }))}
+              onClose={onClose}
+              onDragStart={startDrag}
+              closeTitle="Close sector HUD"
+            />
+            <StoreBridge store={store}>
+              {sectorMiniMap}
+            </StoreBridge>
+          </HudPanel>
+        </div>
       </Html>
     </group>
   );
@@ -2410,10 +2553,12 @@ const CameraPinnedGalaxyMiniMapHud = ({
   const pinned = layout.pinned;
   const groupRef = useRef<THREE.Group>(null);
   const { camera, size } = useThree();
+  const { elementRef, measuredBounds } = useMeasuredHudBounds({ size });
   const { dragOffsetRef, startDrag } = useCameraPinnedHudDrag({
     id: "galaxyMap",
     pinned,
     offset,
+    offsetBounds: measuredBounds,
     size,
     dispatch,
   });
@@ -2434,7 +2579,12 @@ const CameraPinnedGalaxyMiniMapHud = ({
     camera.getWorldDirection(forward);
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const activeOffset = clampHudOffset(dragOffsetRef.current ?? offset);
+    const safeOffset = clampHudOffsetToBounds(offset, measuredBounds);
+    if (!sameHudOffset(safeOffset, offset)) {
+      dragOffsetRef.current = safeOffset;
+      dispatch(setHudOffset({ id: "galaxyMap", offset: safeOffset }));
+    }
+    const activeOffset = clampHudOffsetToBounds(dragOffsetRef.current ?? safeOffset, measuredBounds);
 
     group.position
       .copy(camera.position)
@@ -2449,19 +2599,21 @@ const CameraPinnedGalaxyMiniMapHud = ({
   return (
     <group ref={groupRef}>
       <Html transform center occlude={false} distanceFactor={4.8}>
-        <HudPanel>
-          <HudHeader
-            title="Galaxy"
-            pinned={pinned}
-            onTogglePinned={() => dispatch(setHudPinned({ id: "galaxyMap", pinned: !pinned }))}
-            onClose={onClose}
-            onDragStart={startDrag}
-            closeTitle="Close galaxy HUD"
-          />
-          <StoreBridge store={store}>
-            {galaxyMiniMap}
-          </StoreBridge>
-        </HudPanel>
+        <div ref={elementRef}>
+          <HudPanel>
+            <HudHeader
+              title="Galaxy"
+              pinned={pinned}
+              onTogglePinned={() => dispatch(setHudPinned({ id: "galaxyMap", pinned: !pinned }))}
+              onClose={onClose}
+              onDragStart={startDrag}
+              closeTitle="Close galaxy HUD"
+            />
+            <StoreBridge store={store}>
+              {galaxyMiniMap}
+            </StoreBridge>
+          </HudPanel>
+        </div>
       </Html>
     </group>
   );

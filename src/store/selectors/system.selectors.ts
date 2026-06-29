@@ -1,3 +1,6 @@
+import { createSelector } from "@reduxjs/toolkit";
+import { buildStarSystemViewModel } from "../../lib/buildStarSystemViewModel";
+import type { StarSystemViewModel } from "../../lib/starSystemViewModel";
 import type { RootState } from "../index";
 import type { SystemData } from "../../lib/systemTypes";
 import { systemCacheKey, type SystemCacheStatus } from "../slices/systemSlice";
@@ -30,3 +33,15 @@ export const selectActiveWorldSystem = (
   if (!sectorAbbr || !hex) return null;
   return state.system.records[systemCacheKey({ sectorAbbr, hex })] ?? null;
 };
+
+export const selectCurrentStarSystemViewModel = createSelector(
+  [
+    (state: RootState) => state.systemScene.renderableLocation,
+    (state: RootState) => state.system.records,
+  ],
+  (location, records): StarSystemViewModel | null => {
+    if (!location) return null;
+    const system = records[systemCacheKey(location)];
+    return system ? buildStarSystemViewModel(system) : null;
+  },
+);
