@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -615,6 +615,65 @@ export const buildCloudTexture = (
   layer: CloudLayerConfig,
 ): THREE.CanvasTexture => buildCloudTextureFromKey(`${world.hex}:${world.name}`, config, layer);
 
+interface WorldGlobeVisualAssets {
+  texture: THREE.CanvasTexture;
+  cloudTextures: THREE.CanvasTexture[];
+}
+
+const worldGlobeAssetCache = new Map<string, WorldGlobeVisualAssets>();
+
+const worldGlobeAssetKey = (world: World): string => [
+  world.hex,
+  world.name,
+  world.uwp.raw,
+  world.remarks.join(","),
+  world.pbg.raw,
+].join(":");
+
+const canBuildCanvasTexture = (): boolean => {
+  if (typeof document === "undefined") return false;
+  try {
+    const canvas = document.createElement("canvas");
+    return Boolean(canvas.getContext("2d"));
+  } catch {
+    return false;
+  }
+};
+
+export const prewarmWorldGlobeVisualAssets = (world: World): void => {
+  if (!canBuildCanvasTexture() || isAsteroid(world)) return;
+  const key = worldGlobeAssetKey(world);
+  if (worldGlobeAssetCache.has(key)) return;
+
+  const atmo = uwpVal(world.uwp.atmosphere);
+  const clouds = cloudConfig(atmo, uwpVal(world.uwp.hydrographics));
+  worldGlobeAssetCache.set(key, {
+    texture: buildTexture(world),
+    cloudTextures: clouds
+      ? clouds.layers.map((layer) => buildCloudTexture(world, clouds, layer))
+      : [],
+  });
+};
+
+const getWorldGlobeVisualAssets = (
+  world: World,
+  clouds: CloudConfig | null,
+): WorldGlobeVisualAssets | null => {
+  if (!canBuildCanvasTexture() || isAsteroid(world)) return null;
+  const key = worldGlobeAssetKey(world);
+  const cached = worldGlobeAssetCache.get(key);
+  if (cached) return cached;
+
+  const assets = {
+    texture: buildTexture(world),
+    cloudTextures: clouds
+      ? clouds.layers.map((layer) => buildCloudTexture(world, clouds, layer))
+      : [],
+  };
+  worldGlobeAssetCache.set(key, assets);
+  return assets;
+};
+
 // ─── Spinning planet mesh ─────────────────────────────────────────────────────
 
 export const PLANET_SPEED = 0.18;
@@ -736,23 +795,15 @@ export const WorldGlobeVisual = ({
     () => asteroid ? null : atmosphereGlowConfig(atmo),
     [asteroid, atmo],
   );
-  const texture = useMemo(
-    () => asteroid ? null : buildTexture(world),
-    [world, asteroid],
+  const assets = useMemo(
+    () => asteroid ? null : getWorldGlobeVisualAssets(world, clouds),
+    [world, asteroid, clouds],
   );
+  const texture = assets?.texture ?? null;
   const cloudRefs = useRef<Array<THREE.Mesh | null>>([]);
   const spinRef = useRef<THREE.Mesh | null>(null);
 
-  useEffect(() => () => texture?.dispose(), [texture]);
-
-  const cloudTextures = useMemo(
-    () => clouds ? clouds.layers.map((layer) => buildCloudTexture(world, clouds, layer)) : [],
-    [world, clouds],
-  );
-  useEffect(
-    () => () => cloudTextures.forEach((cloudTexture) => cloudTexture.dispose()),
-    [cloudTextures],
-  );
+  const cloudTextures = assets?.cloudTextures ?? [];
 
   useFrame((_, dt) => {
     if (!animationEnabled) return;

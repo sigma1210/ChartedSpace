@@ -8,6 +8,7 @@ import {
 } from "@/plugin-api";
 import { selectSystemStatusByKey } from "@/store/selectors/system.selectors";
 import { getSystemData } from "@/store/slices/systemSlice";
+import { prewarmWorldGlobeVisualAssets } from "@/components/world/PlanetGlobe";
 import {
   executeNavigationJump,
   replotNavigationDestination,
@@ -68,6 +69,9 @@ export const NavigationHudContent = () => {
       const target = 4;
       const success = roll >= target;
       if (success) {
+        if (destination.world) {
+          prewarmWorldGlobeVisualAssets(destination.world);
+        }
         void dispatch(getSystemData({
           sectorAbbr: destination.sectorAbbr,
           hex: destination.hex,
