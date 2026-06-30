@@ -10,6 +10,7 @@ import {
   type PointerEventHandler,
   type ReactNode,
 } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { CircleDot, Globe2, Grid3X3, Info, Map as MapIcon, Navigation, Radar } from "lucide-react";
 import { GalaxyMiniMapHudContent } from "@/components/map/GalaxyMiniMap";
 import { SectorMiniMapHudContent } from "@/components/map/SectorMiniMap";
@@ -35,6 +36,11 @@ import {
   selectCurrentStarSystemViewModel,
   selectSystemStatusByKey,
 } from "@/store/selectors/system.selectors";
+import {
+  selectShowWarpLayer,
+  selectWarpLayerActive,
+  selectWarpLayerOpacity,
+} from "@/store/selectors/systemScene.selectors";
 import { setActiveWorldHex } from "@/store/slices/galaxySlice";
 import {
   clampHudOffset,
@@ -75,6 +81,105 @@ type DragState = {
 type RenderableSystemSnapshot = {
   model: StarSystemViewModel;
   mainWorld: World | null;
+};
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const JumpNoiseOverlay = ({
+  visible,
+  active,
+  opacity,
+}: {
+  visible: boolean;
+  active: boolean;
+  opacity: number;
+}) => {
+  const targetOpacity = visible || active || opacity > 0 ? clamp01(opacity) * 0.96 : 0;
+  const rendered = visible || active || opacity > 0;
+
+  return (
+    <AnimatePresence>
+      {rendered ? (
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 overflow-hidden bg-black"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: targetOpacity }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.45, ease: [0.45, 0, 0.25, 1] }}
+        >
+          <style>
+            {`
+              @keyframes charted-space-jump-noise-drift {
+                0% { transform: translate3d(-1.5%, -1%, 0) scale(1.04); filter: hue-rotate(0deg) saturate(1.2); }
+                50% { transform: translate3d(1%, 1.5%, 0) scale(1.07); filter: hue-rotate(16deg) saturate(1.45); }
+                100% { transform: translate3d(-0.5%, 1%, 0) scale(1.05); filter: hue-rotate(-10deg) saturate(1.3); }
+              }
+
+              @keyframes charted-space-jump-scan {
+                from { transform: translateY(-8%); }
+                to { transform: translateY(8%); }
+              }
+
+              @keyframes charted-space-jump-static {
+                0% { opacity: 0.34; transform: translate3d(0, 0, 0); }
+                50% { opacity: 0.46; transform: translate3d(0.25%, -0.2%, 0); }
+                100% { opacity: 0.38; transform: translate3d(-0.2%, 0.15%, 0); }
+              }
+            `}
+          </style>
+          <svg className="absolute h-0 w-0" focusable="false" aria-hidden="true">
+            <filter id="charted-space-jump-noise-filter">
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency="0.82"
+                numOctaves="3"
+                stitchTiles="stitch"
+              />
+              <feColorMatrix
+                type="matrix"
+                values="
+                  0.35 0.00 0.75 0 0
+                  0.00 0.90 0.42 0 0
+                  0.72 0.12 0.95 0 0
+                  0.00 0.00 0.00 0.62 0"
+              />
+            </filter>
+          </svg>
+          <div
+            className="absolute -inset-4 mix-blend-screen"
+            style={{
+              animation: "charted-space-jump-noise-drift 1600ms ease-in-out infinite alternate",
+              backgroundImage: [
+                "radial-gradient(circle at 22% 28%, rgba(34,211,238,0.42), transparent 30%)",
+                "radial-gradient(circle at 76% 62%, rgba(244,114,182,0.32), transparent 34%)",
+                "radial-gradient(circle at 44% 76%, rgba(163,230,53,0.22), transparent 28%)",
+                "linear-gradient(115deg, rgba(56,189,248,0.16), rgba(232,121,249,0.18) 32%, rgba(250,204,21,0.08) 58%, rgba(45,212,191,0.15))",
+              ].join(", "),
+              backgroundSize: "100% 100%",
+            }}
+          />
+          <div
+            className="absolute -inset-4 mix-blend-screen"
+            style={{
+              animation: "charted-space-jump-static 900ms ease-in-out infinite alternate",
+              background: "rgba(255,255,255,0.42)",
+              filter: "url(#charted-space-jump-noise-filter)",
+            }}
+          />
+          <div
+            className="absolute -inset-y-8 inset-x-0 opacity-45 mix-blend-screen"
+            style={{
+              animation: "charted-space-jump-scan 900ms ease-in-out infinite alternate",
+              backgroundImage:
+                "repeating-linear-gradient(0deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 4px)",
+            }}
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0_42%,rgba(0,0,0,0.28)_76%,rgba(0,0,0,0.64)_100%)]" />
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 };
 
 const sameOffset = (a: HudOffset, b: HudOffset) =>
@@ -421,6 +526,9 @@ const SystemV2PageClient = () => {
   const worldMapVisible = useAppSelector(selectHudVisible("worldMap"));
   const navigationHudVisible = useAppSelector(selectHudVisible(navigationSelectHudId));
   const mainWorldHudVisible = useAppSelector(selectHudVisible("mainWorld"));
+  const showWarpLayer = useAppSelector(selectShowWarpLayer);
+  const warpLayerActive = useAppSelector(selectWarpLayerActive);
+  const warpLayerOpacity = useAppSelector(selectWarpLayerOpacity);
   const pluginHudVisibility = useAppSelector(
     (state) =>
       Object.fromEntries(
@@ -469,6 +577,11 @@ const SystemV2PageClient = () => {
             model={renderableSnapshot.model}
             mainWorld={renderableSnapshot.mainWorld}
             className="h-full w-full"
+          />
+          <JumpNoiseOverlay
+            visible={showWarpLayer}
+            active={warpLayerActive}
+            opacity={warpLayerOpacity}
           />
           <DraggableSystemHud
             id="hudControls"
