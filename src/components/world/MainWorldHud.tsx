@@ -143,7 +143,7 @@ const MainWorldGlobePreview = ({ world }: { world: World }) => {
       >
         <ambientLight intensity={0.66} />
         <directionalLight position={[2, 2, 3]} intensity={1.35} />
-        <WorldGlobeVisual world={world} radius={0.72} animationEnabled={false} />
+        <WorldGlobeVisual world={world} radius={0.34} />
       </Canvas>
       <span className="absolute left-1 top-1 max-w-[9rem] truncate text-[8px] tracking-widest text-(--hud-accent)">
         {world.name}
