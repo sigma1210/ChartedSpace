@@ -28,6 +28,22 @@ import {
   selectNavigationState,
 } from "./selectors";
 
+const ensureDestinationCharacterPostings = (location: string) => {
+  void fetch("/api/characters/postings/ensure", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      location,
+      targets: {
+        crew_available: 5,
+        patron_job: 3,
+      },
+    }),
+  }).catch((err) => {
+    console.error("[navigation plot postings prewarm]", err);
+  });
+};
+
 export const NavigationHudContent = () => {
   const dispatch = usePluginDispatch();
   const cells = usePluginSelector(selectNavigationGridCells);
@@ -72,6 +88,7 @@ export const NavigationHudContent = () => {
         if (destination.world) {
           prewarmWorldGlobeVisualAssets(destination.world);
         }
+        ensureDestinationCharacterPostings(`${destination.sectorAbbr}:${destination.hex}`);
         void dispatch(getSystemData({
           sectorAbbr: destination.sectorAbbr,
           hex: destination.hex,

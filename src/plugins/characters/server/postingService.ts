@@ -189,3 +189,48 @@ export const createGeneratedPosting = async ({
 
   return rowToSummary(posting);
 };
+
+const postingTypes: CharacterPostingType[] = ["crew_available", "patron_job"];
+
+const clampTarget = (value: number) => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(20, Math.floor(value)));
+};
+
+export const ensureLocalCharacterPostings = async ({
+  userId,
+  location,
+  targets,
+}: {
+  userId: string;
+  location: string;
+  targets: Partial<Record<CharacterPostingType, number>>;
+}) => {
+  const requestedTargets = {
+    crew_available: clampTarget(targets.crew_available ?? 0),
+    patron_job: clampTarget(targets.patron_job ?? 0),
+  } satisfies Record<CharacterPostingType, number>;
+
+  const existingCounts = await characterPrisma.characterPosting.groupBy({
+    by: ["type"],
+    where: {
+      userId,
+      location,
+      status: "open",
+      type: { in: postingTypes },
+    },
+    _count: { _all: true },
+  });
+  const countsByType = new Map(
+    existingCounts.map((row) => [row.type, row._count._all]),
+  );
+
+  for (const type of postingTypes) {
+    const missing = requestedTargets[type] - (countsByType.get(type) ?? 0);
+    for (let i = 0; i < missing; i += 1) {
+      await createGeneratedPosting({ userId, type, location });
+    }
+  }
+
+  return listOpenCharacterPostings({ userId, location });
+};
