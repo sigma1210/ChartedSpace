@@ -18,6 +18,7 @@ export interface CharacterPostingSummary {
   characterId: string;
   characterName: string;
   characterGender: CharacterGender | null;
+  characterSkills: Array<{ name: string; level: number }>;
   createdAt: string;
 }
 
@@ -57,7 +58,11 @@ const rowToSummary = (row: {
   status: string;
   createdAt: Date;
   characterId: string;
-  character: { name: string; sheet: unknown };
+  character: {
+    name: string;
+    sheet: unknown;
+    skills: Array<{ name: string; level: number }>;
+  };
 }): CharacterPostingSummary => {
   const sheet = row.character.sheet as CharacterSheet | null;
   const gender = sheet?.gender;
@@ -73,6 +78,7 @@ const rowToSummary = (row: {
     characterId: row.characterId,
     characterName: row.character.name,
     characterGender: gender === "female" || gender === "male" || gender === "nonbinary" ? gender : null,
+    characterSkills: row.character.skills,
     createdAt: row.createdAt.toISOString(),
   };
 };
@@ -105,6 +111,13 @@ export const listOpenCharacterPostings = async ({
         select: {
           name: true,
           sheet: true,
+          skills: {
+            select: {
+              name: true,
+              level: true,
+            },
+            orderBy: { name: "asc" },
+          },
         },
       },
     },
@@ -181,6 +194,13 @@ export const createGeneratedPosting = async ({
           select: {
             name: true,
             sheet: true,
+            skills: {
+              select: {
+                name: true,
+                level: true,
+              },
+              orderBy: { name: "asc" },
+            },
           },
         },
       },

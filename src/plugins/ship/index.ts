@@ -1,7 +1,7 @@
 import type { PluginManifest } from "@/plugin-api/types";
 import { shipNavigationCapabilityId } from "./shipNavigationCapabilities";
 import { shipTradeCapabilityId } from "./shipTradeCapabilities";
-import { shipHudMetadata } from "./hudMetadata";
+import { shipHudMetadataList } from "./hudMetadata";
 import { shipPluginId } from "./metadata";
 import { shipPluginStateRegistration } from "./stateRegistration";
 import type { ShipPluginState } from "./shipPluginSlice";
@@ -14,18 +14,21 @@ export const shipPlugin = {
     provides: [shipNavigationCapabilityId, shipTradeCapabilityId],
   },
   state: shipPluginStateRegistration,
-  huds: [
-    shipHudMetadata,
-  ],
+  huds: [...shipHudMetadataList],
   actions: [],
   handlers: [],
   effectResolvers: [],
 } satisfies PluginManifest<ShipPluginState>;
 
 export {
+  shipActionsHudMetadata,
+  shipCrewAssignmentHudMetadata,
   shipHudMetadata,
+  shipHudMetadataList,
 } from "./hudMetadata";
 export {
+  shipActionsHudId,
+  shipCrewAssignmentHudId,
   shipHudId,
   shipPluginId,
   shipPluginStateKey,
