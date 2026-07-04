@@ -5,22 +5,22 @@ import { HudIconButton } from "@/components/world/HudPrimitives";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectHudVisible } from "@/store/selectors/hud.selectors";
 import { setHudVisible } from "@/store/slices/hudSlice";
+import { openModal } from "@/store/slices/uiSlice";
 import { selectActiveShip } from "./selectors";
-import { shipCrewAssignmentHudId, shipHudId } from "./metadata";
+import { shipHudId } from "./metadata";
 
 export const ShipsPluginBar = () => {
   const dispatch = useAppDispatch();
   const ship = useAppSelector(selectActiveShip);
   const shipHudVisible = useAppSelector(selectHudVisible(shipHudId));
-  const crewHudVisible = useAppSelector(selectHudVisible(shipCrewAssignmentHudId));
   const ships = ship ? [ship] : [];
 
   const openShipHud = () => {
     dispatch(setHudVisible({ id: shipHudId, visible: true }));
   };
 
-  const openCrewHud = () => {
-    dispatch(setHudVisible({ id: shipCrewAssignmentHudId, visible: true }));
+  const openCrewModal = () => {
+    dispatch(openModal("shipCrewAssignment"));
   };
 
   return (
@@ -48,8 +48,8 @@ export const ShipsPluginBar = () => {
           <Gauge size={13} aria-hidden="true" />
         </HudIconButton>
         <HudIconButton
-          title={crewHudVisible ? "Ship crew visible" : "Open ship crew"}
-          onClick={openCrewHud}
+          title="Open ship crew"
+          onClick={openCrewModal}
         >
           <UsersRound size={13} aria-hidden="true" />
         </HudIconButton>

@@ -44,7 +44,13 @@ const roleLabel = (role: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
-export const ShipCrewAssignmentHudContent = () => {
+interface ShipCrewAssignmentHudContentProps {
+  presentation?: "hud" | "modal";
+}
+
+export const ShipCrewAssignmentHudContent = ({
+  presentation = "hud",
+}: ShipCrewAssignmentHudContentProps = {}) => {
   const dispatch = useAppDispatch();
   const ship = useAppSelector(selectActiveShip);
   const shipLocation = useAppSelector(selectShipLocation);
@@ -256,7 +262,14 @@ export const ShipCrewAssignmentHudContent = () => {
   }
 
   return (
-    <div className="flex max-h-[54vh] w-96 max-w-[84vw] flex-col gap-1 overflow-hidden p-0.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+    <div
+      className={[
+        "flex flex-col gap-1 overflow-hidden p-0.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)",
+        presentation === "modal"
+          ? "h-full min-h-[560px] w-full"
+          : "max-h-[54vh] w-96 max-w-[84vw]",
+      ].join(" ")}
+    >
       <div className="border-b border-(--hud-border-subtle) pb-1">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-[9px] text-(--hud-text)">{ship.name}</span>
