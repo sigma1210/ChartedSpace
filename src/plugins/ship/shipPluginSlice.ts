@@ -43,6 +43,7 @@ export interface ShipSummary {
   sectorAbbr: string | null;
   hex: string | null;
   cargoCapacity: number;
+  stateroomsTotal?: number;
   jumpArrivesTurn: number | null;
   crew: CrewMember[];
   cargo: CargoManifestLot[];

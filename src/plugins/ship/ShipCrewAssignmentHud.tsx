@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, UserRoundPlus } from "lucide-react";
+import { Check, Loader2, Plus, UserRoundMinus, UserRoundPlus } from "lucide-react";
 import ships from "@/data/classic/ships.json";
 import { ROLE_REQUIRED_SKILL } from "@/lib/crew";
 import { selectEffectiveCharacterProfile } from "@/plugins/characters/selectors";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchShip, invalidateShip } from "./shipPluginSlice";
 import { selectActiveShip, selectShipLocation } from "./selectors";
 
 interface CharacterPostingSummary {
@@ -27,13 +28,12 @@ interface ShipDefinition {
   type: string;
   designation?: string;
   requiredCrew?: string[];
+  stateroomsTotal?: number;
 }
 
 type LoadStatus = "idle" | "loading" | "loaded" | "error";
-type CrewChoice =
-  | { source: "current-character"; characterId: string; role: string }
-  | { source: "posting"; postingId: string; characterId: string; role: string }
-  | null;
+type SaveStatus = "idle" | "saving";
+type CrewChoice = { source: "crew-pool"; characterId: string; role: string } | null;
 
 const shipDefinitions = ships as ShipDefinition[];
 
@@ -44,22 +44,8 @@ const roleLabel = (role: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
-const skillLevelForCandidate = (candidate: CharacterPostingSummary, role: string) => {
-  const requiredSkill = ROLE_REQUIRED_SKILL[role];
-  if (!requiredSkill) return null;
-  return candidate.characterSkills.find((skill) => skill.name === requiredSkill)?.level ?? null;
-};
-
-const skillLevelForSkills = (
-  skills: Array<{ name: string; level: number }>,
-  role: string,
-) => {
-  const requiredSkill = ROLE_REQUIRED_SKILL[role];
-  if (!requiredSkill) return null;
-  return skills.find((skill) => skill.name === requiredSkill)?.level ?? null;
-};
-
 export const ShipCrewAssignmentHudContent = () => {
+  const dispatch = useAppDispatch();
   const ship = useAppSelector(selectActiveShip);
   const shipLocation = useAppSelector(selectShipLocation);
   const currentCharacter = useAppSelector(selectEffectiveCharacterProfile);
@@ -67,6 +53,9 @@ export const ShipCrewAssignmentHudContent = () => {
   const [crewChoice, setCrewChoice] = useState<CrewChoice>(null);
   const [candidates, setCandidates] = useState<CharacterPostingSummary[]>([]);
   const [status, setStatus] = useState<LoadStatus>("idle");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [addingCandidateId, setAddingCandidateId] = useState<string | null>(null);
+  const [removingCrewId, setRemovingCrewId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const locationKey = shipLocation?.sectorAbbr && shipLocation.hex
@@ -77,11 +66,158 @@ export const ShipCrewAssignmentHudContent = () => {
     [ship?.type],
   );
   const requiredRoles = definition?.requiredCrew ?? [];
+  const stateroomsTotal = ship?.stateroomsTotal ?? definition?.stateroomsTotal ?? 0;
+  const crewPoolSize = useMemo(() => {
+    if (!ship) return 0;
+    if (!currentCharacter) return ship.crew.length;
+    return ship.crew.some((member) => member.characterId === currentCharacter.id)
+      ? ship.crew.length
+      : ship.crew.length + 1;
+  }, [currentCharacter, ship]);
+  const crewPoolRows = useMemo(() => {
+    if (!ship) return [];
+    const rows = ship.crew.map((member) => ({
+      id: member.id,
+      characterId: member.characterId,
+      name: member.characterName ?? member.npcName ?? "Crew",
+      role: member.role,
+      isOwnerOperator: member.isOwnerOperator,
+      synthetic: false,
+    }));
+    if (
+      currentCharacter &&
+      !ship.crew.some((member) => member.characterId === currentCharacter.id)
+    ) {
+      rows.unshift({
+        id: `current-${currentCharacter.id}`,
+        characterId: currentCharacter.id,
+        name: currentCharacter.name,
+        role: "unassigned",
+        isOwnerOperator: false,
+        synthetic: true,
+      });
+    }
+    return rows;
+  }, [currentCharacter, ship]);
+  const totalCrewSalary = useMemo(
+    () => ship?.crew.reduce((total, member) => total + member.monthlySalary, 0) ?? 0,
+    [ship],
+  );
+  const crewCharacterIds = useMemo(
+    () => new Set(ship?.crew.flatMap((member) => member.characterId ? [member.characterId] : []) ?? []),
+    [ship],
+  );
+  const displayedCandidates = useMemo(
+    () => locationKey ? candidates : [],
+    [candidates, locationKey],
+  );
+  const displayedStatus = locationKey ? status : "loaded";
+  const availableCandidates = useMemo(
+    () => displayedCandidates.filter((candidate) => !crewCharacterIds.has(candidate.characterId)),
+    [displayedCandidates, crewCharacterIds],
+  );
+  const crewAtCapacity = stateroomsTotal > 0 && crewPoolSize >= stateroomsTotal;
+  const selectedCharacterAlreadyCrew =
+    crewChoice
+      ? crewCharacterIds.has(crewChoice.characterId) || crewChoice.characterId === currentCharacter?.id
+      : false;
+  const canSaveCrewChoice = Boolean(
+    crewChoice &&
+    selectedRole &&
+    crewChoice.role === selectedRole &&
+    saveStatus !== "saving" &&
+    (!crewAtCapacity || selectedCharacterAlreadyCrew),
+  );
+  const selectedCrewName = crewChoice
+    ? crewPoolRows.find((member) => member.characterId === crewChoice.characterId)?.name ?? null
+    : null;
+
+  const assignSelectedCrew = async () => {
+    if (!crewChoice || !selectedRole) return;
+    setSaveStatus("saving");
+    setError(null);
+    try {
+      const response = await fetch("/api/ship/crew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(crewChoice),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Failed to assign crew");
+      setCrewChoice(null);
+      dispatch(invalidateShip());
+      await dispatch(fetchShip());
+    } catch (err) {
+      console.error("[ship crew assignment]", err);
+      setError(err instanceof Error ? err.message : "Failed to assign crew");
+    } finally {
+      setSaveStatus("idle");
+    }
+  };
+
+  const addCandidateToCrew = async (candidate: CharacterPostingSummary) => {
+    setAddingCandidateId(candidate.id);
+    setError(null);
+    try {
+      const response = await fetch("/api/ship/crew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add-to-pool",
+          postingId: candidate.id,
+          characterId: candidate.characterId,
+        }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Failed to add crew");
+      setCandidates((items) => items.filter((item) => item.id !== candidate.id));
+      setCrewChoice(null);
+      dispatch(invalidateShip());
+      await dispatch(fetchShip());
+    } catch (err) {
+      console.error("[ship crew assignment]", err);
+      setError(err instanceof Error ? err.message : "Failed to add crew");
+    } finally {
+      setAddingCandidateId(null);
+    }
+  };
+
+  const removeCrewMember = async (crewId: string) => {
+    setRemovingCrewId(crewId);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (currentCharacter?.id) params.set("currentCharacterId", currentCharacter.id);
+      const response = await fetch(`/api/crew/${crewId}?${params.toString()}`, {
+        method: "DELETE",
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Failed to remove crew");
+      setCrewChoice((choice) => {
+        const removed = crewPoolRows.find((member) => member.id === crewId);
+        return removed?.characterId && choice?.characterId === removed.characterId ? null : choice;
+      });
+      dispatch(invalidateShip());
+      await dispatch(fetchShip());
+      if (locationKey) {
+        const params = new URLSearchParams();
+        params.set("location", locationKey);
+        const postingsResponse = await fetch(`/api/characters/postings?${params.toString()}`);
+        if (postingsResponse.ok) {
+          const postingsBody = await postingsResponse.json() as { items: CharacterPostingSummary[] };
+          setCandidates(postingsBody.items.filter((item) => item.type === "crew_available"));
+        }
+      }
+    } catch (err) {
+      console.error("[ship crew assignment]", err);
+      setError(err instanceof Error ? err.message : "Failed to remove crew");
+    } finally {
+      setRemovingCrewId(null);
+    }
+  };
 
   useEffect(() => {
     if (!locationKey) {
-      setCandidates([]);
-      setStatus("loaded");
       return;
     }
 
@@ -129,6 +265,14 @@ export const ShipCrewAssignmentHudContent = () => {
         <div className="mt-0.5 text-(--hud-text-dim)">
           {locationKey ? `Local candidates: ${locationKey}` : "Current system unavailable"}
         </div>
+        <div className="mt-1 grid grid-cols-2 gap-1 text-[7px] text-(--hud-text-dim)">
+          <div className="border border-(--hud-border-subtle) px-1 py-0.5">
+            Crew {crewPoolSize}/{stateroomsTotal || "?"}
+          </div>
+          <div className="border border-(--hud-border-subtle) px-1 py-0.5">
+            Salaries Cr{totalCrewSalary.toLocaleString()}
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -137,9 +281,9 @@ export const ShipCrewAssignmentHudContent = () => {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1 overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-1 overflow-hidden">
         <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="mb-1 text-[7px] text-(--hud-text-dim)">Required Crew</div>
+          <div className="mb-1 text-[7px] text-(--hud-text-dim)">Roles</div>
           {requiredRoles.length === 0 ? (
             <div className="border border-(--hud-border-subtle) px-1.5 py-2 text-(--hud-text-dim)">
               No required crew data
@@ -153,7 +297,10 @@ export const ShipCrewAssignmentHudContent = () => {
                   <li key={role} className="border border-(--hud-border-subtle) bg-(--hud-surface-2)/40">
                     <button
                       type="button"
-                      onClick={() => setSelectedRole(role)}
+                      onClick={() => {
+                        setSelectedRole(role);
+                        setCrewChoice(null);
+                      }}
                       className={`block w-full px-1.5 py-1 text-left transition-colors ${
                         active ? "bg-(--hud-accent)/10 text-(--hud-text)" : "hover:bg-(--hud-surface-2)"
                       }`}
@@ -178,112 +325,169 @@ export const ShipCrewAssignmentHudContent = () => {
         </div>
 
         <div className="min-h-0 overflow-y-auto pr-1">
-          {currentCharacter && (
-            <div className="mb-1 border border-(--hud-accent)/50 bg-(--hud-accent)/10">
-              <button
-                type="button"
-                disabled={!selectedRole}
-                onClick={() => setCrewChoice({
-                  source: "current-character",
-                  characterId: currentCharacter.id,
-                  role: selectedRole ?? "",
-                })}
-                title={selectedRole ? "Choose current character" : "Select a crew slot first"}
-                className={`block w-full px-1.5 py-1 text-left transition-colors hover:bg-(--hud-accent)/15 ${
-                  !selectedRole
-                    ? "cursor-not-allowed opacity-60"
-                    : ""
-                } ${
-                  crewChoice?.source === "current-character" &&
-                  crewChoice.characterId === currentCharacter.id &&
-                  crewChoice.role === selectedRole
-                    ? "text-(--hud-text)"
-                    : "text-(--hud-text-dim)"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[9px] text-(--hud-text)">
-                    {currentCharacter.name}
-                  </span>
-                  <span className="shrink-0 text-[7px] text-(--hud-accent)">Current</span>
-                </div>
-                <div className="mt-0.5 truncate text-(--hud-text-dim)">
-                  {!selectedRole
-                    ? "Select a crew slot"
-                    : ROLE_REQUIRED_SKILL[selectedRole]
-                    ? `${ROLE_REQUIRED_SKILL[selectedRole]} ${skillLevelForSkills(currentCharacter.skills, selectedRole) ?? "untrained"}`
-                    : "Available for this role"}
-                </div>
-              </button>
-            </div>
-          )}
           <div className="mb-1 flex items-center justify-between gap-2 text-[7px] text-(--hud-text-dim)">
-            <span>Candidates</span>
-            {status === "loading" && <Loader2 size={10} className="animate-spin" aria-hidden="true" />}
+            <span>Crew Pool</span>
+            {selectedRole && <span>{roleLabel(selectedRole)}</span>}
           </div>
-          {!selectedRole ? (
-            <div className="border border-(--hud-border-subtle) px-1.5 py-2 text-(--hud-text-dim)">
-              Select a crew slot
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {status === "loading" ? (
-                <div className="flex items-center justify-center gap-1.5 border border-(--hud-border-subtle) px-1.5 py-5 text-(--hud-text-dim)">
-                  <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-                  Loading
-                </div>
-              ) : candidates.length === 0 ? (
-                <div className="border border-(--hud-border-subtle) px-1.5 py-2 text-(--hud-text-dim)">
-                  No local crew postings
-                </div>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {candidates.map((candidate) => {
-                    const requiredSkill = ROLE_REQUIRED_SKILL[selectedRole];
-                    const skillLevel = skillLevelForCandidate(candidate, selectedRole);
-                    const qualified = !requiredSkill || skillLevel !== null;
-                    return (
-                      <li
-                        key={candidate.id}
-                        className={`border bg-(--hud-surface-2)/40 ${
-                          qualified ? "border-(--hud-border-subtle)" : "border-(--hud-error)/30 opacity-60"
-                        }`}
-                      >
-                    <button
-                      type="button"
-                      onClick={() => setCrewChoice({
-                        source: "posting",
-                        postingId: candidate.id,
-                        characterId: candidate.characterId,
+          <ul className="mb-1 flex max-h-36 flex-col gap-1 overflow-y-auto">
+            {crewPoolRows.map((member) => (
+              <li
+                key={member.id}
+                className="border border-(--hud-border-subtle) bg-(--hud-surface-2)/30"
+              >
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-stretch">
+                  <button
+                    type="button"
+                    disabled={!selectedRole || !member.characterId}
+                    onClick={() => {
+                      if (!selectedRole || !member.characterId) return;
+                      setCrewChoice({
+                        source: "crew-pool",
+                        characterId: member.characterId,
                         role: selectedRole,
-                      })}
-                      className={`block w-full px-1.5 py-1 text-left transition-colors hover:bg-(--hud-surface-2) ${
-                        crewChoice?.source === "posting" &&
-                        crewChoice.postingId === candidate.id &&
-                        crewChoice.role === selectedRole
-                          ? "text-(--hud-text)"
-                          : "text-(--hud-text-dim)"
-                      }`}
+                      });
+                    }}
+                    title={
+                      !selectedRole
+                        ? "Select a crew slot first"
+                        : !member.characterId
+                        ? "This crew member cannot be assigned from the pool"
+                        : "Pick for selected role"
+                    }
+                    className={`min-w-0 px-1.5 py-1 text-left transition-colors ${
+                      crewChoice?.source === "crew-pool" &&
+                      crewChoice.characterId === member.characterId &&
+                      crewChoice.role === selectedRole
+                        ? "bg-(--hud-accent)/10 text-(--hud-text)"
+                        : "text-(--hud-text-dim)"
+                    } ${
+                      !selectedRole || !member.characterId
+                        ? "cursor-not-allowed opacity-60"
+                        : "hover:bg-(--hud-surface-2)"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[9px] text-(--hud-text)">
+                        {member.name}
+                      </span>
+                      {crewChoice?.source === "crew-pool" &&
+                        crewChoice.characterId === member.characterId &&
+                        crewChoice.role === selectedRole && (
+                          <Check size={10} aria-hidden="true" className="shrink-0 text-(--hud-accent)" />
+                      )}
+                    </div>
+                    <div className="mt-0.5 truncate text-[7px] text-(--hud-text-dim)">
+                      {member.synthetic ? "Current character" : member.role === "unassigned" ? "Unassigned" : roleLabel(member.role)}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      member.synthetic ||
+                      member.isOwnerOperator ||
+                      member.characterId === currentCharacter?.id ||
+                      removingCrewId !== null
+                    }
+                    onClick={() => void removeCrewMember(member.id)}
+                    title={
+                      member.synthetic || member.characterId === currentCharacter?.id
+                        ? "Cannot remove the current character"
+                        : member.isOwnerOperator
+                        ? "Cannot remove the owner-operator"
+                        : "Remove from crew"
+                    }
+                    className={`flex w-6 items-center justify-center border-l border-(--hud-border-subtle) transition-colors ${
+                      member.synthetic ||
+                      member.isOwnerOperator ||
+                      member.characterId === currentCharacter?.id ||
+                      removingCrewId !== null
+                        ? "cursor-not-allowed opacity-50"
+                        : "text-(--hud-text-dim) hover:bg-(--hud-error)/10 hover:text-(--hud-error)"
+                    }`}
+                  >
+                    {removingCrewId === member.id ? (
+                      <Loader2 size={10} className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <UserRoundMinus size={11} aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            disabled={!canSaveCrewChoice}
+            onClick={assignSelectedCrew}
+            className={`mb-2 flex w-full items-center justify-center gap-1 border border-(--hud-accent)/50 px-1.5 py-1 text-[8px] transition-colors ${
+              canSaveCrewChoice
+                ? "bg-(--hud-accent)/10 text-(--hud-text) hover:bg-(--hud-accent)/15"
+                : "cursor-not-allowed text-(--hud-text-dim) opacity-60"
+            }`}
+          >
+            {saveStatus === "saving" && <Loader2 size={10} className="animate-spin" aria-hidden="true" />}
+            {selectedCrewName && selectedRole
+              ? `Assign ${selectedCrewName} to ${roleLabel(selectedRole)}`
+              : "Assign Crew"}
+          </button>
+          <div className="mb-1 flex items-center justify-between gap-2 text-[7px] text-(--hud-text-dim)">
+            <span>Job Board</span>
+            {displayedStatus === "loading" && <Loader2 size={10} className="animate-spin" aria-hidden="true" />}
+          </div>
+          <div className="flex flex-col gap-1">
+            {displayedStatus === "loading" ? (
+              <div className="flex items-center justify-center gap-1.5 border border-(--hud-border-subtle) px-1.5 py-5 text-(--hud-text-dim)">
+                <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                Loading
+              </div>
+            ) : availableCandidates.length === 0 ? (
+              <div className="border border-(--hud-border-subtle) px-1.5 py-2 text-(--hud-text-dim)">
+                No local crew postings
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {availableCandidates.map((candidate) => {
+                  const addDisabled = crewAtCapacity || addingCandidateId !== null;
+                  return (
+                    <li
+                      key={candidate.id}
+                      className="border border-(--hud-border-subtle) bg-(--hud-surface-2)/30"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-[9px] text-(--hud-text)">
-                          {candidate.characterName}
-                        </span>
-                        <UserRoundPlus size={10} aria-hidden="true" className="shrink-0 text-(--hud-text-dim)" />
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 px-1.5 py-1">
+                        <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-[9px] text-(--hud-text)">
+                            {candidate.characterName}
+                          </span>
+                          <UserRoundPlus size={10} aria-hidden="true" className="shrink-0 text-(--hud-text-dim)" />
+                        </div>
+                        <div className="mt-0.5 truncate text-(--hud-text-dim)">
+                          Available crew candidate
+                        </div>
+                        </div>
+                          <button
+                            type="button"
+                            disabled={addDisabled}
+                            onClick={() => void addCandidateToCrew(candidate)}
+                            title={crewAtCapacity ? "Crew pool is at stateroom capacity" : "Add to ship crew"}
+                            className={`flex h-6 w-6 items-center justify-center border border-(--hud-border-subtle) transition-colors ${
+                              addDisabled
+                                ? "cursor-not-allowed opacity-60"
+                                : "hover:bg-(--hud-surface-2)"
+                            }`}
+                          >
+                            {addingCandidateId === candidate.id && (
+                              <Loader2 size={9} className="animate-spin" aria-hidden="true" />
+                            )}
+                            {addingCandidateId !== candidate.id && <Plus size={11} aria-hidden="true" />}
+                          </button>
                       </div>
-                      <div className="mt-0.5 truncate text-(--hud-text-dim)">
-                        {requiredSkill
-                          ? `${requiredSkill} ${skillLevel ?? "untrained"}`
-                          : "No role skill required"}
-                      </div>
-                    </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
     </div>

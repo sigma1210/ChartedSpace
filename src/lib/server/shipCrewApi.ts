@@ -8,7 +8,11 @@ import { characterPrisma } from "@/plugins/characters/server/characterPrisma";
 type ShipTypeDefinition = {
   type: string;
   requiredCrew?: string[];
+  stateroomsTotal?: number;
 };
+
+const UNASSIGNED_CREW_ROLE = "unassigned";
+const CREW_POOL_SALARY_ROLE = "crew";
 
 const parseText = (value: unknown) =>
   typeof value === "string" ? value.trim() : null;
@@ -71,12 +75,14 @@ export const assignShipCrewMember = async (request: Request) => {
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const action = parseText(body.action);
+    const addToPool = action === "add-to-pool";
     const role = parseText(body.role);
     const characterId = parseText(body.characterId);
     const postingId = parseText(body.postingId);
 
-    if (!role || !characterId) {
-      return NextResponse.json({ error: "role and characterId are required" }, { status: 400 });
+    if (!characterId || (!addToPool && !role)) {
+      return NextResponse.json({ error: "characterId and role are required" }, { status: 400 });
     }
 
     const ship = await prisma.ship.findUnique({
@@ -91,6 +97,10 @@ export const assignShipCrewMember = async (request: Request) => {
             role: true,
             characterId: true,
             isOwnerOperator: true,
+            monthlySalary: true,
+            npcName: true,
+            keySkillName: true,
+            keySkillLevel: true,
           },
         },
       },
@@ -99,9 +109,10 @@ export const assignShipCrewMember = async (request: Request) => {
 
     const shipType = (shipTypes as ShipTypeDefinition[]).find((item) => item.type === ship.type);
     const requiredCrew = shipType?.requiredCrew ?? [];
-    if (!requiredCrew.includes(role)) {
+    if (!addToPool && (!role || !requiredCrew.includes(role))) {
       return NextResponse.json({ error: "Role is not required for this ship" }, { status: 400 });
     }
+    const crewCapacity = shipType?.stateroomsTotal ?? 0;
 
     const character = await characterPrisma.character.findFirst({
       where: {
@@ -141,33 +152,109 @@ export const assignShipCrewMember = async (request: Request) => {
       }
     }
 
-    const { skillName, skillLevel } = skillLevelForRole(character.skills, role);
-    const payableSkillLevel = Math.max(0, skillLevel);
     const existingForCharacter = ship.crew.find((member) => member.characterId === characterId) ?? null;
-    const existingForRole = ship.crew.find((member) => member.role === role) ?? null;
 
-    if (
-      existingForRole &&
-      existingForRole.id !== existingForCharacter?.id &&
-      existingForRole.isOwnerOperator
-    ) {
-      return NextResponse.json({ error: "Role is occupied by the owner-operator" }, { status: 409 });
+    if (!existingForCharacter && crewCapacity > 0 && ship.crew.length >= crewCapacity) {
+      return NextResponse.json({ error: "Crew pool is at stateroom capacity" }, { status: 409 });
     }
+
+    if (addToPool) {
+      const crew = existingForCharacter ?? await prisma.shipCrew.create({
+        data: {
+          shipId: ship.id,
+          characterId,
+          npcName: character.name,
+          role: UNASSIGNED_CREW_ROLE,
+          isOwnerOperator: false,
+          monthlySalary: calculateSalary(CREW_POOL_SALARY_ROLE, 0),
+          keySkillName: null,
+          keySkillLevel: 0,
+        },
+        select: {
+          id: true,
+          role: true,
+          isOwnerOperator: true,
+          monthlySalary: true,
+          characterId: true,
+          npcName: true,
+          keySkillName: true,
+          keySkillLevel: true,
+        },
+      });
+
+      await characterPrisma.$transaction(async (tx) => {
+        await tx.character.update({
+          where: { id: characterId },
+          data: {
+            currentShipId: ship.id,
+            currentShipRole: existingForCharacter?.role === UNASSIGNED_CREW_ROLE
+              ? null
+              : existingForCharacter?.role ?? null,
+            ...(ship.currentLocation ? { currentLocation: ship.currentLocation } : {}),
+          },
+        });
+
+        if (ship.currentLocation) {
+          await tx.locationLog.create({
+            data: {
+              characterId,
+              location: ship.currentLocation,
+            },
+          });
+        }
+
+        if (postingId) {
+          await tx.characterPosting.update({
+            where: { id: postingId },
+            data: { status: "hired" },
+          });
+        }
+      });
+
+      const ownerCharacterId =
+        ship.crew.find((member) => member.isOwnerOperator)?.characterId ?? null;
+      await upsertCrewRelationship({
+        fromCharacterId: ownerCharacterId,
+        toCharacterId: characterId,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        crew: {
+          ...crew,
+          characterName: character.name,
+        },
+      });
+    }
+
+    const assignmentRole = role;
+    if (!assignmentRole) {
+      return NextResponse.json({ error: "role is required" }, { status: 400 });
+    }
+
+    const { skillName, skillLevel } = skillLevelForRole(character.skills, assignmentRole);
+    const payableSkillLevel = Math.max(0, skillLevel);
+    const existingForRole = ship.crew.find((member) => member.role === assignmentRole) ?? null;
 
     const monthlySalary = existingForCharacter?.isOwnerOperator
       ? 0
       : calculateSalary(role, payableSkillLevel);
 
-    const crew = await prisma.$transaction(async (tx) => {
+    const { crew, displacedCharacterId } = await prisma.$transaction(async (tx) => {
+      let displacedCharacterId: string | null = null;
       if (existingForRole && existingForRole.id !== existingForCharacter?.id) {
-        await tx.shipCrew.delete({ where: { id: existingForRole.id } });
+        displacedCharacterId = existingForRole.characterId;
+        await tx.shipCrew.update({
+          where: { id: existingForRole.id },
+          data: { role: UNASSIGNED_CREW_ROLE },
+        });
       }
 
       if (existingForCharacter) {
-        return tx.shipCrew.update({
+        const crew = await tx.shipCrew.update({
           where: { id: existingForCharacter.id },
           data: {
-            role,
+            role: assignmentRole,
             monthlySalary,
             keySkillName: skillName,
             keySkillLevel: skillLevel,
@@ -183,14 +270,15 @@ export const assignShipCrewMember = async (request: Request) => {
             keySkillLevel: true,
           },
         });
+        return { crew, displacedCharacterId };
       }
 
-      return tx.shipCrew.create({
+      const crew = await tx.shipCrew.create({
         data: {
           shipId: ship.id,
           characterId,
           npcName: character.name,
-          role,
+          role: assignmentRole,
           isOwnerOperator: false,
           monthlySalary,
           keySkillName: skillName,
@@ -207,6 +295,7 @@ export const assignShipCrewMember = async (request: Request) => {
           keySkillLevel: true,
         },
       });
+      return { crew, displacedCharacterId };
     });
 
     await characterPrisma.$transaction(async (tx) => {
@@ -214,7 +303,7 @@ export const assignShipCrewMember = async (request: Request) => {
         where: { id: characterId },
         data: {
           currentShipId: ship.id,
-          currentShipRole: role,
+          currentShipRole: assignmentRole,
           ...(ship.currentLocation ? { currentLocation: ship.currentLocation } : {}),
         },
       });
@@ -232,6 +321,13 @@ export const assignShipCrewMember = async (request: Request) => {
         await tx.characterPosting.update({
           where: { id: postingId },
           data: { status: "hired" },
+        });
+      }
+
+      if (displacedCharacterId) {
+        await tx.character.update({
+          where: { id: displacedCharacterId },
+          data: { currentShipRole: null },
         });
       }
     });

@@ -144,6 +144,7 @@ export const GET = async () => {
         sectorAbbr:          parsed?.sectorAbbr ?? null,
         hex:                 parsed?.hex ?? null,
         cargoCapacity:       typeData?.cargoCapacity ?? 0,
+        stateroomsTotal:     typeData?.stateroomsTotal ?? 0,
         crew: ship.crew.map(c => ({
           id:              c.id,
           role:            c.role,

@@ -210,6 +210,79 @@ export const createGeneratedPosting = async ({
   return rowToSummary(posting);
 };
 
+export const reopenCrewAvailablePosting = async ({
+  userId,
+  characterId,
+  location = null,
+}: {
+  userId: string;
+  characterId: string;
+  location?: string | null;
+}) => {
+  const template = postingTemplate("crew_available");
+  const existing = await characterPrisma.characterPosting.findFirst({
+    where: {
+      userId,
+      characterId,
+      type: "crew_available",
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+
+  const select = {
+    id: true,
+    type: true,
+    title: true,
+    description: true,
+    location: true,
+    role: true,
+    status: true,
+    createdAt: true,
+    characterId: true,
+    character: {
+      select: {
+        name: true,
+        sheet: true,
+        skills: {
+          select: {
+            name: true,
+            level: true,
+          },
+          orderBy: { name: "asc" },
+        },
+      },
+    },
+  } satisfies CharacterDbPrisma.CharacterPostingSelect;
+
+  const posting = existing
+    ? await characterPrisma.characterPosting.update({
+        where: { id: existing.id },
+        data: {
+          status: "open",
+          location,
+          title: template.title,
+          description: template.description,
+          role: template.role,
+        },
+        select,
+      })
+    : await characterPrisma.characterPosting.create({
+        data: {
+          userId,
+          characterId,
+          type: "crew_available",
+          title: template.title,
+          description: template.description,
+          location,
+          role: template.role,
+        },
+        select,
+      });
+
+  return rowToSummary(posting);
+};
+
 const postingTypes: CharacterPostingType[] = ["crew_available", "patron_job"];
 
 const clampTarget = (value: number) => {
