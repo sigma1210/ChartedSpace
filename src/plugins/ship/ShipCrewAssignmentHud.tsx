@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Plus, UserRoundMinus, UserRoundPlus } from "lucide-react";
 import ships from "@/data/classic/ships.json";
+import type { CharacterAvatar } from "@/lib/characters/avatar";
 import { ROLE_REQUIRED_SKILL } from "@/lib/crew";
 import { selectEffectiveCharacterProfile } from "@/plugins/characters/selectors";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -20,6 +22,7 @@ interface CharacterPostingSummary {
   characterId: string;
   characterName: string;
   characterGender: "female" | "male" | null;
+  characterAvatar: CharacterAvatar | null;
   characterSkills: Array<{ name: string; level: number }>;
   createdAt: string;
 }
@@ -34,6 +37,41 @@ interface ShipDefinition {
 type LoadStatus = "idle" | "loading" | "loaded" | "error";
 type SaveStatus = "idle" | "saving";
 type CrewChoice = { source: "crew-pool"; characterId: string; role: string } | null;
+
+const AvatarThumb = ({
+  avatar,
+  name,
+  size = "sm",
+}: {
+  avatar?: CharacterAvatar | null;
+  name: string;
+  size?: "xs" | "sm";
+}) => {
+  const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
+  const portraitPath = avatar?.currentPortraitPath ?? null;
+  const showPortrait = portraitPath && failedPortraitPath !== portraitPath;
+  const sizeClass = size === "xs" ? "h-8 w-8" : "h-10 w-10";
+
+  return (
+    <span className={`relative block shrink-0 overflow-hidden border border-(--hud-border-subtle) bg-(--hud-surface) ${sizeClass}`}>
+      {showPortrait && (
+        <Image
+          src={portraitPath}
+          alt={`${name} portrait`}
+          fill
+          sizes={size === "xs" ? "32px" : "40px"}
+          onError={() => setFailedPortraitPath(portraitPath)}
+          className="object-cover"
+        />
+      )}
+      {!showPortrait && (
+        <span className="flex h-full w-full items-center justify-center text-[11px] text-(--hud-text-dim)">
+          {name.slice(0, 1)}
+        </span>
+      )}
+    </span>
+  );
+};
 
 const shipDefinitions = ships as ShipDefinition[];
 
@@ -86,6 +124,7 @@ export const ShipCrewAssignmentHudContent = ({
       id: member.id,
       characterId: member.characterId,
       name: member.characterName ?? member.npcName ?? "Crew",
+      avatar: member.characterAvatar ?? null,
       role: member.role,
       isOwnerOperator: member.isOwnerOperator,
       synthetic: false,
@@ -98,6 +137,7 @@ export const ShipCrewAssignmentHudContent = ({
         id: `current-${currentCharacter.id}`,
         characterId: currentCharacter.id,
         name: currentCharacter.name,
+        avatar: currentCharacter.avatar ?? null,
         role: "unassigned",
         isOwnerOperator: false,
         synthetic: true,
@@ -324,10 +364,22 @@ export const ShipCrewAssignmentHudContent = ({
                           {ROLE_REQUIRED_SKILL[role] ?? "Any"}
                         </span>
                       </div>
-                      <div className="mt-0.5 truncate normal-case tracking-normal text-(--hud-text-dim)">
-                        {assigned
-                          ? assigned.characterName ?? assigned.npcName ?? "Assigned"
-                          : "Open slot"}
+                      <div className="mt-1 flex items-center gap-2">
+                        <AvatarThumb
+                          avatar={assigned?.characterAvatar ?? null}
+                          name={assigned ? assigned.characterName ?? assigned.npcName ?? "Assigned" : "Open slot"}
+                          size="xs"
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate normal-case tracking-normal text-(--hud-text)">
+                            {assigned
+                              ? assigned.characterName ?? assigned.npcName ?? "Assigned"
+                              : "Open slot"}
+                          </div>
+                          <div className="truncate text-[7px] text-(--hud-text-dim)">
+                            {assigned ? "Assigned crew" : "No crew assigned"}
+                          </div>
+                        </div>
                       </div>
                     </button>
                   </li>
@@ -379,18 +431,23 @@ export const ShipCrewAssignmentHudContent = ({
                         : "hover:bg-(--hud-surface-2)"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[9px] text-(--hud-text)">
-                        {member.name}
-                      </span>
-                      {crewChoice?.source === "crew-pool" &&
-                        crewChoice.characterId === member.characterId &&
-                        crewChoice.role === selectedRole && (
-                          <Check size={10} aria-hidden="true" className="shrink-0 text-(--hud-accent)" />
-                      )}
-                    </div>
-                    <div className="mt-0.5 truncate text-[7px] text-(--hud-text-dim)">
-                      {member.synthetic ? "Current character" : member.role === "unassigned" ? "Unassigned" : roleLabel(member.role)}
+                    <div className="flex items-center gap-2">
+                      <AvatarThumb avatar={member.avatar} name={member.name} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-[9px] text-(--hud-text)">
+                            {member.name}
+                          </span>
+                          {crewChoice?.source === "crew-pool" &&
+                            crewChoice.characterId === member.characterId &&
+                            crewChoice.role === selectedRole && (
+                              <Check size={10} aria-hidden="true" className="shrink-0 text-(--hud-accent)" />
+                          )}
+                        </div>
+                        <div className="mt-0.5 truncate text-[7px] text-(--hud-text-dim)">
+                          {member.synthetic ? "Current character" : member.role === "unassigned" ? "Unassigned" : roleLabel(member.role)}
+                        </div>
+                      </div>
                     </div>
                   </button>
                   <button
@@ -467,16 +524,19 @@ export const ShipCrewAssignmentHudContent = ({
                       className="border border-(--hud-border-subtle) bg-(--hud-surface-2)/30"
                     >
                       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 px-1.5 py-1">
-                        <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[9px] text-(--hud-text)">
-                            {candidate.characterName}
-                          </span>
-                          <UserRoundPlus size={10} aria-hidden="true" className="shrink-0 text-(--hud-text-dim)" />
-                        </div>
-                        <div className="mt-0.5 truncate text-(--hud-text-dim)">
-                          Available crew candidate
-                        </div>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <AvatarThumb avatar={candidate.characterAvatar} name={candidate.characterName} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-[9px] text-(--hud-text)">
+                                {candidate.characterName}
+                              </span>
+                              <UserRoundPlus size={10} aria-hidden="true" className="shrink-0 text-(--hud-text-dim)" />
+                            </div>
+                            <div className="mt-0.5 truncate text-(--hud-text-dim)">
+                              Available crew candidate
+                            </div>
+                          </div>
                         </div>
                           <button
                             type="button"

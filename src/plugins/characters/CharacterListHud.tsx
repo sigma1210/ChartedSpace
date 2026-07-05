@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { Eye, Plus, Loader2 } from "lucide-react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
@@ -34,53 +35,81 @@ const CharacterCard = ({
   onStart: (characterId: string) => void;
   starting: boolean;
 }) => {
+  const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
+  const portraitPath = character.avatar?.currentPortraitPath ?? null;
+  const showPortrait = portraitPath && failedPortraitPath !== portraitPath;
+  const isPlayerCharacter = character.kind === "player";
+
   return (
     <div className="w-full border border-(--hud-border-subtle) bg-(--hud-surface-2)/70 px-1.5 py-1 text-left">
-      <div className="flex items-center justify-between gap-1">
-        <div className="flex min-w-0 items-center gap-1">
-          <span className="truncate font-mono text-[9px] font-semibold leading-tight text-(--hud-text)">
-            {character.name}
-          </span>
-          <span className="shrink-0 border border-(--hud-border-subtle) px-1 font-mono text-[7px] leading-tight text-(--hud-text-dim)">
-            {kindLabel(character.kind)}
-          </span>
+      <div className="flex gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex min-w-0 items-center gap-1">
+              <span className="truncate font-mono text-[9px] font-semibold leading-tight text-(--hud-text)">
+                {character.name}
+              </span>
+              <span className="shrink-0 border border-(--hud-border-subtle) px-1 font-mono text-[7px] leading-tight text-(--hud-text-dim)">
+                {kindLabel(character.kind)}
+              </span>
+            </div>
+            <span className="shrink-0 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
+              Cr {character.credits.toLocaleString()}
+            </span>
+          </div>
+          {character.worldName && (
+            <div className="mt-0.5 flex min-w-0 items-center gap-1 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
+              <span className="truncate">
+                ◉ {character.worldName}
+                {character.sectorAbbr && ` · ${character.sectorAbbr}`}
+                {character.hex && ` · ${character.hex}`}
+              </span>
+            </div>
+          )}
+          <div className="mt-0.5 flex gap-2 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
+            <span className="text-(--hud-accent)">{character.upp}</span>
+            {genderLabel(character.gender) && <span>{genderLabel(character.gender)}</span>}
+            <span>Skills: {character.skills.length}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onProfile(character.id)}
+              className="flex h-5 items-center gap-1 border border-(--hud-border) px-1.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+              title={`View ${character.name}`}
+            >
+              <Eye size={10} aria-hidden="true" />
+              Profile
+            </button>
+            {isPlayerCharacter && (
+              <button
+                type="button"
+                onClick={() => onStart(character.id)}
+                disabled={starting}
+                className="h-5 border border-(--hud-accent) px-1.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-accent) transition-colors hover:bg-(--hud-accent)/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {starting ? "Starting..." : "Start"}
+              </button>
+            )}
+          </div>
         </div>
-        <span className="shrink-0 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
-          Cr {character.credits.toLocaleString()}
-        </span>
-      </div>
-      {character.worldName && (
-        <div className="mt-0.5 flex min-w-0 items-center gap-1 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
-          <span className="truncate">
-            ◉ {character.worldName}
-            {character.sectorAbbr && ` · ${character.sectorAbbr}`}
-            {character.hex && ` · ${character.hex}`}
-          </span>
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden border border-(--hud-border-subtle) bg-(--hud-surface)">
+          {showPortrait && (
+            <Image
+              src={portraitPath}
+              alt={`${character.name} portrait`}
+              fill
+              sizes="48px"
+              onError={() => setFailedPortraitPath(portraitPath)}
+              className="object-cover"
+            />
+          )}
+          {!showPortrait && (
+            <span className="flex h-full w-full items-center justify-center font-mono text-[12px] uppercase text-(--hud-text-dim)">
+              {character.name.slice(0, 1)}
+            </span>
+          )}
         </div>
-      )}
-      <div className="mt-0.5 flex gap-2 font-mono text-[8px] leading-tight text-(--hud-text-dim)">
-        <span className="text-(--hud-accent)">{character.upp}</span>
-        {genderLabel(character.gender) && <span>{genderLabel(character.gender)}</span>}
-        <span>Skills: {character.skills.length}</span>
-      </div>
-      <div className="mt-1 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onProfile(character.id)}
-          className="flex h-5 items-center gap-1 border border-(--hud-border) px-1.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
-          title={`View ${character.name}`}
-        >
-          <Eye size={10} aria-hidden="true" />
-          Profile
-        </button>
-        <button
-          type="button"
-          onClick={() => onStart(character.id)}
-          disabled={starting}
-          className="h-5 border border-(--hud-accent) px-1.5 font-mono text-[8px] uppercase tracking-wider text-(--hud-accent) transition-colors hover:bg-(--hud-accent)/10 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {starting ? "Starting..." : "Start"}
-        </button>
       </div>
     </div>
   );

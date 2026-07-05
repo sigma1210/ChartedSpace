@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
+import type { CharacterAvatar } from "@/lib/characters/avatar";
 import { usePluginDispatch } from "@/plugin-api";
 import { selectShipLocation } from "@/plugins/ship";
 import { useAppSelector } from "@/store/hooks";
@@ -20,6 +22,7 @@ interface CharacterPostingSummary {
   characterId: string;
   characterName: string;
   characterGender: "female" | "male" | null;
+  characterAvatar: CharacterAvatar | null;
   createdAt: string;
 }
 
@@ -30,6 +33,67 @@ const typeLabel = (type: string) => {
   if (type === "crew_available") return "Crew";
   if (type === "patron_job") return "Patron";
   return type;
+};
+
+const PostingCard = ({
+  item,
+  onOpenProfile,
+}: {
+  item: CharacterPostingSummary;
+  onOpenProfile: (characterId: string) => void;
+}) => {
+  const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
+  const portraitPath = item.characterAvatar?.currentPortraitPath ?? null;
+  const showPortrait = portraitPath && failedPortraitPath !== portraitPath;
+
+  return (
+    <li className="border border-(--hud-border-subtle) bg-(--hud-surface-2)/60">
+      <button
+        type="button"
+        onClick={() => onOpenProfile(item.characterId)}
+        className="block w-full px-1.5 py-1 text-left transition-colors hover:bg-(--hud-surface-2)"
+      >
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[9px] text-(--hud-text)">
+                {item.characterName}
+              </span>
+              <span className="shrink-0 border border-(--hud-border-subtle) px-1 text-[7px] text-(--hud-text-dim)">
+                {typeLabel(item.type)}
+              </span>
+            </div>
+            <div className="mt-0.5 flex items-center justify-between gap-2 text-(--hud-text-dim)">
+              <span className="truncate">{item.title}</span>
+              {item.role && <span className="shrink-0">{item.role}</span>}
+            </div>
+            {item.description && (
+              <p className="mt-0.5 line-clamp-2 normal-case tracking-normal text-(--hud-text-dim)">
+                {item.description}
+              </p>
+            )}
+          </div>
+          <div className="relative h-12 w-12 shrink-0 overflow-hidden border border-(--hud-border-subtle) bg-(--hud-surface)">
+            {showPortrait && (
+              <Image
+                src={portraitPath}
+                alt={`${item.characterName} portrait`}
+                fill
+                sizes="48px"
+                onError={() => setFailedPortraitPath(portraitPath)}
+                className="object-cover"
+              />
+            )}
+            {!showPortrait && (
+              <span className="flex h-full w-full items-center justify-center text-[12px] text-(--hud-text-dim)">
+                {item.characterName.slice(0, 1)}
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+    </li>
+  );
 };
 
 export const CharacterProfessionalBoardHudContent = () => {
@@ -203,31 +267,11 @@ export const CharacterProfessionalBoardHudContent = () => {
         {status === "loaded" && filteredItems.length > 0 && (
           <ul className="flex flex-col gap-1">
             {filteredItems.map((item) => (
-              <li key={item.id} className="border border-(--hud-border-subtle) bg-(--hud-surface-2)/60">
-                <button
-                  type="button"
-                  onClick={() => openProfile(item.characterId)}
-                  className="block w-full px-1.5 py-1 text-left transition-colors hover:bg-(--hud-surface-2)"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[9px] text-(--hud-text)">
-                      {item.characterName}
-                    </span>
-                    <span className="shrink-0 border border-(--hud-border-subtle) px-1 text-[7px] text-(--hud-text-dim)">
-                      {typeLabel(item.type)}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-between gap-2 text-(--hud-text-dim)">
-                    <span className="truncate">{item.title}</span>
-                    {item.role && <span className="shrink-0">{item.role}</span>}
-                  </div>
-                  {item.description && (
-                    <p className="mt-0.5 line-clamp-2 normal-case tracking-normal text-(--hud-text-dim)">
-                      {item.description}
-                    </p>
-                  )}
-                </button>
-              </li>
+              <PostingCard
+                key={item.id}
+                item={item}
+                onOpenProfile={openProfile}
+              />
             ))}
           </ul>
         )}

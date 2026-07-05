@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma as CharacterDbPrisma } from "@/generated/character-prisma";
+import type { CharacterAvatar } from "@/lib/characters/avatar";
 import type { CharacterGender, CharacterSheet } from "@/lib/characters/types";
 import { generateAutomaticContactSheet } from "@/plugins/characters/generation/automaticContactGenerator";
 import { characterPrisma } from "./characterPrisma";
@@ -18,6 +19,7 @@ export interface CharacterPostingSummary {
   characterId: string;
   characterName: string;
   characterGender: CharacterGender | null;
+  characterAvatar: CharacterAvatar | null;
   characterSkills: Array<{ name: string; level: number }>;
   createdAt: string;
 }
@@ -78,6 +80,7 @@ const rowToSummary = (row: {
     characterId: row.characterId,
     characterName: row.character.name,
     characterGender: gender === "female" || gender === "male" ? gender : null,
+    characterAvatar: sheet?.avatar ?? null,
     characterSkills: row.character.skills,
     createdAt: row.createdAt.toISOString(),
   };

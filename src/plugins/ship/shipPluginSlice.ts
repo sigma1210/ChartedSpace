@@ -1,4 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import type { CharacterAvatar } from "@/lib/characters/avatar";
 import type { RootState } from "@/store";
 
 export const DEFAULT_SHIP_COLOR = "#9ca3af";
@@ -10,6 +11,7 @@ export interface CrewMember {
   monthlySalary: number;
   characterId: string | null;
   characterName: string | null;
+  characterAvatar?: CharacterAvatar | null;
   npcName: string | null;
   keySkillName: string | null;
   keySkillLevel: number;

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/devAuth";
 import shipTypes from "@/data/classic/ships.json";
 import { calculateWorldPairSalePrice } from "@/lib/trade";
+import type { CharacterAvatar } from "@/lib/characters/avatar";
+import type { CharacterSheet } from "@/lib/characters/types";
 
 const UWP_SELECT = {
   size:          true,
@@ -28,16 +30,22 @@ const parseLocation = (location: string | null): { sectorAbbr: string; hex: stri
   };
 };
 
-const loadCrewCharacterNames = async (userId: string, characterIds: readonly string[]) => {
+const loadCrewCharacters = async (userId: string, characterIds: readonly string[]) => {
   try {
     const { getCharactersForUserByIds } = await import("@/plugins/characters/server/characterService");
     return new Map(
       (await getCharactersForUserByIds(userId, characterIds))
-        .map((character) => [character.id, character.name]),
+        .map((character) => {
+          const sheet = character.sheet as CharacterSheet | null;
+          return [character.id, {
+            name: character.name,
+            avatar: sheet?.avatar ?? null,
+          }];
+        }),
     );
   } catch (err) {
-    console.warn("[GET /api/ship] Character name lookup failed", err);
-    return new Map<string, string>();
+    console.warn("[GET /api/ship] Character lookup failed", err);
+    return new Map<string, { name: string; avatar: CharacterAvatar | null }>();
   }
 };
 
@@ -89,7 +97,7 @@ export const GET = async () => {
     if (!ship) return NextResponse.json({ ship: null });
 
     const parsed = parseLocation(ship.currentLocation);
-    const characterNamesById = await loadCrewCharacterNames(
+    const charactersById = await loadCrewCharacters(
       dbUser.id,
       ship.crew.flatMap(c => c.characterId ? [c.characterId] : []),
     );
@@ -151,7 +159,8 @@ export const GET = async () => {
           isOwnerOperator: c.isOwnerOperator,
           monthlySalary:   c.monthlySalary,
           characterId:     c.characterId,
-          characterName:   c.characterId ? characterNamesById.get(c.characterId) ?? null : null,
+          characterName:   c.characterId ? charactersById.get(c.characterId)?.name ?? null : null,
+          characterAvatar: c.characterId ? charactersById.get(c.characterId)?.avatar ?? null : null,
           npcName:         c.npcName,
           keySkillName:    c.keySkillName,
           keySkillLevel:   c.keySkillLevel,

@@ -34,6 +34,7 @@ export const getCharactersForUserByIds = async (
       id: true,
       name: true,
       credits: true,
+      sheet: true,
       skills: {
         select: {
           name: true,

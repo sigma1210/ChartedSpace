@@ -1,9 +1,10 @@
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CharacterHistoryEntry, CharacterRelationshipSummary, CharacterSummary } from "./charactersSlice";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { fetchCharacters, invalidateCharacters, setSelectedProfileCharacter } from "./charactersSlice";
 import {
+  selectCharacters,
   selectEffectiveCharacterProfile,
   selectEffectiveCharacterProfileLocation,
   type CharacterProfileLocation,
@@ -116,6 +117,36 @@ const StatBar = ({ label, value }: { label: string; value: number }) => {
         />
       </div>
     </div>
+  );
+};
+
+const ContactAvatar = ({
+  relationship,
+}: {
+  relationship: CharacterRelationshipSummary;
+}) => {
+  const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
+  const portraitPath = relationship.toCharacterAvatar?.currentPortraitPath ?? null;
+  const showPortrait = portraitPath && failedPortraitPath !== portraitPath;
+
+  return (
+    <span className="relative block h-9 w-9 shrink-0 overflow-hidden border border-(--hud-border-subtle) bg-(--hud-surface)">
+      {showPortrait && (
+        <Image
+          src={portraitPath}
+          alt={`${relationship.toCharacterName} portrait`}
+          fill
+          sizes="36px"
+          onError={() => setFailedPortraitPath(portraitPath)}
+          className="object-cover"
+        />
+      )}
+      {!showPortrait && (
+        <span className="flex h-full w-full items-center justify-center text-[11px] text-(--hud-text-dim)">
+          {relationship.toCharacterName.slice(0, 1)}
+        </span>
+      )}
+    </span>
   );
 };
 
@@ -255,15 +286,20 @@ export const CharacterProfileHud = ({
                 <p className="mt-0.5 text-[7px] text-(--hud-text-dim)">No location set</p>
               )}
               {showPortrait && (
-                <div className="relative mt-2 aspect-square w-24 overflow-hidden border border-(--hud-border-subtle) bg-(--hud-surface-2)">
-                  <Image
-                    src={portraitPath}
-                    alt={`${character.name} portrait`}
-                    fill
-                    sizes="96px"
-                    onError={() => setFailedPortraitPath(portraitPath)}
-                    className="object-cover"
-                  />
+                <div className="mt-2 w-24">
+                  <div className="relative aspect-square overflow-hidden border border-(--hud-border-subtle) bg-(--hud-surface-2)">
+                    <Image
+                      src={portraitPath}
+                      alt={`${character.name} portrait`}
+                      fill
+                      sizes="96px"
+                      onError={() => setFailedPortraitPath(portraitPath)}
+                      className="object-cover"
+                    />
+                  </div>
+                  <p className="mt-1 truncate text-center text-[8px] text-(--hud-text)">
+                    {character.name}
+                  </p>
                 </div>
               )}
             </div>
@@ -408,27 +444,32 @@ export const CharacterProfileHud = ({
                     onClick={() => onViewCharacter?.(relationship.toCharacterId)}
                     className="block w-full px-1.5 py-1 text-left transition-colors hover:bg-(--hud-surface-2)"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[8px] text-(--hud-text)">
-                        {relationship.toCharacterName}
-                      </span>
-                      <span className="shrink-0 text-[7px] text-(--hud-text-dim)">
-                        {relationship.attitude}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <ContactAvatar relationship={relationship} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-[8px] text-(--hud-text)">
+                            {relationship.toCharacterName}
+                          </span>
+                          <span className="shrink-0 text-[7px] text-(--hud-text-dim)">
+                            {relationship.attitude}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2 text-(--hud-text-dim)">
+                          <span className="truncate">
+                            {formatRelationshipType(relationship.type)}
+                          </span>
+                          <span className="shrink-0">
+                            {attitudeLabel(relationship.attitude)}
+                          </span>
+                        </div>
+                        {relationshipOrigin(relationship) && (
+                          <p className="mt-0.5 truncate normal-case tracking-normal text-(--hud-text-dim)">
+                            {relationshipOrigin(relationship)}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2 text-(--hud-text-dim)">
-                      <span className="truncate">
-                        {formatRelationshipType(relationship.type)}
-                      </span>
-                      <span className="shrink-0">
-                        {attitudeLabel(relationship.attitude)}
-                      </span>
-                    </div>
-                    {relationshipOrigin(relationship) && (
-                      <p className="mt-0.5 truncate normal-case tracking-normal text-(--hud-text-dim)">
-                        {relationshipOrigin(relationship)}
-                      </p>
-                    )}
                   </button>
                 </li>
               ))}
@@ -486,9 +527,27 @@ export const CharacterProfileHud = ({
 export const CharacterProfileHudContent = () => {
   const dispatch = usePluginDispatch();
   const character = usePluginSelector(selectEffectiveCharacterProfile);
+  const characters = usePluginSelector(selectCharacters);
   const currentLocation = usePluginSelector(selectEffectiveCharacterProfileLocation);
   const [contactGenerationState, setContactGenerationState] = useState<ContactGenerationState>("idle");
   const [contactGenerationError, setContactGenerationError] = useState<string | null>(null);
+
+  const characterWithResolvedContactAvatars = useMemo(() => {
+    if (!character?.relationships?.length) return character;
+    const avatarsByCharacterId = new Map(
+      characters.map((item) => [item.id, item.avatar ?? null]),
+    );
+
+    return {
+      ...character,
+      relationships: character.relationships.map((relationship) => ({
+        ...relationship,
+        toCharacterAvatar: relationship.toCharacterAvatar
+          ?? avatarsByCharacterId.get(relationship.toCharacterId)
+          ?? null,
+      })),
+    };
+  }, [character, characters]);
 
   const handleGenerateContact = async (characterId: string) => {
     if (contactGenerationState === "generating") return;
@@ -530,7 +589,7 @@ export const CharacterProfileHudContent = () => {
 
   return (
     <CharacterProfileHud
-      character={character}
+      character={characterWithResolvedContactAvatars}
       currentLocation={currentLocation}
       contactGenerationState={contactGenerationState}
       contactGenerationError={contactGenerationError}

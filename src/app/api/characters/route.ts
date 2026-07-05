@@ -186,6 +186,7 @@ export const GET = async () => {
             toCharacter: {
               select: {
                 name: true,
+                sheet: true,
               },
             },
           },
@@ -229,6 +230,7 @@ export const GET = async () => {
           source:          relationship.source,
           toCharacterId:   relationship.toCharacterId,
           toCharacterName: relationship.toCharacter.name,
+          toCharacterAvatar: (relationship.toCharacter.sheet as CharacterSheet | null)?.avatar ?? null,
         })),
       };
     });

@@ -21,6 +21,7 @@
     "tunnel": "ngrok http 3000",
     "avatar-seed": "tsx scripts/avatarSeed.ts",
     "avatar-pool": "tsx scripts/generateAvatarPool.ts",
+    "avatar-backfill-npcs": "tsx scripts/backfillNpcAvatars.ts",
     "generate:crew": "tsx scripts/generateCrewLibrary.ts",
     "generate:avatar-slugs": "tsx scripts/generateAvatarAttributeSlugs.ts"
   },

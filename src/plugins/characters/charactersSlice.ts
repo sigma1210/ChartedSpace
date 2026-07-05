@@ -61,6 +61,7 @@ export interface CharacterRelationshipSummary {
   source?: string | null;
   toCharacterId: string;
   toCharacterName: string;
+  toCharacterAvatar?: CharacterAvatar | null;
 }
 
 export interface CharacterState {
