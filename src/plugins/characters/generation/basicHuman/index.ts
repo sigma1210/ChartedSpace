@@ -1,5 +1,6 @@
 import { basicHumanCareers } from "./careers";
 import { basicHumanTables } from "./tables";
+import { DEFAULT_AVATAR_SLUG_FIELDS } from "@/lib/characters/avatar";
 import type { LifepathGeneratorDefinition } from "../lifepathTypes";
 
 export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
@@ -7,6 +8,7 @@ export const basicHumanLifepathDefinition: LifepathGeneratorDefinition = {
   label: "Basic Human Lifepath",
   version: "0.1.0",
   sophontId: "human",
+  avatarSlugFields: DEFAULT_AVATAR_SLUG_FIELDS,
   data: {
     tableSource: "charted-space-starter",
     tableSourceLabel: "Charted Space starter tables",

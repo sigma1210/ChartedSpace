@@ -1,5 +1,7 @@
+import type { CharacterAvatar } from "./avatar";
+
 export type CareerName = "navy" | "marines" | "army" | "scouts" | "merchants" | "other";
-export type CharacterGender = "female" | "male" | "nonbinary";
+export type CharacterGender = "female" | "male";
 export type GenerationRuleset = "classic" | "lifepath";
 export type GenerationMode = "random" | "guided" | "directed";
 export type DecisionMadeBy = "random" | "human" | "directed";
@@ -75,6 +77,7 @@ export interface CharacterSheet {
   name: string;
   gender?: CharacterGender | null;
   age: number;
+  avatar?: CharacterAvatar | null;
   upp: UPP;
   skills: Skill[];
   careers: CareerRecord[];

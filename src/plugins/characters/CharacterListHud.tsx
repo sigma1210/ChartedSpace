@@ -5,7 +5,7 @@ import { Eye, Plus, Loader2 } from "lucide-react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { setHudVisible } from "@/store/slices/hudSlice";
 import { openModal } from "@/store/slices/uiSlice";
-import { fetchCharacters, setSelectedProfileCharacter } from "./charactersSlice";
+import { setSelectedProfileCharacter } from "./charactersSlice";
 import { fetchShip, invalidateShip } from "@/plugins/ship";
 import {
   selectCharacters,
@@ -17,7 +17,6 @@ import { characterProfileHudId } from "./metadata";
 const genderLabel = (gender: CharacterSummary["gender"]) => {
   if (gender === "female") return "Female";
   if (gender === "male") return "Male";
-  if (gender === "nonbinary") return "Nonbinary";
   return null;
 };
 

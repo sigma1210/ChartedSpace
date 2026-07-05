@@ -1,0 +1,211 @@
+{
+  "6": {
+    "inputs": {
+      "text": [
+        "245",
+        0
+      ],
+      "clip": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "163": {
+    "inputs": {
+      "seed": 501288839359488,
+      "steps": 30,
+      "cfg": 4,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "194",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "240",
+        0
+      ],
+      "latent_image": [
+        "238",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "164": {
+    "inputs": {
+      "samples": [
+        "163",
+        0
+      ],
+      "vae": [
+        "196",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "194": {
+    "inputs": {
+      "unet_name": "anima\\anima-base-v1.0.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "195": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "flux2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP 1"
+    }
+  },
+  "196": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "210": {
+    "inputs": {
+      "note_json": "{\"version\":1,\"content\":\"<h2>MODELS AND NODES USED IN THIS WORKFLOW</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #777777\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h3><span data-ic=\\\"model-v4\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load Diffusion Model</h3><p>\\n\\n</p><p>\\n\\n<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-base-v1.0.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download anima-base-v1.0.safetensors<span class=\\\"pix-note-btnsize\\\">3.9 GB</span></a></span>&nbsp;\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #888888\\\">Place in: ComfyUI/models/diffusion_models/anima<br><span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/circlestone-labs/Anima\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Read More about the model</a></span>&nbsp;</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #777777\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h3><span data-ic=\\\"CLIP\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load CLIP 1</h3><p>\\n\\n</p><p>\\n\\n<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download qwen_3_06b_base.safetensors<span class=\\\"pix-note-btnsize\\\">1.1 GB</span></a></span>&nbsp;\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #888888\\\">Place in: ComfyUI/models/text_encoders</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #777777\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h3><span data-ic=\\\"VAE\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load VAE</h3><p>\\n\\n</p><p>\\n\\n<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download qwen_image_vae.safetensors<span class=\\\"pix-note-btnsize\\\">242 MB</span></a></span>&nbsp;\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #888888\\\">Place in: ComfyUI/models/vae</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #777777\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h3><span data-ic=\\\"CLIP\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load CLIP 2</h3><p>\\n\\n</p><p>\\n\\n<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/gemma-4/resolve/main/text_encoders/gemma4_e4b_it_fp8_scaled.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download gemma4_e4b_it_fp8_scaled.safetensors<span class=\\\"pix-note-btnsize\\\">8.06 GB</span></a></span>&nbsp;\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #888888\\\">Place in: ComfyUI/models/text_encoders</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #777777\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h3></h3><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p><span data-ic=\\\"warning-v1\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;After placing the files, <span style=\\\"color: #f66744\\\">restart</span> ComfyUI or refresh model lists using <span style=\\\"color: #f66744\\\">R</span> shortcut.</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #777777\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h3><span data-ic=\\\"nodes-installed\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Custom Nodes</h3><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><ul>\\n  <li>Pixaroma</li>\\n</ul><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #777777\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h3><span data-ic=\\\"pixaroma\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Resources</h3><p>\\n\\n</p><p>\\n\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-discord\\\" href=\\\"https://discord.com/invite/gggpkVgBf3\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Join Discord</a>\\n</span>&nbsp;\\n\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-yt\\\" href=\\\"https://www.youtube.com/@pixaroma\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Pixaroma YouTube Channel</a>\\n</span>&nbsp;</p>\",\"buttonColor\":\"#f66744\",\"lineColor\":\"#f66744\",\"width\":530,\"height\":690,\"backgroundColor\":\"#2a2a2a\"}"
+    },
+    "class_type": "PixaromaNote",
+    "_meta": {
+      "title": "Note Pixaroma"
+    }
+  },
+  "211": {
+    "inputs": {
+      "label_json": "{\"text\":\"Anima Base v1.0 + Gemma 4 txt2img\",\"fontSize\":30,\"fontFamily\":\"Arial\",\"fontColor\":\"#ffffff\",\"textAlign\":\"left\",\"backgroundColor\":\"#f66744\",\"padding\":10,\"borderRadius\":0,\"opacity\":1,\"fontWeight\":\"normal\",\"lineHeight\":1}"
+    },
+    "class_type": "PixaromaLabel",
+    "_meta": {
+      "title": "Label Pixaroma"
+    }
+  },
+  "238": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "240": {
+    "inputs": {
+      "text": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, bad hands, extra fingers, missing fingers, deformed, distorted face, text, watermark, logo, jpeg artifacts,cropped face, cropped head, cut-off hair, cut-off forehead, cut-off chin, extreme close-up, selfie angle, exaggerated anime expression, chibi style, goofy smile, distorted anatomy, low quality, blurry, cluttered background, text, watermark, logo, multiple people, side profile, face outside frame, dramatic action pose.",
+      "clip": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "242": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "164",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "243": {
+    "inputs": {
+      "string_a": "Take the user's short prompt and rewrite it as one polished positive prompt optimized for the CircleStone Labs Anima model.\n\nOutput only the final positive prompt. Do not explain. Do not use bullet points. Do not include a negative prompt.\n\nThe final output must be one comma-separated positive prompt.\n\nAlways start the prompt exactly with:\nmasterpiece, best quality, score_7, safe,\n\nAfter that, follow this order:\nsubject count tag, main subject, character details, clothing, pose or action, expression, environment, background details, lighting, composition, camera angle or framing, color palette, anime or illustration style, rendering details.\n\nChoose the correct subject count tag:\n1girl for one female anime-style character\n1boy for one male anime-style character\n1other for one non-human, creature, robot, monster, object character, or unclear character\nsolo when there is one main subject\n2girls, 2boys, 1girl and 1boy, or multiple characters only when clearly requested by the user\n\nPreserve the user's original subject, setting, and intent exactly. Do not add extra characters, animals, weapons, text, logos, random objects, famous characters, copyrighted characters, artist names, or unrelated story details unless the user explicitly asks for them.\n\nUse Anima-friendly tags and short natural-language phrases. Keep tags mostly lowercase. Use spaces instead of underscores, except for score_7. Do not use score_9, score_8_up, score_7_up, or other score tags unless the user specifically asks for them.\n\nUse anime and illustration wording when helpful:\nanime illustration, detailed character design, clean line art, expressive eyes, soft shading, painterly background, cinematic lighting, vibrant colors, polished digital art, coherent composition, high detail.\n\nAvoid photography and realism wording unless the user explicitly asks for realism:\nphotorealistic, real photo, DSLR, raw photo, camera lens, hyperreal skin texture, realistic photography.\n\nIf the user's prompt is very short, expand it with coherent visual details that fit the original idea. If the prompt already has details, preserve them and improve clarity. If the prompt contains multiple characters, describe each character separately using left character, right character, foreground character, or background character to reduce attribute mixing.\n\nReturn only the enhanced positive prompt.",
+      "string_b": "female, average build, blue clothing, blonde hair, green eyes,\n\n\nexplorer in sci fi far future. on spaceship, simple background,  Anime-style professional avatar portrait, confident and approachable professional adult posing for a business networking profile, facing the camera with direct eye contact, subtle friendly smile, composed and trustworthy expression, framed from mid-chest upward, full head and shoulders completely visible, entire face inside the frame, generous headroom above the hair, centered composition, modern professional attire, clean and polished appearance, elegant anime illustration, high-quality character design, detailed eyes, refined facial features, natural pose, soft studio lighting, subtle depth of field, simple uncluttered background with professional aesthetic, premium corporate branding feel, crisp line art, beautiful shading, vibrant but realistic color palette, high detail, professional social media profile picture, polished anime portrait, masterpiece quality\n\n",
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Formula + Short Prompt"
+    }
+  },
+  "244": {
+    "inputs": {
+      "clip_name": "gemma4_e4b_it_fp8_scaled.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP 2"
+    }
+  },
+  "245": {
+    "inputs": {
+      "text": "masterpiece, best quality, score_7, safe, 1girl, scout uniform, blonde hair, green eyes, explorer, sci fi far future, on spaceship, simple background, professional avatar portrait, confident and approachable, facing the camera, direct eye contact, subtle friendly smile, composed and trustworthy expression, mid-chest upward, full head and shoulders visible, centered composition, modern professional attire, clean and polished appearance, elegant anime illustration, high-quality character design, detailed eyes, refined facial features, natural pose, soft studio lighting, subtle depth of field, simple uncluttered background with professional aesthetic, crisp line art, beautiful shading, vibrant but realistic color palette, high detail, polished anime portrait",
+      "source": [
+        "246",
+        0
+      ]
+    },
+    "class_type": "PixaromaShowText",
+    "_meta": {
+      "title": "Show Text Pixaroma"
+    }
+  },
+  "246": {
+    "inputs": {
+      "prompt": [
+        "243",
+        0
+      ],
+      "max_length": 1048,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.7,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1.05,
+      "sampling_mode.seed": 1,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "use_default_template": true,
+      "clip": [
+        "244",
+        0
+      ]
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Generate Text"
+    }
+  }
+}

@@ -1,12 +1,14 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "@/store";
 import type { CharacterGender } from "@/lib/characters/types";
+import type { CharacterAvatar } from "@/lib/characters/avatar";
 
 export interface CharacterSummary {
   id: string;
   kind?: "player" | "npc" | string;
   name: string;
   gender?: CharacterGender | null;
+  avatar?: CharacterAvatar | null;
   upp: string;
   strength: number;
   dexterity: number;

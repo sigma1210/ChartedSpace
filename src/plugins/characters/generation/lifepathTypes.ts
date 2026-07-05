@@ -4,6 +4,7 @@ import type {
   GenerationTable,
   GenerationTableEntry,
 } from "./types";
+import type { AvatarSlugFieldDefinition } from "@/lib/characters/avatar";
 
 export type LifepathCharacteristicId =
   | "str"
@@ -216,6 +217,7 @@ export interface LifepathGeneratorDefinition {
   label: string;
   version: string;
   sophontId: string;
+  avatarSlugFields?: readonly AvatarSlugFieldDefinition[];
   characteristics: readonly LifepathCharacteristicDefinition[];
   startingRules: LifepathStartingRulesDefinition;
   preCareerEducation?: readonly LifepathPreCareerEducationDefinition[];

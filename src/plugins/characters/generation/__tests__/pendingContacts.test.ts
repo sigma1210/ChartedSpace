@@ -12,7 +12,7 @@ import { extractPendingGeneratedContacts } from "../pendingContacts";
 
 const baseSheet = (relationships: unknown[]): CharacterSheet => ({
   name: "Test",
-  gender: "nonbinary",
+  gender: "female",
   age: 34,
   upp: { str: 7, dex: 7, end: 7, int: 7, edu: 7, soc: 7 },
   skills: [],
@@ -89,7 +89,7 @@ const failedUniversityAdmissionSheet = () => {
     { type: "preCareer.qualification.resolve" },
     queuedRolls(2),
   );
-  const draft = buildLifepathDraft(failed, basicHumanLifepathDefinition, "Test Traveller", "nonbinary");
+  const draft = buildLifepathDraft(failed, basicHumanLifepathDefinition, "Test Traveller", "female");
   return lifepathDraftToCharacterSheet(draft);
 };
 

@@ -19,6 +19,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "tunnel": "ngrok http 3000",
+    "avatar-seed": "tsx scripts/avatarSeed.ts",
+    "avatar-pool": "tsx scripts/generateAvatarPool.ts",
     "generate:crew": "tsx scripts/generateCrewLibrary.ts",
     "generate:avatar-slugs": "tsx scripts/generateAvatarAttributeSlugs.ts"
   },

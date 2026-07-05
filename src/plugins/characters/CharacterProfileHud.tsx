@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useState } from "react";
 import type { CharacterHistoryEntry, CharacterRelationshipSummary, CharacterSummary } from "./charactersSlice";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { fetchCharacters, invalidateCharacters, setSelectedProfileCharacter } from "./charactersSlice";
@@ -33,7 +34,6 @@ const educationStatusLabel = (status: string) => {
 const genderLabel = (gender: CharacterSummary["gender"]) => {
   if (gender === "female") return "Female";
   if (gender === "male") return "Male";
-  if (gender === "nonbinary") return "Nonbinary";
   return "Unknown";
 };
 
@@ -134,11 +134,11 @@ export const CharacterProfileHud = ({
   onGenerateContact?: (characterId: string) => void;
   onViewCharacter?: (characterId: string) => void;
 }) => {
-  const [activeTab, setActiveTab] = useState<CharacterProfileTab>("profile");
-
-  useEffect(() => {
-    setActiveTab("profile");
-  }, [character?.id]);
+  const [activeTabState, setActiveTabState] = useState<{
+    characterId: string | null;
+    tab: CharacterProfileTab;
+  }>({ characterId: null, tab: "profile" });
+  const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
 
   if (!character) {
     return (
@@ -166,6 +166,11 @@ export const CharacterProfileHud = ({
   const careers = character.careers ?? [];
   const relationships = character.relationships ?? [];
   const historyGroups = groupHistoryByTerm(history);
+  const portraitPath = character.avatar?.currentPortraitPath ?? null;
+  const showPortrait = portraitPath && failedPortraitPath !== portraitPath;
+  const activeTab = activeTabState.characterId === character.id
+    ? activeTabState.tab
+    : "profile";
   const tabs: { id: CharacterProfileTab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "skills", label: `Skills ${character.skills.length}` },
@@ -176,13 +181,13 @@ export const CharacterProfileHud = ({
   ];
 
   return (
-    <div className="flex w-72 flex-col gap-1 font-mono text-[7px] uppercase tracking-wider text-(--hud-text)">
+    <div className="flex max-h-[70vh] w-72 flex-col gap-1 overflow-hidden font-mono text-[7px] uppercase tracking-wider text-(--hud-text)">
       <div className="flex items-center gap-1 border-b border-(--hud-border-subtle) pb-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => setActiveTabState({ characterId: character.id, tab: tab.id })}
             className={[
               "h-5 border px-1.5 text-[7px] uppercase tracking-wider transition-colors",
               activeTab === tab.id
@@ -196,58 +201,72 @@ export const CharacterProfileHud = ({
       </div>
 
       {activeTab === "profile" && (
-        <div className="grid grid-cols-2 divide-x divide-(--hud-border)">
-          <div className="flex flex-col gap-2 pr-2">
-            <div>
-              <p className="mb-0.5 text-[7px] tracking-widest text-(--hud-text-dim)">
-                Universal Person Profile
-              </p>
-              <p className="mb-1 text-[10px] tracking-widest text-(--hud-text)">
-                {character.upp}
-              </p>
-              <div className="flex flex-col gap-0.5">
-                {STAT_LABELS.map((label, index) => (
-                  <StatBar key={label} label={label} value={stats[index]} />
-                ))}
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <div className="grid grid-cols-2 divide-x divide-(--hud-border)">
+            <div className="flex flex-col gap-2 pr-2">
+              <div>
+                <p className="mb-0.5 text-[7px] tracking-widest text-(--hud-text-dim)">
+                  Universal Person Profile
+                </p>
+                <p className="mb-1 text-[10px] tracking-widest text-(--hud-text)">
+                  {character.upp}
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  {STAT_LABELS.map((label, index) => (
+                    <StatBar key={label} label={label} value={stats[index]} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-(--hud-border-subtle) pt-1">
+                <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Kind</p>
+                <p className="mt-0.5 text-[8px] text-(--hud-text)">
+                  {kindLabel(character.kind)}
+                </p>
+              </div>
+
+              <div className="border-t border-(--hud-border-subtle) pt-1">
+                <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Gender</p>
+                <p className="mt-0.5 text-[8px] text-(--hud-text)">
+                  {genderLabel(character.gender)}
+                </p>
+              </div>
+
+              <div className="border-t border-(--hud-border-subtle) pt-1">
+                <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Credits</p>
+                <p className="mt-0.5 text-[8px] text-(--hud-text)">
+                  Cr {character.credits.toLocaleString()}
+                </p>
               </div>
             </div>
 
-            <div className="border-t border-(--hud-border-subtle) pt-1">
-              <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Kind</p>
-              <p className="mt-0.5 text-[8px] text-(--hud-text)">
-                {kindLabel(character.kind)}
-              </p>
+            <div className="pl-2">
+              <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Current Location</p>
+              {location.worldName ? (
+                <>
+                  <p className="mt-0.5 text-[8px] text-(--hud-text)">
+                    {location.worldName}
+                  </p>
+                  <p className="text-[7px] text-(--hud-text-dim)">
+                    {location.sectorAbbr} / Hex {location.hex}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-0.5 text-[7px] text-(--hud-text-dim)">No location set</p>
+              )}
+              {showPortrait && (
+                <div className="relative mt-2 aspect-square w-24 overflow-hidden border border-(--hud-border-subtle) bg-(--hud-surface-2)">
+                  <Image
+                    src={portraitPath}
+                    alt={`${character.name} portrait`}
+                    fill
+                    sizes="96px"
+                    onError={() => setFailedPortraitPath(portraitPath)}
+                    className="object-cover"
+                  />
+                </div>
+              )}
             </div>
-
-            <div className="border-t border-(--hud-border-subtle) pt-1">
-              <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Gender</p>
-              <p className="mt-0.5 text-[8px] text-(--hud-text)">
-                {genderLabel(character.gender)}
-              </p>
-            </div>
-
-            <div className="border-t border-(--hud-border-subtle) pt-1">
-              <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Credits</p>
-              <p className="mt-0.5 text-[8px] text-(--hud-text)">
-                Cr {character.credits.toLocaleString()}
-              </p>
-            </div>
-          </div>
-
-          <div className="pl-2">
-            <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Current Location</p>
-            {location.worldName ? (
-              <>
-                <p className="mt-0.5 text-[8px] text-(--hud-text)">
-                  {location.worldName}
-                </p>
-                <p className="text-[7px] text-(--hud-text-dim)">
-                  {location.sectorAbbr} / Hex {location.hex}
-                </p>
-              </>
-            ) : (
-              <p className="mt-0.5 text-[7px] text-(--hud-text-dim)">No location set</p>
-            )}
           </div>
         </div>
       )}

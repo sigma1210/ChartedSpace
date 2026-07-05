@@ -19,7 +19,7 @@ interface CharacterPostingSummary {
   status: string;
   characterId: string;
   characterName: string;
-  characterGender: "female" | "male" | "nonbinary" | null;
+  characterGender: "female" | "male" | null;
   characterSkills: Array<{ name: string; level: number }>;
   createdAt: string;
 }

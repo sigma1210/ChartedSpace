@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { invalidateCharacters, fetchCharacters } from "./charactersSlice";
 import { selectCharacters } from "./selectors";
@@ -13,6 +13,13 @@ import {
 import { characterGenders, generateHumanName, type GeneratedCharacterName } from "@/lib/characters/names";
 import type { CharacterGender, CharacterSheet, DecisionPoint } from "@/lib/characters/types";
 import {
+  buildAvatarPromptSlug,
+  buildAvatarSlugValuesForGender,
+  type AvatarSlugFieldDefinition,
+  type AvatarSlugValues,
+  type CharacterAvatar,
+} from "@/lib/characters/avatar";
+import {
   applyLifepathAction,
   buildLifepathDraft,
   createInitialLifepathState,
@@ -24,8 +31,9 @@ import {
 } from "./generation";
 
 const basicHumanLifepathDefinition = registeredLifepathDefinitions[0];
+const lifepathAvatarSlugFields = basicHumanLifepathDefinition.avatarSlugFields ?? [];
 const placeholderIdentity: GeneratedCharacterName = {
-  gender: "nonbinary",
+  gender: "female",
   givenName: "",
   familyName: "",
   name: "Unnamed Traveller",
@@ -108,8 +116,6 @@ const genderLabel = (gender: CharacterGender) => {
       return "Female";
     case "male":
       return "Male";
-    case "nonbinary":
-      return "Nonbinary";
   }
 };
 
@@ -129,6 +135,85 @@ const addSheetIdentity = (
     },
   },
 });
+
+const buildCharacterAvatar = (
+  values: AvatarSlugValues,
+  existing?: CharacterAvatar | null,
+): CharacterAvatar | null => {
+  if (lifepathAvatarSlugFields.length === 0) return existing ?? null;
+
+  return {
+    slugValues: values,
+    promptSlug: buildAvatarPromptSlug(lifepathAvatarSlugFields, values),
+    currentPortraitPath: existing?.currentPortraitPath ?? null,
+    images: existing?.images ?? [],
+  };
+};
+
+const addSheetAvatar = (
+  sheet: CharacterSheet,
+  values: AvatarSlugValues,
+): CharacterSheet => {
+  const avatar = buildCharacterAvatar(values, sheet.avatar);
+  return {
+    ...sheet,
+    avatar,
+    generation: {
+      ...sheet.generation,
+      metadata: {
+        ...(sheet.generation.metadata ?? {}),
+        avatar,
+      },
+    },
+  };
+};
+
+const AvatarSlugEditor = ({
+  fields,
+  values,
+  promptSlug,
+  onChange,
+}: {
+  fields: readonly AvatarSlugFieldDefinition[];
+  values: AvatarSlugValues;
+  promptSlug: string;
+  onChange: (key: string, value: string) => void;
+}) => {
+  if (fields.length === 0) return null;
+  const editableFields = fields.filter((field) => field.key !== "gender");
+
+  return (
+    <div className="flex flex-col gap-1 border border-(--hud-border-subtle) bg-(--hud-surface-2)/60 px-1.5 py-1">
+      <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">
+        Avatar
+      </span>
+      <div className="grid grid-cols-2 gap-1">
+        {editableFields.map((field) => (
+          <label key={field.key} className="flex flex-col gap-0.5">
+            <span className="font-mono text-[7px] uppercase tracking-wider text-(--hud-text-dim)">
+              {field.label}
+            </span>
+            <select
+              value={values[field.key] ?? ""}
+              onChange={(event) => onChange(field.key, event.target.value)}
+              className="h-6 border border-(--hud-border-subtle) bg-(--hud-surface) px-1 font-mono text-[8px] text-(--hud-text) outline-none transition-colors focus:border-(--hud-accent)"
+            >
+              {!field.required && <option value="">None</option>}
+              {field.options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+      <div className="border-t border-(--hud-border-subtle) pt-1 font-mono text-[7px] normal-case tracking-normal text-(--hud-text-dim)">
+        {promptSlug}
+      </div>
+    </div>
+  );
+};
 
 // ─── Sheet display ────────────────────────────────────────────────────────────
 
@@ -585,14 +670,20 @@ const lifepathUpp = (state: LifepathRuntimeState) =>
 export const CharacterCreateHudContent = () => {
   const dispatch = usePluginDispatch();
   const characters = usePluginSelector(selectCharacters);
-  const [identity, setIdentity] = useState<GeneratedCharacterName>(placeholderIdentity);
+  const [identityState, setIdentityState] = useState(() => {
+    return {
+      identity: placeholderIdentity,
+      charName: placeholderIdentity.name,
+      avatarSlugValues: buildAvatarSlugValuesForGender(lifepathAvatarSlugFields, placeholderIdentity.gender),
+    };
+  });
+  const { identity, charName, avatarSlugValues } = identityState;
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
   const [deathMsg, setDeathMsg] = useState<string | null>(null);
   const [pendingPoint, setPendingPoint] = useState<DecisionPoint | null>(null);
   const [log, setLog] = useState<string[]>([]);
-  const [charName, setCharName] = useState<string>(identity.name);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [savedId, setSavedId] = useState<string | null>(null);
   const [savedGeneratedContacts, setSavedGeneratedContacts] = useState(0);
@@ -602,24 +693,42 @@ export const CharacterCreateHudContent = () => {
   const providerRef = useRef<HumanDecisionProvider | null>(null);
 
   const isFirstCharacter = characters.length === 0;
-
-  useEffect(() => {
-    if (phase !== "idle" || charName !== placeholderIdentity.name) return;
-    const nextIdentity = generateHumanName();
-    setIdentity(nextIdentity);
-    setCharName(nextIdentity.name);
-  }, [charName, phase]);
+  const setIdentity = (nextIdentity: GeneratedCharacterName) => {
+    setIdentityState((current) => ({
+      ...current,
+      identity: nextIdentity,
+    }));
+  };
+  const setCharName = (name: string) => {
+    setIdentityState((current) => ({
+      ...current,
+      charName: name,
+    }));
+  };
+  const setAvatarSlugValues = (
+    nextValues: AvatarSlugValues | ((current: AvatarSlugValues) => AvatarSlugValues),
+  ) => {
+    setIdentityState((current) => ({
+      ...current,
+      avatarSlugValues: typeof nextValues === "function"
+        ? nextValues(current.avatarSlugValues)
+        : nextValues,
+    }));
+  };
 
   const reset = (nextIdentity = generateHumanName()) => {
     providerRef.current?.cancel();
     providerRef.current = null;
-    setIdentity(nextIdentity);
+    setIdentityState({
+      identity: nextIdentity,
+      charName: nextIdentity.name,
+      avatarSlugValues: buildAvatarSlugValuesForGender(lifepathAvatarSlugFields, nextIdentity.gender),
+    });
     setPhase("idle");
     setSheet(null);
     setDeathMsg(null);
     setPendingPoint(null);
     setLog([]);
-    setCharName(nextIdentity.name);
     setSaveState("idle");
     setSavedId(null);
     setSavedGeneratedContacts(0);
@@ -632,12 +741,30 @@ export const CharacterCreateHudContent = () => {
     const nextIdentity = generateHumanName(gender);
     setIdentity(nextIdentity);
     setCharName(nextIdentity.name);
+    setAvatarSlugValues((current) => ({
+      ...buildAvatarSlugValuesForGender(lifepathAvatarSlugFields, gender),
+      ...current,
+      gender,
+    }));
   };
 
   const regenerateSuggestedName = () => {
     const nextIdentity = generateHumanName(identity.gender);
     setIdentity(nextIdentity);
     setCharName(nextIdentity.name);
+  };
+
+  const avatarPromptSlug = buildAvatarPromptSlug(lifepathAvatarSlugFields, avatarSlugValues);
+
+  const handleAvatarSlugChange = (key: string, value: string) => {
+    const nextValues = {
+      ...avatarSlugValues,
+      [key]: value,
+    };
+    setAvatarSlugValues(nextValues);
+    setSheet((current) => current && current.generation.ruleset === "lifepath"
+      ? addSheetAvatar(current, nextValues)
+      : current);
   };
 
   // ── Random mode ─────────────────────────────────────────────────────────────
@@ -693,7 +820,10 @@ export const CharacterCreateHudContent = () => {
     if (!sheet || saveState === "saving" || saveState === "saved") return;
     if (isFirstCharacter && !selectedRole) return;
     const finalName = charName.trim();
-    const sheetForSave = addSheetIdentity(sheet, finalName, identity.gender);
+    const sheetWithAvatar = sheet.generation.ruleset === "lifepath"
+      ? addSheetAvatar(sheet, avatarSlugValues)
+      : sheet;
+    const sheetForSave = addSheetIdentity(sheetWithAvatar, finalName, identity.gender);
     setSaveState("saving");
     try {
       const res = await fetch("/api/characters", {
@@ -971,7 +1101,7 @@ export const CharacterCreateHudContent = () => {
       updateLifepath(next);
       if (next.phase === "generation-complete") {
         const draft = buildLifepathDraft(next, basicHumanLifepathDefinition, charName, identity.gender);
-        setSheet(lifepathDraftToCharacterSheet(draft));
+        setSheet(addSheetAvatar(lifepathDraftToCharacterSheet(draft), avatarSlugValues));
         setPhase("complete");
       }
     }
@@ -1029,6 +1159,15 @@ export const CharacterCreateHudContent = () => {
             {charName}
           </div>
         </div>
+      )}
+
+      {createMode === "lifepath" && (phase === "idle" || phase === "complete") && (
+        <AvatarSlugEditor
+          fields={lifepathAvatarSlugFields}
+          values={avatarSlugValues}
+          promptSlug={avatarPromptSlug}
+          onChange={handleAvatarSlugChange}
+        />
       )}
 
         {/* ── Idle: mode selection ───────────────────────────────────────────── */}

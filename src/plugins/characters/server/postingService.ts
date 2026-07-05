@@ -77,7 +77,7 @@ const rowToSummary = (row: {
     status: row.status,
     characterId: row.characterId,
     characterName: row.character.name,
-    characterGender: gender === "female" || gender === "male" || gender === "nonbinary" ? gender : null,
+    characterGender: gender === "female" || gender === "male" ? gender : null,
     characterSkills: row.character.skills,
     createdAt: row.createdAt.toISOString(),
   };

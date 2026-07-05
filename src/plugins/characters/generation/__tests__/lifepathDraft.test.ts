@@ -979,6 +979,15 @@ describe("buildLifepathDraft", () => {
       },
     });
     expect(sheet.generation.decisions.every((decision) => decision.step === "lifepath_event")).toBe(true);
+    expect(sheet.avatar).toMatchObject({
+      slugValues: {
+        gender: "female",
+        build: "average",
+        clothing: "blue",
+      },
+      promptSlug: "female, average build, blue clothing, brown hair, brown eyes",
+      images: [],
+    });
     expect(sheet.generation.metadata).toMatchObject({
       generatorId: "basic-human-lifepath",
       completedTerms: 1,

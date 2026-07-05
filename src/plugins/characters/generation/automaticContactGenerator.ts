@@ -1,4 +1,7 @@
 import type { CharacterSheet } from "@/lib/characters/types";
+import type { AvatarSlugValues, CharacterAvatar } from "@/lib/characters/avatar";
+import { buildAvatarPromptSlug } from "@/lib/characters/avatar";
+import { assignAvatarFromPool } from "@/lib/characters/avatarPool";
 import { generateHumanName } from "@/lib/characters/names";
 import {
   applyLifepathAction,
@@ -33,6 +36,34 @@ const rollProvider: LifepathRollProvider = {
 
 const choose = <T,>(items: readonly T[]): T =>
   items[Math.floor(Math.random() * items.length)];
+
+const buildRandomNpcAvatar = (
+  baseAvatar: CharacterAvatar | null | undefined,
+  age: number,
+): CharacterAvatar | null => {
+  const fields = definition.avatarSlugFields;
+  if (!fields || fields.length === 0 || !baseAvatar) return baseAvatar ?? null;
+
+  const slugValues: AvatarSlugValues = {};
+  for (const field of fields) {
+    if (field.key === "gender") {
+      const gender = baseAvatar.slugValues.gender;
+      if (gender) slugValues.gender = gender;
+      continue;
+    }
+
+    const option = choose(field.options);
+    slugValues[field.key] = option.id;
+  }
+
+  const promptSlug = buildAvatarPromptSlug(fields, slugValues);
+  return assignAvatarFromPool({ slugValues, promptSlug, age }) ?? {
+    slugValues,
+    promptSlug,
+    currentPortraitPath: null,
+    images: [],
+  };
+};
 
 const resolveRollStep = (state: LifepathRuntimeState): LifepathRuntimeState => {
   const step = getCurrentLifepathStep(state, definition);
@@ -165,8 +196,10 @@ export const generateAutomaticContactSheet = ({
 
     if (step.kind === "complete" || step.id === "lifepath.generation-complete") {
       const draft = buildLifepathDraft(state, definition, identity.name, identity.gender);
+      const sheet = lifepathDraftToCharacterSheet(draft);
       return {
-        ...lifepathDraftToCharacterSheet(draft),
+        ...sheet,
+        avatar: buildRandomNpcAvatar(sheet.avatar, sheet.age),
         currentLocation,
       };
     }

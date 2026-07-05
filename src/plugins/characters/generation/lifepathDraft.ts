@@ -1,5 +1,10 @@
 import type { GenerationLogEntry, GenerationPayload } from "./types";
 import type { CareerName, CharacterGender, CharacterSheet, DecisionRecord } from "@/lib/characters/types";
+import {
+  buildAvatarPromptSlug,
+  buildAvatarSlugValuesForGender,
+  type CharacterAvatar,
+} from "@/lib/characters/avatar";
 import type { LifepathGeneratorDefinition } from "./lifepathTypes";
 import type {
   LifepathCareerHistoryEntry,
@@ -38,6 +43,7 @@ export interface LifepathDraft {
   name: string;
   gender?: CharacterGender | null;
   age: number;
+  avatar?: CharacterAvatar | null;
   completedTerms: number;
   characteristics: LifepathRuntimeCharacteristics;
   skills: readonly LifepathRuntimeSkill[];
@@ -54,6 +60,7 @@ export interface LifepathDraft {
     generatorLabel: string;
     generatorVersion: string;
     sophontId: string;
+    avatarSlugFields?: LifepathGeneratorDefinition["avatarSlugFields"];
   };
 }
 
@@ -351,11 +358,13 @@ export const buildLifepathDraft = (
   }
 
   const history = buildLifepathHistory(state.log);
+  const avatar = buildLifepathAvatar(definition, gender);
 
   return {
     name,
     gender,
     age: state.age,
+    avatar,
     completedTerms: state.completedTerms,
     characteristics: state.characteristics,
     skills: state.skills,
@@ -383,7 +392,24 @@ export const buildLifepathDraft = (
       generatorLabel: definition.label,
       generatorVersion: definition.version,
       sophontId: definition.sophontId,
+      avatarSlugFields: definition.avatarSlugFields,
     },
+  };
+};
+
+const buildLifepathAvatar = (
+  definition: LifepathGeneratorDefinition,
+  gender: CharacterGender | null,
+): CharacterAvatar | null => {
+  const fields = definition.avatarSlugFields;
+  if (!fields || fields.length === 0) return null;
+
+  const slugValues = buildAvatarSlugValuesForGender(fields, gender);
+  return {
+    slugValues,
+    promptSlug: buildAvatarPromptSlug(fields, slugValues),
+    currentPortraitPath: null,
+    images: [],
   };
 };
 
@@ -410,6 +436,7 @@ export const lifepathDraftToCharacterSheet = (
   name: draft.name,
   gender: draft.gender ?? null,
   age: draft.age,
+  avatar: draft.avatar ?? null,
   upp: {
     str: draft.characteristics.str ?? 7,
     dex: draft.characteristics.dex ?? 7,
@@ -447,6 +474,7 @@ export const lifepathDraftToCharacterSheet = (
     metadata: {
       ...draft.metadata,
       gender: draft.gender ?? null,
+      avatar: draft.avatar ?? null,
       completedTerms: draft.completedTerms,
       characteristics: draft.characteristics,
       credits: draft.credits,

@@ -5,6 +5,7 @@ import type { CharacterGender, CharacterSheet } from "@/lib/characters/types";
 import { getCurrentUser, isDevAuthMode } from "@/lib/devAuth";
 import { extractPendingGeneratedContacts } from "@/plugins/characters/generation/pendingContacts";
 import { materializePendingGeneratedContacts } from "@/plugins/characters/server/contactGenerationService";
+import { generateCharacterPortraitAvatar } from "@/plugins/characters/server/avatarGenerationService";
 
 const toHex = (n: number) => Math.min(15, Math.max(0, n)).toString(16).toUpperCase();
 
@@ -21,7 +22,7 @@ const normalizeSkills = (skills: CharacterSheet["skills"]) => {
 };
 
 const normalizeGender = (value: unknown): CharacterGender | null =>
-  value === "female" || value === "male" || value === "nonbinary" ? value : null;
+  value === "female" || value === "male" ? value : null;
 
 const preCareerHistoryTypes = new Set([
   "preCareer.skip",
@@ -204,6 +205,7 @@ export const GET = async () => {
         kind:           c.kind,
         name:           c.name,
         gender:         normalizeGender(sheet?.gender ?? sheetMetadata?.gender),
+        avatar:         sheet?.avatar ?? sheetMetadata?.avatar ?? null,
         upp:            [c.strength, c.dexterity, c.endurance, c.intelligence, c.education, c.socialStanding].map(toHex).join(""),
         strength:       c.strength,
         dexterity:      c.dexterity,
@@ -308,10 +310,35 @@ export const POST = async (request: Request) => {
       };
     });
 
+    let avatarGenerated = false;
+    let avatarError: string | null = null;
+
+    try {
+      const avatarResult = await generateCharacterPortraitAvatar({
+        characterId: saved.character.id,
+        sheet: sheetForStorage,
+      });
+
+      if (avatarResult) {
+        await characterPrisma.character.update({
+          where: { id: saved.character.id },
+          data: {
+            sheet: avatarResult.sheet as unknown as CharacterDbPrisma.InputJsonValue,
+          },
+        });
+        avatarGenerated = true;
+      }
+    } catch (err) {
+      avatarError = err instanceof Error ? err.message : String(err);
+      console.error("[POST /api/characters avatar]", err);
+    }
+
     return NextResponse.json({
       id: saved.character.id,
       name: saved.character.name,
       generatedContacts: saved.generatedContacts.length,
+      avatarGenerated,
+      ...(avatarError ? { avatarError } : {}),
     }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/characters]", err);

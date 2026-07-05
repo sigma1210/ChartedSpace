@@ -1,6 +1,6 @@
 import type { CharacterGender } from "./types";
 
-export const characterGenders = ["female", "male", "nonbinary"] as const satisfies readonly CharacterGender[];
+export const characterGenders = ["female", "male"] as const satisfies readonly CharacterGender[];
 
 export interface GeneratedCharacterName {
   gender: CharacterGender;
@@ -221,109 +221,6 @@ const maleGivenNames = [
   "Sasha",
 ];
 
-const neutralGivenNames = [
-  "Adair",
-  "Arden",
-  "Ari",
-  "Ash",
-  "Aster",
-  "Avery",
-  "Bex",
-  "Blair",
-  "Briar",
-  "Camber",
-  "Ciel",
-  "Cove",
-  "Dane",
-  "Devon",
-  "Eden",
-  "Emery",
-  "Ever",
-  "Finch",
-  "Gray",
-  "Hadley",
-  "Hollis",
-  "Indigo",
-  "Jules",
-  "Jun",
-  "Kai",
-  "Kestrel",
-  "Kit",
-  "Lane",
-  "Lior",
-  "Lux",
-  "Marlowe",
-  "Micah",
-  "Morgan",
-  "Nico",
-  "Noor",
-  "Nova",
-  "Ocean",
-  "Pax",
-  "Quinn",
-  "Reese",
-  "Ren",
-  "River",
-  "Robin",
-  "Rowan",
-  "Sage",
-  "Sasha",
-  "Shay",
-  "Sky",
-  "Sol",
-  "Taran",
-  "Teagan",
-  "Tobin",
-  "Uma",
-  "Vale",
-  "Vesper",
-  "Winter",
-  "Wren",
-  "Zephyr",
-  "Addison",
-  "Aeron",
-  "Akira",
-  "Amari",
-  "Auden",
-  "Bellamy",
-  "Brook",
-  "Cameron",
-  "Casey",
-  "Darcy",
-  "Ellis",
-  "Ezri",
-  "Fable",
-  "Harper",
-  "Ira",
-  "Joss",
-  "Keir",
-  "Larkin",
-  "Linden",
-  "Lowen",
-  "Mika",
-  "Monroe",
-  "Nile",
-  "Noa",
-  "Ori",
-  "Perry",
-  "Raine",
-  "Ridley",
-  "Riley",
-  "Rory",
-  "Scout",
-  "Sen",
-  "Sidney",
-  "Sorrel",
-  "Taj",
-  "Tali",
-  "Taylor",
-  "Teal",
-  "True",
-  "Vega",
-  "Yael",
-  "Zen",
-];
-
 const familyNames = [
   "Akiyama",
   "Alvarez",
@@ -398,8 +295,7 @@ const choose = <T,>(items: readonly T[]): T =>
 
 const givenNamesForGender = (gender: CharacterGender) => {
   if (gender === "female") return femaleGivenNames;
-  if (gender === "male") return maleGivenNames;
-  return neutralGivenNames;
+  return maleGivenNames;
 };
 
 export const randomCharacterGender = (): CharacterGender =>

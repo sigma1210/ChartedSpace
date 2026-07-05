@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { usePluginDispatch } from "@/plugin-api";
 import { selectShipLocation } from "@/plugins/ship";
@@ -19,7 +19,7 @@ interface CharacterPostingSummary {
   status: string;
   characterId: string;
   characterName: string;
-  characterGender: "female" | "male" | "nonbinary" | null;
+  characterGender: "female" | "male" | null;
   createdAt: string;
 }
 
@@ -49,7 +49,7 @@ export const CharacterProfessionalBoardHudContent = () => {
     [activeType, items],
   );
 
-  const loadPostings = async () => {
+  const loadPostings = useCallback(async () => {
     setStatus("loading");
     setError(null);
     try {
@@ -72,11 +72,15 @@ export const CharacterProfessionalBoardHudContent = () => {
       setError("Failed to load postings");
       setStatus("error");
     }
-  };
+  }, [locationKey]);
 
   useEffect(() => {
-    void loadPostings();
-  }, [locationKey]);
+    const timeout = window.setTimeout(() => {
+      void loadPostings();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [loadPostings]);
 
   const createPosting = async () => {
     if (actionState === "creating") return;
