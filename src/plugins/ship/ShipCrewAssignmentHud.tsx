@@ -6,7 +6,7 @@ import { Check, Loader2, Plus, UserRoundMinus, UserRoundPlus } from "lucide-reac
 import ships from "@/data/classic/ships.json";
 import type { CharacterAvatar } from "@/lib/characters/avatar";
 import { ROLE_REQUIRED_SKILL } from "@/lib/crew";
-import { selectEffectiveCharacterProfile } from "@/plugins/characters/selectors";
+import { selectCurrentCharacter } from "@/plugins/characters/selectors";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchShip, invalidateShip } from "./shipPluginSlice";
 import { selectActiveShip, selectShipLocation } from "./selectors";
@@ -92,7 +92,7 @@ export const ShipCrewAssignmentHudContent = ({
   const dispatch = useAppDispatch();
   const ship = useAppSelector(selectActiveShip);
   const shipLocation = useAppSelector(selectShipLocation);
-  const currentCharacter = useAppSelector(selectEffectiveCharacterProfile);
+  const currentCharacter = useAppSelector(selectCurrentCharacter);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [crewChoice, setCrewChoice] = useState<CrewChoice>(null);
   const [candidates, setCandidates] = useState<CharacterPostingSummary[]>([]);

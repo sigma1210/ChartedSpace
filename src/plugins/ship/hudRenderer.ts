@@ -1,9 +1,10 @@
 import type { PluginHudRendererRegistration } from "@/plugin-api/types";
-import { Ship, UsersRound } from "lucide-react";
+import { ClipboardList, Ship, UsersRound } from "lucide-react";
 import { ShipCrewAssignmentHudContent } from "./ShipCrewAssignmentHud";
+import { ShipCrewListHudContent } from "./ShipCrewListHud";
 import { ShipHudContent, ShipHudIcon } from "./ShipHud";
 import { ShipsPluginBar } from "./ShipsPluginBar";
-import { shipActionsHudId, shipCrewAssignmentHudId, shipHudId } from "./metadata";
+import { shipActionsHudId, shipCrewAssignmentHudId, shipCrewListHudId, shipHudId } from "./metadata";
 
 export const shipActionsHudRenderer = {
   id: shipActionsHudId,
@@ -23,8 +24,15 @@ export const shipCrewAssignmentHudRenderer = {
   Component: ShipCrewAssignmentHudContent,
 } satisfies PluginHudRendererRegistration;
 
+export const shipCrewListHudRenderer = {
+  id: shipCrewListHudId,
+  Icon: ClipboardList,
+  Component: ShipCrewListHudContent,
+} satisfies PluginHudRendererRegistration;
+
 export const shipHudRenderers = [
   shipActionsHudRenderer,
   shipHudRenderer,
   shipCrewAssignmentHudRenderer,
+  shipCrewListHudRenderer,
 ] as const;

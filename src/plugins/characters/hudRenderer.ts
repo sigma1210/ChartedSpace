@@ -2,13 +2,17 @@ import type { PluginHudRendererRegistration } from "@/plugin-api/types";
 import { BriefcaseBusiness, User, Users } from "lucide-react";
 import { CharacterListHudContent } from "./CharacterListHud";
 import { CharacterProfessionalBoardHudContent } from "./CharacterProfessionalBoardHud";
-import { CharacterProfileHudContent } from "./CharacterProfileHud";
+import {
+  CurrentCharacterProfileHudContent,
+  SelectedCharacterProfileHudContent,
+} from "./CharacterProfileHud";
 import { CharactersPluginBar } from "./CharactersPluginBar";
 import {
   characterActionsHudId,
   characterListHudId,
   characterProfessionalBoardHudId,
   characterProfileHudId,
+  selectedCharacterProfileHudId,
 } from "./metadata";
 
 export const characterActionsHudRenderer = {
@@ -20,7 +24,13 @@ export const characterActionsHudRenderer = {
 export const characterProfileHudRenderer = {
   id: characterProfileHudId,
   Icon: User,
-  Component: CharacterProfileHudContent,
+  Component: CurrentCharacterProfileHudContent,
+} satisfies PluginHudRendererRegistration;
+
+export const selectedCharacterProfileHudRenderer = {
+  id: selectedCharacterProfileHudId,
+  Icon: User,
+  Component: SelectedCharacterProfileHudContent,
 } satisfies PluginHudRendererRegistration;
 
 export const characterListHudRenderer = {
@@ -38,6 +48,7 @@ export const characterProfessionalBoardHudRenderer = {
 export const characterHudRenderers = [
   characterActionsHudRenderer,
   characterProfileHudRenderer,
+  selectedCharacterProfileHudRenderer,
   characterListHudRenderer,
   characterProfessionalBoardHudRenderer,
 ] as const;

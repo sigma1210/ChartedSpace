@@ -22,6 +22,7 @@ export {
   characterProfileHudId,
   charactersPluginId,
   charactersStateKey,
+  selectedCharacterProfileHudId,
 } from "./metadata";
 export {
   fetchCharacters,
@@ -35,11 +36,14 @@ export {
   selectCharacters,
   selectCharactersStatus,
   selectCurrentCharacter,
+  selectCurrentCharacterProfileLocation,
   selectEffectiveCharacterProfile,
   selectEffectiveCharacterProfileLocation,
   selectFallbackCharacter,
   selectOwnerOperatorCharacter,
   selectOwnerOperatorCredits,
+  selectSelectedCharacterProfileLocation,
+  selectSelectedProfileCharacter,
   type CharacterProfileLocation,
 } from "./selectors";
 export {

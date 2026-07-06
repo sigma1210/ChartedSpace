@@ -10,7 +10,6 @@ import type { RootState } from "../index";
 const initialState: UIState = {
   activeModal: null,
   mapView: "galaxy",
-  activeCharacterId: null,
   activeWorldId: null,
   activeSectorAbbr: null,
   activeSubsector: null,
@@ -40,9 +39,6 @@ const uiSlice = createSlice({
     goBack(state) {
       state.activeModal = state.previousModal;
       state.previousModal = null;
-    },
-    setActiveCharacter(state, action: PayloadAction<string>) {
-      state.activeCharacterId = action.payload;
     },
     openMap(state, action: PayloadAction<MapView | undefined>) {
       state.previousModal = state.activeModal;
@@ -128,7 +124,6 @@ export const {
   openModal,
   closeModal,
   goBack,
-  setActiveCharacter,
   openMap,
   setMapView,
   setActiveSector,

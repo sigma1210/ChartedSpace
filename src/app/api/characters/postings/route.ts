@@ -29,6 +29,8 @@ export const GET = async (request: Request) => {
 
     const url = new URL(request.url);
     const location = parseText(url.searchParams.get("location"));
+    if (!location) return NextResponse.json({ items: [] });
+
     const items = await listOpenCharacterPostings({
       userId: user.id,
       location,
@@ -52,6 +54,9 @@ export const POST = async (request: Request) => {
 
     if (!type || !postingTypes.has(type as CharacterPostingType)) {
       return NextResponse.json({ error: "Invalid posting type" }, { status: 400 });
+    }
+    if (!location) {
+      return NextResponse.json({ error: "location is required" }, { status: 400 });
     }
 
     const item = await createGeneratedPosting({

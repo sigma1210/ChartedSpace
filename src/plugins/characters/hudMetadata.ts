@@ -4,6 +4,7 @@ import {
   characterProfileHudId,
   characterProfessionalBoardHudId,
   charactersPluginId,
+  selectedCharacterProfileHudId,
 } from "./metadata";
 
 export const characterActionsHudMetadata = {
@@ -24,15 +25,30 @@ export const characterActionsHudMetadata = {
 export const characterProfileHudMetadata = {
   id: characterProfileHudId,
   pluginId: charactersPluginId,
-  title: "Character",
-  openTitle: "Open character profile",
-  visibleTitle: "Character profile visible",
+  title: "Current Character",
+  openTitle: "Open current character profile",
+  visibleTitle: "Current character profile visible",
   showInHudControls: false,
   panelClassName: "px-1.5 py-1 text-[8px] tracking-normal",
   defaultLayout: {
     visible: false,
     pinned: true,
     offset: { x: -0.18, y: 0.1 },
+  },
+} as const;
+
+export const selectedCharacterProfileHudMetadata = {
+  id: selectedCharacterProfileHudId,
+  pluginId: charactersPluginId,
+  title: "Selected Character",
+  openTitle: "Open selected character profile",
+  visibleTitle: "Selected character profile visible",
+  showInHudControls: false,
+  panelClassName: "px-1.5 py-1 text-[8px] tracking-normal",
+  defaultLayout: {
+    visible: false,
+    pinned: true,
+    offset: { x: 0.18, y: 0.1 },
   },
 } as const;
 
@@ -69,6 +85,7 @@ export const characterProfessionalBoardHudMetadata = {
 export const characterHudMetadata = [
   characterActionsHudMetadata,
   characterProfileHudMetadata,
+  selectedCharacterProfileHudMetadata,
   characterListHudMetadata,
   characterProfessionalBoardHudMetadata,
 ] as const;

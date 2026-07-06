@@ -8,7 +8,6 @@ import { fetchTurn } from "../../store/slices/turnSlice";
 import { refreshWorldCrew } from "../../store/slices/availableCrewSlice";
 import { selectCharacters, selectCharactersStatus } from "../../plugins/characters";
 import { setActiveLocation } from "../../store/slices/galaxySlice";
-import { setActiveCharacter } from "../../store/slices/uiSlice";
 
 const subsectorFromHex = (hex: string): string => {
   const hexX = parseInt(hex.slice(0, 2), 10);
@@ -36,7 +35,6 @@ const MapInitializer = () => {
     const first = characters.find(c => c.sectorAbbr && c.hex);
     if (!first) return;
     initialized.current = true;
-    dispatch(setActiveCharacter(first.id));
     dispatch(setActiveLocation({
       sectorAbbr:   first.sectorAbbr!,
       subsectorKey: subsectorFromHex(first.hex!),

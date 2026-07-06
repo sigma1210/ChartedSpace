@@ -3,12 +3,16 @@ import { useMemo, useState } from "react";
 import type { CharacterHistoryEntry, CharacterRelationshipSummary, CharacterSummary } from "./charactersSlice";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { fetchCharacters, invalidateCharacters, setSelectedProfileCharacter } from "./charactersSlice";
+import { setHudVisible } from "@/store/slices/hudSlice";
 import {
   selectCharacters,
-  selectEffectiveCharacterProfile,
-  selectEffectiveCharacterProfileLocation,
+  selectCurrentCharacter,
+  selectCurrentCharacterProfileLocation,
+  selectSelectedProfileCharacter,
+  selectSelectedCharacterProfileLocation,
   type CharacterProfileLocation,
 } from "./selectors";
+import { selectedCharacterProfileHudId } from "./metadata";
 
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
@@ -69,6 +73,9 @@ const formatRelationshipSource = (source: string) =>
 const relationshipOrigin = (relationship: CharacterRelationshipSummary) =>
   relationship.notes
   ?? (relationship.source ? formatRelationshipSource(relationship.source) : null);
+
+const hasLocationCoordinates = (location: CharacterProfileLocation) =>
+  Boolean(location.sectorAbbr && location.hex);
 
 const preCareerHistoryTypes = new Set([
   "preCareer.skip",
@@ -192,6 +199,7 @@ export const CharacterProfileHud = ({
     sectorAbbr: character.sectorAbbr,
     hex: character.hex,
   };
+  const hasLocation = Boolean(location.worldName || hasLocationCoordinates(location));
   const history = character.history ?? [];
   const education = character.educationHistory ?? null;
   const careers = character.careers ?? [];
@@ -273,14 +281,16 @@ export const CharacterProfileHud = ({
 
             <div className="pl-2">
               <p className="text-[7px] tracking-widest text-(--hud-text-dim)">Current Location</p>
-              {location.worldName ? (
+              {hasLocation ? (
                 <>
                   <p className="mt-0.5 text-[8px] text-(--hud-text)">
-                    {location.worldName}
+                    {location.worldName ?? "Local system"}
                   </p>
-                  <p className="text-[7px] text-(--hud-text-dim)">
-                    {location.sectorAbbr} / Hex {location.hex}
-                  </p>
+                  {hasLocationCoordinates(location) && (
+                    <p className="text-[7px] text-(--hud-text-dim)">
+                      {location.sectorAbbr} / Hex {location.hex}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="mt-0.5 text-[7px] text-(--hud-text-dim)">No location set</p>
@@ -524,11 +534,18 @@ export const CharacterProfileHud = ({
   );
 };
 
-export const CharacterProfileHudContent = () => {
+const CharacterProfileHudContentFor = ({
+  mode,
+}: {
+  mode: "current" | "selected";
+}) => {
   const dispatch = usePluginDispatch();
-  const character = usePluginSelector(selectEffectiveCharacterProfile);
+  const currentCharacter = usePluginSelector(selectCurrentCharacter);
+  const selectedCharacter = usePluginSelector(selectSelectedProfileCharacter);
+  const character = mode === "current" ? currentCharacter : selectedCharacter;
   const characters = usePluginSelector(selectCharacters);
-  const currentLocation = usePluginSelector(selectEffectiveCharacterProfileLocation);
+  const currentLocation = usePluginSelector(selectCurrentCharacterProfileLocation);
+  const selectedLocation = usePluginSelector(selectSelectedCharacterProfileLocation);
   const [contactGenerationState, setContactGenerationState] = useState<ContactGenerationState>("idle");
   const [contactGenerationError, setContactGenerationError] = useState<string | null>(null);
 
@@ -585,12 +602,13 @@ export const CharacterProfileHudContent = () => {
 
   const handleViewCharacter = (characterId: string) => {
     dispatch(setSelectedProfileCharacter(characterId));
+    dispatch(setHudVisible({ id: selectedCharacterProfileHudId, visible: true }));
   };
 
   return (
     <CharacterProfileHud
       character={characterWithResolvedContactAvatars}
-      currentLocation={currentLocation}
+      currentLocation={mode === "current" ? currentLocation : selectedLocation}
       contactGenerationState={contactGenerationState}
       contactGenerationError={contactGenerationError}
       onGenerateContact={handleGenerateContact}
@@ -598,3 +616,13 @@ export const CharacterProfileHudContent = () => {
     />
   );
 };
+
+export const CurrentCharacterProfileHudContent = () => (
+  <CharacterProfileHudContentFor mode="current" />
+);
+
+export const SelectedCharacterProfileHudContent = () => (
+  <CharacterProfileHudContentFor mode="selected" />
+);
+
+export const CharacterProfileHudContent = CurrentCharacterProfileHudContent;

@@ -25,7 +25,6 @@ export interface Notification {
 export interface UIState {
   activeModal: ModalType | null;
   mapView: MapView;
-  activeCharacterId: string | null;
   activeWorldId: string | null;
   activeSectorAbbr: string | null;
   activeSubsector: string | null;

@@ -27,7 +27,6 @@ const makeRoot = (notifications: NotificationsState): RootState => {
     ui: {
       activeModal: null,
       mapView: "galaxy",
-      activeCharacterId: null,
       activeWorldId: null,
       activeSectorAbbr: null,
       activeSubsector: null,

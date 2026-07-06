@@ -13,7 +13,7 @@ import {
   selectCharactersStatus,
 } from "./selectors";
 import type { CharacterSummary } from "./charactersSlice";
-import { characterProfileHudId } from "./metadata";
+import { selectedCharacterProfileHudId } from "./metadata";
 
 const genderLabel = (gender: CharacterSummary["gender"]) => {
   if (gender === "female") return "Female";
@@ -119,6 +119,7 @@ export const CharacterListHudContent = () => {
   const dispatch = usePluginDispatch();
   const characters = usePluginSelector(selectCharacters);
   const status = usePluginSelector(selectCharactersStatus);
+  const playerCharacters = characters.filter((character) => character.kind === "player");
   const [startingId, setStartingId] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
 
@@ -146,7 +147,7 @@ export const CharacterListHudContent = () => {
 
   const handleViewProfile = (characterId: string) => {
     dispatch(setSelectedProfileCharacter(characterId));
-    dispatch(setHudVisible({ id: characterProfileHudId, visible: true }));
+    dispatch(setHudVisible({ id: selectedCharacterProfileHudId, visible: true }));
   };
 
   const headerRight = (
@@ -188,10 +189,10 @@ export const CharacterListHudContent = () => {
           </div>
         )}
 
-        {(status === "loaded" || status === "idle") && characters.length === 0 && (
+        {(status === "loaded" || status === "idle") && playerCharacters.length === 0 && (
           <div className="py-5 text-center">
             <p className="text-[8px] uppercase tracking-wider text-(--hud-text-dim)">
-              No characters yet
+              No player characters yet
             </p>
             <button
               onClick={() => dispatch(openModal("characterGeneration"))}
@@ -202,9 +203,9 @@ export const CharacterListHudContent = () => {
           </div>
         )}
 
-        {status === "loaded" && characters.length > 0 && (
+        {status === "loaded" && playerCharacters.length > 0 && (
           <>
-            {characters.map((c) => (
+            {playerCharacters.map((c) => (
               <CharacterCard
                 key={c.id}
                 character={c}
@@ -214,7 +215,7 @@ export const CharacterListHudContent = () => {
               />
             ))}
             <p className="pt-0.5 text-center text-[8px] uppercase tracking-wider text-(--hud-text-dim)">
-              {characters.length} character{characters.length !== 1 ? "s" : ""}
+              {playerCharacters.length} player character{playerCharacters.length !== 1 ? "s" : ""}
             </p>
           </>
         )}

@@ -2,7 +2,6 @@ import type { RootState } from "../index";
 
 export const selectActiveModal = (state: RootState) => state.ui.activeModal;
 export const selectMapView = (state: RootState) => state.ui.mapView;
-export const selectActiveCharacterId = (state: RootState) => state.ui.activeCharacterId;
 export const selectActiveWorldId = (state: RootState) => state.ui.activeWorldId;
 export const selectActiveSectorAbbr = (state: RootState) => state.ui.activeSectorAbbr;
 export const selectActiveSubsector = (state: RootState) => state.ui.activeSubsector;

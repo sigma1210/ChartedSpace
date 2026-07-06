@@ -14,6 +14,7 @@ import {
   characterActionsHudId,
   characterListHudId,
   characterProfileHudId,
+  selectedCharacterProfileHudId,
 } from "../../plugins/characters";
 
 describe("hudSlice reducers", () => {
@@ -62,6 +63,11 @@ describe("hudSlice reducers", () => {
       visible: false,
       pinned: true,
       offset: { x: -0.18, y: 0.1 },
+    });
+    expect(initialHudState.layouts[selectedCharacterProfileHudId]).toEqual({
+      visible: false,
+      pinned: true,
+      offset: { x: 0.18, y: 0.1 },
     });
     expect(initialHudState.layouts[characterListHudId]).toEqual({
       visible: false,

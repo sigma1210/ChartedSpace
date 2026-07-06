@@ -15,7 +15,7 @@ export const selectCharactersStatus = (state: RootState) =>
   state.plugins.characters.status;
 
 export const selectCurrentCharacter = (state: RootState): CharacterSummary | null => {
-  const id = state.ui.activeCharacterId;
+  const id = selectOwnerOperatorCharacterId(state);
   if (!id) return null;
   return state.plugins.characters.items.find(c => c.id === id) ?? null;
 };
@@ -43,7 +43,6 @@ export const selectFallbackCharacter = (state: RootState): CharacterSummary | nu
 export const selectEffectiveCharacterProfile = (state: RootState): CharacterSummary | null =>
   selectSelectedProfileCharacter(state) ??
   selectCurrentCharacter(state) ??
-  selectOwnerOperatorCharacter(state) ??
   selectFallbackCharacter(state);
 
 export const selectEffectiveCharacterProfileLocation = (
@@ -57,5 +56,32 @@ export const selectEffectiveCharacterProfileLocation = (
     worldName: shipLocation?.worldName ?? character.worldName ?? null,
     sectorAbbr: shipLocation?.sectorAbbr ?? character.sectorAbbr ?? null,
     hex: shipLocation?.hex ?? character.hex ?? null,
+  };
+};
+
+export const selectCurrentCharacterProfileLocation = (
+  state: RootState,
+): CharacterProfileLocation | null => {
+  const character = selectCurrentCharacter(state);
+  if (!character) return null;
+  const shipLocation = selectShipLocation(state);
+
+  return {
+    worldName: shipLocation?.worldName ?? character.worldName ?? null,
+    sectorAbbr: shipLocation?.sectorAbbr ?? character.sectorAbbr ?? null,
+    hex: shipLocation?.hex ?? character.hex ?? null,
+  };
+};
+
+export const selectSelectedCharacterProfileLocation = (
+  state: RootState,
+): CharacterProfileLocation | null => {
+  const character = selectSelectedProfileCharacter(state);
+  if (!character) return null;
+
+  return {
+    worldName: character.worldName ?? null,
+    sectorAbbr: character.sectorAbbr ?? null,
+    hex: character.hex ?? null,
   };
 };

@@ -1,11 +1,13 @@
 import type { RootState } from "../index";
 import type { CharacterSummary } from "../../plugins/characters";
 import {
+  selectCurrentCharacter,
   selectEffectiveCharacterProfile,
   selectEffectiveCharacterProfileLocation,
   selectFallbackCharacter,
   selectOwnerOperatorCharacter,
   selectOwnerOperatorCredits,
+  selectSelectedProfileCharacter,
 } from "../../plugins/characters";
 import { selectOwnerOperatorCharacterId } from "../../plugins/ship";
 import { initialHudState } from "../slices/hudSlice";
@@ -43,7 +45,6 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
   ui: {
     activeModal: null,
     mapView: "galaxy",
-    activeCharacterId: null,
     activeWorldId: null,
     activeSectorAbbr: null,
     activeSubsector: null,
@@ -90,7 +91,6 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
 });
 
 describe("character profile selectors", () => {
-  const active = makeCharacter("active");
   const owner = makeCharacter("owner");
   const fallback = makeCharacter("fallback", {
     worldName: "Regina",
@@ -98,12 +98,11 @@ describe("character profile selectors", () => {
     hex: "1910",
   });
 
-  it("selects the explicit active character first", () => {
+  it("selects the owner operator as the current character", () => {
     const root = makeRoot({
-      ui: { ...makeRoot().ui, activeCharacterId: active.id },
       plugins: {
         ...makeRoot().plugins,
-        characters: { ...initialCharactersState, items: [owner, active, fallback], status: "loaded", error: null },
+        characters: { ...initialCharactersState, items: [owner, fallback], status: "loaded", error: null },
         shipPlugin: {
           ...initialShipPluginState,
           ship: { crew: [{ characterId: owner.id, isOwnerOperator: true }] } as unknown as ShipSummary,
@@ -112,28 +111,35 @@ describe("character profile selectors", () => {
       },
     });
 
-    expect(selectEffectiveCharacterProfile(root)).toBe(active);
+    expect(selectCurrentCharacter(root)).toBe(owner);
+    expect(selectEffectiveCharacterProfile(root)).toBe(owner);
   });
 
-  it("selects the inspected profile character before the active character", () => {
+  it("selects the inspected profile character before the current character", () => {
     const inspected = makeCharacter("inspected");
     const root = makeRoot({
-      ui: { ...makeRoot().ui, activeCharacterId: active.id },
       plugins: {
         ...makeRoot().plugins,
         characters: {
           ...initialCharactersState,
-          items: [owner, active, inspected],
+          items: [owner, inspected],
           status: "loaded",
           selectedProfileCharacterId: inspected.id,
+        },
+        shipPlugin: {
+          ...initialShipPluginState,
+          ship: { crew: [{ characterId: owner.id, isOwnerOperator: true }] } as unknown as ShipSummary,
+          status: "loaded",
         },
       },
     });
 
+    expect(selectSelectedProfileCharacter(root)).toBe(inspected);
+    expect(selectCurrentCharacter(root)).toBe(owner);
     expect(selectEffectiveCharacterProfile(root)).toBe(inspected);
   });
 
-  it("falls back to the owner operator when there is no active character", () => {
+  it("uses owner operator credits from the current character source", () => {
     const root = makeRoot({
       plugins: {
         ...makeRoot().plugins,
@@ -148,6 +154,7 @@ describe("character profile selectors", () => {
 
     expect(selectOwnerOperatorCharacterId(root)).toBe(owner.id);
     expect(selectOwnerOperatorCharacter(root)).toBe(owner);
+    expect(selectCurrentCharacter(root)).toBe(owner);
     expect(selectOwnerOperatorCredits(root)).toBe(owner.credits);
     expect(selectEffectiveCharacterProfile(root)).toBe(owner);
   });

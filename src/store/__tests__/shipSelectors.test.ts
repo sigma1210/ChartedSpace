@@ -30,7 +30,6 @@ const makeRoot = (ship: ShipSummary | null): RootState => ({
   ui: {
     activeModal: null,
     mapView: "galaxy",
-    activeCharacterId: null,
     activeWorldId: null,
     activeSectorAbbr: null,
     activeSubsector: null,

@@ -104,7 +104,7 @@ export const CharactersPluginBar = () => {
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
         <HudIconButton
-          title={profileVisible ? "Character profile visible" : "Open character profile"}
+          title={profileVisible ? "Current character profile visible" : "Open current character profile"}
           onClick={() => openHud(characterProfileHudId)}
         >
           <User size={13} aria-hidden="true" />

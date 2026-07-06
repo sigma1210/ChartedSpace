@@ -23,12 +23,14 @@ export const shipPlugin = {
 export {
   shipActionsHudMetadata,
   shipCrewAssignmentHudMetadata,
+  shipCrewListHudMetadata,
   shipHudMetadata,
   shipHudMetadataList,
 } from "./hudMetadata";
 export {
   shipActionsHudId,
   shipCrewAssignmentHudId,
+  shipCrewListHudId,
   shipHudId,
   shipPluginId,
   shipPluginStateKey,

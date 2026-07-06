@@ -98,6 +98,11 @@ export const listOpenCharacterPostings = async ({
       userId,
       status: "open",
       ...(location ? { location } : {}),
+      character: {
+        kind: "npc",
+        currentShipId: null,
+        ...(location ? { currentLocation: location } : {}),
+      },
     },
     orderBy: { updatedAt: "desc" },
     select: {
@@ -138,9 +143,10 @@ export const createGeneratedPosting = async ({
   type: CharacterPostingType;
   location?: string | null;
 }) => {
+  const postingLocation = location?.trim() || null;
   const template = postingTemplate(type);
   const sheet = generateAutomaticContactSheet({
-    currentLocation: location,
+    currentLocation: postingLocation,
     targetTerms: type === "patron_job" ? 3 : 2,
   });
   const skills = normalizeSkills(sheet.skills);
@@ -158,7 +164,7 @@ export const createGeneratedPosting = async ({
         education: sheet.upp.edu,
         socialStanding: sheet.upp.soc,
         credits: sheet.credits,
-        currentLocation: sheet.currentLocation,
+        currentLocation: postingLocation,
         sheet: sheet as unknown as CharacterDbPrisma.InputJsonValue,
       },
     });
@@ -180,7 +186,7 @@ export const createGeneratedPosting = async ({
         type,
         title: template.title,
         description: template.description,
-        location,
+        location: postingLocation,
         role: template.role,
       },
       select: {
@@ -222,6 +228,7 @@ export const reopenCrewAvailablePosting = async ({
   characterId: string;
   location?: string | null;
 }) => {
+  const postingLocation = location?.trim() || null;
   const template = postingTemplate("crew_available");
   const existing = await characterPrisma.characterPosting.findFirst({
     where: {
@@ -258,30 +265,44 @@ export const reopenCrewAvailablePosting = async ({
     },
   } satisfies CharacterDbPrisma.CharacterPostingSelect;
 
-  const posting = existing
-    ? await characterPrisma.characterPosting.update({
-        where: { id: existing.id },
-        data: {
-          status: "open",
-          location,
-          title: template.title,
-          description: template.description,
-          role: template.role,
-        },
-        select,
-      })
-    : await characterPrisma.characterPosting.create({
-        data: {
-          userId,
-          characterId,
-          type: "crew_available",
-          title: template.title,
-          description: template.description,
-          location,
-          role: template.role,
-        },
-        select,
-      });
+  const posting = await characterPrisma.$transaction(async (tx) => {
+    await tx.character.updateMany({
+      where: {
+        id: characterId,
+        userId,
+      },
+      data: {
+        currentShipId: null,
+        currentShipRole: null,
+        ...(postingLocation ? { currentLocation: postingLocation } : {}),
+      },
+    });
+
+    return existing
+      ? await tx.characterPosting.update({
+          where: { id: existing.id },
+          data: {
+            status: "open",
+            location: postingLocation,
+            title: template.title,
+            description: template.description,
+            role: template.role,
+          },
+          select,
+        })
+      : await tx.characterPosting.create({
+          data: {
+            userId,
+            characterId,
+            type: "crew_available",
+            title: template.title,
+            description: template.description,
+            location: postingLocation,
+            role: template.role,
+          },
+          select,
+        });
+  });
 
   return rowToSummary(posting);
 };
@@ -314,6 +335,11 @@ export const ensureLocalCharacterPostings = async ({
       location,
       status: "open",
       type: { in: postingTypes },
+      character: {
+        kind: "npc",
+        currentLocation: location,
+        currentShipId: null,
+      },
     },
     _count: { _all: true },
   });

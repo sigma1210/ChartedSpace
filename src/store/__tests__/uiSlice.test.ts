@@ -18,7 +18,6 @@ import uiReducer, {
 import {
   selectActiveModal,
   selectMapView,
-  selectActiveCharacterId,
   selectActiveWorldId,
   selectActiveSectorAbbr,
   selectActiveSubsector,
@@ -47,7 +46,6 @@ import { initialTradeState } from "../../plugins/trade/tradeSlice";
 const initialState: UIState = {
   activeModal: null,
   mapView: "galaxy",
-  activeCharacterId: null,
   activeWorldId: null,
   activeSectorAbbr: null,
   activeSubsector: null,
@@ -199,7 +197,6 @@ describe("ui selectors", () => {
     ...initialState,
     activeModal: "search",
     mapView: "sector",
-    activeCharacterId: "char-1",
     activeWorldId: "world-1",
     activeSectorAbbr: "Spin",
     activeSubsector: "C",
@@ -216,7 +213,6 @@ describe("ui selectors", () => {
 
   it("selectActiveModal", () => expect(selectActiveModal(root)).toBe("search"));
   it("selectMapView", () => expect(selectMapView(root)).toBe("sector"));
-  it("selectActiveCharacterId", () => expect(selectActiveCharacterId(root)).toBe("char-1"));
   it("selectActiveWorldId", () => expect(selectActiveWorldId(root)).toBe("world-1"));
   it("selectActiveSectorAbbr", () => expect(selectActiveSectorAbbr(root)).toBe("Spin"));
   it("selectActiveSubsector", () => expect(selectActiveSubsector(root)).toBe("C"));

@@ -8,7 +8,7 @@ import { usePluginDispatch } from "@/plugin-api";
 import { selectShipLocation } from "@/plugins/ship";
 import { useAppSelector } from "@/store/hooks";
 import { setHudVisible } from "@/store/slices/hudSlice";
-import { characterProfileHudId } from "./metadata";
+import { selectedCharacterProfileHudId } from "./metadata";
 import { fetchCharacters, invalidateCharacters, setSelectedProfileCharacter } from "./charactersSlice";
 
 interface CharacterPostingSummary {
@@ -177,7 +177,7 @@ export const CharacterProfessionalBoardHudContent = () => {
 
   const openProfile = (characterId: string) => {
     dispatch(setSelectedProfileCharacter(characterId));
-    dispatch(setHudVisible({ id: characterProfileHudId, visible: true }));
+    dispatch(setHudVisible({ id: selectedCharacterProfileHudId, visible: true }));
   };
 
   return (
