@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { Palette } from "lucide-react";
 import type { CharacterHistoryEntry, CharacterRelationshipSummary, CharacterSummary } from "./charactersSlice";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
 import { fetchCharacters, invalidateCharacters, setSelectedProfileCharacter } from "./charactersSlice";
@@ -12,7 +13,7 @@ import {
   selectSelectedCharacterProfileLocation,
   type CharacterProfileLocation,
 } from "./selectors";
-import { selectedCharacterProfileHudId } from "./metadata";
+import { characterAvatarCustomizeHudId, selectedCharacterProfileHudId } from "./metadata";
 
 const STAT_LABELS = ["STR", "DEX", "END", "INT", "EDU", "SOC"] as const;
 const STAT_MAX = 15;
@@ -164,6 +165,7 @@ export const CharacterProfileHud = ({
   contactGenerationError,
   onGenerateContact,
   onViewCharacter,
+  onCustomizeAvatar,
 }: {
   character: CharacterSummary | null;
   currentLocation: CharacterProfileLocation | null;
@@ -171,6 +173,7 @@ export const CharacterProfileHud = ({
   contactGenerationError?: string | null;
   onGenerateContact?: (characterId: string) => void;
   onViewCharacter?: (characterId: string) => void;
+  onCustomizeAvatar?: (characterId: string) => void;
 }) => {
   const [activeTabState, setActiveTabState] = useState<{
     characterId: string | null;
@@ -311,6 +314,17 @@ export const CharacterProfileHud = ({
                     {character.name}
                   </p>
                 </div>
+              )}
+              {character.kind === "player" && (
+                <button
+                  type="button"
+                  onClick={() => onCustomizeAvatar?.(character.id)}
+                  className="mt-2 flex h-5 items-center gap-1 border border-(--hud-border-subtle) px-1.5 text-[7px] uppercase tracking-wider text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+                  title="Customize avatar"
+                >
+                  <Palette size={10} aria-hidden="true" />
+                  Avatar
+                </button>
               )}
             </div>
           </div>
@@ -605,6 +619,11 @@ const CharacterProfileHudContentFor = ({
     dispatch(setHudVisible({ id: selectedCharacterProfileHudId, visible: true }));
   };
 
+  const handleCustomizeAvatar = (characterId: string) => {
+    dispatch(setSelectedProfileCharacter(characterId));
+    dispatch(setHudVisible({ id: characterAvatarCustomizeHudId, visible: true }));
+  };
+
   return (
     <CharacterProfileHud
       character={characterWithResolvedContactAvatars}
@@ -613,6 +632,7 @@ const CharacterProfileHudContentFor = ({
       contactGenerationError={contactGenerationError}
       onGenerateContact={handleGenerateContact}
       onViewCharacter={handleViewCharacter}
+      onCustomizeAvatar={handleCustomizeAvatar}
     />
   );
 };

@@ -24,6 +24,32 @@ const normalizeSkills = (skills: CharacterSheet["skills"]) => {
 const normalizeGender = (value: unknown): CharacterGender | null =>
   value === "female" || value === "male" ? value : null;
 
+const queueCharacterAvatarGeneration = ({
+  characterId,
+  sheet,
+  logContext,
+}: {
+  characterId: string;
+  sheet: CharacterSheet;
+  logContext: string;
+}) => {
+  void generateCharacterPortraitAvatar({
+    characterId,
+    sheet,
+  }).then(async (avatarResult) => {
+    if (!avatarResult) return;
+
+    await characterPrisma.character.update({
+      where: { id: characterId },
+      data: {
+        sheet: avatarResult.sheet as unknown as CharacterDbPrisma.InputJsonValue,
+      },
+    });
+  }).catch((err) => {
+    console.error(logContext, err);
+  });
+};
+
 const preCareerHistoryTypes = new Set([
   "preCareer.skip",
   "preCareer.select",
@@ -206,6 +232,7 @@ export const GET = async () => {
         kind:           c.kind,
         name:           c.name,
         gender:         normalizeGender(sheet?.gender ?? sheetMetadata?.gender),
+        age:            typeof sheet?.age === "number" ? sheet.age : null,
         avatar:         sheet?.avatar ?? sheetMetadata?.avatar ?? null,
         upp:            [c.strength, c.dexterity, c.endurance, c.intelligence, c.education, c.socialStanding].map(toHex).join(""),
         strength:       c.strength,
@@ -312,35 +339,17 @@ export const POST = async (request: Request) => {
       };
     });
 
-    let avatarGenerated = false;
-    let avatarError: string | null = null;
-
-    try {
-      const avatarResult = await generateCharacterPortraitAvatar({
-        characterId: saved.character.id,
-        sheet: sheetForStorage,
-      });
-
-      if (avatarResult) {
-        await characterPrisma.character.update({
-          where: { id: saved.character.id },
-          data: {
-            sheet: avatarResult.sheet as unknown as CharacterDbPrisma.InputJsonValue,
-          },
-        });
-        avatarGenerated = true;
-      }
-    } catch (err) {
-      avatarError = err instanceof Error ? err.message : String(err);
-      console.error("[POST /api/characters avatar]", err);
-    }
+    queueCharacterAvatarGeneration({
+      characterId: saved.character.id,
+      sheet: sheetForStorage,
+      logContext: "[POST /api/characters avatar]",
+    });
 
     return NextResponse.json({
       id: saved.character.id,
       name: saved.character.name,
       generatedContacts: saved.generatedContacts.length,
-      avatarGenerated,
-      ...(avatarError ? { avatarError } : {}),
+      avatarGenerationQueued: Boolean(sheetForStorage.avatar?.promptSlug),
     }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/characters]", err);

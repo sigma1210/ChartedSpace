@@ -8,6 +8,7 @@ export interface CharacterSummary {
   kind?: "player" | "npc" | string;
   name: string;
   gender?: CharacterGender | null;
+  age?: number | null;
   avatar?: CharacterAvatar | null;
   upp: string;
   strength: number;

@@ -1,5 +1,6 @@
 import {
   characterActionsHudId,
+  characterAvatarCustomizeHudId,
   characterListHudId,
   characterProfileHudId,
   characterProfessionalBoardHudId,
@@ -82,10 +83,26 @@ export const characterProfessionalBoardHudMetadata = {
   },
 } as const;
 
+export const characterAvatarCustomizeHudMetadata = {
+  id: characterAvatarCustomizeHudId,
+  pluginId: charactersPluginId,
+  title: "Avatar",
+  openTitle: "Open avatar customization",
+  visibleTitle: "Avatar customization visible",
+  showInHudControls: false,
+  panelClassName: "px-1.5 py-1 text-[8px] tracking-normal",
+  defaultLayout: {
+    visible: false,
+    pinned: true,
+    offset: { x: -0.02, y: 0.04 },
+  },
+} as const;
+
 export const characterHudMetadata = [
   characterActionsHudMetadata,
   characterProfileHudMetadata,
   selectedCharacterProfileHudMetadata,
   characterListHudMetadata,
   characterProfessionalBoardHudMetadata,
+  characterAvatarCustomizeHudMetadata,
 ] as const;

@@ -46,11 +46,14 @@ export const generateCharacterPortraitAvatar = async ({
     age: sheet.age,
   });
   const outputPath = characterAvatarFilePath(publicPath);
+  const promptWithAge = typeof sheet.age === "number"
+    ? `${promptSlug}, ${sheet.age} years old`
+    : promptSlug;
   const result = await generateComfyImage({
     baseUrl: process.env.COMFYUI_BASE_URL ?? DEFAULT_COMFYUI_BASE_URL,
     workflowPath: process.env.COMFYUI_AVATAR_WORKFLOW_PATH ?? DEFAULT_AVATAR_WORKFLOW_PATH,
     outputPath,
-    shortPrompt: buildAvatarShortPrompt(promptSlug),
+    shortPrompt: buildAvatarShortPrompt(promptWithAge),
   });
   const image: CharacterAvatarImage = {
     id: `portrait-v${version}`,

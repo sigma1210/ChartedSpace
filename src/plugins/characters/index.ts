@@ -17,6 +17,7 @@ export const charactersPlugin = {
 
 export {
   characterActionsHudId,
+  characterAvatarCustomizeHudId,
   characterListHudId,
   characterProfessionalBoardHudId,
   characterProfileHudId,
