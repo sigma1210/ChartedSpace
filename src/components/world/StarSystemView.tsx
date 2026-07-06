@@ -1800,7 +1800,7 @@ const hudBoundsForElementSize = ({
   let maxX = Math.min(baseBounds.maxX, 1 - widthRatio);
   const topSafeMaxY = Math.min(HUD_TOP_OFFSET_LIMIT, 1 - heightRatio);
   let minY = baseBounds.minY;
-  let maxY = Math.min(baseBounds.maxY, topSafeMaxY);
+  const maxY = Math.min(baseBounds.maxY, topSafeMaxY);
 
   if (minX > maxX) {
     minX = 0;
@@ -1852,7 +1852,7 @@ const useMeasuredHudBounds = ({
       elementSize,
       bounds: offsetBounds,
     }),
-    [elementSize, offsetBounds, size.height, size.width],
+    [elementSize, offsetBounds, size],
   );
 
   return { elementRef, measuredBounds };
@@ -1881,9 +1881,11 @@ const useCameraPinnedHudDrag = ({
     origin: HudOffset;
   } | null>(null);
 
-  if (!dragRef.current && dragOffsetRef.current && sameHudOffset(dragOffsetRef.current, offset)) {
-    dragOffsetRef.current = null;
-  }
+  useEffect(() => {
+    if (!dragRef.current && dragOffsetRef.current && sameHudOffset(dragOffsetRef.current, offset)) {
+      dragOffsetRef.current = null;
+    }
+  }, [offset]);
 
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {

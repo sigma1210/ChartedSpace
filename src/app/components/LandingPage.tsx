@@ -1,6 +1,8 @@
 import Link from "next/link"
 import SignInForm from "@/app/(auth)/components/SignInForm"
 
+const sessionToken = "0x7C4A91F3B20D";
+
 const LandingPage = () => {
   return (
     <div className="starfield flex min-h-screen flex-col">
@@ -51,7 +53,7 @@ const LandingPage = () => {
                 {[
                   { label: "Origin Node", value: "Third Imperium Core" },
                   { label: "Source Branch", value: "Charted Space v1.0" },
-                  { label: "Session Token", value: "0x" + Math.random().toString(16).slice(2, 14).toUpperCase() },
+                  { label: "Session Token", value: sessionToken },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="font-mono text-xs uppercase tracking-widest text-(--hud-text-dim) mb-1">

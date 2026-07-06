@@ -33,7 +33,7 @@ const SignUpForm = () => {
   const navigateToFeed = ({ decorateUrl }: { decorateUrl: (url: string) => string }) => {
     const url = decorateUrl("/map")
     if (url.startsWith("http")) {
-      window.location.href = url
+      window.location.assign(url)
     } else {
       router.push(url)
     }

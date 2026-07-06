@@ -1159,6 +1159,7 @@ export const assignTerrain = (
   world: World,
   _totalH: number,
 ): HexCell[] => {
+  void _totalH;
   const rand = mulberry32(hashStr(world.hex + world.name));
   const atmo = uwpVal(world.uwp.atmosphere);
   const hydro = uwpVal(world.uwp.hydrographics);

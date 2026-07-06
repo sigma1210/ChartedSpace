@@ -52,8 +52,6 @@ import {
 } from "@/store/slices/hudSlice";
 import { getSystemData } from "@/store/slices/systemSlice";
 import { openSystemDetail } from "@/store/slices/uiSlice";
-import type { StarSystemViewModel } from "@/lib/starSystemViewModel";
-import type { World } from "@/types";
 
 const HUD_SCREEN_MARGIN = 8;
 const V2_HUD_VISUAL_SCALE = 1.6;
@@ -76,11 +74,6 @@ type DragState = {
   startX: number;
   startY: number;
   origin: HudOffset;
-};
-
-type RenderableSystemSnapshot = {
-  model: StarSystemViewModel;
-  mainWorld: World | null;
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -542,17 +535,9 @@ const SystemV2PageClient = () => {
     sectorAbbr && hex ? selectSystemStatusByKey(sectorAbbr, hex) : () => "idle",
   );
   const inJump = ship?.status === "in_jump";
-  const lastRenderableSnapshotRef = useRef<RenderableSystemSnapshot | null>(null);
-
-  if (model) {
-    lastRenderableSnapshotRef.current = {
-      model,
-      mainWorld,
-    };
-  }
   const renderableSnapshot = model
     ? { model, mainWorld }
-    : lastRenderableSnapshotRef.current;
+    : null;
 
   useEffect(() => {
     if (!sectorAbbr || !hex) return;

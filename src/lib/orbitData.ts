@@ -256,7 +256,7 @@ export const buildWorldPlacements = (world: World): WorldPlacement[] => {
   }
 
   // Gas giants — start 2 orbits beyond main world
-  let ggBase = mainOrbit + 2;
+  const ggBase = mainOrbit + 2;
   for (let i = 0; i < Math.min(gasCount, 5); i++) {
     const ggOrbit = place(ggBase + i);
     result.push({

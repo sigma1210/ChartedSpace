@@ -25,7 +25,7 @@ export type DemographicsPluginRoot = RootState & {
   plugins: RootState["plugins"] & Record<typeof demographicsStateKey, DemographicsState>;
 };
 
-const baseDotRadius = (_mode: MapMode) => 5;
+const baseDotRadius = () => 5;
 
 export const selectDemographicsState = (state: DemographicsPluginRoot) =>
   state.plugins[demographicsStateKey] ?? initialDemographicsState;
@@ -36,14 +36,14 @@ export const selectSelectedDemographicDotMode = (state: DemographicsPluginRoot) 
 export const selectDemographicWorldDotStyleResolver = createSelector(
   [selectSelectedDemographicDotMode],
   (selectedMode): DemographicWorldDotStyleResolver =>
-    (world, _coord, mode) => {
+    (world) => {
       if (selectedMode === "stellar") {
-        return { fill: getPrimaryStellarColor(world), r: baseDotRadius(mode) };
+        return { fill: getPrimaryStellarColor(world), r: baseDotRadius() };
       }
       if (selectedMode === "allegiance") {
-        return { fill: getAllegianceColor(world?.allegiance), r: baseDotRadius(mode) };
+        return { fill: getAllegianceColor(world?.allegiance), r: baseDotRadius() };
       }
-      return { fill: defaultWorldDotColor, r: baseDotRadius(mode) };
+      return { fill: defaultWorldDotColor, r: baseDotRadius() };
     },
 );
 

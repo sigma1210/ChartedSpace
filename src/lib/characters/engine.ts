@@ -3,7 +3,6 @@ import type {
   CharacterGender,
   CharacterSheet,
   DecisionMadeBy,
-  DecisionPoint,
   DecisionProvider,
   DecisionRecord,
   DecisionStep,
