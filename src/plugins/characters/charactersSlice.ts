@@ -95,6 +95,16 @@ export const fetchCharacters = createAsyncThunk(
   }
 );
 
+export const refreshCharacters = createAsyncThunk(
+  "characters/refresh",
+  async () => {
+    const res = await fetch("/api/characters");
+    if (!res.ok) throw new Error("Failed to fetch characters");
+    const data = await res.json() as { items: CharacterSummary[] };
+    return data.items;
+  },
+);
+
 const characterSlice = createSlice({
   name: "characters",
   initialState: initialCharactersState,
@@ -129,6 +139,15 @@ const characterSlice = createSlice({
       .addCase(fetchCharacters.rejected, (state, action) => {
         state.status = "error";
         state.error = action.error.message ?? "Unknown error";
+      })
+      .addCase(refreshCharacters.fulfilled, (state, action) => {
+        state.items = action.payload;
+        if (
+          state.selectedProfileCharacterId &&
+          !action.payload.some((character) => character.id === state.selectedProfileCharacterId)
+        ) {
+          state.selectedProfileCharacterId = null;
+        }
       });
   },
 });

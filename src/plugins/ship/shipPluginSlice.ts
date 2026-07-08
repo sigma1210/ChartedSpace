@@ -83,6 +83,16 @@ export const fetchShip = createAsyncThunk(
   },
 );
 
+export const refreshShip = createAsyncThunk(
+  "shipPlugin/refresh",
+  async () => {
+    const res = await fetch("/api/ship");
+    if (!res.ok) throw new Error("Failed to fetch ship");
+    const data = await res.json() as { ship: ShipSummary | null };
+    return data.ship;
+  },
+);
+
 const shipPluginSlice = createSlice({
   name: "shipPlugin",
   initialState: initialShipPluginState,
@@ -119,6 +129,9 @@ const shipPluginSlice = createSlice({
       .addCase(fetchShip.rejected, (state, action) => {
         state.status = "error";
         state.error = action.error.message ?? "Unknown error";
+      })
+      .addCase(refreshShip.fulfilled, (state, action) => {
+        state.ship = action.payload;
       });
   },
 });

@@ -29,6 +29,7 @@ export {
   fetchCharacters,
   initialCharactersState,
   invalidateCharacters,
+  refreshCharacters,
   updateCharacterInList,
   type CharacterState,
   type CharacterSummary,

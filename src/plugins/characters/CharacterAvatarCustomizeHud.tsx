@@ -10,7 +10,8 @@ import {
   type AvatarSlugValues,
 } from "@/lib/characters/avatar";
 import { usePluginDispatch, usePluginSelector } from "@/plugin-api";
-import { fetchCharacters, invalidateCharacters } from "./charactersSlice";
+import { refreshShip } from "@/plugins/ship";
+import { fetchCharacters, invalidateCharacters, refreshCharacters } from "./charactersSlice";
 import { selectCurrentCharacter, selectSelectedProfileCharacter } from "./selectors";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -127,8 +128,10 @@ export const CharacterAvatarCustomizeHudContent = () => {
           ? { ...current, attempts: (current.attempts ?? 0) + 1 }
           : current
       ));
-      dispatch(invalidateCharacters());
-      void dispatch(fetchCharacters());
+      void Promise.all([
+        dispatch(refreshCharacters()),
+        dispatch(refreshShip()),
+      ]);
     }, 3_000);
 
     return () => window.clearTimeout(timeoutId);

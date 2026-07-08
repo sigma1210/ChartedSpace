@@ -68,6 +68,7 @@ export {
 export {
   fetchShip,
   invalidateShip,
+  refreshShip,
   setShipColor,
   setShipJumpRating,
   updateShipInStore,
