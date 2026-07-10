@@ -30,6 +30,7 @@ import {
   nextGrandPrixCheckpoint,
   type GrandPrixState,
 } from "./grandPrixRules";
+import { rescueResult, rescueScenario, rescueScenarioId } from "./rescueRules";
 import {
   addVector,
   advanceEncounter,
@@ -128,6 +129,7 @@ interface MaydayHudDrag {
 
 const maydayScenarios: MaydayScenario[] = [
   grandPrixScenario,
+  rescueScenario,
   {
     id: "laser-duel",
     label: "Laser Duel",
@@ -741,12 +743,25 @@ export const MaydayBoard = () => {
       })),
   ].slice(0, 6);
   const isGrandPrix = selectedScenario.id === grandPrixScenarioId;
+  const isRescue = selectedScenario.id === rescueScenarioId;
   const playerRaceProgress = grandPrixState?.racers.find((racer) => racer.side === "player") ?? null;
   const playerRaceCheckpoint = playerShip && grandPrixState
     ? nextGrandPrixCheckpoint(grandPrixState, playerShip.id)
     : null;
   const raceLandingPreview = isGrandPrix && playerShip && playerRaceCheckpoint
     ? grandPrixLandingPreview(playerShip, effectivePendingThrust, playerRaceCheckpoint)
+    : null;
+  const currentRescueResult = isRescue ? rescueResult(encounter) : null;
+  const projectedRescueResult = isRescue && playerShip && primaryContact && projectedPlayerVelocity
+    ? rescueResult({
+        ...encounter,
+        turn: encounter.turn + 1,
+        ships: encounter.ships.map((ship) => ship.side === "player"
+          ? { ...ship, velocity: projectedPlayerVelocity, position: addVector(ship.position, projectedPlayerVelocity) }
+          : ship.side === "opponent"
+            ? { ...ship, position: addVector(ship.position, ship.velocity) }
+            : ship),
+      })
     : null;
   const objective = isGrandPrix && grandPrixState
     ? {
@@ -755,7 +770,7 @@ export const MaydayBoard = () => {
           ? grandPrixState.winner === "player" ? "Grand Prix won" : "Opponent won the Grand Prix"
           : `Next: ${playerRaceCheckpoint?.label ?? "Finish"} · ${Math.max(0, (playerRaceProgress?.nextCheckpointIndex ?? 1) - 1)}/4 landings`,
       }
-    : objectiveResult(selectedScenario, encounter, objectiveProgress);
+    : currentRescueResult ?? objectiveResult(selectedScenario, encounter, objectiveProgress);
   const scenarioActive = maydayWorkflow === "playing";
   const scenarioComplete = scenarioActive && objective.status !== "in-progress";
   const currentShipCombatResult = shipMode === "current-ship" && startedScenario
@@ -961,7 +976,9 @@ export const MaydayBoard = () => {
     const opponentRaceCheckpoint = opponentBefore && grandPrixState
       ? nextGrandPrixCheckpoint(grandPrixState, opponentBefore.id)
       : null;
-    const opponentThrust = isGrandPrix && opponentBefore && opponentRaceCheckpoint
+    const opponentThrust = isRescue
+      ? { vector: { q: 0, r: 0 }, label: "Drift" }
+      : isGrandPrix && opponentBefore && opponentRaceCheckpoint
       ? { vector: chooseGrandPrixThrust(opponentBefore, opponentRaceCheckpoint), label: "Race" }
       : playerBefore && opponentBefore && playerProjectedVelocity
       ? chooseOpponentThrust({
@@ -984,7 +1001,9 @@ export const MaydayBoard = () => {
     const completedRaceLegs = nextRaceState && grandPrixState
       ? completedGrandPrixLegs(grandPrixState, nextRaceState)
       : [];
-    const nextObjective = nextRaceState
+    const nextObjective = isRescue
+      ? rescueResult(nextEncounter)
+      : nextRaceState
       ? { status: nextRaceState.winner === "player" ? "success" as const : nextRaceState.winner ? "failed" as const : "in-progress" as const }
       : objectiveResult(selectedScenario, nextEncounter, nextProgress);
     const playerAfter = nextEncounter.ships.find((ship) => ship.side === "player") ?? null;
@@ -1034,7 +1053,7 @@ export const MaydayBoard = () => {
     }
     setActiveSandShipIds([]);
     setPendingThrust({ q: 0, r: 0 });
-    setCombatPhase(isGrandPrix ? "movement" : "laser");
+    setCombatPhase(isGrandPrix || isRescue ? "movement" : "laser");
   };
 
   const chooseThrust = (direction: MaydayVector) => {
@@ -1554,7 +1573,7 @@ export const MaydayBoard = () => {
             </div>
             {!scenarioActive && (
               <div className="flex flex-col gap-1">
-                {!isGrandPrix && <label className="flex flex-col gap-1">
+                {!isGrandPrix && !isRescue && <label className="flex flex-col gap-1">
                   <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Scenario</span>
                   <select
                     value={scenarioId}
@@ -1696,12 +1715,24 @@ export const MaydayBoard = () => {
                     <span>Projected range</span><span className="text-right text-(--hud-text)">{raceLandingPreview.projectedRange}</span>
                     <span>Arrival velocity</span><span className="text-right text-(--hud-text)">{vectorLabel(raceLandingPreview.projectedVelocity)}</span>
                   </>}
+                  {currentRescueResult && <>
+                    <span>Range</span><span className="text-right text-(--hud-text)">{currentRescueResult.range ?? "-"}</span>
+                    <span>Relative velocity</span><span className="text-right text-(--hud-text)">{currentRescueResult.relativeVelocity ?? "-"}</span>
+                    <span>Turns remaining</span><span className="text-right text-(--hud-accent)">{currentRescueResult.turnsRemaining}</span>
+                  </>}
+                  {projectedRescueResult && <>
+                    <span>Projected range</span><span className="text-right text-(--hud-text)">{projectedRescueResult.range ?? "-"}</span>
+                    <span>Projected relative velocity</span><span className="text-right text-(--hud-text)">{projectedRescueResult.relativeVelocity ?? "-"}</span>
+                  </>}
                 </div>
                 {raceLandingPreview?.status === "landing-confirmed" && (
                   <div className="border border-emerald-200/60 bg-emerald-200/10 px-2 py-1 text-center font-bold text-emerald-100">Landing confirmed</div>
                 )}
                 {raceLandingPreview?.status === "too-fast" && (
                   <div className="border border-yellow-200/60 bg-yellow-200/10 px-2 py-1 text-center font-bold text-yellow-100">Too fast to land</div>
+                )}
+                {projectedRescueResult?.status === "success" && (
+                  <div className="border border-emerald-200/60 bg-emerald-200/10 px-2 py-1 text-center font-bold text-emerald-100">Rescue Match Confirmed</div>
                 )}
                 {isGrandPrix && (
                   <div className="grid grid-cols-2 gap-1">

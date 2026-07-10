@@ -1,7 +1,7 @@
 export type MaydaySide = "player" | "opponent";
 export type OpponentBehavior = "coast" | "pursue" | "evade" | "intercept";
 export type ObjectiveStatus = "in-progress" | "success" | "failed";
-export type ObjectiveKind = "range-band" | "escape-range" | "intercept-range" | "approach-contact" | "combat-disable" | "grand-prix";
+export type ObjectiveKind = "range-band" | "escape-range" | "intercept-range" | "approach-contact" | "combat-disable" | "grand-prix" | "rescue-intercept";
 export type MaydayCombatPhase = "movement" | "laser" | "ordnance";
 export type MaydayTargetType = "ship" | "craft" | "missile";
 export type MaydayDamageResult = "none" | "m-drive" | "j-drive" | "weapon" | "computer" | "detonate";
@@ -673,6 +673,8 @@ export const objectiveResult = (
       return { status: "in-progress", progress: `Range ${range}/1` };
     case "grand-prix":
       return { status: "in-progress", progress: "Race in progress" };
+    case "rescue-intercept":
+      return { status: "in-progress", progress: "Rescue intercept in progress" };
   }
 };
 
