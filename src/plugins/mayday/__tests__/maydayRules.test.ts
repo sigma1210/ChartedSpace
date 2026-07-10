@@ -4,6 +4,8 @@ import {
   buildCustomScenario,
   buildMissile,
   defaultCustomSetup,
+  expandedMaydayBoardRadius,
+  maydayInitialBoardRadius,
   removeDestroyedMissiles,
   resolveLaserFire,
   resolveOpponentOrdnanceCloseout,
@@ -49,6 +51,31 @@ const encounter = (ships: MaydayShip[] = [playerShip(), opponentShip()]): Mayday
 });
 
 describe("maydayRules", () => {
+  it("keeps the initial board radius when positions are away from the edge", () => {
+    expect(expandedMaydayBoardRadius(maydayInitialBoardRadius, [
+      { q: 10, r: 0 },
+      { q: -8, r: 4 },
+    ])).toBe(maydayInitialBoardRadius);
+  });
+
+  it("expands the board when a position approaches the edge", () => {
+    expect(expandedMaydayBoardRadius(maydayInitialBoardRadius, [
+      { q: 15, r: 0 },
+    ])).toBe(24);
+  });
+
+  it("adds enough rings when a position moves beyond the current edge", () => {
+    expect(expandedMaydayBoardRadius(maydayInitialBoardRadius, [
+      { q: 28, r: 0 },
+    ])).toBe(36);
+  });
+
+  it("never shrinks an expanded board", () => {
+    expect(expandedMaydayBoardRadius(30, [
+      { q: 2, r: 0 },
+    ])).toBe(30);
+  });
+
   it("builds a missile with initial tracking toward its target", () => {
     const launcher = playerShip();
     const target = opponentShip({ position: { q: 3, r: 0 } });
@@ -159,7 +186,7 @@ describe("maydayRules", () => {
       },
       turn: 1,
       phase: "laser",
-      rollAttack: () => 7,
+      rollAttack: () => 8,
       rollDamage: () => 1,
     });
 
@@ -167,6 +194,52 @@ describe("maydayRules", () => {
       hit: true,
       targetType: "missile",
       adjustedRoll: 8,
+    });
+  });
+
+  it("applies Gunnery skill and a range penalty to laser fire", () => {
+    const result = resolveLaserFire({
+      attacker: playerShip({ gunnery: 2 }),
+      target: {
+        id: "corsair",
+        name: "Corsair",
+        position: { q: 4, r: 0 },
+        targetType: "ship",
+      },
+      turn: 1,
+      phase: "laser",
+      rollAttack: () => 9,
+      rollDamage: () => 1,
+    });
+
+    expect(result).toMatchObject({
+      range: 4,
+      roll: 9,
+      modifier: -1,
+      adjustedRoll: 8,
+      hit: true,
+    });
+  });
+
+  it("uses Gunnery 0 when no skill is present", () => {
+    const result = resolveLaserFire({
+      attacker: playerShip(),
+      target: {
+        id: "corsair",
+        name: "Corsair",
+        position: { q: 3, r: 0 },
+        targetType: "ship",
+      },
+      turn: 1,
+      phase: "laser",
+      rollAttack: () => 9,
+      rollDamage: () => 1,
+    });
+
+    expect(result).toMatchObject({
+      modifier: -2,
+      adjustedRoll: 7,
+      hit: false,
     });
   });
 

@@ -15,6 +15,7 @@ export interface CrewMember {
   npcName: string | null;
   keySkillName: string | null;
   keySkillLevel: number;
+  skills?: Array<{ name: string; level: number }>;
 }
 
 export type WorldCoordinateToken = `${string}:${string}`;

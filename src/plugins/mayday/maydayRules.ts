@@ -1,7 +1,7 @@
 export type MaydaySide = "player" | "opponent";
 export type OpponentBehavior = "coast" | "pursue" | "evade" | "intercept";
 export type ObjectiveStatus = "in-progress" | "success" | "failed";
-export type ObjectiveKind = "range-band" | "escape-range" | "intercept-range" | "approach-contact" | "combat-disable";
+export type ObjectiveKind = "range-band" | "escape-range" | "intercept-range" | "approach-contact" | "combat-disable" | "grand-prix";
 export type MaydayCombatPhase = "movement" | "laser" | "ordnance";
 export type MaydayTargetType = "ship" | "craft" | "missile";
 export type MaydayDamageResult = "none" | "m-drive" | "j-drive" | "weapon" | "computer" | "detonate";
@@ -19,6 +19,8 @@ export interface MaydayShip {
   velocity: MaydayVector;
   thrustRating: number;
   lasers: number;
+  gunnery?: number;
+  gunneryOperator?: string | null;
   missiles?: number;
   sandcasters?: number;
   sand?: number;
@@ -220,6 +222,40 @@ export const maydayShipTemplates: MaydayShipTemplate[] = [
 
 export const vectorLabel = (vector: MaydayVector) => `${vector.q}, ${vector.r}`;
 
+export const maydayInitialBoardRadius = 18;
+export const maydayBoardExpansionBuffer = 3;
+export const maydayBoardExpansionStep = 6;
+export const maydayMaximumBoardRadius = 60;
+
+export const axialRadius = (position: MaydayVector) =>
+  Math.max(Math.abs(position.q), Math.abs(position.r), Math.abs(position.q + position.r));
+
+export const expandedMaydayBoardRadius = (
+  currentRadius: number,
+  positions: readonly MaydayVector[],
+) => {
+  const safeCurrentRadius = Math.max(maydayInitialBoardRadius, Math.trunc(currentRadius));
+  const furthestRadius = positions.reduce(
+    (furthest, position) => Math.max(furthest, axialRadius(position)),
+    0,
+  );
+
+  if (furthestRadius < safeCurrentRadius - maydayBoardExpansionBuffer) {
+    return safeCurrentRadius;
+  }
+
+  const requiredRadius = furthestRadius + maydayBoardExpansionBuffer;
+  const expansionSteps = Math.max(
+    1,
+    Math.ceil((requiredRadius - safeCurrentRadius) / maydayBoardExpansionStep),
+  );
+
+  return Math.min(
+    maydayMaximumBoardRadius,
+    safeCurrentRadius + expansionSteps * maydayBoardExpansionStep,
+  );
+};
+
 export const hexRange = (from: MaydayVector, to: MaydayVector) => {
   const dq = to.q - from.q;
   const dr = to.r - from.r;
@@ -385,11 +421,7 @@ export const rollTwoDice = () =>
 
 export const rollOneDie = () => 1 + Math.floor(Math.random() * 6);
 
-const laserAttackTable: Record<MaydayTargetType, Set<number>> = {
-  ship: new Set([7, 8, 9, 10, 11]),
-  craft: new Set([8, 9, 10, 11]),
-  missile: new Set([8, 9, 10, 11]),
-};
+export const laserTargetNumber = 8;
 
 export const damageTableResult = (targetType: MaydayTargetType, roll: number): MaydayDamageResult => {
   if (targetType !== "ship") return "none";
@@ -435,9 +467,10 @@ export const resolveLaserFire = ({
 
   const range = hexRange(attacker.position, target.position);
   const roll = rollAttack();
-  const modifier = range;
+  const rangePenalty = Math.max(0, range - 1);
+  const modifier = Math.max(0, Math.trunc(attacker.gunnery ?? 0)) - rangePenalty;
   const adjustedRoll = clampAttackRoll(roll + modifier);
-  const hit = laserAttackTable[target.targetType].has(adjustedRoll);
+  const hit = adjustedRoll >= laserTargetNumber;
   const damageRoll = hit ? rollDamage() : null;
   const damageResult = damageRoll === null ? null : damageTableResult(target.targetType, damageRoll);
 
@@ -638,6 +671,8 @@ export const objectiveResult = (
     case "approach-contact":
       if (range <= 1) return { status: "success", progress: `Range ${range}` };
       return { status: "in-progress", progress: `Range ${range}/1` };
+    case "grand-prix":
+      return { status: "in-progress", progress: "Race in progress" };
   }
 };
 

@@ -11,15 +11,17 @@ export const MaydayModal = () => {
   const activeModal = useAppSelector(selectActiveModal);
   const visible = activeModal === "mayday";
 
+  if (!visible) return null;
+
   return (
     <div
-      aria-hidden={!visible}
+      aria-hidden={false}
       className={[
         "fixed inset-0 z-50 flex items-center justify-center bg-black/62 p-4 backdrop-blur-sm transition-opacity",
         "[--hud-accent:#d8e2df] [--hud-bg:#050a0f] [--hud-border:#5b6870]",
         "[--hud-surface:rgba(8,13,19,0.68)] [--hud-surface-2:rgba(18,24,31,0.72)]",
         "[--hud-text:#edf2ef] [--hud-text-dim:#9ba8a8] [--hud-border-subtle:#3f4a51]",
-        visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
+        "pointer-events-auto opacity-100",
       ].join(" ")}
       onClick={() => dispatch(closeModal())}
     >

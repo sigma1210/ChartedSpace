@@ -24,3 +24,11 @@ export {
   initialMaydayState,
   type MaydayState,
 } from "./maydaySlice";
+export {
+  buildMaydayPlayerShip,
+  buildMaydayScenarioForPlayerShip,
+} from "./playerShipAdapter";
+export {
+  summarizeMaydayPlayerCombatResult,
+  type MaydayPlayerCombatResult,
+} from "./combatResult";

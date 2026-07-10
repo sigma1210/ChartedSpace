@@ -40,12 +40,17 @@ const loadCrewCharacters = async (userId: string, characterIds: readonly string[
           return [character.id, {
             name: character.name,
             avatar: sheet?.avatar ?? null,
+            skills: character.skills,
           }];
         }),
     );
   } catch (err) {
     console.warn("[GET /api/ship] Character lookup failed", err);
-    return new Map<string, { name: string; avatar: CharacterAvatar | null }>();
+    return new Map<string, {
+      name: string;
+      avatar: CharacterAvatar | null;
+      skills: Array<{ name: string; level: number }>;
+    }>();
   }
 };
 
@@ -164,6 +169,7 @@ export const GET = async () => {
           npcName:         c.npcName,
           keySkillName:    c.keySkillName,
           keySkillLevel:   c.keySkillLevel,
+          skills:          c.characterId ? charactersById.get(c.characterId)?.skills ?? [] : [],
         })),
         cargo: ship.cargo.map(lot => {
           const originWorld = lot.originLocation

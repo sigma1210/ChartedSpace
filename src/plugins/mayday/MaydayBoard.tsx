@@ -12,6 +12,24 @@ import {
 } from "react";
 import { StepForward } from "lucide-react";
 import { HudHeader, HudPanel } from "@/components/world/HudPrimitives";
+import { selectActiveShip } from "@/plugins/ship";
+import { useAppSelector } from "@/store/hooks";
+import { buildMaydayScenarioForPlayerShip } from "./playerShipAdapter";
+import { summarizeMaydayPlayerCombatResult } from "./combatResult";
+import { buildVisibleMaydayHexes, maydayPanToCenter } from "./maydayGrid";
+import {
+  advanceGrandPrixState,
+  chooseGrandPrixThrust,
+  completedGrandPrixLegs,
+  createGrandPrixState,
+  grandPrixCheckpoints,
+  grandPrixMarkerState,
+  grandPrixLandingPreview,
+  grandPrixScenario,
+  grandPrixScenarioId,
+  nextGrandPrixCheckpoint,
+  type GrandPrixState,
+} from "./grandPrixRules";
 import {
   addVector,
   advanceEncounter,
@@ -25,10 +43,12 @@ import {
   damageStatusLabel,
   defaultCustomSetup,
   encounterMissiles,
+  expandedMaydayBoardRadius,
   hexDirections,
   hexRange,
   initialObjectiveProgress,
   maydayShipTemplates,
+  maydayInitialBoardRadius,
   nextObjectiveProgress,
   objectiveResult,
   rangeForEncounter,
@@ -87,6 +107,7 @@ type MaydayHudId =
   | "setup";
 
 type MaydayWorkflowState = "setup" | "playing";
+type MaydayShipMode = "training" | "current-ship";
 
 interface MaydayHudLayout {
   visible: boolean;
@@ -106,6 +127,7 @@ interface MaydayHudDrag {
 }
 
 const maydayScenarios: MaydayScenario[] = [
+  grandPrixScenario,
   {
     id: "laser-duel",
     label: "Laser Duel",
@@ -325,7 +347,6 @@ const opponentBehaviors: { id: OpponentBehavior; label: string }[] = [
 
 const hexRadius = 28;
 const maneuverHexRadius = 26;
-const boardRadius = 18;
 const boardWidth = 760;
 const boardHeight = 560;
 const boardCenter = { x: boardWidth / 2, y: boardHeight / 2 };
@@ -412,19 +433,6 @@ const polygonPoints = (center: { x: number; y: number }, radius: number) =>
 
 const thrustLabel = (vector: MaydayVector) =>
   maneuverOptions.find((option) => sameVector(option.vector, vector))?.label ?? vectorLabel(vector);
-
-const buildHexes = () => {
-  const hexes: MaydayVector[] = [];
-  for (let q = -boardRadius; q <= boardRadius; q += 1) {
-    for (let r = -boardRadius; r <= boardRadius; r += 1) {
-      const s = -q - r;
-      if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= boardRadius) {
-        hexes.push({ q, r });
-      }
-    }
-  }
-  return hexes;
-};
 
 const maneuverHexCenter = ({ q, r }: MaydayVector) => ({
   x: 76 + maneuverHexRadius * Math.sqrt(3) * (q + r / 2),
@@ -579,7 +587,10 @@ const MaydayFloatingHud = ({
 
 export const MaydayBoard = () => {
   const boardRef = useRef<HTMLDivElement | null>(null);
+  const activeShip = useAppSelector(selectActiveShip);
   const [maydayWorkflow, setMaydayWorkflow] = useState<MaydayWorkflowState>("setup");
+  const [shipMode, setShipMode] = useState<MaydayShipMode>("training");
+  const [startedScenario, setStartedScenario] = useState<MaydayScenario | null>(null);
   const [scenarioId, setScenarioId] = useState(defaultScenario.id);
   const [customScenario, setCustomScenario] = useState<MaydayScenario>(() => buildCustomScenario(defaultCustomSetup));
   const [customSetup, setCustomSetup] = useState<MaydayCustomSetup>(defaultCustomSetup);
@@ -589,6 +600,8 @@ export const MaydayBoard = () => {
   const [pendingThrust, setPendingThrust] = useState<MaydayVector>({ q: 0, r: 0 });
   const [combatPhase, setCombatPhase] = useState<MaydayCombatPhase>("movement");
   const [objectiveProgress, setObjectiveProgress] = useState<ObjectiveProgress>(initialObjectiveProgress);
+  const [grandPrixState, setGrandPrixState] = useState<GrandPrixState | null>(null);
+  const [raceEvents, setRaceEvents] = useState<MaydayOrdnanceEvent[]>([]);
   const [opponentBehavior, setOpponentBehavior] = useState<OpponentBehavior>("coast");
   const [selectedLaserTargetId, setSelectedLaserTargetId] = useState<string>("");
   const [turnHistory, setTurnHistory] = useState<MaydayTurnHistoryEntry[]>([]);
@@ -599,11 +612,28 @@ export const MaydayBoard = () => {
   const [drag, setDrag] = useState<BoardDrag | null>(null);
   const [hudViewport, setHudViewport] = useState<HudSize>({ width: 0, height: 0 });
   const [hudLayouts, setHudLayouts] = useState<Record<MaydayHudId, MaydayHudLayout>>(defaultMaydayHudLayouts);
-  const hexes = useMemo(() => buildHexes(), []);
+  const [boardRadius, setBoardRadius] = useState(maydayInitialBoardRadius);
+  const hexes = useMemo(() => buildVisibleMaydayHexes({
+    width: boardWidth,
+    height: boardHeight,
+    origin: boardCenter,
+    pan,
+    hexRadius,
+    boardRadius,
+    padding: hexRadius * 2.5,
+  }), [boardRadius, pan]);
   const selectedScenario = scenarioId === customScenarioId
     ? customScenario
     : maydayScenarios.find((scenario) => scenario.id === scenarioId) ?? defaultScenario;
   const isCustomScenario = scenarioId === customScenarioId;
+  const currentShipScenario = activeShip
+    ? buildMaydayScenarioForPlayerShip(selectedScenario, activeShip)
+    : null;
+  const currentShipUnavailableReason = !activeShip
+    ? "No current ship available."
+    : !currentShipScenario
+      ? `${activeShip.type} is not supported in Mayday yet.`
+      : null;
   const playerShip = encounter.ships.find((ship) => ship.side === "player") ?? null;
   const primaryContact = encounter.ships.find((ship) => ship.side === "opponent") ?? null;
   const effectivePendingThrust = playerShip && shipCanThrust(playerShip) ? pendingThrust : { q: 0, r: 0 };
@@ -681,6 +711,7 @@ export const MaydayBoard = () => {
         : "Steady"
     : null;
   const latestEvents = [
+    ...raceEvents.slice(0, 4),
     ...laserLog.slice(0, 3).map((entry) => ({
       id: `laser:${entry.id}`,
       label: `${entry.phase} ${entry.attacker}: ${entry.hit ? "hit" : "miss"} ${entry.target} ${entry.adjustedRoll}${entry.hit ? ` ${entry.targetType === "missile" ? "Destroyed" : damageResultLabel(entry.damageResult)}` : ""}`,
@@ -698,7 +729,7 @@ export const MaydayBoard = () => {
     ...laserLog.slice(0, 4).map((entry) => ({
       id: `laser-detail:${entry.id}`,
       label: `T${entry.turn} ${entry.phase} ${entry.attacker} -> ${entry.target}`,
-      detail: `2D ${entry.roll} + R${entry.modifier} = ${entry.adjustedRoll} ${entry.hit ? "hit" : "miss"}${entry.damageRoll !== null ? `; dmg ${entry.damageRoll} ${damageResultLabel(entry.damageResult)}` : ""}`,
+      detail: `2D ${entry.roll} ${entry.modifier >= 0 ? "+" : "-"} DM${Math.abs(entry.modifier)} = ${entry.adjustedRoll} ${entry.hit ? "hit" : "miss"}${entry.damageRoll !== null ? `; dmg ${entry.damageRoll} ${damageResultLabel(entry.damageResult)}` : ""}`,
     })),
     ...missileLog
       .filter((entry) => entry.detail)
@@ -709,9 +740,27 @@ export const MaydayBoard = () => {
         detail: entry.detail ?? "",
       })),
   ].slice(0, 6);
-  const objective = objectiveResult(selectedScenario, encounter, objectiveProgress);
+  const isGrandPrix = selectedScenario.id === grandPrixScenarioId;
+  const playerRaceProgress = grandPrixState?.racers.find((racer) => racer.side === "player") ?? null;
+  const playerRaceCheckpoint = playerShip && grandPrixState
+    ? nextGrandPrixCheckpoint(grandPrixState, playerShip.id)
+    : null;
+  const raceLandingPreview = isGrandPrix && playerShip && playerRaceCheckpoint
+    ? grandPrixLandingPreview(playerShip, effectivePendingThrust, playerRaceCheckpoint)
+    : null;
+  const objective = isGrandPrix && grandPrixState
+    ? {
+        status: grandPrixState.winner === "player" ? "success" as const : grandPrixState.winner ? "failed" as const : "in-progress" as const,
+        progress: grandPrixState.winner
+          ? grandPrixState.winner === "player" ? "Grand Prix won" : "Opponent won the Grand Prix"
+          : `Next: ${playerRaceCheckpoint?.label ?? "Finish"} · ${Math.max(0, (playerRaceProgress?.nextCheckpointIndex ?? 1) - 1)}/4 landings`,
+      }
+    : objectiveResult(selectedScenario, encounter, objectiveProgress);
   const scenarioActive = maydayWorkflow === "playing";
   const scenarioComplete = scenarioActive && objective.status !== "in-progress";
+  const currentShipCombatResult = shipMode === "current-ship" && startedScenario
+    ? summarizeMaydayPlayerCombatResult(startedScenario, encounter, objective.status)
+    : null;
   const currentAction = !scenarioActive
     ? {
         label: "Scenario setup",
@@ -770,16 +819,34 @@ export const MaydayBoard = () => {
     setHudLayouts(defaultMaydayHudLayouts);
   }, []);
 
+  const expandBoardToFitEncounter = (nextEncounter: MaydayEncounter) => {
+    const positions = [
+      ...nextEncounter.ships.flatMap((ship) => [
+        ship.position,
+        addVector(ship.position, ship.velocity),
+      ]),
+      ...encounterMissiles(nextEncounter).flatMap((missile) => [
+        missile.position,
+        addVector(missile.position, missile.velocity),
+      ]),
+    ];
+
+    setBoardRadius((currentRadius) => expandedMaydayBoardRadius(currentRadius, positions));
+  };
+
   const resetEncounter = (scenario: MaydayScenario = selectedScenario) => {
     setEncounter(scenario.encounter);
     setPendingThrust({ q: 0, r: 0 });
     setCombatPhase("movement");
     setObjectiveProgress(initialObjectiveProgress());
+    setGrandPrixState(scenario.id === grandPrixScenarioId ? createGrandPrixState(scenario.encounter) : null);
+    setRaceEvents([]);
     setSelectedLaserTargetId("");
     setTurnHistory([]);
     setLaserLog([]);
     setMissileLog([]);
     setActiveSandShipIds([]);
+    setBoardRadius(maydayInitialBoardRadius);
     setPan({ x: 0, y: 0 });
     setDrag(null);
   };
@@ -789,6 +856,7 @@ export const MaydayBoard = () => {
       ? customScenario
       : maydayScenarios.find((item) => item.id === nextScenarioId) ?? defaultScenario;
     setScenarioId(scenario.id);
+    setStartedScenario(null);
     setMaydayWorkflow("setup");
     resetEncounter(scenario);
   };
@@ -810,9 +878,17 @@ export const MaydayBoard = () => {
   };
 
   const startCustomScenario = () => {
-    const scenario = buildCustomScenario(customSetup);
+    const trainingScenario = buildCustomScenario(customSetup);
+    const scenario = shipMode === "current-ship"
+      ? activeShip
+        ? buildMaydayScenarioForPlayerShip(trainingScenario, activeShip)
+        : null
+      : trainingScenario;
+    if (!scenario) return;
+
     setCustomScenario(scenario);
     setScenarioId(customScenarioId);
+    setStartedScenario(scenario);
     resetEncounter(scenario);
     setMaydayWorkflow("playing");
   };
@@ -822,12 +898,17 @@ export const MaydayBoard = () => {
       startCustomScenario();
       return;
     }
-    resetEncounter(selectedScenario);
+
+    const scenario = shipMode === "current-ship" ? currentShipScenario : selectedScenario;
+    if (!scenario) return;
+
+    setStartedScenario(scenario);
+    resetEncounter(scenario);
     setMaydayWorkflow("playing");
   };
 
   const restartScenario = () => {
-    resetEncounter(selectedScenario);
+    resetEncounter(startedScenario ?? selectedScenario);
     setMaydayWorkflow("playing");
   };
 
@@ -861,6 +942,11 @@ export const MaydayBoard = () => {
     if (drag?.pointerId === event.pointerId) setDrag(null);
   };
 
+  const centerBoardOn = (position: MaydayVector) => {
+    setPan(maydayPanToCenter(position, { width: boardWidth, height: boardHeight }, boardCenter, hexRadius));
+    setDrag(null);
+  };
+
   const advanceTurn = () => {
     if (!scenarioActive || scenarioComplete || combatPhase !== "movement") return;
 
@@ -872,7 +958,12 @@ export const MaydayBoard = () => {
           r: playerBefore.velocity.r + (shipCanThrust(playerBefore) ? pendingThrust.r : 0),
         }
       : null;
-    const opponentThrust = playerBefore && opponentBefore && playerProjectedVelocity
+    const opponentRaceCheckpoint = opponentBefore && grandPrixState
+      ? nextGrandPrixCheckpoint(grandPrixState, opponentBefore.id)
+      : null;
+    const opponentThrust = isGrandPrix && opponentBefore && opponentRaceCheckpoint
+      ? { vector: chooseGrandPrixThrust(opponentBefore, opponentRaceCheckpoint), label: "Race" }
+      : playerBefore && opponentBefore && playerProjectedVelocity
       ? chooseOpponentThrust({
           behavior: opponentBehavior,
           opponent: opponentBefore,
@@ -889,10 +980,30 @@ export const MaydayBoard = () => {
       new Set(activeSandShipIds),
     );
     const nextProgress = nextObjectiveProgress(selectedScenario, nextEncounter, objectiveProgress);
-    const nextObjective = objectiveResult(selectedScenario, nextEncounter, nextProgress);
+    const nextRaceState = isGrandPrix && grandPrixState ? advanceGrandPrixState(grandPrixState, nextEncounter) : null;
+    const completedRaceLegs = nextRaceState && grandPrixState
+      ? completedGrandPrixLegs(grandPrixState, nextRaceState)
+      : [];
+    const nextObjective = nextRaceState
+      ? { status: nextRaceState.winner === "player" ? "success" as const : nextRaceState.winner ? "failed" as const : "in-progress" as const }
+      : objectiveResult(selectedScenario, nextEncounter, nextProgress);
     const playerAfter = nextEncounter.ships.find((ship) => ship.side === "player") ?? null;
+    expandBoardToFitEncounter(nextEncounter);
     setEncounter(nextEncounter);
     setObjectiveProgress(nextProgress);
+    if (nextRaceState) setGrandPrixState(nextRaceState);
+    if (completedRaceLegs.length > 0) {
+      setRaceEvents((currentEvents) => [
+        ...completedRaceLegs.map((event) => ({
+          id: `race:${nextEncounter.turn}:${event.shipId}:${event.checkpoint.id}`,
+          turn: nextEncounter.turn,
+          label: event.side === "player"
+            ? `Landed at ${event.checkpoint.label}${event.nextCheckpoint ? ` — next destination ${event.nextCheckpoint.label}` : " — race complete"}`
+            : `Opponent landed at ${event.checkpoint.label}`,
+        })),
+        ...currentEvents,
+      ].slice(0, 8));
+    }
     setTurnHistory((currentHistory) => [
       {
         turn: encounter.turn,
@@ -923,12 +1034,21 @@ export const MaydayBoard = () => {
     }
     setActiveSandShipIds([]);
     setPendingThrust({ q: 0, r: 0 });
-    setCombatPhase("laser");
+    setCombatPhase(isGrandPrix ? "movement" : "laser");
   };
 
   const chooseThrust = (direction: MaydayVector) => {
     if (!scenarioActive) return;
     if (playerShip && !shipCanThrust(playerShip)) return;
+    if (playerShip) {
+      const projectedDestination = addVector(
+        playerShip.position,
+        addVector(playerShip.velocity, direction),
+      );
+      setBoardRadius((currentRadius) =>
+        expandedMaydayBoardRadius(currentRadius, [projectedDestination])
+      );
+    }
     setPendingThrust(direction);
   };
 
@@ -1078,6 +1198,35 @@ export const MaydayBoard = () => {
                   {(hex.q === 0 && hex.r === 0) && (
                     <circle cx={center.x} cy={center.y} r="2" fill="rgba(216,226,223,0.55)" />
                   )}
+                </g>
+              );
+            })}
+
+            {isGrandPrix && grandPrixCheckpoints.slice(0, 4).map((checkpoint, checkpointIndex) => {
+              const center = axialToPixel(checkpoint.position);
+              const marker = grandPrixState
+                ? grandPrixMarkerState(grandPrixState, checkpointIndex)
+                : { completed: checkpointIndex === 0, playerTarget: false, opponentTarget: false };
+              return (
+                <g key={checkpoint.id}>
+                  {marker.playerTarget && (
+                    <circle cx={center.x} cy={center.y} r="17" fill="none" stroke="#a7f3d0" strokeWidth="2" strokeDasharray="4 3" />
+                  )}
+                  {marker.opponentTarget && (
+                    <circle cx={center.x} cy={center.y} r="14" fill="none" stroke="#fca5a5" strokeWidth="1.5" strokeDasharray="2 3" />
+                  )}
+                  <circle
+                    cx={center.x}
+                    cy={center.y}
+                    r="11"
+                    fill={marker.completed ? "rgba(52,211,153,0.24)" : "rgba(125,211,252,0.20)"}
+                    stroke={marker.completed ? "#a7f3d0" : "#bae6fd"}
+                    strokeWidth="2"
+                  />
+                  {marker.completed && <path d={`M ${center.x - 5} ${center.y} l 3 3 l 7 -7`} fill="none" stroke="#d1fae5" strokeWidth="2" />}
+                  <text x={center.x} y={center.y - 16} textAnchor="middle" className="fill-(--hud-text)" fontSize="9" letterSpacing="0">
+                    {checkpoint.label}
+                  </text>
                 </g>
               );
             })}
@@ -1405,7 +1554,7 @@ export const MaydayBoard = () => {
             </div>
             {!scenarioActive && (
               <div className="flex flex-col gap-1">
-                <label className="flex flex-col gap-1">
+                {!isGrandPrix && <label className="flex flex-col gap-1">
                   <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Scenario</span>
                   <select
                     value={scenarioId}
@@ -1419,7 +1568,47 @@ export const MaydayBoard = () => {
                     ))}
                     <option value={customScenarioId}>Custom</option>
                   </select>
-                </label>
+                </label>}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Ship</span>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setShipMode("training")}
+                      className={[
+                        "h-7 border text-[8px] transition-colors",
+                        shipMode === "training"
+                          ? "border-(--hud-accent) bg-(--hud-accent)/10 text-(--hud-text)"
+                          : "border-(--hud-border-subtle) text-(--hud-text-dim) hover:border-(--hud-accent)",
+                      ].join(" ")}
+                    >
+                      Training
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShipMode("current-ship")}
+                      disabled={!currentShipScenario}
+                      className={[
+                        "h-7 border text-[8px] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                        shipMode === "current-ship"
+                          ? "border-(--hud-accent) bg-(--hud-accent)/10 text-(--hud-text)"
+                          : "border-(--hud-border-subtle) text-(--hud-text-dim) hover:border-(--hud-accent)",
+                      ].join(" ")}
+                    >
+                      Current Ship
+                    </button>
+                  </div>
+                  {shipMode === "current-ship" && activeShip && currentShipScenario && (
+                    <div className="normal-case tracking-normal text-(--hud-accent)">
+                      {activeShip.name} · {activeShip.type}
+                    </div>
+                  )}
+                  {currentShipUnavailableReason && (
+                    <div className="normal-case tracking-normal text-(--hud-text-dim)">
+                      {currentShipUnavailableReason}
+                    </div>
+                  )}
+                </div>
                 <label className="flex flex-col gap-1">
                   <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Opponent tactic</span>
                   <select
@@ -1437,7 +1626,8 @@ export const MaydayBoard = () => {
                 <button
                   type="button"
                   onClick={startSelectedScenario}
-                  className="h-8 border border-(--hud-accent) bg-(--hud-accent)/10 text-[8px] font-bold text-(--hud-text) transition-colors hover:bg-(--hud-accent)/20"
+                  disabled={shipMode === "current-ship" && !currentShipScenario}
+                  className="h-8 border border-(--hud-accent) bg-(--hud-accent)/10 text-[8px] font-bold text-(--hud-text) transition-colors hover:bg-(--hud-accent)/20 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Start Scenario
                 </button>
@@ -1445,6 +1635,11 @@ export const MaydayBoard = () => {
             )}
             {scenarioActive && !scenarioComplete && combatPhase === "movement" && (
               <div className="flex flex-col gap-1">
+                {isGrandPrix && raceEvents.find((event) => event.label.startsWith("Landed at")) && (
+                  <div className="border border-emerald-200/60 bg-emerald-200/10 px-2 py-1 normal-case tracking-normal text-emerald-100">
+                    {raceEvents.find((event) => event.label.startsWith("Landed at"))?.label}
+                  </div>
+                )}
                 <svg
                   viewBox="0 0 152 152"
                   className="mx-auto block h-28 w-28"
@@ -1492,9 +1687,42 @@ export const MaydayBoard = () => {
                 <div className="grid grid-cols-2 gap-x-2 text-(--hud-text-dim)">
                   <span>Thrust</span>
                   <span className="text-right text-(--hud-accent)">{thrustLabel(effectivePendingThrust)}</span>
-                  <span>Projected range</span>
-                  <span className="text-right text-(--hud-text)">{projectedContactRange ?? "-"}</span>
+                  <span>{isGrandPrix ? "Next world" : "Projected range"}</span>
+                  <span className="text-right text-(--hud-text)">{isGrandPrix ? playerRaceCheckpoint?.label ?? "Finish" : projectedContactRange ?? "-"}</span>
+                  {isGrandPrix && <><span>Progress</span><span className="text-right text-(--hud-accent)">{Math.max(0, (playerRaceProgress?.nextCheckpointIndex ?? 1) - 1)}/4</span></>}
+                  {raceLandingPreview && <>
+                    <span>Range</span><span className="text-right text-(--hud-text)">{raceLandingPreview.currentRange}</span>
+                    <span>Velocity</span><span className="text-right text-(--hud-text)">{vectorLabel(playerShip?.velocity ?? { q: 0, r: 0 })}</span>
+                    <span>Projected range</span><span className="text-right text-(--hud-text)">{raceLandingPreview.projectedRange}</span>
+                    <span>Arrival velocity</span><span className="text-right text-(--hud-text)">{vectorLabel(raceLandingPreview.projectedVelocity)}</span>
+                  </>}
                 </div>
+                {raceLandingPreview?.status === "landing-confirmed" && (
+                  <div className="border border-emerald-200/60 bg-emerald-200/10 px-2 py-1 text-center font-bold text-emerald-100">Landing confirmed</div>
+                )}
+                {raceLandingPreview?.status === "too-fast" && (
+                  <div className="border border-yellow-200/60 bg-yellow-200/10 px-2 py-1 text-center font-bold text-yellow-100">Too fast to land</div>
+                )}
+                {isGrandPrix && (
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => playerRaceCheckpoint && centerBoardOn(playerRaceCheckpoint.position)}
+                      disabled={!playerRaceCheckpoint}
+                      className="h-7 border border-(--hud-border) text-[8px] text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text) disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Center Next World
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => playerShip && centerBoardOn(playerShip.position)}
+                      disabled={!playerShip}
+                      className="h-7 border border-(--hud-border) text-[8px] text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text) disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Center Ship
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={advanceTurn}
@@ -1507,6 +1735,14 @@ export const MaydayBoard = () => {
             )}
             {scenarioActive && !scenarioComplete && combatPhase === "laser" && (
               <div className="flex flex-col gap-1">
+                <div className="grid grid-cols-2 gap-x-2 text-(--hud-text-dim)">
+                  <span>Operator</span>
+                  <span className="truncate text-right text-(--hud-text)">
+                    {playerShip?.gunneryOperator ?? "No qualified crew"}
+                  </span>
+                  <span>Gunnery</span>
+                  <span className="text-right text-(--hud-accent)">+{Math.max(0, playerShip?.gunnery ?? 0)}</span>
+                </div>
                 <label className="flex flex-col gap-1">
                   <span className="text-[7px] tracking-widest text-(--hud-text-dim)">Target</span>
                   <select
@@ -1566,21 +1802,51 @@ export const MaydayBoard = () => {
               </div>
             )}
             {scenarioComplete && (
-              <div className="grid grid-cols-2 gap-1">
-                <button
-                  type="button"
-                  onClick={restartScenario}
-                  className="h-7 border border-(--hud-border) text-[8px] text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
-                >
-                  Restart
-                </button>
-                <button
-                  type="button"
-                  onClick={chooseNewScenario}
-                  className="h-7 border border-(--hud-border) text-[8px] text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
-                >
-                  New Scenario
-                </button>
+              <div className="flex flex-col gap-1">
+                {currentShipCombatResult && (
+                  <div className="border border-(--hud-border-subtle) bg-(--hud-surface)/60 p-1.5 text-(--hud-text-dim)">
+                    <div className="mb-1 text-[7px] tracking-widest text-(--hud-text)">
+                      Combat Result
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 normal-case tracking-normal">
+                      <span>Outcome</span>
+                      <span className={currentShipCombatResult.outcome === "victory" ? "text-emerald-200" : "text-red-200"}>
+                        {currentShipCombatResult.outcome}
+                      </span>
+                      <span>Missiles used</span>
+                      <span>{currentShipCombatResult.missilesConsumed}</span>
+                      <span>Sand used</span>
+                      <span>{currentShipCombatResult.sandConsumed}</span>
+                      <span>Damage</span>
+                      <span>
+                        {currentShipCombatResult.destroyed
+                          ? "Destroyed"
+                          : [
+                              currentShipCombatResult.damageSustained.mDriveDisabled ? "M-drive" : null,
+                              currentShipCombatResult.damageSustained.jDriveDisabled ? "J-drive" : null,
+                              currentShipCombatResult.damageSustained.weaponsDisabled ? "Weapons" : null,
+                              currentShipCombatResult.damageSustained.computerDisabled ? "Computer" : null,
+                            ].filter(Boolean).join(", ") || "None"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={restartScenario}
+                    className="h-7 border border-(--hud-border) text-[8px] text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+                  >
+                    Restart
+                  </button>
+                  <button
+                    type="button"
+                    onClick={chooseNewScenario}
+                    className="h-7 border border-(--hud-border) text-[8px] text-(--hud-text-dim) transition-colors hover:border-(--hud-accent) hover:text-(--hud-text)"
+                  >
+                    New Scenario
+                  </button>
+                </div>
               </div>
             )}
           </div>
