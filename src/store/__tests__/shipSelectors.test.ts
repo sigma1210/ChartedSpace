@@ -21,6 +21,7 @@ import { initialCharactersState } from "../../plugins/characters";
 import { initialDemographicsState } from "../../plugins/demographics";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
+import { initialMaydayState } from "../../plugins/mayday";
 import { initialShipPluginState } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
@@ -76,6 +77,7 @@ const makeRoot = (ship: ShipSummary | null): RootState => ({
     demographics: initialDemographicsState,
     economy: initialEconomyState,
     expenseScenario: initialExpenseScenarioState,
+    mayday: initialMaydayState,
     shipPlugin: { ...initialShipPluginState, ship },
     navigation: initialNavigationState,
     stayInLocation: initialStayInLocationState,

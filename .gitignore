@@ -4,6 +4,8 @@
 /books
 /node_modules
 /worlds
+/mayday
+/tmp
 /public/generated/*
 /.pnp
 .pnp.*

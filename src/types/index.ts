@@ -7,7 +7,8 @@ export type ModalType =
   | "userProfile"
   | "crewManagement"
   | "characterGeneration"
-  | "shipCrewAssignment";
+  | "shipCrewAssignment"
+  | "mayday";
 
 export type MapView = "galaxy" | "sector" | "subsector";
 
