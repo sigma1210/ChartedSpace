@@ -7,7 +7,7 @@ import {
 } from "./maydayRules";
 
 export const rescueScenarioId = "rescue-intercept";
-export const rescueTurnLimit = 12;
+export const rescueTurnLimit = 15;
 
 export interface RescueResult {
   status: "in-progress" | "success" | "failed";
@@ -16,6 +16,42 @@ export interface RescueResult {
   turnsRemaining: number;
   progress: string;
 }
+
+export interface RescueDockingProgress {
+  matchedTurns: number;
+}
+
+export const initialRescueDockingProgress = (): RescueDockingProgress => ({ matchedTurns: 0 });
+
+export const nextRescueDockingProgress = (
+  encounter: MaydayEncounter,
+  current: RescueDockingProgress,
+): RescueDockingProgress => {
+  const player = encounter.ships.find((ship) => ship.side === "player");
+  const target = encounter.ships.find((ship) => ship.side === "opponent");
+  const matched = Boolean(
+    player
+    && target
+    && sameVector(player.position, target.position)
+    && sameVector(player.velocity, target.velocity),
+  );
+  return { matchedTurns: matched ? current.matchedTurns + 1 : 0 };
+};
+
+export const rescueDockingResult = (
+  encounter: MaydayEncounter,
+  progress: RescueDockingProgress,
+): RescueResult => {
+  const result = rescueResult(encounter);
+  if (result.status === "failed") return result;
+  if (progress.matchedTurns >= 2) {
+    return { ...result, status: "success", progress: "Docking transfer complete" };
+  }
+  if (progress.matchedTurns === 1) {
+    return { ...result, status: "in-progress", progress: "Match established; hold for one more turn" };
+  }
+  return { ...result, status: "in-progress" };
+};
 
 export const rescueScenario: MaydayScenario = {
   id: rescueScenarioId,

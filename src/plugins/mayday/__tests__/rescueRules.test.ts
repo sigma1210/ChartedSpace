@@ -1,5 +1,12 @@
 import { advanceEncounter } from "../maydayRules";
-import { rescueResult, rescueScenario, rescueTurnLimit } from "../rescueRules";
+import {
+  initialRescueDockingProgress,
+  nextRescueDockingProgress,
+  rescueDockingResult,
+  rescueResult,
+  rescueScenario,
+  rescueTurnLimit,
+} from "../rescueRules";
 
 describe("rescueRules", () => {
   it("defines an unarmed drifting rescue scenario", () => {
@@ -21,7 +28,7 @@ describe("rescueRules", () => {
     expect(rescueResult(encounter)).toMatchObject({ status: "success", range: 0, relativeVelocity: 0 });
   });
 
-  it("fails after the twelve-turn rescue window", () => {
+  it("fails after the fifteen-turn rescue window", () => {
     const encounter = structuredClone(rescueScenario.encounter);
     encounter.turn = rescueTurnLimit + 1;
     expect(rescueResult(encounter)).toMatchObject({ status: "failed", turnsRemaining: 0 });
@@ -38,5 +45,37 @@ describe("rescueRules", () => {
 
     expect(advanced.ships.find((ship) => ship.side === "opponent")?.velocity).toEqual(target.velocity);
     expect(rescueResult(advanced).status).toBe("success");
+  });
+
+  it("requires the velocity match to be held for an additional docking turn", () => {
+    const encounter = structuredClone(rescueScenario.encounter);
+    const player = encounter.ships.find((ship) => ship.side === "player")!;
+    const target = encounter.ships.find((ship) => ship.side === "opponent")!;
+    player.position = { ...target.position };
+    player.velocity = { ...target.velocity };
+
+    const established = nextRescueDockingProgress(encounter, initialRescueDockingProgress());
+    expect(rescueDockingResult(encounter, established)).toMatchObject({
+      status: "in-progress",
+      progress: "Match established; hold for one more turn",
+    });
+
+    const held = nextRescueDockingProgress(encounter, established);
+    expect(rescueDockingResult(encounter, held)).toMatchObject({
+      status: "success",
+      progress: "Docking transfer complete",
+    });
+  });
+
+  it("resets docking progress when position or velocity separates", () => {
+    const encounter = structuredClone(rescueScenario.encounter);
+    const player = encounter.ships.find((ship) => ship.side === "player")!;
+    const target = encounter.ships.find((ship) => ship.side === "opponent")!;
+    player.position = { ...target.position };
+    player.velocity = { ...target.velocity };
+    const established = nextRescueDockingProgress(encounter, initialRescueDockingProgress());
+
+    player.velocity.q += 1;
+    expect(nextRescueDockingProgress(encounter, established)).toEqual({ matchedTurns: 0 });
   });
 });

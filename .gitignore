@@ -5,6 +5,7 @@
 /node_modules
 /worlds
 /mayday
+/AHL
 /tmp
 /public/generated/*
 /.pnp

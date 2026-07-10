@@ -30,7 +30,14 @@ import {
   nextGrandPrixCheckpoint,
   type GrandPrixState,
 } from "./grandPrixRules";
-import { rescueResult, rescueScenario, rescueScenarioId } from "./rescueRules";
+import {
+  initialRescueDockingProgress,
+  nextRescueDockingProgress,
+  rescueDockingResult,
+  rescueScenario,
+  rescueScenarioId,
+  type RescueDockingProgress,
+} from "./rescueRules";
 import {
   addVector,
   advanceEncounter,
@@ -604,6 +611,8 @@ export const MaydayBoard = () => {
   const [objectiveProgress, setObjectiveProgress] = useState<ObjectiveProgress>(initialObjectiveProgress);
   const [grandPrixState, setGrandPrixState] = useState<GrandPrixState | null>(null);
   const [raceEvents, setRaceEvents] = useState<MaydayOrdnanceEvent[]>([]);
+  const [rescueDockingProgress, setRescueDockingProgress] = useState<RescueDockingProgress>(initialRescueDockingProgress);
+  const [rescueNotice, setRescueNotice] = useState<string | null>(null);
   const [opponentBehavior, setOpponentBehavior] = useState<OpponentBehavior>("coast");
   const [selectedLaserTargetId, setSelectedLaserTargetId] = useState<string>("");
   const [turnHistory, setTurnHistory] = useState<MaydayTurnHistoryEntry[]>([]);
@@ -751,9 +760,9 @@ export const MaydayBoard = () => {
   const raceLandingPreview = isGrandPrix && playerShip && playerRaceCheckpoint
     ? grandPrixLandingPreview(playerShip, effectivePendingThrust, playerRaceCheckpoint)
     : null;
-  const currentRescueResult = isRescue ? rescueResult(encounter) : null;
-  const projectedRescueResult = isRescue && playerShip && primaryContact && projectedPlayerVelocity
-    ? rescueResult({
+  const currentRescueResult = isRescue ? rescueDockingResult(encounter, rescueDockingProgress) : null;
+  const projectedRescueEncounter = isRescue && playerShip && primaryContact && projectedPlayerVelocity
+    ? {
         ...encounter,
         turn: encounter.turn + 1,
         ships: encounter.ships.map((ship) => ship.side === "player"
@@ -761,7 +770,13 @@ export const MaydayBoard = () => {
           : ship.side === "opponent"
             ? { ...ship, position: addVector(ship.position, ship.velocity) }
             : ship),
-      })
+      }
+    : null;
+  const projectedRescueProgress = projectedRescueEncounter
+    ? nextRescueDockingProgress(projectedRescueEncounter, rescueDockingProgress)
+    : null;
+  const projectedRescueResult = projectedRescueEncounter && projectedRescueProgress
+    ? rescueDockingResult(projectedRescueEncounter, projectedRescueProgress)
     : null;
   const objective = isGrandPrix && grandPrixState
     ? {
@@ -856,6 +871,8 @@ export const MaydayBoard = () => {
     setObjectiveProgress(initialObjectiveProgress());
     setGrandPrixState(scenario.id === grandPrixScenarioId ? createGrandPrixState(scenario.encounter) : null);
     setRaceEvents([]);
+    setRescueDockingProgress(initialRescueDockingProgress());
+    setRescueNotice(null);
     setSelectedLaserTargetId("");
     setTurnHistory([]);
     setLaserLog([]);
@@ -998,11 +1015,14 @@ export const MaydayBoard = () => {
     );
     const nextProgress = nextObjectiveProgress(selectedScenario, nextEncounter, objectiveProgress);
     const nextRaceState = isGrandPrix && grandPrixState ? advanceGrandPrixState(grandPrixState, nextEncounter) : null;
+    const nextDockingProgress = isRescue
+      ? nextRescueDockingProgress(nextEncounter, rescueDockingProgress)
+      : rescueDockingProgress;
     const completedRaceLegs = nextRaceState && grandPrixState
       ? completedGrandPrixLegs(grandPrixState, nextRaceState)
       : [];
     const nextObjective = isRescue
-      ? rescueResult(nextEncounter)
+      ? rescueDockingResult(nextEncounter, nextDockingProgress)
       : nextRaceState
       ? { status: nextRaceState.winner === "player" ? "success" as const : nextRaceState.winner ? "failed" as const : "in-progress" as const }
       : objectiveResult(selectedScenario, nextEncounter, nextProgress);
@@ -1011,6 +1031,14 @@ export const MaydayBoard = () => {
     setEncounter(nextEncounter);
     setObjectiveProgress(nextProgress);
     if (nextRaceState) setGrandPrixState(nextRaceState);
+    if (isRescue) {
+      setRescueDockingProgress(nextDockingProgress);
+      setRescueNotice(
+        rescueDockingProgress.matchedTurns > 0 && nextDockingProgress.matchedTurns === 0
+          ? "Docking match lost — re-match position and velocity"
+          : null,
+      );
+    }
     if (completedRaceLegs.length > 0) {
       setRaceEvents((currentEvents) => [
         ...completedRaceLegs.map((event) => ({
@@ -1731,8 +1759,17 @@ export const MaydayBoard = () => {
                 {raceLandingPreview?.status === "too-fast" && (
                   <div className="border border-yellow-200/60 bg-yellow-200/10 px-2 py-1 text-center font-bold text-yellow-100">Too fast to land</div>
                 )}
+                {currentRescueResult?.progress === "Match established; hold for one more turn" && (
+                  <div className="border border-cyan-200/60 bg-cyan-200/10 px-2 py-1 text-center font-bold text-cyan-100">Match established — hold for one more turn</div>
+                )}
+                {rescueNotice && (
+                  <div className="border border-yellow-200/60 bg-yellow-200/10 px-2 py-1 text-center font-bold text-yellow-100">{rescueNotice}</div>
+                )}
+                {projectedRescueResult && projectedRescueProgress?.matchedTurns === 1 && rescueDockingProgress.matchedTurns === 0 && (
+                  <div className="border border-cyan-200/60 bg-cyan-200/10 px-2 py-1 text-center font-bold text-cyan-100">Match will be established</div>
+                )}
                 {projectedRescueResult?.status === "success" && (
-                  <div className="border border-emerald-200/60 bg-emerald-200/10 px-2 py-1 text-center font-bold text-emerald-100">Rescue Match Confirmed</div>
+                  <div className="border border-emerald-200/60 bg-emerald-200/10 px-2 py-1 text-center font-bold text-emerald-100">Docking will complete</div>
                 )}
                 {isGrandPrix && (
                   <div className="grid grid-cols-2 gap-1">
