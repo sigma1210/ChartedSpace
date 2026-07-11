@@ -2,10 +2,24 @@
 
 import { Canvas } from "@react-three/fiber";
 import { Html, OrthographicCamera } from "@react-three/drei";
+import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { adjacentObjectives, closedDoorsAdjacentTo, coverProtection, grenadeBlastCells, pathContains, pointKey, rangedEnemies, reachableMovement, validGrenadeTargets } from "./geometry";
-import { openDoor, previewAttack, previewGrenadeTarget, previewMove, previewSecureObjective, selectPlayerCombatant, setHoveredDestination } from "./slice";
+import { adjustCameraZoom, openDoor, panCameraBy, previewAttack, previewGrenadeTarget, previewMove, previewSecureObjective, rotateCameraBy, selectPlayerCombatant, setHoveredDestination } from "./slice";
 import type { DoorSegment, WallSegment } from "./types";
+import { equipmentVisualFor } from "./equipmentPresentation";
+
+const WeaponMesh = ({ category, facing }: { category: ReturnType<typeof equipmentVisualFor>["weaponCategory"]; facing: "north" | "east" | "south" | "west" }) => {
+  const rotationY = facing === "east" ? -Math.PI / 2 : facing === "south" ? Math.PI : facing === "west" ? Math.PI / 2 : 0;
+  const dimensions: [number, number, number] = category === "pistol" ? [0.12, 0.12, 0.32] : category === "smg" ? [0.2, 0.17, 0.45] : category === "shotgun" ? [0.15, 0.15, 0.72] : category === "gauss-rifle" ? [0.18, 0.16, 0.88] : [0.12, 0.13, 0.82];
+  const z = -dimensions[2] / 2 + 0.02;
+  const color = category === "laser-rifle" ? "#22d3ee" : category === "gauss-rifle" ? "#94a3b8" : category === "shotgun" ? "#a16207" : "#334155";
+  return <group rotation={[0, rotationY, 0]}>
+    <mesh position={[0.25, 0.56, z]} castShadow><boxGeometry args={dimensions} /><meshStandardMaterial color={color} emissive={category === "laser-rifle" ? "#0891b2" : "#000000"} emissiveIntensity={category === "laser-rifle" ? 0.8 : 0} /></mesh>
+    {category === "gauss-rifle" && <mesh position={[0.25, 0.42, -0.28]}><boxGeometry args={[0.16, 0.22, 0.18]} /><meshStandardMaterial color="#475569" /></mesh>}
+    {category === "smg" && <mesh position={[0.25, 0.43, -0.1]}><boxGeometry args={[0.13, 0.2, 0.12]} /><meshStandardMaterial color="#1e293b" /></mesh>}
+  </group>;
+};
 
 const SegmentMesh = ({ segment, width, height, color, wallHeight = 0.9, cutaway = false }: { segment: WallSegment; width: number; height: number; color: string; wallHeight?: number; cutaway?: boolean }) => {
   const horizontal = segment.from.y === segment.to.y;
@@ -31,13 +45,13 @@ const DoorMesh = ({ door, width, height, actionable, onOpen }: { door: DoorSegme
 
 const CombatScene3D = () => {
   const dispatch = useAppDispatch();
-  const { scenario, camera, status, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, maintainedTargetByCombatantId, coveringFireByTargetId } = useAppSelector((state) => state.plugins.characterCombat);
+  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, maintainedTargetByCombatantId, coveringFireByTargetId } = useAppSelector((state) => state.plugins.characterCombat);
   if (!scenario) return null;
   const span = Math.max(scenario.width, scenario.height);
-  const focusX = camera.focus ? camera.focus.x + 0.5 - scenario.width / 2 : 0;
-  const focusZ = camera.focus ? camera.focus.y + 0.5 - scenario.height / 2 : 0;
-  const cameraDirections = [[1, 1], [1, -1], [-1, -1], [-1, 1]] as const;
-  const [cameraX, cameraZ] = cameraDirections[camera.quarterTurn];
+  const focusX = (camera.focus ? camera.focus.x + 0.5 - scenario.width / 2 : 0) + camera.pan.x;
+  const focusZ = (camera.focus ? camera.focus.y + 0.5 - scenario.height / 2 : 0) + camera.pan.y;
+  const cameraX = Math.cos(camera.azimuth);
+  const cameraZ = Math.sin(camera.azimuth);
   const cameraFacingOuterWall = (wall: WallSegment) => (cameraX > 0 && wall.from.x === scenario.width && wall.to.x === scenario.width)
     || (cameraX < 0 && wall.from.x === 0 && wall.to.x === 0)
     || (cameraZ > 0 && wall.from.y === scenario.height && wall.to.y === scenario.height)
@@ -58,7 +72,7 @@ const CombatScene3D = () => {
     <color attach="background" args={["#03070a"]} />
     <ambientLight intensity={0.85} />
     <directionalLight position={[8, 14, 9]} intensity={2.2} castShadow />
-    <OrthographicCamera makeDefault position={[focusX + cameraX * span * 0.82, span * 0.9, focusZ + cameraZ * span * 0.82]} zoom={camera.zoom} near={0.1} far={100} onUpdate={(activeCamera) => activeCamera.lookAt(focusX, 0, focusZ)} />
+    <OrthographicCamera makeDefault position={[focusX + cameraX * span * 1.25 * Math.cos(camera.elevation), span * 1.25 * Math.sin(camera.elevation), focusZ + cameraZ * span * 1.25 * Math.cos(camera.elevation)]} zoom={camera.zoom} near={0.1} far={100} onUpdate={(activeCamera) => activeCamera.lookAt(focusX, 0, focusZ)} />
 
     {Array.from({ length: scenario.width }, (_, x) => Array.from({ length: scenario.height }, (_, y) => {
       const point = { x, y };
@@ -82,19 +96,22 @@ const CombatScene3D = () => {
     {scenario.doors.map((door) => <DoorMesh key={door.id} door={door} width={scenario.width} height={scenario.height} actionable={actionableDoorIds.has(door.id)} onOpen={() => dispatch(openDoor(door.id))} />)}
 
     {scenario.objects.map((object) => {
-      const position: [number, number, number] = [object.position.x + 0.5 - scenario.width / 2, object.kind === "console" ? 0.38 : 0.32, object.position.y + 0.5 - scenario.height / 2];
+      const objective = object.kind !== "cover";
+      const position: [number, number, number] = [object.position.x + 0.5 - scenario.width / 2, objective ? 0.38 : 0.32, object.position.y + 0.5 - scenario.height / 2];
       const actionable = actionableObjectiveIds.has(object.id);
       const planned = plannedObjectiveId === object.id;
-      return object.kind === "console" ? <group key={object.id} position={position} onClick={(event) => { if (actionable) { event.stopPropagation(); dispatch(previewSecureObjective(object.id)); } }}>
-        <pointLight position={[0, 0.72, 0]} color="#22d3ee" intensity={1.2} distance={2.2} />
-        <Html center position={[0, 1.02, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-cyan-300/70 bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold text-cyan-100">{object.label.toUpperCase()}</div></Html>
-        {(actionable || planned) && <mesh position={[0, -0.3, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[planned ? 0.52 : 0.45, planned ? 0.07 : 0.04, 8, 32]} /><meshBasicMaterial color={planned ? "#ecfeff" : "#22d3ee"} /></mesh>}
-        <mesh castShadow><boxGeometry args={[0.62, 0.7, 0.5]} /><meshStandardMaterial color="#0e7490" emissive="#083344" /></mesh>
-        <mesh position={[0, 0.18, -0.27]} rotation={[-0.25, 0, 0]}><boxGeometry args={[0.42, 0.25, 0.04]} /><meshStandardMaterial color="#67e8f9" emissive="#22d3ee" emissiveIntensity={0.8} /></mesh>
+      const objectiveColor = object.kind === "extraction" ? "#10b981" : object.kind === "prisoner" ? "#f59e0b" : object.kind === "control" ? "#a855f7" : "#22d3ee";
+      return objective ? <group key={object.id} position={position} onClick={(event) => { if (actionable) { event.stopPropagation(); dispatch(previewSecureObjective(object.id)); } }}>
+        {object.kind === "extraction" && <><mesh position={[0, -0.3, 0]} rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[0.46, 0.68, 32]} /><meshBasicMaterial color="#34d399" transparent opacity={0.72} /></mesh><Html center position={[0, 1.32, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border-2 border-emerald-300 bg-emerald-950/95 px-2 py-1 font-mono text-[11px] font-bold text-emerald-100">EXTRACTION ZONE · {object.position.x},{object.position.y}</div></Html></>}
+        <pointLight position={[0, 0.72, 0]} color={objectiveColor} intensity={1.2} distance={2.2} />
+        {object.kind !== "extraction" && <Html center position={[0, 1.02, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold text-cyan-100" style={{ borderColor: objectiveColor }}>{object.label.toUpperCase()}{object.completed ? " · RELEASED" : ""}</div></Html>}
+        {(actionable || planned) && <mesh position={[0, -0.3, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[planned ? 0.52 : 0.45, planned ? 0.07 : 0.04, 8, 32]} /><meshBasicMaterial color={planned ? "#ecfeff" : objectiveColor} /></mesh>}
+        <mesh castShadow><boxGeometry args={[0.62, 0.7, 0.5]} /><meshStandardMaterial color={objectiveColor} emissive={objectiveColor} emissiveIntensity={0.25} /></mesh>
+        <mesh position={[0, 0.18, -0.27]} rotation={[-0.25, 0, 0]}><boxGeometry args={[0.42, 0.25, 0.04]} /><meshStandardMaterial color="#e2e8f0" emissive={objectiveColor} emissiveIntensity={0.8} /></mesh>
       </group> : <mesh key={object.id} position={position} castShadow receiveShadow><boxGeometry args={[0.76, 0.64, 0.76]} /><meshStandardMaterial color="#725338" roughness={0.85} /></mesh>;
     })}
 
-    {scenario.combatants.map((unit) => {
+    {scenario.combatants.filter((unit) => !unit.reinforcementTurn || unit.reinforcementTurn <= turn).map((unit) => {
       const selected = unit.id === selectedCombatantId;
       const inactive = unit.defeated;
       const color = unit.surrendered ? "#eab308" : inactive ? "#64748b" : unit.side === "player" ? "#10b981" : "#dc2626";
@@ -106,6 +123,7 @@ const CombatScene3D = () => {
       const covering = coveringCombatantIds.has(unit.id);
       const overwatched = coveredTargetIds.has(unit.id);
       const grenadeRisk = grenadeBlastKeys.has(pointKey(unit.position));
+      const equipment = equipmentVisualFor(unit);
       const facing = unit.facing === "east" ? { position: [0.34, 0.12, 0] as [number, number, number], rotation: [0, 0, -Math.PI / 2] as [number, number, number] }
         : unit.facing === "west" ? { position: [-0.34, 0.12, 0] as [number, number, number], rotation: [0, 0, Math.PI / 2] as [number, number, number] }
           : unit.facing === "south" ? { position: [0, 0.12, 0.34] as [number, number, number], rotation: [Math.PI / 2, 0, 0] as [number, number, number] }
@@ -121,8 +139,12 @@ const CombatScene3D = () => {
         {covering && <mesh position={[-0.34, 0.18, 0]}><boxGeometry args={[0.12, 0.12, 0.12]} /><meshBasicMaterial color="#facc15" /></mesh>}
         {overwatched && <mesh position={[0.34, 0.18, 0]}><boxGeometry args={[0.12, 0.12, 0.12]} /><meshBasicMaterial color="#e879f9" /></mesh>}
         {validTarget && covered && <mesh position={[0, 0.16, 0.36]}><boxGeometry args={[0.32, 0.08, 0.08]} /><meshBasicMaterial color="#f59e0b" /></mesh>}
-        <mesh position={[0, 0.38, 0]} castShadow>{unit.side === "player" ? <cylinderGeometry args={[0.2, 0.28, 0.58, 12]} /> : <boxGeometry args={[0.42, 0.58, 0.32]} />}<meshStandardMaterial color={color} roughness={0.65} /></mesh>
+        <mesh position={[0, 0.38, 0]} castShadow>{equipment.armorClass === "light" && unit.side === "player" ? <cylinderGeometry args={[0.18, 0.25, 0.58, 12]} /> : <boxGeometry args={equipment.armorClass === "battle-dress" ? [0.56, 0.66, 0.46] : equipment.armorClass === "combat" ? [0.48, 0.62, 0.4] : [0.42, 0.58, 0.32]} />}<meshStandardMaterial color={color} roughness={0.65} /></mesh>
+        {(equipment.armorClass === "combat" || equipment.armorClass === "battle-dress") && <><mesh position={[-0.34, 0.58, 0]} castShadow><boxGeometry args={[equipment.armorClass === "battle-dress" ? 0.22 : 0.16, 0.18, 0.38]} /><meshStandardMaterial color={color} /></mesh><mesh position={[0.34, 0.58, 0]} castShadow><boxGeometry args={[equipment.armorClass === "battle-dress" ? 0.22 : 0.16, 0.18, 0.38]} /><meshStandardMaterial color={color} /></mesh></>}
+        {equipment.armorClass === "flak" && <mesh position={[0, 0.42, 0]}><boxGeometry args={[0.43, 0.38, 0.35]} /><meshStandardMaterial color="#475569" transparent opacity={0.82} /></mesh>}
+        {equipment.armorClass === "battle-dress" && <mesh position={[0, 0.45, 0.3]} castShadow><boxGeometry args={[0.4, 0.5, 0.22]} /><meshStandardMaterial color="#334155" /></mesh>}
         <mesh position={[0, 0.78, 0]} castShadow><sphereGeometry args={[0.2, 16, 12]} /><meshStandardMaterial color={color} roughness={0.65} /></mesh>
+        {!inactive && <WeaponMesh category={equipment.weaponCategory} facing={unit.facing} />}
         {!inactive && <mesh position={facing.position} rotation={facing.rotation}><coneGeometry args={[0.11, 0.28, 3]} /><meshBasicMaterial color="#f8fafc" /></mesh>}
         {unit.surrendered ? <><mesh position={[-0.27, 0.72, 0]} rotation={[0, 0, 0.62]}><boxGeometry args={[0.09, 0.48, 0.09]} /><meshStandardMaterial color={color} /></mesh><mesh position={[0.27, 0.72, 0]} rotation={[0, 0, -0.62]}><boxGeometry args={[0.09, 0.48, 0.09]} /><meshStandardMaterial color={color} /></mesh></> : <><mesh position={[-0.27, 0.46, 0]} rotation={[0, 0, -0.22]}><boxGeometry args={[0.09, 0.42, 0.09]} /><meshStandardMaterial color={color} /></mesh><mesh position={[0.27, 0.46, 0]} rotation={[0, 0, 0.22]}><boxGeometry args={[0.09, 0.42, 0.09]} /><meshStandardMaterial color={color} /></mesh></>}
         {unit.woundState === "light" && <mesh position={[0.24, 0.55, 0]}><sphereGeometry args={[0.07, 8, 6]} /><meshBasicMaterial color="#fbbf24" /></mesh>}
@@ -133,6 +155,42 @@ const CombatScene3D = () => {
 
 export const CombatBoard3D = () => {
   const dispatch = useAppDispatch();
-  const grenadeTargeting = useAppSelector((state) => state.plugins.characterCombat.grenadeTargeting);
-  return <Canvas shadows frameloop="demand" dpr={[1, 1.5]} onPointerMissed={() => { if (!grenadeTargeting) dispatch(selectPlayerCombatant(null)); }}><CombatScene3D /></Canvas>;
+  const { grenadeTargeting, camera } = useAppSelector((state) => state.plugins.characterCombat);
+  const drag = useRef({ pointerId: -1, x: 0, y: 0, startX: 0, startY: 0, moved: false, captured: false, mode: "rotate" as "pan" | "rotate" });
+  const startPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 && event.button !== 2) return;
+    const rightButton = event.button === 2;
+    drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false, captured: rightButton, mode: rightButton ? "pan" : "rotate" };
+    if (rightButton) event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const continuePan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (drag.current.pointerId !== event.pointerId || event.buttons === 0) return;
+    const dx = event.clientX - drag.current.x;
+    const dy = event.clientY - drag.current.y;
+    if (!drag.current.moved && Math.abs(event.clientX - drag.current.startX) + Math.abs(event.clientY - drag.current.startY) < 4) return;
+    if (!drag.current.captured) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag.current.captured = true;
+    }
+    drag.current.x = event.clientX;
+    drag.current.y = event.clientY;
+    drag.current.moved = true;
+    if (drag.current.mode === "rotate") {
+      dispatch(rotateCameraBy({ azimuth: -dx * 0.012, elevation: dy * 0.008 }));
+    } else {
+      const cameraX = Math.cos(camera.azimuth);
+      const cameraY = Math.sin(camera.azimuth);
+      const scale = 0.7 / camera.zoom;
+      dispatch(panCameraBy({ x: (-dx * cameraY + dy * cameraX) * scale, y: (dx * cameraX + dy * cameraY) * scale }));
+    }
+  };
+  const finishPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (drag.current.pointerId !== event.pointerId) return;
+    if (drag.current.captured && event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    drag.current.pointerId = -1;
+    if (drag.current.mode === "pan") drag.current.moved = false;
+  };
+  return <div className="h-full w-full cursor-grab active:cursor-grabbing" onContextMenu={(event) => event.preventDefault()} onWheel={(event) => { event.preventDefault(); dispatch(adjustCameraZoom(event.deltaY < 0 ? 1 : -1)); }} onPointerDown={startPan} onPointerMove={continuePan} onPointerUp={finishPan} onPointerCancel={finishPan} onClickCapture={(event) => { if (drag.current.moved) { event.preventDefault(); event.stopPropagation(); drag.current.moved = false; } }}>
+    <Canvas shadows frameloop="demand" dpr={[1, 1.5]} onPointerMissed={() => { if (!grenadeTargeting && !drag.current.moved) dispatch(selectPlayerCombatant(null)); }}><CombatScene3D /></Canvas>
+  </div>;
 };

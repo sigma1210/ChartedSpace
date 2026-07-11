@@ -1,7 +1,7 @@
-import type { Combatant, FireMode, WoundState } from "./types";
+import type { Combatant, FireMode, WeaponProfile, WeaponRangeBand, WoundState } from "./types";
 
 export interface DicePair { first: number; second: number }
-export interface SnapShotResult { hit: boolean; hitRoll: number; hitModifier: number; hitTotal: number; targetNumber: number; range: number; rangeBand: "effective" | "long" | "extreme"; woundRoll: number | null; woundTotal: number | null; cover: number; woundState: WoundState }
+export interface SnapShotResult { hit: boolean; hitRoll: number; hitModifier: number; hitTotal: number; targetNumber: number; range: number; rangeBand: WeaponRangeBand; weaponAccuracy: number; weaponPenetration: number; woundRoll: number | null; woundTotal: number | null; cover: number; woundState: WoundState }
 export interface MeleeResult { roll: number; modifier: number; total: number; woundState: WoundState }
 
 export const rollDicePair = (): DicePair => ({ first: Math.floor(Math.random() * 6) + 1, second: Math.floor(Math.random() * 6) + 1 });
@@ -14,6 +14,8 @@ export const snapShotTarget = (attacker: Combatant, target: Combatant) => {
   if (range <= attacker.weapon.extremeRange) return { range, rangeBand: "extreme" as const, targetNumber: 12 };
   return null;
 };
+export const weaponAccuracyForRange = (weapon: WeaponProfile, rangeBand: WeaponRangeBand) => (weapon.accuracy ?? 0) + (weapon.accuracyByRange?.[rangeBand] ?? 0);
+export const weaponPenetrationForRange = (weapon: WeaponProfile, rangeBand: WeaponRangeBand) => weapon.penetrationByRange?.[rangeBand] ?? weapon.penetration;
 
 export const woundStateForTotal = (total: number): WoundState => total <= 4 ? "healthy" : total <= 6 ? "light" : total <= 8 ? "serious" : total <= 10 ? "unconscious" : "dead";
 export const resolveMelee = (attacker: Combatant, target: Combatant, die: number): MeleeResult => {
@@ -27,10 +29,12 @@ export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice:
   const profile = snapShotTarget(attacker, target);
   if (!profile) return null;
   const hitRoll = hitDice.first + hitDice.second;
-  const hitModifier = attacker.weaponSkill - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 1 : 0) - (fireMode === "covering" ? 2 : 0) + (fireMode === "automatic" ? 4 : 0);
+  const weaponAccuracy = weaponAccuracyForRange(attacker.weapon, profile.rangeBand);
+  const weaponPenetration = weaponPenetrationForRange(attacker.weapon, profile.rangeBand);
+  const hitModifier = attacker.weaponSkill + weaponAccuracy - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 1 : 0) - (fireMode === "covering" ? 2 : 0) + (fireMode === "automatic" ? 4 : 0);
   const hitTotal = hitRoll + hitModifier;
-  if (hitTotal < profile.targetNumber) return { ...profile, hit: false, hitRoll, hitModifier, hitTotal, woundRoll: null, woundTotal: null, cover, woundState: target.woundState };
+  if (hitTotal < profile.targetNumber) return { ...profile, hit: false, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, woundRoll: null, woundTotal: null, cover, woundState: target.woundState };
   const woundRoll = woundDice.first + woundDice.second;
-  const woundTotal = woundRoll + attacker.weapon.penetration - target.armor - cover;
-  return { ...profile, hit: true, hitRoll, hitModifier, hitTotal, woundRoll, woundTotal, cover, woundState: woundStateForTotal(woundTotal) };
+  const woundTotal = woundRoll + weaponPenetration - target.armor - cover;
+  return { ...profile, hit: true, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, woundRoll, woundTotal, cover, woundState: woundStateForTotal(woundTotal) };
 };

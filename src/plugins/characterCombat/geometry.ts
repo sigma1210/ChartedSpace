@@ -26,7 +26,7 @@ const doorAdjacentCells = (door: DoorSegment): GridPoint[] => {
 export const closedDoorsAdjacentTo = (scenario: CombatScenario, combatantId: string) => {
   const unit = scenario.combatants.find((combatant) => combatant.id === combatantId);
   if (!unit) return [];
-  return scenario.doors.filter((door) => !door.open && doorAdjacentCells(door).some((point) => samePoint(point, unit.position)));
+  return scenario.doors.filter((door) => !door.open && !door.locked && doorAdjacentCells(door).some((point) => samePoint(point, unit.position)));
 };
 
 const blockedCells = (scenario: CombatScenario, movingId: string) => new Set([
@@ -46,8 +46,13 @@ export const adjacentEnemies = (scenario: CombatScenario, combatantId: string) =
 export const adjacentObjectives = (scenario: CombatScenario, combatantId: string) => {
   const unit = scenario.combatants.find((combatant) => combatant.id === combatantId && !combatant.defeated);
   if (!unit) return [];
-  return scenario.objects.filter((object) => object.kind === "console"
-    && Math.abs(object.position.x - unit.position.x) + Math.abs(object.position.y - unit.position.y) === 1);
+  const activeStageObjectiveId = scenario.victoryCondition === "staged-objectives" ? scenario.stageObjectiveIds?.find((id) => !scenario.objects.find((object) => object.id === id)?.completed) : null;
+  return scenario.objects.filter((object) => object.kind !== "cover" && object.kind !== "control" && !object.completed
+    && (!activeStageObjectiveId || object.id === activeStageObjectiveId)
+    && (object.kind !== "extraction" || unit.id === scenario.captiveId)
+    && (object.kind === "extraction"
+      ? Math.abs(object.position.x - unit.position.x) + Math.abs(object.position.y - unit.position.y) <= 1
+      : Math.abs(object.position.x - unit.position.x) + Math.abs(object.position.y - unit.position.y) === 1));
 };
 
 export const treatableAllies = (scenario: CombatScenario, combatantId: string) => {
@@ -64,6 +69,61 @@ const validStep = (scenario: CombatScenario, movingId: string, from: GridPoint, 
   if (scenario.walls.some((segment) => wallBlocksStep(from, to, segment))) return false;
   if (scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door))) return false;
   return true;
+};
+
+const pathfindingNeighbors = (point: GridPoint): GridPoint[] => [
+  { x: point.x + 1, y: point.y },
+  { x: point.x, y: point.y + 1 },
+  { x: point.x - 1, y: point.y },
+  { x: point.x, y: point.y - 1 },
+];
+
+/** Returns the shortest legal path to any goal, excluding the combatant's starting cell. */
+export const shortestPathToAny = (scenario: CombatScenario, combatantId: string, goals: GridPoint[]) => {
+  const unit = scenario.combatants.find((combatant) => combatant.id === combatantId && !combatant.defeated);
+  if (!unit || goals.length === 0) return null;
+  const goalKeys = new Set(goals.map(pointKey));
+  if (goalKeys.has(pointKey(unit.position))) return [];
+
+  const heuristic = (point: GridPoint) => Math.min(...goals.map((goal) => Math.abs(goal.x - point.x) + Math.abs(goal.y - point.y)));
+  const open: { point: GridPoint; path: GridPoint[]; cost: number; estimate: number; order: number }[] = [
+    { point: unit.position, path: [], cost: 0, estimate: heuristic(unit.position), order: 0 },
+  ];
+  const bestCost = new Map([[pointKey(unit.position), 0]]);
+  let order = 1;
+
+  while (open.length > 0) {
+    open.sort((a, b) => a.estimate - b.estimate || a.cost - b.cost || a.order - b.order);
+    const current = open.shift()!;
+    if (current.cost !== bestCost.get(pointKey(current.point))) continue;
+    if (goalKeys.has(pointKey(current.point))) return current.path;
+
+    for (const destination of pathfindingNeighbors(current.point)) {
+      if (!validStep(scenario, combatantId, current.point, destination)) continue;
+      const cost = current.cost + 1;
+      const key = pointKey(destination);
+      if (cost >= (bestCost.get(key) ?? Number.POSITIVE_INFINITY)) continue;
+      bestCost.set(key, cost);
+      open.push({ point: destination, path: [...current.path, destination], cost, estimate: cost + heuristic(destination), order });
+      order += 1;
+    }
+  }
+  return null;
+};
+
+export const routeAllowingClosedDoors = (scenario: CombatScenario, combatantId: string, goals: GridPoint[]) => {
+  const openDoorScenario: CombatScenario = { ...scenario, doors: scenario.doors.map((door) => ({ ...door, open: door.locked ? door.open : true })) };
+  const path = shortestPathToAny(openDoorScenario, combatantId, goals);
+  const unit = scenario.combatants.find((combatant) => combatant.id === combatantId);
+  if (!path || !unit) return null;
+  let from = unit.position;
+  for (let index = 0; index < path.length; index += 1) {
+    const destination = path[index];
+    const door = scenario.doors.find((candidate) => !candidate.open && !candidate.locked && wallBlocksStep(from, destination, candidate));
+    if (door) return { path, door, doorStepIndex: index };
+    from = destination;
+  }
+  return { path, door: null, doorStepIndex: -1 };
 };
 
 const boundaryClear = (scenario: CombatScenario, from: GridPoint, to: GridPoint) => !scenario.walls.some((wall) => wallBlocksStep(from, to, wall))
@@ -148,10 +208,7 @@ export const reachableMovement = (scenario: CombatScenario, combatantId: string,
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (current.path.length >= allowance) continue;
-    const candidates = [
-      { x: current.point.x + 1, y: current.point.y }, { x: current.point.x - 1, y: current.point.y },
-      { x: current.point.x, y: current.point.y + 1 }, { x: current.point.x, y: current.point.y - 1 },
-    ];
+    const candidates = pathfindingNeighbors(current.point);
     for (const destination of candidates) {
       const key = pointKey(destination);
       if (visited.has(key) || !validStep(scenario, combatantId, current.point, destination)) continue;

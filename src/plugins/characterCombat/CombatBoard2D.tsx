@@ -2,12 +2,14 @@
 
 import { pathContains, pointKey } from "./geometry";
 import type { CombatScenario, GridPoint, PlannedMove } from "./types";
+import { equipmentVisualFor } from "./equipmentPresentation";
 
 const cell = 60;
 const facingArrow = { north: "↑", east: "→", south: "↓", west: "←" } as const;
 
-export const CombatBoard2D = ({ scenario, selectedCombatantId, lockedTargetId, coveringCombatantIds, overwatchTargetIds, onSelectCombatant, onSelectTarget, onClearSelection, reachableKeys, validTargetIds, coveredTargetIds, grenadeTargetKeys, grenadeBlastKeys, grenadeTargeting, plannedMove, hoveredDestination, onPreviewMove, onPreviewGrenade, onHoverDestination }: {
+export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lockedTargetId, coveringCombatantIds, overwatchTargetIds, onSelectCombatant, onSelectTarget, onClearSelection, reachableKeys, validTargetIds, coveredTargetIds, grenadeTargetKeys, grenadeBlastKeys, grenadeTargeting, plannedMove, hoveredDestination, onPreviewMove, onPreviewGrenade, onHoverDestination }: {
   scenario: CombatScenario;
+  currentTurn: number;
   selectedCombatantId: string | null;
   lockedTargetId: string | null;
   coveringCombatantIds: Set<string>;
@@ -53,11 +55,13 @@ export const CombatBoard2D = ({ scenario, selectedCombatantId, lockedTargetId, c
     {scenario.objects.map((object) => {
       const x = object.position.x * cell + cell / 2;
       const y = object.position.y * cell + cell / 2;
-      return object.kind === "console" ? (
+      return object.kind !== "cover" ? (
         <g key={object.id}>
-          <rect x={x - 22} y={y - 18} width="44" height="36" rx="5" fill="#083344" stroke="#22d3ee" strokeWidth="3" />
-          <circle cx={x} cy={y} r="6" fill="#67e8f9" />
-          <text x={x} y={y + 32} textAnchor="middle" fill="#a5f3fc" fontSize="10" fontFamily="monospace">OBJECTIVE</text>
+          {object.kind === "extraction" && <><rect x={x - 29} y={y - 29} width="58" height="58" rx="8" fill="rgba(16,185,129,0.25)" stroke="#6ee7b7" strokeWidth="5" strokeDasharray="7 4" /><text x={x} y={y - 35} textAnchor="middle" fill="#a7f3d0" fontSize="12" fontWeight="bold" fontFamily="monospace">EXTRACTION ZONE · {object.position.x},{object.position.y}</text></>}
+          {object.kind === "control" && <circle cx={x} cy={y} r="29" fill="rgba(168,85,247,0.22)" stroke="#c084fc" strokeWidth="5" strokeDasharray="7 4" />}
+          <rect x={x - 22} y={y - 18} width="44" height="36" rx="5" fill={object.kind === "extraction" ? "#064e3b" : object.kind === "prisoner" ? "#713f12" : object.kind === "control" ? "#581c87" : "#083344"} stroke={object.kind === "extraction" ? "#34d399" : object.kind === "prisoner" ? "#fbbf24" : object.kind === "control" ? "#c084fc" : "#22d3ee"} strokeWidth="3" />
+          <circle cx={x} cy={y} r="6" fill={object.kind === "extraction" ? "#6ee7b7" : object.kind === "prisoner" ? "#fde68a" : "#67e8f9"} />
+          <text x={x} y={y + 32} textAnchor="middle" fill="#e2e8f0" fontSize="10" fontFamily="monospace">{object.kind === "extraction" ? "EXTRACT" : object.kind === "prisoner" ? object.completed ? "RELEASED" : "PRISONER" : object.kind === "control" ? "HOLD ZONE" : "OBJECTIVE"}</text>
         </g>
       ) : (
         <g key={object.id}>
@@ -75,7 +79,7 @@ export const CombatBoard2D = ({ scenario, selectedCombatantId, lockedTargetId, c
       </g>
     ))}
 
-    {scenario.combatants.map((unit) => {
+    {scenario.combatants.filter((unit) => !unit.reinforcementTurn || unit.reinforcementTurn <= currentTurn).map((unit) => {
       const x = unit.position.x * cell + cell / 2;
       const y = unit.position.y * cell + cell / 2;
       const player = unit.side === "player";
@@ -86,6 +90,7 @@ export const CombatBoard2D = ({ scenario, selectedCombatantId, lockedTargetId, c
       const covering = coveringCombatantIds.has(unit.id);
       const overwatched = overwatchTargetIds.has(unit.id);
       const active = !unit.defeated;
+      const equipment = equipmentVisualFor(unit);
       return (
         <g key={unit.id} opacity={active ? 1 : 0.5} pointerEvents={active ? "auto" : "none"} onClick={(event) => { if ((player && active) || validTarget) event.stopPropagation(); if (player && active) onSelectCombatant(unit.id); else if (validTarget) onSelectTarget(unit.id); }} className={(player && active) || validTarget ? "cursor-pointer" : "cursor-default"}>
           {selected && <rect x={unit.position.x * cell + 3} y={unit.position.y * cell + 3} width={cell - 6} height={cell - 6} rx="7" fill="rgba(52,211,153,0.16)" stroke="#f8fafc" strokeWidth="4" />}
@@ -101,8 +106,9 @@ export const CombatBoard2D = ({ scenario, selectedCombatantId, lockedTargetId, c
             <path d="M -6 0 L -12 7 M 6 0 L 12 7 M -3 8 L -7 15 M 3 8 L 7 15" fill="none" strokeWidth="4" />
           </g>
           <text x={x + 14} y={y + 18} textAnchor="middle" fill="white" fontSize="13" fontWeight="bold">{facingArrow[unit.facing]}</text>
-          <rect x={x - 48} y={y - 39} width="96" height="16" rx="3" fill="rgba(0,0,0,0.82)" />
+          <rect x={x - 48} y={y - 43} width="96" height="27" rx="3" fill="rgba(0,0,0,0.82)" />
           <text x={x} y={y - 28} textAnchor="middle" fill={player ? "#a7f3d0" : "#fecaca"} fontSize="10" fontFamily="monospace">{unit.name.toUpperCase()}</text>
+          <text x={x} y={y - 19} textAnchor="middle" fill="#cbd5e1" fontSize="7" fontFamily="monospace">{equipment.weaponLabel} · {equipment.armorLabel.toUpperCase()}</text>
           {unit.surrendered ? <text x={x} y={y + 42} textAnchor="middle" fill="#fde68a" fontSize="8" fontWeight="bold" fontFamily="monospace">SURRENDERED</text> : unit.woundState !== "healthy" && <text x={x} y={y + 42} textAnchor="middle" fill={unit.woundState === "light" ? "#fbbf24" : "#fca5a5"} fontSize="8" fontWeight="bold" fontFamily="monospace">{unit.woundState.toUpperCase()}</text>}
         </g>
       );
