@@ -4,6 +4,7 @@ import { initialDemographicsState } from "../plugins/demographics";
 import { initialEconomyState } from "../plugins/economy";
 import { initialExpenseScenarioState } from "../plugins/expenseScenario";
 import { initialMaydayState } from "../plugins/mayday";
+import { initialCharacterCombatState } from "../plugins/characterCombat";
 import { initialShipPluginState } from "../plugins/ship";
 import { initialNavigationState } from "../plugins/navigation";
 import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLocationSlice";
@@ -27,6 +28,7 @@ export const createPluginTestRootState = ({
   systemScene: {} as RootState["systemScene"],
   hud: {} as RootState["hud"],
   plugins: {
+    characterCombat: initialCharacterCombatState,
     characters: {
       ...initialCharactersState,
       items: [{

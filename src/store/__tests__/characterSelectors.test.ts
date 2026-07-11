@@ -16,6 +16,7 @@ import { initialDemographicsState } from "../../plugins/demographics";
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialMaydayState } from "../../plugins/mayday";
+import { initialCharacterCombatState } from "../../plugins/characterCombat";
 import { initialShipPluginState, type ShipSummary } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
@@ -87,7 +88,7 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     sceneReady: true,
   },
   hud: initialHudState,
-  plugins: { characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
+  plugins: { characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
   ...overrides,
 });
 

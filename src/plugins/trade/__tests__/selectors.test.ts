@@ -5,6 +5,7 @@ import { initialDemographicsState } from "@/plugins/demographics";
 import { initialEconomyState } from "@/plugins/economy";
 import { initialExpenseScenarioState } from "@/plugins/expenseScenario";
 import { initialMaydayState } from "@/plugins/mayday";
+import { initialCharacterCombatState } from "@/plugins/characterCombat";
 import { initialNavigationState } from "@/plugins/navigation";
 import { initialShipPluginState, type ShipSummary } from "@/plugins/ship";
 import { initialStayInLocationState } from "@/plugins/stayInLocation/stayInLocationSlice";
@@ -107,6 +108,7 @@ const makeRoot = (mainWorld: World): RootState => ({
   systemScene: {} as RootState["systemScene"],
   hud: initialHudState,
   plugins: {
+    characterCombat: initialCharacterCombatState,
     characters: initialCharactersState,
     demographics: initialDemographicsState,
     economy: initialEconomyState,

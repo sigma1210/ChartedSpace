@@ -1,0 +1,2 @@
+import { characterCombatHudId, characterCombatPluginId } from "./metadata";
+export const characterCombatHudMetadata = [{ id: characterCombatHudId, pluginId: characterCombatPluginId, title: "Character Combat", openTitle: "Open character combat", visibleTitle: "Character combat visible", showInHudControls: true, panelClassName: "px-1.5 py-1", defaultLayout: { visible: false, pinned: true, offset: { x: 0.4, y: 0.32 } } }] as const;

@@ -24,6 +24,7 @@ import {
 import { initialEconomyState } from "../../plugins/economy";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialMaydayState } from "../../plugins/mayday";
+import { initialCharacterCombatState } from "../../plugins/characterCombat";
 import { initialShipPluginState } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
@@ -74,7 +75,7 @@ const makeStore = (preloaded?: Partial<GalaxyState>) =>
   });
 
 const makeRoot = (galaxy: GalaxyState): RootState =>
-  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } });
+  ({ galaxy, ui: {} as RootState["ui"], notifications: {} as RootState["notifications"], turn: {} as RootState["turn"], availableCrew: {} as RootState["availableCrew"], system: {} as RootState["system"], systemScene: {} as RootState["systemScene"], hud: initialHudState, plugins: { characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } });
 
 describe("galaxySlice reducers", () => {
   it("populates sectors from the index on initialization", () => {
