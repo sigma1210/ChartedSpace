@@ -1,8 +1,10 @@
 "use client";
 
-import { pathContains, pointKey } from "./geometry";
+import { depressurizedCells, doorBlastCells, fireLaneCells, pathContains, pointKey, validCoveringFireTargets } from "./geometry";
 import type { CombatScenario, GridPoint, PlannedMove } from "./types";
 import { equipmentVisualFor } from "./equipmentPresentation";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { previewCoveringFire } from "./slice";
 
 const cell = 60;
 const facingArrow = { north: "↑", east: "→", south: "↓", west: "←" } as const;
@@ -28,7 +30,16 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
   onPreviewMove: (point: GridPoint) => void;
   onPreviewGrenade: (point: GridPoint) => void;
   onHoverDestination: (point: GridPoint | null) => void;
-}) => (
+}) => {
+  const dispatch = useAppDispatch();
+  const { coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, plannedBreachDoorId, placedBreachingChargeByDoorId } = useAppSelector((state) => state.plugins.characterCombat);
+  const coveringTargetKeys = new Set(coveringFireTargeting && selectedCombatantId ? validCoveringFireTargets(scenario, selectedCombatantId).map(pointKey) : []);
+  const laneKeys = new Set(coveringFireLanes.flatMap((lane) => lane.cells.map(pointKey)));
+  const plannedLaneKeys = new Set(plannedCoveringFireTarget && selectedCombatantId ? fireLaneCells(scenario, scenario.combatants.find((unit) => unit.id === selectedCombatantId)!.position, plannedCoveringFireTarget).map(pointKey) : []);
+  const breachDoor = scenario.doors.find((door) => door.id === plannedBreachDoorId);
+  const breachKeys = new Set(breachDoor ? doorBlastCells(breachDoor).map(pointKey) : []);
+  const vacuumKeys = new Set(depressurizedCells(scenario).keys());
+  return (
   <svg viewBox={`-20 -20 ${scenario.width * cell + 40} ${scenario.height * cell + 40}`} className="h-full w-full" role="img" aria-label="Two dimensional boarding action deck plan" onClick={onClearSelection}>
     <rect x="0" y="0" width={scenario.width * cell} height={scenario.height * cell} rx="8" fill="#101c26" />
     {Array.from({ length: scenario.width }, (_, x) => Array.from({ length: scenario.height }, (_, y) => {
@@ -38,13 +49,18 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
       const hovered = hoveredDestination?.x === x && hoveredDestination?.y === y;
       const grenadeTarget = grenadeTargetKeys.has(pointKey(point));
       const grenadeBlast = grenadeBlastKeys.has(pointKey(point));
+      const coveringTarget = coveringTargetKeys.has(pointKey(point));
+      const inFireLane = laneKeys.has(pointKey(point)) || plannedLaneKeys.has(pointKey(point));
+      const inBreachBlast = breachKeys.has(pointKey(point));
+      const inVacuum = vacuumKeys.has(pointKey(point));
       return <rect key={`${x}:${y}`} x={x * cell + 2} y={y * cell + 2} width={cell - 4} height={cell - 4}
-        fill={grenadeBlast ? "rgba(251,146,60,0.38)" : grenadeTarget ? "rgba(244,114,182,0.15)" : inPath ? "rgba(251,191,36,0.28)" : hovered && reachable ? "rgba(103,232,249,0.28)" : reachable ? "rgba(52,211,153,0.13)" : "#172631"}
-        stroke={grenadeBlast ? "#fb923c" : grenadeTarget ? "#f472b6" : inPath ? "#fbbf24" : reachable ? "#34d399" : "#29404d"} strokeWidth={grenadeBlast || inPath || hovered ? 3 : 1}
-        className={grenadeTarget || (!grenadeTargeting && reachable) ? "cursor-pointer" : "cursor-default"}
+        fill={inBreachBlast ? "rgba(249,115,22,0.48)" : inFireLane ? "rgba(250,204,21,0.32)" : coveringTarget ? "rgba(250,204,21,0.10)" : grenadeBlast ? "rgba(251,146,60,0.38)" : grenadeTarget ? "rgba(244,114,182,0.15)" : inPath ? "rgba(251,191,36,0.28)" : hovered && reachable ? "rgba(103,232,249,0.28)" : reachable ? "rgba(52,211,153,0.13)" : inVacuum ? "#172554" : "#172631"}
+        stroke={inFireLane || coveringTarget ? "#facc15" : grenadeBlast ? "#fb923c" : grenadeTarget ? "#f472b6" : inPath ? "#fbbf24" : reachable ? "#34d399" : "#29404d"} strokeWidth={inFireLane || grenadeBlast || inPath || hovered ? 3 : 1}
+        className={coveringTarget || grenadeTarget || (!grenadeTargeting && reachable) ? "cursor-pointer" : "cursor-default"}
         onMouseEnter={() => onHoverDestination(!grenadeTargeting && reachable ? point : null)} onMouseLeave={() => onHoverDestination(null)}
-        onClick={(event) => { if (grenadeTarget) { event.stopPropagation(); onPreviewGrenade(point); } else if (!grenadeTargeting && reachable) { event.stopPropagation(); onPreviewMove(point); } }} />;
+        onClick={(event) => { if (coveringTarget) { event.stopPropagation(); dispatch(previewCoveringFire(point)); } else if (grenadeTarget) { event.stopPropagation(); onPreviewGrenade(point); } else if (!grenadeTargeting && reachable && !coveringFireTargeting) { event.stopPropagation(); onPreviewMove(point); } }} />;
     }))}
+    {(scenario.handholds ?? []).map((point) => <g key={`handhold:${pointKey(point)}`} pointerEvents="none"><circle cx={point.x * cell + cell / 2} cy={point.y * cell + cell / 2} r="10" fill="none" stroke="#60a5fa" strokeWidth="4" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 24} textAnchor="middle" fill="#93c5fd" fontSize="8" fontWeight="bold" fontFamily="monospace">HANDHOLD</text></g>)}
     {scenario.id === "boarding-action" && <>
       <rect pointerEvents="none" x="6" y={3 * cell + 6} width={4 * cell - 12} height={3 * cell - 12} rx="8" fill="rgba(16,185,129,0.06)" />
       <rect pointerEvents="none" x={8 * cell + 6} y={2 * cell + 6} width={4 * cell - 12} height={4 * cell - 12} rx="8" fill="rgba(34,211,238,0.06)" />
@@ -76,6 +92,7 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
       <g key={door.id} pointerEvents="none">
         {!door.open && <line x1={door.from.x * cell} y1={door.from.y * cell} x2={door.to.x * cell} y2={door.to.y * cell} stroke="#f59e0b" strokeWidth="12" />}
         <text x={door.from.x * cell + 8} y={(door.from.y + 0.5) * cell} fill={door.open ? "#6ee7b7" : "#fbbf24"} fontSize="10" fontFamily="monospace">{door.open ? "DOOR OPEN" : "SECURITY DOOR"}</text>
+        {placedBreachingChargeByDoorId[door.id] && <text x={door.from.x * cell + 8} y={(door.from.y + 0.5) * cell + 12} fill="#fb7185" fontSize="10" fontWeight="bold" fontFamily="monospace">CHARGE PLACED</text>}
       </g>
     ))}
 
@@ -114,4 +131,5 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
       );
     })}
   </svg>
-);
+  );
+};

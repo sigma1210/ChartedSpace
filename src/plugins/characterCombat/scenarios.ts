@@ -277,6 +277,37 @@ export const buildCaptureBridgeScenario = (): CombatScenario => ({
   ],
 });
 
+export const buildZeroGravityScenario = (): CombatScenario => {
+  const scenario = buildTrainingScenario();
+  return {
+    ...scenario,
+    id: "zero-g-drift",
+    title: "Zero-G Drift",
+    briefing: "Artificial gravity has failed. Push off in a cardinal direction and drift until stopped by structure, a handhold, or another character.",
+    objective: "Cross the zero-G compartment and secure the command console.",
+    gravityMode: "zero-g",
+    handholds: [
+      { x: 3, y: 4 }, { x: 3, y: 5 }, { x: 4, y: 3 }, { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 4, y: 6 },
+      { x: 5, y: 5 }, { x: 7, y: 3 }, { x: 7, y: 6 },
+      { x: 9, y: 3 }, { x: 9, y: 4 }, { x: 10, y: 5 },
+    ],
+  };
+};
+
+export const buildHullBreachScenario = (): CombatScenario => {
+  const scenario = buildZeroGravityScenario();
+  return {
+    ...scenario,
+    id: "hull-breach",
+    title: "Hull Breach",
+    briefing: "The command compartment is open to vacuum. The security door contains decompression until opened; suited and unprotected crew must secure damage control.",
+    objective: "Reach the damage-control console and seal the hull breach.",
+    vacuumSources: [{ x: 11, y: 3 }],
+    objects: scenario.objects.map((object) => object.id === "command-console" ? { ...object, label: "Damage-Control Console" } : object),
+    combatants: scenario.combatants.map((unit) => ({ ...unit, vaccSuit: unit.id === "player-1" || unit.side === "enemy" })),
+  };
+};
+
 export const characterCombatScenarios = [
   { id: "boarding-action", title: "Boarding Action", summary: "Training encounter: breach the command room and secure its console.", build: registered(buildTrainingScenario) },
   { id: "engine-room-sabotage", title: "Engine Room Sabotage", summary: "Larger engineering deck with two security doors and three defenders.", build: registered(buildEngineRoomScenario) },
@@ -286,4 +317,6 @@ export const characterCombatScenarios = [
   { id: "hold-the-airlock", title: "Hold the Airlock", summary: "Defend a central control zone against reinforcement waves through turn five.", build: registered(buildHoldAirlockScenario) },
   { id: "armory-sweep", title: "Armory Sweep", summary: "Test short- and long-range weapons against clothing, flak, combat armor, and battle dress.", build: registered(buildArmorySweepScenario) },
   { id: "capture-the-bridge", title: "Capture the Bridge", summary: "Disable bridge security, unlock access, and seize command control in a two-stage assault.", build: registered(buildCaptureBridgeScenario) },
+  { id: "zero-g-drift", title: "Zero-G Drift", summary: "Push off and drift through a compartment with handholds, walls, doors, and collision hazards.", build: registered(buildZeroGravityScenario) },
+  { id: "hull-breach", title: "Hull Breach", summary: "Contain decompression, cross a zero-G deck, and survive vacuum exposure.", build: registered(buildHullBreachScenario) },
 ];
