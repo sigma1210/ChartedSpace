@@ -210,6 +210,8 @@ export const grenadeCoverProtection = (scenario: CombatScenario, center: GridPoi
 };
 
 export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: GridPoint) => {
+  const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
+  if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const samples = Math.max(Math.abs(dx), Math.abs(dy)) * 8;
@@ -217,6 +219,7 @@ export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: Gr
   for (let index = 1; index <= samples; index += 1) {
     const next = { x: Math.floor(from.x + 0.5 + dx * index / samples), y: Math.floor(from.y + 0.5 + dy * index / samples) };
     if (next.x === cell.x && next.y === cell.y) continue;
+    if (smoke.has(pointKey(next))) return false;
     if (next.x !== cell.x && next.y !== cell.y) {
       const horizontal = { x: next.x, y: cell.y };
       const vertical = { x: cell.x, y: next.y };

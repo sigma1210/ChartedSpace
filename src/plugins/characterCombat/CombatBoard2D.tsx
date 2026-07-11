@@ -39,6 +39,8 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
   const breachDoor = scenario.doors.find((door) => door.id === plannedBreachDoorId);
   const breachKeys = new Set(breachDoor ? doorBlastCells(breachDoor).map(pointKey) : []);
   const vacuumKeys = new Set(depressurizedCells(scenario).keys());
+  const fireKeys = new Set((scenario.fireCells ?? []).map(pointKey));
+  const smokeKeys = new Set((scenario.smokeCells ?? []).map(pointKey));
   return (
   <svg viewBox={`-20 -20 ${scenario.width * cell + 40} ${scenario.height * cell + 40}`} className="h-full w-full" role="img" aria-label="Two dimensional boarding action deck plan" onClick={onClearSelection}>
     <rect x="0" y="0" width={scenario.width * cell} height={scenario.height * cell} rx="8" fill="#101c26" />
@@ -53,13 +55,17 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
       const inFireLane = laneKeys.has(pointKey(point)) || plannedLaneKeys.has(pointKey(point));
       const inBreachBlast = breachKeys.has(pointKey(point));
       const inVacuum = vacuumKeys.has(pointKey(point));
+      const inEnvironmentalFire = fireKeys.has(pointKey(point));
+      const inSmoke = smokeKeys.has(pointKey(point));
       return <rect key={`${x}:${y}`} x={x * cell + 2} y={y * cell + 2} width={cell - 4} height={cell - 4}
-        fill={inBreachBlast ? "rgba(249,115,22,0.48)" : inFireLane ? "rgba(250,204,21,0.32)" : coveringTarget ? "rgba(250,204,21,0.10)" : grenadeBlast ? "rgba(251,146,60,0.38)" : grenadeTarget ? "rgba(244,114,182,0.15)" : inPath ? "rgba(251,191,36,0.28)" : hovered && reachable ? "rgba(103,232,249,0.28)" : reachable ? "rgba(52,211,153,0.13)" : inVacuum ? "#172554" : "#172631"}
+        fill={inBreachBlast ? "rgba(249,115,22,0.48)" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "rgba(250,204,21,0.32)" : coveringTarget ? "rgba(250,204,21,0.10)" : grenadeBlast ? "rgba(251,146,60,0.38)" : grenadeTarget ? "rgba(244,114,182,0.15)" : inPath ? "rgba(251,191,36,0.28)" : hovered && reachable ? "rgba(103,232,249,0.28)" : reachable ? "rgba(52,211,153,0.13)" : inVacuum ? "#172554" : "#172631"}
         stroke={inFireLane || coveringTarget ? "#facc15" : grenadeBlast ? "#fb923c" : grenadeTarget ? "#f472b6" : inPath ? "#fbbf24" : reachable ? "#34d399" : "#29404d"} strokeWidth={inFireLane || grenadeBlast || inPath || hovered ? 3 : 1}
         className={coveringTarget || grenadeTarget || (!grenadeTargeting && reachable) ? "cursor-pointer" : "cursor-default"}
         onMouseEnter={() => onHoverDestination(!grenadeTargeting && reachable ? point : null)} onMouseLeave={() => onHoverDestination(null)}
         onClick={(event) => { if (coveringTarget) { event.stopPropagation(); dispatch(previewCoveringFire(point)); } else if (grenadeTarget) { event.stopPropagation(); onPreviewGrenade(point); } else if (!grenadeTargeting && reachable && !coveringFireTargeting) { event.stopPropagation(); onPreviewMove(point); } }} />;
     }))}
+    {(scenario.fireCells ?? []).map((point) => <g key={`fire:${pointKey(point)}`} pointerEvents="none"><circle cx={point.x * cell + cell / 2} cy={point.y * cell + cell / 2} r="13" fill="#f97316" opacity="0.82" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 4} textAnchor="middle" fill="#fff7ed" fontSize="10" fontWeight="bold" fontFamily="monospace">FIRE</text></g>)}
+    {(scenario.smokeCells ?? []).map((point) => <g key={`smoke:${pointKey(point)}`} pointerEvents="none"><circle cx={point.x * cell + cell / 2 - 8} cy={point.y * cell + cell / 2} r="12" fill="#94a3b8" opacity="0.62" /><circle cx={point.x * cell + cell / 2 + 8} cy={point.y * cell + cell / 2} r="14" fill="#64748b" opacity="0.72" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 4} textAnchor="middle" fill="#f8fafc" fontSize="9" fontWeight="bold" fontFamily="monospace">SMOKE</text></g>)}
     {(scenario.handholds ?? []).map((point) => <g key={`handhold:${pointKey(point)}`} pointerEvents="none"><circle cx={point.x * cell + cell / 2} cy={point.y * cell + cell / 2} r="10" fill="none" stroke="#60a5fa" strokeWidth="4" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 24} textAnchor="middle" fill="#93c5fd" fontSize="8" fontWeight="bold" fontFamily="monospace">HANDHOLD</text></g>)}
     {scenario.id === "boarding-action" && <>
       <rect pointerEvents="none" x="6" y={3 * cell + 6} width={4 * cell - 12} height={3 * cell - 12} rx="8" fill="rgba(16,185,129,0.06)" />

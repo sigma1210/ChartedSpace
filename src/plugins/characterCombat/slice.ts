@@ -6,6 +6,18 @@ import { shouldImproveEnemyRange } from "./enemyTactics";
 
 const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
+const applyFireDamage = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => {
+  const nextWound = unit.woundState === "healthy" ? "light" : unit.woundState === "light" ? "serious" : unit.woundState === "serious" ? "unconscious" : "dead";
+  unit.woundState = nextWound;
+  if (nextWound === "serious" || nextWound === "unconscious" || nextWound === "dead") {
+    unit.defeated = true;
+    unit.health = 0;
+    state.actionPointsById[unit.id] = 0;
+    if (!state.actedCombatantIds.includes(unit.id)) state.actedCombatantIds.push(unit.id);
+  }
+  state.events.unshift(`${unit.name} entered fire and suffered a ${nextWound} wound`);
+};
+
 const applyZeroGravityRecoil = (state: CharacterCombatState, combatantId: string) => {
   const unit = state.scenario?.combatants.find((combatant) => combatant.id === combatantId);
   if (!unit || !state.scenario) return;
@@ -148,10 +160,10 @@ const resolveHoldZoneCapture = (state: CharacterCombatState) => {
   return true;
 };
 
-export const initialCharacterCombatState: CharacterCombatState = { scenario: null, selectedBoardingTeamIds: [], armoryLoadoutIds: ["scout", "breacher"], combatantStarts: {}, outcome: null, viewMode: "3d", camera: { quarterTurn: 0, azimuth: Math.PI / 4, elevation: Math.PI / 4.75, zoom: 42, focus: null, pan: { x: 0, y: 0 } }, status: "active", turn: 1, selectedCombatantId: null, plannedMove: null, plannedAttackTargetId: null, plannedAttackMode: null, grenadeTargeting: false, plannedGrenadeTarget: null, plannedOpenDoorId: null, plannedBreachDoorId: null, placedBreachingChargeByDoorId: {}, vacuumExposureByCombatantId: {}, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], plannedTreatmentTargetId: null, recoveringCombatantIds: [], evadingCombatantIds: [], trottingCombatantIds: [], suppressedCombatantIds: [], draggingCombatantByCarrierId: {}, maintainedTargetByCombatantId: {}, plannedObjectiveId: null, hoveredDestination: null, actionPointsById: {}, ammunitionById: {}, actedCombatantIds: [], events: [], hudLayouts: freshHudLayouts() };
+export const initialCharacterCombatState: CharacterCombatState = { scenario: null, selectedBoardingTeamIds: [], armoryLoadoutIds: ["scout", "breacher"], combatantStarts: {}, outcome: null, viewMode: "3d", camera: { quarterTurn: 0, azimuth: Math.PI / 4, elevation: Math.PI / 4.75, zoom: 42, focus: null, pan: { x: 0, y: 0 } }, status: "active", turn: 1, selectedCombatantId: null, plannedMove: null, plannedAttackTargetId: null, plannedAttackMode: null, grenadeTargeting: false, plannedGrenadeTarget: null, plannedOpenDoorId: null, plannedBreachDoorId: null, plannedExtinguishFire: null, smokeClearsAtTurnByCell: {}, placedBreachingChargeByDoorId: {}, vacuumExposureByCombatantId: {}, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], plannedTreatmentTargetId: null, recoveringCombatantIds: [], evadingCombatantIds: [], trottingCombatantIds: [], suppressedCombatantIds: [], draggingCombatantByCarrierId: {}, maintainedTargetByCombatantId: {}, plannedObjectiveId: null, hoveredDestination: null, actionPointsById: {}, ammunitionById: {}, actedCombatantIds: [], events: [], hudLayouts: freshHudLayouts() };
 const slice = createSlice({ name: "characterCombat", initialState: initialCharacterCombatState, reducers: {
-  loadCombatScenario: (state, action: PayloadAction<CombatScenario>) => { state.scenario = action.payload; state.combatantStarts = startingCombatants(action.payload); state.outcome = null; state.camera.focus = null; state.camera.pan = { x: 0, y: 0 }; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = freshActionPoints(action.payload); state.ammunitionById = freshAmmunition(action.payload); state.actedCombatantIds = []; state.events = []; },
-  clearCombatScenario: (state) => { state.scenario = null; state.combatantStarts = {}; state.outcome = null; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = {}; state.ammunitionById = {}; state.actedCombatantIds = []; state.events = []; },
+  loadCombatScenario: (state, action: PayloadAction<CombatScenario>) => { state.scenario = action.payload; state.combatantStarts = startingCombatants(action.payload); state.outcome = null; state.camera.focus = null; state.camera.pan = { x: 0, y: 0 }; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = freshActionPoints(action.payload); state.ammunitionById = freshAmmunition(action.payload); state.actedCombatantIds = []; state.events = []; },
+  clearCombatScenario: (state) => { state.scenario = null; state.combatantStarts = {}; state.outcome = null; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = {}; state.ammunitionById = {}; state.actedCombatantIds = []; state.events = []; },
   selectPlayerCombatant: (state, action: PayloadAction<string | null>) => {
     if (state.status !== "active") return;
     if (action.payload === null) { state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedObjectiveId = null; state.hoveredDestination = null; return; }
@@ -206,6 +218,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.actionPointsById[unit.id] = Math.max(0, (state.actionPointsById[unit.id] ?? 0) - move.cost);
     if (state.actionPointsById[unit.id] === 0 && !state.actedCombatantIds.includes(unit.id)) state.actedCombatantIds.push(unit.id);
     state.events.unshift(`${unit.name} moved to ${final.x},${final.y}`);
+    if (scenario.fireCells?.some((cell) => pointKey(cell) === pointKey(final))) applyFireDamage(state, unit);
     state.plannedMove = null;
     const extraction = scenario.objects.find((object) => object.kind === "extraction" && !object.completed);
     if (unit.id === scenario.captiveId && extraction && pointKey(unit.position) === pointKey(extraction.position)) {
@@ -282,6 +295,31 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (state.actionPointsById[unit.id] === 0) state.actedCombatantIds.push(unit.id);
     state.events.unshift(`${unit.name} closed ${door.id} (3 AP)`);
   },
+  previewExtinguishFire: (state, action: PayloadAction<GridPoint>) => {
+    const scenario = state.scenario;
+    const id = state.selectedCombatantId;
+    const unit = scenario?.combatants.find((combatant) => combatant.id === id && !combatant.defeated);
+    if (!scenario || !id || !unit || state.status !== "active" || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 3) return;
+    const adjacent = Math.abs(unit.position.x - action.payload.x) + Math.abs(unit.position.y - action.payload.y) === 1;
+    if (adjacent && scenario.fireCells?.some((cell) => pointKey(cell) === pointKey(action.payload))) state.plannedExtinguishFire = action.payload;
+  },
+  confirmExtinguishFire: (state) => {
+    const scenario = state.scenario;
+    const id = state.selectedCombatantId;
+    const fire = state.plannedExtinguishFire;
+    const unit = scenario?.combatants.find((combatant) => combatant.id === id && !combatant.defeated);
+    if (!scenario || !id || !unit || !fire || state.status !== "active" || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 3) return;
+    const fireIndex = scenario.fireCells?.findIndex((cell) => pointKey(cell) === pointKey(fire)) ?? -1;
+    if (fireIndex < 0 || Math.abs(unit.position.x - fire.x) + Math.abs(unit.position.y - fire.y) !== 1) return;
+    const pairedSmoke = scenario.smokeCells?.filter((cell) => !state.smokeClearsAtTurnByCell[pointKey(cell)]).sort((a, b) => distanceBetween(a, fire) - distanceBetween(b, fire))[0];
+    scenario.fireCells!.splice(fireIndex, 1);
+    if (pairedSmoke) state.smokeClearsAtTurnByCell[pointKey(pairedSmoke)] = state.turn + 1;
+    state.actionPointsById[id] -= 3;
+    if (state.actionPointsById[id] === 0) state.actedCombatantIds.push(id);
+    state.plannedExtinguishFire = null;
+    state.events.unshift(`${unit.name} extinguished fire at ${fire.x},${fire.y} (3 AP)`);
+  },
+  cancelExtinguishFire: (state) => { state.plannedExtinguishFire = null; },
   previewAttack: (state, action: PayloadAction<string>) => {
     const scenario = state.scenario;
     const attackerId = state.selectedCombatantId;
@@ -786,6 +824,8 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       if (unit.defeated) unit.health = 0;
       state.events.unshift(`${unit.name} vacuum exposure ${exposure}: ${unit.woundState}`);
     });
+    const fireCells = new Set((scenario!.fireCells ?? []).map(pointKey));
+    scenario!.combatants.filter((unit) => !unit.defeated && !unit.surrendered && fireCells.has(pointKey(unit.position))).forEach((unit) => applyFireDamage(state, unit));
     if (scenario!.combatants.filter((unit) => unit.side === "player").every((unit) => unit.defeated)) {
       state.status = "defeat";
       state.selectedCombatantId = null;
@@ -814,6 +854,10 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.recoveringCombatantIds = [];
     state.evadingCombatantIds = [];
     state.trottingCombatantIds = [];
+    const nextTurn = state.turn + 1;
+    const clearingSmoke = new Set(Object.entries(state.smokeClearsAtTurnByCell).filter(([, clearTurn]) => clearTurn <= nextTurn).map(([key]) => key));
+    scenario!.smokeCells = scenario!.smokeCells?.filter((cell) => !clearingSmoke.has(pointKey(cell)));
+    clearingSmoke.forEach((key) => { delete state.smokeClearsAtTurnByCell[key]; });
     state.turn += 1;
     activateReinforcements(state);
     state.coveringFireLanes = [];
@@ -863,5 +907,5 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.armoryLoadoutIds[action.payload.index] = action.payload.loadoutId;
   },
 } });
-export const { loadCombatScenario, clearCombatScenario, selectPlayerCombatant, startTrot, beginDragging, releaseDraggedCombatant, previewMove, confirmMove, turnCombatant, previewOpenDoor, confirmOpenDoor, cancelOpenDoor, openDoor, closeDoor, previewAttack, selectAttackMode, confirmAttack, cancelAttackPreview, beginCoveringFire, previewCoveringFire, confirmCoveringFire, cancelCoveringFire, beginGrenadeTargeting, previewGrenadeTarget, cancelGrenadeTargeting, confirmGrenade, previewTreatment, cancelTreatmentPreview, confirmTreatment, previewSecureObjective, confirmSecureObjective, cancelObjectivePreview, previewBreachDoor, confirmBreachDoor, previewBreachDetonation, detonateBreachCharge, cancelBreachDoor, reloadWeapon, evade, rally, finishActivation, endPlayerTurn, cancelMovePreview, setHoveredDestination, updateHudLayout, restoreHud, resetHudLayouts, setViewMode, rotateCamera, rotateCameraBy, adjustCameraZoom, panCameraBy, resetCamera, focusCameraOnSelected, setBoardingTeamIds, setArmoryLoadout } = slice.actions;
+export const { loadCombatScenario, clearCombatScenario, selectPlayerCombatant, startTrot, beginDragging, releaseDraggedCombatant, previewMove, confirmMove, turnCombatant, previewOpenDoor, confirmOpenDoor, cancelOpenDoor, openDoor, closeDoor, previewExtinguishFire, confirmExtinguishFire, cancelExtinguishFire, previewAttack, selectAttackMode, confirmAttack, cancelAttackPreview, beginCoveringFire, previewCoveringFire, confirmCoveringFire, cancelCoveringFire, beginGrenadeTargeting, previewGrenadeTarget, cancelGrenadeTargeting, confirmGrenade, previewTreatment, cancelTreatmentPreview, confirmTreatment, previewSecureObjective, confirmSecureObjective, cancelObjectivePreview, previewBreachDoor, confirmBreachDoor, previewBreachDetonation, detonateBreachCharge, cancelBreachDoor, reloadWeapon, evade, rally, finishActivation, endPlayerTurn, cancelMovePreview, setHoveredDestination, updateHudLayout, restoreHud, resetHudLayouts, setViewMode, rotateCamera, rotateCameraBy, adjustCameraZoom, panCameraBy, resetCamera, focusCameraOnSelected, setBoardingTeamIds, setArmoryLoadout } = slice.actions;
 export default slice.reducer;

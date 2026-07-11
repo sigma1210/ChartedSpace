@@ -78,6 +78,8 @@ const CombatScene3D = () => {
   const breachDoor = scenario.doors.find((door) => door.id === plannedBreachDoorId);
   const breachKeys = new Set(breachDoor ? doorBlastCells(breachDoor).map(pointKey) : []);
   const vacuumKeys = new Set(depressurizedCells(scenario).keys());
+  const fireKeys = new Set((scenario.fireCells ?? []).map(pointKey));
+  const smokeKeys = new Set((scenario.smokeCells ?? []).map(pointKey));
 
   return <>
     <color attach="background" args={["#03070a"]} />
@@ -95,9 +97,11 @@ const CombatScene3D = () => {
       const inFireLane = laneKeys.has(key) || plannedLaneKeys.has(key);
       const inBreachBlast = breachKeys.has(key);
       const inVacuum = vacuumKeys.has(key);
+      const inEnvironmentalFire = fireKeys.has(key);
+      const inSmoke = smokeKeys.has(key);
       const inPath = plannedMove ? pathContains(plannedMove.path, point) : false;
       const hovered = hoveredDestination?.x === x && hoveredDestination?.y === y;
-      const color = inBreachBlast ? "#c2410c" : inFireLane ? "#a16207" : coveringTarget ? "#713f12" : inGrenadeBlast ? "#ea580c" : canTargetGrenade ? "#9d174d" : inPath ? "#d97706" : hovered && canMove ? "#0891b2" : canMove ? "#14532d" : inVacuum ? "#172554" : (x + y) % 2 === 0 ? "#172631" : "#13222c";
+      const color = inBreachBlast ? "#c2410c" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "#a16207" : coveringTarget ? "#713f12" : inGrenadeBlast ? "#ea580c" : canTargetGrenade ? "#9d174d" : inPath ? "#d97706" : hovered && canMove ? "#0891b2" : canMove ? "#14532d" : inVacuum ? "#172554" : (x + y) % 2 === 0 ? "#172631" : "#13222c";
       return <mesh key={`floor:${key}`} position={[x + 0.5 - scenario.width / 2, -0.05, y + 0.5 - scenario.height / 2]} receiveShadow
         onPointerOver={(event) => { if (canMove) { event.stopPropagation(); dispatch(setHoveredDestination(point)); } }}
         onPointerOut={() => { if (hovered) dispatch(setHoveredDestination(null)); }}
@@ -106,6 +110,9 @@ const CombatScene3D = () => {
         <meshStandardMaterial color={color} emissive={inGrenadeBlast ? "#9a3412" : canTargetGrenade ? "#500724" : inPath ? "#78350f" : canMove ? "#052e16" : "#000000"} roughness={0.9} />
       </mesh>;
     }))}
+
+    {(scenario.fireCells ?? []).map((point) => <group key={`fire:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.2, point.y + 0.5 - scenario.height / 2]}><mesh><coneGeometry args={[0.28, 0.75, 10]} /><meshStandardMaterial color="#fb923c" emissive="#dc2626" emissiveIntensity={1.5} /></mesh><pointLight color="#f97316" intensity={1.5} distance={2.5} /></group>)}
+    {(scenario.smokeCells ?? []).map((point) => <group key={`smoke:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.48, point.y + 0.5 - scenario.height / 2]}><mesh position={[-0.18, 0, 0]}><sphereGeometry args={[0.34, 12, 8]} /><meshStandardMaterial color="#94a3b8" transparent opacity={0.5} /></mesh><mesh position={[0.2, 0.12, 0.05]}><sphereGeometry args={[0.4, 12, 8]} /><meshStandardMaterial color="#64748b" transparent opacity={0.55} /></mesh></group>)}
 
     {(scenario.handholds ?? []).map((point) => <mesh key={`handhold:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.08, point.y + 0.5 - scenario.height / 2]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.25, 0.05, 8, 24]} /><meshBasicMaterial color="#60a5fa" /></mesh>)}
 

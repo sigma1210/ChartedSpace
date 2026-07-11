@@ -1,5 +1,5 @@
-import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, openDoorsAdjacentTo, pointKey, proposedMoveFor, reachableMovement, routeAllowingClosedDoors, shortestPathToAny, treatableAllies, validGrenadeTargets, weaponRecoilDistance, zeroGravityPushes, zeroGravityRecoilPath } from "../geometry";
-import reducer, { adjustCameraZoom, beginCoveringFire, beginDragging, beginGrenadeTargeting, cancelMovePreview, clearCombatScenario, closeDoor, confirmAttack, confirmBreachDoor, confirmCoveringFire, confirmGrenade, confirmMove, confirmOpenDoor, confirmSecureObjective, confirmTreatment, detonateBreachCharge, endPlayerTurn, evade, finishActivation, focusCameraOnSelected, loadCombatScenario, openDoor, panCameraBy, previewAttack, previewBreachDetonation, previewBreachDoor, previewCoveringFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewSecureObjective, previewTreatment, rally, releaseDraggedCombatant, reloadWeapon, resetCamera, rotateCamera, rotateCameraBy, selectAttackMode, selectPlayerCombatant, setArmoryLoadout, setViewMode, startTrot, turnCombatant } from "../slice";
+import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, hasLineOfSight, openDoorsAdjacentTo, pointKey, proposedMoveFor, rangedEnemies, reachableMovement, routeAllowingClosedDoors, shortestPathToAny, treatableAllies, validGrenadeTargets, weaponRecoilDistance, zeroGravityPushes, zeroGravityRecoilPath } from "../geometry";
+import reducer, { adjustCameraZoom, beginCoveringFire, beginDragging, beginGrenadeTargeting, cancelMovePreview, clearCombatScenario, closeDoor, confirmAttack, confirmBreachDoor, confirmCoveringFire, confirmExtinguishFire, confirmGrenade, confirmMove, confirmOpenDoor, confirmSecureObjective, confirmTreatment, detonateBreachCharge, endPlayerTurn, evade, finishActivation, focusCameraOnSelected, loadCombatScenario, openDoor, panCameraBy, previewAttack, previewBreachDetonation, previewBreachDoor, previewCoveringFire, previewExtinguishFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewSecureObjective, previewTreatment, rally, releaseDraggedCombatant, reloadWeapon, resetCamera, rotateCamera, rotateCameraBy, selectAttackMode, selectPlayerCombatant, setArmoryLoadout, setViewMode, startTrot, turnCombatant } from "../slice";
 import { buildTrainingScenario } from "../trainingScenario";
 import { buildArmorySweepScenario, buildCaptureBridgeScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildHullBreachScenario, buildRescueScenario, buildZeroGravityScenario, characterCombatScenarios } from "../scenarios";
 import { attackArcAgainstTarget, resolveMelee, resolveSnapShot, snapShotTarget, woundStateForTotal } from "../combatResolution";
@@ -1095,6 +1095,137 @@ describe("character combat 2D checkpoint", () => {
     expect(state.scenario?.doors[0].open).toBe(false);
     expect(state.actionPointsById[player.id]).toBe(3);
     expect(state.events[0]).toBe("Boarding Lead closed security-door (3 AP)");
+  });
+
+  it("applies a wound when movement ends in environmental fire", () => {
+    const scenario = buildEngineRoomScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 4, y: 4 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewMove({ x: 5, y: 4 }));
+    state = reducer(state, confirmMove());
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === player.id)?.woundState).toBe("light");
+    expect(state.events[0]).toBe("Boarding Lead entered fire and suffered a light wound");
+    expect(state.status).toBe("active");
+  });
+
+  it("applies one fire wound at round end when a character remains in fire", () => {
+    const scenario = buildEngineRoomScenario();
+    scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 5, y: 4 };
+    scenario.combatants.filter((unit) => unit.side === "enemy").forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: ["player-1", "player-2"] };
+
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === "player-1")?.woundState).toBe("light");
+    expect(state.events.filter((event) => event.includes("Boarding Lead entered fire"))).toHaveLength(1);
+  });
+
+  it("does not apply round-end fire damage after a character leaves the fire cell", () => {
+    const scenario = buildEngineRoomScenario();
+    scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 6, y: 4 };
+    scenario.combatants.filter((unit) => unit.side === "enemy").forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: ["player-1", "player-2"] };
+
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === "player-1")?.woundState).toBe("healthy");
+  });
+
+  it("incapacitates a lightly wounded character who remains in fire", () => {
+    const scenario = buildEngineRoomScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 5, y: 4 };
+    player.woundState = "light";
+    scenario.combatants.filter((unit) => unit.side === "enemy").forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: ["player-1", "player-2"] };
+
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === player.id)).toMatchObject({ woundState: "serious", defeated: true, health: 0 });
+    expect(state.status).toBe("active");
+  });
+
+  it("blocks ranged line of sight through smoke", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.smokeCells = [{ x: 2, y: 1 }];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 1, y: 1 };
+    enemy.position = { x: 3, y: 1 };
+
+    expect(hasLineOfSight(scenario, player.position, enemy.position)).toBe(false);
+    expect(rangedEnemies(scenario, player.id)).not.toContainEqual(expect.objectContaining({ id: enemy.id }));
+  });
+
+  it("allows movement through smoke", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.smokeCells = [{ x: 2, y: 1 }];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 1, y: 1 };
+
+    expect(proposedMoveFor(scenario, player.id, { x: 3, y: 1 }, 4)?.path).toContainEqual({ x: 2, y: 1 });
+  });
+
+  it("allows adjacent melee when either character is in smoke", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.smokeCells = [{ x: 2, y: 1 }];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 1, y: 1 };
+    enemy.position = { x: 2, y: 1 };
+
+    expect(adjacentEnemies(scenario, player.id)).toContainEqual(expect.objectContaining({ id: enemy.id }));
+    expect(rangedEnemies(scenario, player.id)).not.toContainEqual(expect.objectContaining({ id: enemy.id }));
+  });
+
+  it("extinguishes adjacent fire for three AP and clears its smoke next turn", () => {
+    const scenario = buildEngineRoomScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 4, y: 4 };
+    scenario.combatants.filter((unit) => unit.side === "enemy").forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewExtinguishFire({ x: 5, y: 4 }));
+    state = reducer(state, confirmExtinguishFire());
+
+    expect(state.scenario?.fireCells).not.toContainEqual({ x: 5, y: 4 });
+    expect(state.scenario?.smokeCells).toContainEqual({ x: 6, y: 4 });
+    expect(state.actionPointsById[player.id]).toBe(3);
+    expect(state.smokeClearsAtTurnByCell["6:4"]).toBe(2);
+
+    state = { ...state, actedCombatantIds: ["player-1", "player-2"] };
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+    expect(state.turn).toBe(2);
+    expect(state.scenario?.smokeCells).not.toContainEqual({ x: 6, y: 4 });
+    expect(state.smokeClearsAtTurnByCell).toEqual({});
+  });
+
+  it("rejects attempts to extinguish distant fire", () => {
+    const scenario = buildEngineRoomScenario();
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewExtinguishFire({ x: 8, y: 6 }));
+    state = reducer(state, confirmExtinguishFire());
+
+    expect(state.plannedExtinguishFire).toBeNull();
+    expect(state.scenario?.fireCells).toContainEqual({ x: 8, y: 6 });
+    expect(state.actionPointsById["player-1"]).toBe(6);
   });
 
   it("seals the hull breach, restores pressure, and preserves existing wounds", () => {

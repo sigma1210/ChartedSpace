@@ -13,6 +13,8 @@ export const buildEngineRoomScenario = (): CombatScenario => ({
   objective: "Reach and disable the drive-control console.",
   width: 14,
   height: 9,
+  fireCells: [{ x: 5, y: 4 }, { x: 8, y: 6 }, { x: 11, y: 5 }],
+  smokeCells: [{ x: 6, y: 4 }, { x: 8, y: 7 }, { x: 11, y: 4 }],
   walls: [
     wall("hull-top", 0, 0, 14, 0), wall("hull-right", 14, 0, 14, 9), wall("hull-bottom", 14, 9, 0, 9), wall("hull-left", 0, 9, 0, 0),
     wall("access-wall-a", 4, 0, 4, 3), wall("access-wall-b", 4, 4, 4, 9),
