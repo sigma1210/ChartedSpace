@@ -3,6 +3,7 @@ import { snapShotTarget } from "./combatResolution";
 
 export const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 const samePoint = (a: GridPoint, b: GridPoint) => a.x === b.x && a.y === b.y;
+export const remainingCriticalFireCells = (scenario: CombatScenario) => (scenario.criticalFireCells ?? []).filter((critical) => scenario.fireCells?.some((fire) => samePoint(fire, critical)));
 const between = (value: number, a: number, b: number) => value >= Math.min(a, b) && value < Math.max(a, b);
 
 const wallBlocksStep = (from: GridPoint, to: GridPoint, segment: WallSegment) => {
@@ -62,6 +63,7 @@ export const adjacentObjectives = (scenario: CombatScenario, combatantId: string
   if (!unit) return [];
   const activeStageObjectiveId = scenario.victoryCondition === "staged-objectives" ? scenario.stageObjectiveIds?.find((id) => !scenario.objects.find((object) => object.id === id)?.completed) : null;
   return scenario.objects.filter((object) => object.kind !== "cover" && object.kind !== "control" && !object.completed
+    && (scenario.id !== "damage-control" || remainingCriticalFireCells(scenario).length === 0)
     && (!activeStageObjectiveId || object.id === activeStageObjectiveId)
     && (object.kind !== "extraction" || unit.id === scenario.captiveId)
     && (object.kind === "extraction"
@@ -139,6 +141,15 @@ export const routeAllowingClosedDoors = (scenario: CombatScenario, combatantId: 
   }
   return { path, door: null, doorStepIndex: -1 };
 };
+
+export const scenarioAvoidingFireForPathfinding = (scenario: CombatScenario): CombatScenario => ({
+  ...scenario,
+  objects: [
+    ...scenario.objects,
+    ...(scenario.fireCells ?? []).filter((fire) => !scenario.objects.some((object) => object.kind === "cover" && samePoint(object.position, fire)))
+      .map((position, index) => ({ id: `pathfinding-fire-${index}`, kind: "cover" as const, position, label: "Fire" })),
+  ],
+});
 
 const boundaryClear = (scenario: CombatScenario, from: GridPoint, to: GridPoint) => !scenario.walls.some((wall) => wallBlocksStep(from, to, wall))
   && !scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door));

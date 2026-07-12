@@ -80,6 +80,7 @@ const CombatScene3D = () => {
   const vacuumKeys = new Set(depressurizedCells(scenario).keys());
   const fireKeys = new Set((scenario.fireCells ?? []).map(pointKey));
   const smokeKeys = new Set((scenario.smokeCells ?? []).map(pointKey));
+  const criticalFireKeys = new Set((scenario.criticalFireCells ?? []).map(pointKey));
 
   return <>
     <color attach="background" args={["#03070a"]} />
@@ -111,7 +112,7 @@ const CombatScene3D = () => {
       </mesh>;
     }))}
 
-    {(scenario.fireCells ?? []).map((point) => <group key={`fire:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.2, point.y + 0.5 - scenario.height / 2]}><mesh><coneGeometry args={[0.28, 0.75, 10]} /><meshStandardMaterial color="#fb923c" emissive="#dc2626" emissiveIntensity={1.5} /></mesh><pointLight color="#f97316" intensity={1.5} distance={2.5} /></group>)}
+    {(scenario.fireCells ?? []).map((point) => { const critical = criticalFireKeys.has(pointKey(point)); return <group key={`fire:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.2, point.y + 0.5 - scenario.height / 2]}>{critical && <><mesh position={[0, -0.08, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.46, 0.07, 8, 32]} /><meshBasicMaterial color="#fde047" /></mesh><Html center position={[0, 1.15, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border-2 border-yellow-300 bg-red-950/95 px-1.5 py-0.5 font-mono text-[9px] font-bold text-yellow-100">CRITICAL FIRE</div></Html></>}<mesh><coneGeometry args={[critical ? 0.34 : 0.28, critical ? 0.9 : 0.75, 10]} /><meshStandardMaterial color={critical ? "#dc2626" : "#fb923c"} emissive="#dc2626" emissiveIntensity={1.5} /></mesh><pointLight color={critical ? "#fde047" : "#f97316"} intensity={critical ? 2.2 : 1.5} distance={2.5} /></group>; })}
     {(scenario.smokeCells ?? []).map((point) => <group key={`smoke:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.48, point.y + 0.5 - scenario.height / 2]}><mesh position={[-0.18, 0, 0]}><sphereGeometry args={[0.34, 12, 8]} /><meshStandardMaterial color="#94a3b8" transparent opacity={0.5} /></mesh><mesh position={[0.2, 0.12, 0.05]}><sphereGeometry args={[0.4, 12, 8]} /><meshStandardMaterial color="#64748b" transparent opacity={0.55} /></mesh></group>)}
 
     {(scenario.handholds ?? []).map((point) => <mesh key={`handhold:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.08, point.y + 0.5 - scenario.height / 2]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.25, 0.05, 8, 24]} /><meshBasicMaterial color="#60a5fa" /></mesh>)}

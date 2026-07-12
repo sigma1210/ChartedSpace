@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { ArmoryLoadoutId, CharacterCombatHudId, CharacterCombatHudLayout, CharacterCombatState, CharacterCombatViewMode, CombatScenario, FireMode, GridPoint } from "./types";
-import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, openDoorsAdjacentTo, pointKey, proposedMoveFor, rangedEnemies, routeAllowingClosedDoors, shortestPathToAny, treatableAllies, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
+import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, openDoorsAdjacentTo, pointKey, proposedMoveFor, rangedEnemies, remainingCriticalFireCells, routeAllowingClosedDoors, scenarioAvoidingFireForPathfinding, shortestPathToAny, treatableAllies, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
 import { resolveMelee, resolveSnapShot, snapShotTarget, woundStateForTotal, type DicePair } from "./combatResolution";
 import { shouldImproveEnemyRange } from "./enemyTactics";
 
@@ -114,7 +114,7 @@ const resolveEnemyMorale = (state: CharacterCombatState, moraleRolls: MoraleRoll
       state.events.unshift(`${guard.name} failed morale ${total}/${target} and surrendered`);
     } else state.events.unshift(`${guard.name} passed morale ${total}/${target}`);
   }
-  if (enemies.length > 0 && enemies.every((unit) => unit.defeated) && scenario.id !== "hull-breach" && scenario.victoryCondition !== "rescue-extract" && scenario.victoryCondition !== "hold-zone" && scenario.victoryCondition !== "staged-objectives") {
+  if (enemies.length > 0 && enemies.every((unit) => unit.defeated) && scenario.id !== "hull-breach" && scenario.id !== "damage-control" && scenario.victoryCondition !== "rescue-extract" && scenario.victoryCondition !== "hold-zone" && scenario.victoryCondition !== "staged-objectives") {
     state.status = "victory";
     state.selectedCombatantId = null;
     state.plannedMove = null;
@@ -313,6 +313,12 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (fireIndex < 0 || Math.abs(unit.position.x - fire.x) + Math.abs(unit.position.y - fire.y) !== 1) return;
     const pairedSmoke = scenario.smokeCells?.filter((cell) => !state.smokeClearsAtTurnByCell[pointKey(cell)]).sort((a, b) => distanceBetween(a, fire) - distanceBetween(b, fire))[0];
     scenario.fireCells!.splice(fireIndex, 1);
+    if (scenario.id === "damage-control") {
+      const total = scenario.criticalFireCells?.length ?? 0;
+      const remaining = remainingCriticalFireCells(scenario);
+      const extinguished = total - remaining.length;
+      scenario.objective = `Critical fires: ${extinguished}/${total} extinguished. ${remaining.length ? `Remaining: ${remaining.map((cell) => `${cell.x},${cell.y}`).join(" · ")}. Extinguish all critical fires, then restore the damage-control console.` : "Restore the damage-control console."}`;
+    }
     if (pairedSmoke) state.smokeClearsAtTurnByCell[pointKey(pairedSmoke)] = state.turn + 1;
     state.actionPointsById[id] -= 3;
     if (state.actionPointsById[id] === 0) state.actedCombatantIds.push(id);
@@ -489,7 +495,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const scenario = state.scenario;
     const combatantId = state.selectedCombatantId;
     const objectiveId = state.plannedObjectiveId;
-    if (state.status !== "active" || !scenario || !combatantId || !objectiveId || state.actedCombatantIds.includes(combatantId) || (state.actionPointsById[combatantId] ?? 0) < 6) return;
+    if (state.status !== "active" || !scenario || !combatantId || !objectiveId || state.actedCombatantIds.includes(combatantId) || (state.actionPointsById[combatantId] ?? 0) < 6 || (scenario.id === "damage-control" && remainingCriticalFireCells(scenario).length > 0)) return;
     const unit = scenario.combatants.find((combatant) => combatant.id === combatantId);
     const objective = adjacentObjectives(scenario, combatantId).find((candidate) => candidate.id === objectiveId);
     if (!unit || !objective) return;
@@ -628,6 +634,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (state.status !== "active" || playerIds.length === 0 || !playerIds.every((id) => state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) === 0)) return;
     for (const enemy of scenario!.combatants.filter((unit) => unit.side === "enemy" && !unit.defeated)) {
       const activePlayers = scenario!.combatants.filter((unit) => unit.side === "player" && !unit.defeated);
+      const fireSafeScenario = scenarioAvoidingFireForPathfinding(scenario!);
       if (activePlayers.length === 0) break;
       const coveringLane = state.coveringFireLanes.find((lane) => lane.cells.some((cell) => pointKey(cell) === pointKey(enemy.position)));
       const coveringAttackerId = coveringLane?.attackerId;
@@ -680,9 +687,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         { x: attackTarget.position.x, y: attackTarget.position.y - 1 },
       ] : [];
       const openApproach = attackTarget && scenario!.victoryCondition !== "hold-zone" && attackProfile && shouldImproveEnemyRange(enemy, attackProfile.rangeBand)
-        ? shortestPathToAny(scenario!, enemy.id, approachGoals) : null;
+        ? shortestPathToAny(fireSafeScenario, enemy.id, approachGoals) ?? shortestPathToAny(scenario!, enemy.id, approachGoals) : null;
       const doorApproach = !openApproach && attackTarget && scenario!.victoryCondition !== "hold-zone" && attackProfile && shouldImproveEnemyRange(enemy, attackProfile.rangeBand)
-        ? routeAllowingClosedDoors(scenario!, enemy.id, approachGoals) : null;
+        ? routeAllowingClosedDoors(fireSafeScenario, enemy.id, approachGoals) ?? routeAllowingClosedDoors(scenario!, enemy.id, approachGoals) : null;
       const improvingRange = Boolean(openApproach?.length || doorApproach?.door);
       if (attackTarget && !improvingRange) {
         const ammunition = state.ammunitionById[enemy.id] ?? 0;
@@ -719,7 +726,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           state.actionPointsById[enemy.id] = 0;
           continue;
         }
-        const pushes = [...zeroGravityPushes(scenario!, enemy.id).values()].sort((a, b) => {
+        const allPushes = [...zeroGravityPushes(scenario!, enemy.id).values()];
+        const safePushes = allPushes.filter((move) => !move.path.some((step) => scenario!.fireCells?.some((fire) => pointKey(fire) === pointKey(step))));
+        const pushes = (safePushes.length > 0 ? safePushes : allPushes).sort((a, b) => {
           const score = (move: typeof a) => distanceBetween(move.destination, target.position) + (snapShotTarget({ ...enemy, position: move.destination }, target) ? -10 : 0);
           return score(a) - score(b) || pointKey(a.destination).localeCompare(pointKey(b.destination));
         });
@@ -733,9 +742,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           { x: target.position.x - 1, y: target.position.y },
           { x: target.position.x, y: target.position.y - 1 },
         ];
-        let route = shortestPathToAny(scenario!, enemy.id, movementGoals);
+        let route = shortestPathToAny(fireSafeScenario, enemy.id, movementGoals) ?? shortestPathToAny(scenario!, enemy.id, movementGoals);
         if (!route) {
-          const doorRoute = routeAllowingClosedDoors(scenario!, enemy.id, movementGoals);
+          const doorRoute = routeAllowingClosedDoors(fireSafeScenario, enemy.id, movementGoals) ?? routeAllowingClosedDoors(scenario!, enemy.id, movementGoals);
           if (!doorRoute?.door) continue;
           if (doorRoute.doorStepIndex === 0) {
             if (state.placedBreachingChargeByDoorId[doorRoute.door.id]) {
@@ -790,6 +799,10 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       enemy.facing = dx > 0 ? "east" : dx < 0 ? "west" : dy > 0 ? "south" : "north";
       state.actionPointsById[enemy.id] = 6 - move.cost;
       state.events.unshift(`${enemy.name} moved to ${move.destination.x},${move.destination.y} (${move.cost} AP)`);
+      if (scenario!.fireCells?.some((fire) => pointKey(fire) === pointKey(enemy.position))) {
+        applyFireDamage(state, enemy);
+        if (enemy.defeated) { resolveEnemyMorale(state, action.payload.moraleRolls); continue; }
+      }
       if (resolveHoldZoneCapture(state)) return;
       const snapTarget = rangedEnemies(scenario!, enemy.id).filter((candidate) => candidate.side === "player").sort((a, b) => distanceBetween(enemy.position, a.position) - distanceBetween(enemy.position, b.position))[0];
       const dice = action.payload.enemyRolls[enemy.id];

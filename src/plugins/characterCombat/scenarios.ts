@@ -310,6 +310,24 @@ export const buildHullBreachScenario = (): CombatScenario => {
   };
 };
 
+export const buildDamageControlScenario = (): CombatScenario => {
+  const scenario = buildCargoDeckScenario();
+  const fireCells = [{ x: 5, y: 6 }, { x: 8, y: 7 }, { x: 11, y: 8 }, { x: 14, y: 6 }];
+  return {
+    ...scenario,
+    id: "damage-control",
+    title: "Damage Control",
+    briefing: "Multiple engineering compartments are burning. Cross the damaged deck, suppress the critical fires, and restore the damage-control console.",
+    objective: "Critical fires: 0/3 extinguished. Remaining: 5,6 · 8,7 · 11,8. Extinguish all critical fires, then restore the damage-control console.",
+    fireCells,
+    criticalFireCells: fireCells.slice(0, 3),
+    smokeCells: [{ x: 6, y: 6 }, { x: 9, y: 7 }, { x: 12, y: 8 }, { x: 14, y: 7 }],
+    objects: scenario.objects.map((object) => object.id === "cargo-manifest-console"
+      ? { ...object, id: "damage-control-console", label: "Damage-Control Console" }
+      : { ...object, label: object.label === "Cargo Stack" || object.label === "Sealed Freight" ? "Engineering Machinery" : object.label }),
+  };
+};
+
 export const characterCombatScenarios = [
   { id: "boarding-action", title: "Boarding Action", summary: "Training encounter: breach the command room and secure its console.", build: registered(buildTrainingScenario) },
   { id: "engine-room-sabotage", title: "Engine Room Sabotage", summary: "Larger engineering deck with two security doors and three defenders.", build: registered(buildEngineRoomScenario) },
@@ -321,4 +339,5 @@ export const characterCombatScenarios = [
   { id: "capture-the-bridge", title: "Capture the Bridge", summary: "Disable bridge security, unlock access, and seize command control in a two-stage assault.", build: registered(buildCaptureBridgeScenario) },
   { id: "zero-g-drift", title: "Zero-G Drift", summary: "Push off and drift through a compartment with handholds, walls, doors, and collision hazards.", build: registered(buildZeroGravityScenario) },
   { id: "hull-breach", title: "Hull Breach", summary: "Contain decompression, cross a zero-G deck, and survive vacuum exposure.", build: registered(buildHullBreachScenario) },
+  { id: "damage-control", title: "Damage Control", summary: "Cross a large damaged engineering deck and suppress multiple critical fires.", build: registered(buildDamageControlScenario) },
 ];

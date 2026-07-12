@@ -41,6 +41,7 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
   const vacuumKeys = new Set(depressurizedCells(scenario).keys());
   const fireKeys = new Set((scenario.fireCells ?? []).map(pointKey));
   const smokeKeys = new Set((scenario.smokeCells ?? []).map(pointKey));
+  const criticalFireKeys = new Set((scenario.criticalFireCells ?? []).map(pointKey));
   return (
   <svg viewBox={`-20 -20 ${scenario.width * cell + 40} ${scenario.height * cell + 40}`} className="h-full w-full" role="img" aria-label="Two dimensional boarding action deck plan" onClick={onClearSelection}>
     <rect x="0" y="0" width={scenario.width * cell} height={scenario.height * cell} rx="8" fill="#101c26" />
@@ -64,7 +65,7 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
         onMouseEnter={() => onHoverDestination(!grenadeTargeting && reachable ? point : null)} onMouseLeave={() => onHoverDestination(null)}
         onClick={(event) => { if (coveringTarget) { event.stopPropagation(); dispatch(previewCoveringFire(point)); } else if (grenadeTarget) { event.stopPropagation(); onPreviewGrenade(point); } else if (!grenadeTargeting && reachable && !coveringFireTargeting) { event.stopPropagation(); onPreviewMove(point); } }} />;
     }))}
-    {(scenario.fireCells ?? []).map((point) => <g key={`fire:${pointKey(point)}`} pointerEvents="none"><circle cx={point.x * cell + cell / 2} cy={point.y * cell + cell / 2} r="13" fill="#f97316" opacity="0.82" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 4} textAnchor="middle" fill="#fff7ed" fontSize="10" fontWeight="bold" fontFamily="monospace">FIRE</text></g>)}
+    {(scenario.fireCells ?? []).map((point) => { const critical = criticalFireKeys.has(pointKey(point)); return <g key={`fire:${pointKey(point)}`} pointerEvents="none">{critical && <circle cx={point.x * cell + cell / 2} cy={point.y * cell + cell / 2} r="20" fill="none" stroke="#fde047" strokeWidth="4" />}<circle cx={point.x * cell + cell / 2} cy={point.y * cell + cell / 2} r="13" fill={critical ? "#dc2626" : "#f97316"} opacity="0.9" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 4} textAnchor="middle" fill="#fff7ed" fontSize={critical ? "8" : "10"} fontWeight="bold" fontFamily="monospace">{critical ? "CRITICAL" : "FIRE"}</text></g>; })}
     {(scenario.smokeCells ?? []).map((point) => <g key={`smoke:${pointKey(point)}`} pointerEvents="none"><circle cx={point.x * cell + cell / 2 - 8} cy={point.y * cell + cell / 2} r="12" fill="#94a3b8" opacity="0.62" /><circle cx={point.x * cell + cell / 2 + 8} cy={point.y * cell + cell / 2} r="14" fill="#64748b" opacity="0.72" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 4} textAnchor="middle" fill="#f8fafc" fontSize="9" fontWeight="bold" fontFamily="monospace">SMOKE</text></g>)}
     {(scenario.handholds ?? []).map((point) => <g key={`handhold:${pointKey(point)}`} pointerEvents="none"><circle cx={point.x * cell + cell / 2} cy={point.y * cell + cell / 2} r="10" fill="none" stroke="#60a5fa" strokeWidth="4" /><text x={point.x * cell + cell / 2} y={point.y * cell + cell / 2 + 24} textAnchor="middle" fill="#93c5fd" fontSize="8" fontWeight="bold" fontFamily="monospace">HANDHOLD</text></g>)}
     {scenario.id === "boarding-action" && <>

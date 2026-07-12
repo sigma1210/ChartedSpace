@@ -1,7 +1,7 @@
 import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, hasLineOfSight, openDoorsAdjacentTo, pointKey, proposedMoveFor, rangedEnemies, reachableMovement, routeAllowingClosedDoors, shortestPathToAny, treatableAllies, validGrenadeTargets, weaponRecoilDistance, zeroGravityPushes, zeroGravityRecoilPath } from "../geometry";
 import reducer, { adjustCameraZoom, beginCoveringFire, beginDragging, beginGrenadeTargeting, cancelMovePreview, clearCombatScenario, closeDoor, confirmAttack, confirmBreachDoor, confirmCoveringFire, confirmExtinguishFire, confirmGrenade, confirmMove, confirmOpenDoor, confirmSecureObjective, confirmTreatment, detonateBreachCharge, endPlayerTurn, evade, finishActivation, focusCameraOnSelected, loadCombatScenario, openDoor, panCameraBy, previewAttack, previewBreachDetonation, previewBreachDoor, previewCoveringFire, previewExtinguishFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewSecureObjective, previewTreatment, rally, releaseDraggedCombatant, reloadWeapon, resetCamera, rotateCamera, rotateCameraBy, selectAttackMode, selectPlayerCombatant, setArmoryLoadout, setViewMode, startTrot, turnCombatant } from "../slice";
 import { buildTrainingScenario } from "../trainingScenario";
-import { buildArmorySweepScenario, buildCaptureBridgeScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildHullBreachScenario, buildRescueScenario, buildZeroGravityScenario, characterCombatScenarios } from "../scenarios";
+import { buildArmorySweepScenario, buildCaptureBridgeScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildDamageControlScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildHullBreachScenario, buildRescueScenario, buildZeroGravityScenario, characterCombatScenarios } from "../scenarios";
 import { attackArcAgainstTarget, resolveMelee, resolveSnapShot, snapShotTarget, woundStateForTotal } from "../combatResolution";
 import { validateCombatScenario } from "../scenarioValidator";
 import { applyArmoryLoadouts, characterCombatArmor, characterCombatWeapons } from "../equipment";
@@ -217,7 +217,7 @@ describe("character combat 2D checkpoint", () => {
   });
 
   it("provides two distinct selectable scenarios that load and reset independently", () => {
-    expect(characterCombatScenarios.map((entry) => entry.id)).toEqual(["boarding-action", "engine-room-sabotage", "cargo-deck-interdiction", "carrier-deck-assault", "detention-deck-rescue", "hold-the-airlock", "armory-sweep", "capture-the-bridge", "zero-g-drift", "hull-breach"]);
+    expect(characterCombatScenarios.map((entry) => entry.id)).toEqual(["boarding-action", "engine-room-sabotage", "cargo-deck-interdiction", "carrier-deck-assault", "detention-deck-rescue", "hold-the-airlock", "armory-sweep", "capture-the-bridge", "zero-g-drift", "hull-breach", "damage-control"]);
     const boarding = buildTrainingScenario();
     const engine = buildEngineRoomScenario();
     expect(engine).toMatchObject({ id: "engine-room-sabotage", width: 14, height: 9 });
@@ -244,6 +244,24 @@ describe("character combat 2D checkpoint", () => {
     const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
     player.position = { x: 11, y: 4 };
     expect(adjacentObjectives(scenario, player.id).map((objective) => objective.id)).toContain("drive-console");
+  });
+
+  it("provides reachable approaches to every Damage Control fire and its console", () => {
+    const scenario = buildDamageControlScenario();
+    scenario.doors.forEach((door) => { door.open = true; });
+    scenario.combatants.filter((unit) => unit.side === "enemy").forEach((unit) => { unit.defeated = true; });
+    const playerId = "player-1";
+    const adjacentCells = (point: { x: number; y: number }) => [
+      { x: point.x + 1, y: point.y }, { x: point.x - 1, y: point.y },
+      { x: point.x, y: point.y + 1 }, { x: point.x, y: point.y - 1 },
+    ];
+
+    expect(scenario).toMatchObject({ id: "damage-control", width: 20, height: 14 });
+    expect(scenario.criticalFireCells).toHaveLength(3);
+    expect(scenario.criticalFireCells?.every((critical) => scenario.fireCells?.some((fire) => pointKey(fire) === pointKey(critical)))).toBe(true);
+    for (const fire of scenario.fireCells ?? []) expect(shortestPathToAny(scenario, playerId, adjacentCells(fire))).not.toBeNull();
+    const console = scenario.objects.find((object) => object.id === "damage-control-console")!;
+    expect(shortestPathToAny(scenario, playerId, adjacentCells(console.position))).not.toBeNull();
   });
 
   it("drifts in a straight line to a handhold for 3 AP in zero gravity", () => {
@@ -981,6 +999,35 @@ describe("character combat 2D checkpoint", () => {
     expect(state.scenario?.vacuumSources).toHaveLength(1);
   });
 
+  it("keeps Damage Control active after every enemy is neutralized or surrendered", () => {
+    const scenario = buildDamageControlScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.fireCells = [{ x: 5, y: 6 }];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const guard = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    const survivor = scenario.combatants.find((unit) => unit.id === "enemy-2")!;
+    player.position = { x: 1, y: 1 };
+    guard.position = { x: 2, y: 1 };
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== guard.id && unit.id !== survivor.id).forEach((unit) => { unit.defeated = true; });
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewAttack(guard.id));
+    state = reducer(state, selectAttackMode("aimed"));
+    state = reducer(state, confirmAttack({
+      hitDice: { first: 6, second: 6 },
+      woundDice: { first: 6, second: 6 },
+      moraleRolls: { [survivor.id]: { first: 1, second: 1 } },
+    }));
+
+    expect(state.scenario?.combatants.filter((unit) => unit.side === "enemy").every((unit) => unit.defeated)).toBe(true);
+    expect(state.status).toBe("active");
+    expect(state.outcome).toBeNull();
+    expect(state.scenario?.fireCells).toHaveLength(1);
+  });
+
   it("keeps a guard active after passing casualty morale", () => {
     const scenario = buildTrainingScenario();
     scenario.doors[0].open = true;
@@ -1228,6 +1275,66 @@ describe("character combat 2D checkpoint", () => {
     expect(state.actionPointsById["player-1"]).toBe(6);
   });
 
+  it("tracks Damage Control progress without removing the original critical-fire list", () => {
+    const scenario = buildDamageControlScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 4, y: 6 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewExtinguishFire({ x: 5, y: 6 }));
+    state = reducer(state, confirmExtinguishFire());
+
+    expect(state.scenario?.criticalFireCells).toHaveLength(3);
+    expect(state.scenario?.fireCells).not.toContainEqual({ x: 5, y: 6 });
+    expect(state.scenario?.objective).toContain("Critical fires: 1/3 extinguished");
+    expect(state.scenario?.objective).not.toContain("5,6");
+    expect(state.scenario?.objective).toContain("8,7 · 11,8");
+  });
+
+  it("does not count an ordinary Damage Control fire toward mission progress", () => {
+    const scenario = buildDamageControlScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 13, y: 6 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewExtinguishFire({ x: 14, y: 6 }));
+    state = reducer(state, confirmExtinguishFire());
+
+    expect(state.scenario?.fireCells).not.toContainEqual({ x: 14, y: 6 });
+    expect(state.scenario?.objective).toContain("Critical fires: 0/3 extinguished");
+    expect(state.scenario?.objective).toContain("Remaining: 5,6 · 8,7 · 11,8");
+  });
+
+  it("keeps the Damage Control console unavailable while critical fire remains", () => {
+    const scenario = buildDamageControlScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 17, y: 7 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewSecureObjective("damage-control-console"));
+    state = reducer(state, confirmSecureObjective());
+
+    expect(state.plannedObjectiveId).toBeNull();
+    expect(state.status).toBe("active");
+    expect(state.actionPointsById[player.id]).toBe(6);
+  });
+
+  it("wins Damage Control by restoring the console after all critical fires are out", () => {
+    const scenario = buildDamageControlScenario();
+    const criticalKeys = new Set(scenario.criticalFireCells?.map(pointKey));
+    scenario.fireCells = scenario.fireCells?.filter((fire) => !criticalKeys.has(pointKey(fire)));
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 17, y: 7 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewSecureObjective("damage-control-console"));
+    state = reducer(state, confirmSecureObjective());
+
+    expect(state.status).toBe("victory");
+    expect(state.actionPointsById[player.id]).toBe(0);
+    expect(state.outcome).toMatchObject({ result: "victory", scenarioTitle: "Damage Control" });
+  });
+
   it("seals the hull breach, restores pressure, and preserves existing wounds", () => {
     const scenario = buildHullBreachScenario();
     const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
@@ -1324,6 +1431,54 @@ describe("character combat 2D checkpoint", () => {
     expect(state.scenario?.combatants.find((unit) => unit.id === "enemy-1")?.position).not.toEqual({ x: 11, y: 6 });
     expect(state.events.some((event) => event.startsWith("Security Guard moved to"))).toBe(true);
     expect(state.events.some((event) => event.startsWith("Security Guard snap fired"))).toBe(true);
+  });
+
+  it("makes enemy movement take a safe alternate route around fire", () => {
+    const scenario = buildTrainingScenario();
+    scenario.width = 6;
+    scenario.height = 3;
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.fireCells = [{ x: 1, y: 1 }];
+    scenario.smokeCells = [];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 5, y: 1 };
+    enemy.position = { x: 0, y: 1 };
+    enemy.weapon = { ...enemy.weapon, effectiveRange: 1, longRange: 1, extremeRange: 1 };
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === enemy.id)?.position).not.toEqual({ x: 1, y: 1 });
+    expect(state.scenario?.combatants.find((unit) => unit.id === enemy.id)?.woundState).toBe("healthy");
+  });
+
+  it("lets an enemy cross unavoidable fire and applies injury when movement ends there", () => {
+    const scenario = buildTrainingScenario();
+    scenario.width = 4;
+    scenario.height = 1;
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.fireCells = [{ x: 2, y: 0 }];
+    scenario.smokeCells = [];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 3, y: 0 };
+    enemy.position = { x: 0, y: 0 };
+    enemy.weapon = { ...enemy.weapon, effectiveRange: 1, longRange: 1, extremeRange: 1 };
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === enemy.id)).toMatchObject({ position: { x: 2, y: 0 }, woundState: "serious", defeated: true });
+    expect(state.events).toContain(`${enemy.name} entered fire and suffered a light wound`);
   });
 
   it("finds a deterministic full-map route around a wall and limits enemy movement to three steps", () => {
