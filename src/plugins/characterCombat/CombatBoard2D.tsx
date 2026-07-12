@@ -134,6 +134,7 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
           <text x={x} y={y - 28} textAnchor="middle" fill={player ? "#a7f3d0" : "#fecaca"} fontSize="10" fontFamily="monospace">{unit.name.toUpperCase()}</text>
           <text x={x} y={y - 19} textAnchor="middle" fill="#cbd5e1" fontSize="7" fontFamily="monospace">{equipment.weaponLabel} · {equipment.armorLabel.toUpperCase()}</text>
           {unit.surrendered ? <text x={x} y={y + 42} textAnchor="middle" fill="#fde68a" fontSize="8" fontWeight="bold" fontFamily="monospace">SURRENDERED</text> : unit.woundState !== "healthy" && <text x={x} y={y + 42} textAnchor="middle" fill={unit.woundState === "light" ? "#fbbf24" : "#fca5a5"} fontSize="8" fontWeight="bold" fontFamily="monospace">{unit.woundState.toUpperCase()}</text>}
+          {unit.posture === "prone" && <text x={x} y={y - 34} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontWeight="bold" fontFamily="monospace">PRONE</text>}
         </g>
       );
     })}

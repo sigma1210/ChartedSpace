@@ -4,7 +4,7 @@ import { Canvas } from "@react-three/fiber";
 import { Html, OrthographicCamera } from "@react-three/drei";
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { adjacentObjectives, closedDoorsAdjacentTo, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, pathContains, pointKey, rangedEnemies, reachableMovement, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
+import { adjacentObjectives, closedDoorsAdjacentTo, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, pathContains, pointKey, proneRotationForFacing, rangedEnemies, reachableMovement, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
 import { adjustCameraZoom, panCameraBy, previewAttack, previewCoveringFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewSecureObjective, rotateCameraBy, selectPlayerCombatant, setHoveredDestination } from "./slice";
 import type { DoorSegment, WallSegment } from "./types";
 import { equipmentVisualFor } from "./equipmentPresentation";
@@ -59,10 +59,12 @@ const CombatScene3D = () => {
     || (cameraZ < 0 && wall.from.y === 0 && wall.to.y === 0);
   const selectedActionPoints = selectedCombatantId ? actionPointsById[selectedCombatantId] ?? 0 : 0;
   const selectedHasActed = selectedCombatantId ? actedCombatantIds.includes(selectedCombatantId) || selectedActionPoints === 0 : false;
+  const selectedUnit = scenario.combatants.find((unit) => unit.id === selectedCombatantId);
   const selectedIsTrotting = selectedCombatantId ? trottingCombatantIds.includes(selectedCombatantId) : false;
+  const selectedIsProne = selectedUnit?.posture === "prone";
   const selectedIsSuppressed = selectedCombatantId ? suppressedCombatantIds.includes(selectedCombatantId) : false;
   const selectedIsDragging = selectedCombatantId ? Boolean(draggingCombatantByCarrierId[selectedCombatantId]) : false;
-  const reachable = status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? scenario.gravityMode === "zero-g" ? selectedActionPoints >= 3 ? zeroGravityPushes(scenario, selectedCombatantId) : new Map() : reachableMovement(scenario, selectedCombatantId, Math.min(selectedIsDragging || selectedIsSuppressed ? 2 : selectedIsTrotting ? 6 : 4, selectedActionPoints)) : new Map();
+  const reachable = status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? scenario.gravityMode === "zero-g" ? selectedActionPoints >= 3 ? zeroGravityPushes(scenario, selectedCombatantId) : new Map() : reachableMovement(scenario, selectedCombatantId, Math.min(selectedIsProne ? 1 : selectedIsDragging || selectedIsSuppressed ? 2 : selectedIsTrotting ? 6 : 4, selectedActionPoints)) : new Map();
   const validTargetIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting && !selectedIsTrotting ? rangedEnemies(scenario, selectedCombatantId).map((unit) => unit.id) : []);
   const maintainedTargetId = selectedCombatantId ? maintainedTargetByCombatantId[selectedCombatantId] : null;
   const coveringCombatantIds = new Set(coveringFireLanes.map((lane) => lane.attackerId));
@@ -73,7 +75,6 @@ const CombatScene3D = () => {
   const grenadeBlastKeys = new Set(plannedGrenadeTarget ? grenadeBlastCells(scenario, plannedGrenadeTarget).map(pointKey) : []);
   const coveringTargetKeys = new Set(coveringFireTargeting && selectedCombatantId ? validCoveringFireTargets(scenario, selectedCombatantId).map(pointKey) : []);
   const laneKeys = new Set(coveringFireLanes.flatMap((lane) => lane.cells.map(pointKey)));
-  const selectedUnit = scenario.combatants.find((unit) => unit.id === selectedCombatantId);
   const plannedLaneKeys = new Set(plannedCoveringFireTarget && selectedUnit ? fireLaneCells(scenario, selectedUnit.position, plannedCoveringFireTarget).map(pointKey) : []);
   const breachDoor = scenario.doors.find((door) => door.id === plannedBreachDoorId);
   const breachKeys = new Set(breachDoor ? doorBlastCells(breachDoor).map(pointKey) : []);
@@ -154,9 +155,9 @@ const CombatScene3D = () => {
           : unit.facing === "south" ? { position: [0, 0.12, 0.34] as [number, number, number], rotation: [Math.PI / 2, 0, 0] as [number, number, number] }
             : { position: [0, 0.12, -0.34] as [number, number, number], rotation: [-Math.PI / 2, 0, 0] as [number, number, number] };
       const showLabel = selected || validTarget || plannedTarget;
-      return <group key={unit.id} position={[unit.position.x + 0.5 - scenario.width / 2, 0.12, unit.position.y + 0.5 - scenario.height / 2]} rotation={inactive && !unit.surrendered ? [0, 0, Math.PI / 2] : [0, 0, 0]}
+      return <group key={unit.id} position={[unit.position.x + 0.5 - scenario.width / 2, unit.posture === "prone" ? 0.28 : 0.12, unit.position.y + 0.5 - scenario.height / 2]} rotation={inactive && !unit.surrendered ? [0, 0, Math.PI / 2] : unit.posture === "prone" ? proneRotationForFacing(unit.facing) : [0, 0, 0]}
         onClick={(event) => { if (selectable || validTarget) event.stopPropagation(); if (selectable) dispatch(selectPlayerCombatant(unit.id)); else if (validTarget) dispatch(previewAttack(unit.id)); }}>
-        {showLabel && <Html center position={[0, 1.18, 0]} style={{ pointerEvents: "none" }}><div className={`whitespace-nowrap border bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold ${unit.side === "player" ? "border-emerald-300 text-emerald-100" : "border-red-300 text-red-100"}`}>{unit.name.toUpperCase()}{unit.woundState !== "healthy" ? ` · ${unit.woundState.toUpperCase()}` : ""}</div></Html>}
+        {showLabel && <Html center position={[0, 1.18, 0]} style={{ pointerEvents: "none" }}><div className={`whitespace-nowrap border bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold ${unit.side === "player" ? "border-emerald-300 text-emerald-100" : "border-red-300 text-red-100"}`}>{unit.name.toUpperCase()}{unit.posture === "prone" ? " · PRONE" : ""}{unit.woundState !== "healthy" ? ` · ${unit.woundState.toUpperCase()}` : ""}</div></Html>}
         {selected && <mesh position={[0, 0.02, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.43, 0.05, 8, 32]} /><meshBasicMaterial color="#f8fafc" /></mesh>}
         {validTarget && <mesh position={[0, 0.04, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[plannedTarget ? 0.52 : 0.46, plannedTarget ? 0.075 : 0.045, 8, 32]} /><meshBasicMaterial color={plannedTarget ? "#fef2f2" : "#ef4444"} /></mesh>}
         {maintainedTarget && <mesh position={[0, 0.08, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.56, 0.025, 8, 32]} /><meshBasicMaterial color="#22d3ee" /></mesh>}

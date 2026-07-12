@@ -318,10 +318,15 @@ export const buildDamageControlScenario = (): CombatScenario => {
     id: "damage-control",
     title: "Damage Control",
     briefing: "Multiple engineering compartments are burning. Cross the damaged deck, suppress the critical fires, and restore the damage-control console.",
-    objective: "Critical fires: 0/3 extinguished. Remaining: 5,6 · 8,7 · 11,8. Extinguish all critical fires, then restore the damage-control console.",
+    objective: "Critical fires: 0/3 extinguished. Remaining: 5,6 · 8,7 · 11,8. Turn 3 spread threat: critical fire 8,7. Engineering cascade: Turn 7. Extinguish all critical fires, then restore the damage-control console.",
     fireCells,
     criticalFireCells: fireCells.slice(0, 3),
     smokeCells: [{ x: 6, y: 6 }, { x: 9, y: 7 }, { x: 12, y: 8 }, { x: 14, y: 7 }],
+    fireSpreadSchedule: [
+      { turn: 3, source: { x: 8, y: 7 }, fire: { x: 7, y: 7 }, smoke: { x: 7, y: 6 } },
+      { turn: 5, source: { x: 11, y: 8 }, fire: { x: 10, y: 8 }, smoke: { x: 10, y: 7 } },
+    ],
+    criticalFireDeadlineTurn: 7,
     objects: scenario.objects.map((object) => object.id === "cargo-manifest-console"
       ? { ...object, id: "damage-control-console", label: "Damage-Control Console" }
       : { ...object, label: object.label === "Cargo Stack" || object.label === "Sealed Freight" ? "Engineering Machinery" : object.label }),

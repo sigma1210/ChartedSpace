@@ -2,6 +2,13 @@ import type { CombatScenario, Combatant, DoorSegment, GridPoint, PlannedMove, Wa
 import { snapShotTarget } from "./combatResolution";
 
 export const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
+export const proneRotationForFacing = (facing: Combatant["facing"]): [number, number, number] => facing === "east"
+  ? [0, 0, -Math.PI / 2]
+  : facing === "west"
+    ? [0, 0, Math.PI / 2]
+    : facing === "south"
+      ? [Math.PI / 2, 0, 0]
+      : [-Math.PI / 2, 0, 0];
 const samePoint = (a: GridPoint, b: GridPoint) => a.x === b.x && a.y === b.y;
 export const remainingCriticalFireCells = (scenario: CombatScenario) => (scenario.criticalFireCells ?? []).filter((critical) => scenario.fireCells?.some((fire) => samePoint(fire, critical)));
 const between = (value: number, a: number, b: number) => value >= Math.min(a, b) && value < Math.max(a, b);
