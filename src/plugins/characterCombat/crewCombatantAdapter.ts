@@ -25,13 +25,12 @@ export const defaultBoardingTeamIds = (candidates: BoardingCandidate[], currentC
   const ranked = [...candidates].sort((a, b) => b.gunCombat + b.melee - (a.gunCombat + a.melee) || b.medic - a.medic);
   const first = candidates.find((candidate) => candidate.characterId === currentCharacterId) ?? candidates.find((candidate) => candidate.isOwnerOperator) ?? ranked[0];
   if (!first) return [];
-  const second = ranked.find((candidate) => candidate.id !== first.id);
-  return second ? [first.id, second.id] : [first.id];
+  return [first.id, ...ranked.filter((candidate) => candidate.id !== first.id).map((candidate) => candidate.id)].slice(0, 5);
 };
 
 export const hydrateScenarioBoardingTeam = (scenario: CombatScenario, candidates: BoardingCandidate[]) => {
-  if (candidates.length !== 2) return scenario;
-  scenario.combatants.filter((unit) => unit.side === "player").slice(0, 2).forEach((unit, index) => {
+  if (candidates.length === 0) return scenario;
+  scenario.combatants.filter((unit) => unit.side === "player").slice(0, candidates.length).forEach((unit, index) => {
     const candidate = candidates[index];
     unit.name = candidate.name;
     unit.weaponSkill = candidate.gunCombat;

@@ -333,16 +333,79 @@ export const buildDamageControlScenario = (): CombatScenario => {
   };
 };
 
+export const buildSuppressStrongpointScenario = (): CombatScenario => ({
+  id: "suppress-strongpoint",
+  title: "Suppress the Strongpoint",
+  briefing: "A five-person boarding section must break a concentrated security force. Coordinate fire, suppress defenders, and exploit failures in enemy morale.",
+  objective: "Neutralize or force the entire security section to surrender.",
+  width: 18,
+  height: 12,
+  walls: [
+    wall("hull-top", 0, 0, 18, 0), wall("hull-right", 18, 0, 18, 12),
+    wall("hull-bottom", 18, 12, 0, 12), wall("hull-left", 0, 12, 0, 0),
+  ],
+  doors: [],
+  objects: [
+    { id: "barricade-1", kind: "cover", position: { x: 7, y: 2 }, label: "Cargo Barricade" },
+    { id: "barricade-2", kind: "cover", position: { x: 7, y: 5 }, label: "Cargo Barricade" },
+    { id: "barricade-3", kind: "cover", position: { x: 7, y: 9 }, label: "Cargo Barricade" },
+    { id: "barricade-4", kind: "cover", position: { x: 10, y: 3 }, label: "Security Barricade" },
+    { id: "barricade-5", kind: "cover", position: { x: 10, y: 8 }, label: "Security Barricade" },
+    { id: "strongpoint-1", kind: "cover", position: { x: 14, y: 2 }, label: "Strongpoint Shield" },
+    { id: "strongpoint-2", kind: "cover", position: { x: 14, y: 9 }, label: "Strongpoint Shield" },
+  ],
+  combatants: [
+    { id: "player-1", name: "Section Leader", side: "player", position: { x: 2, y: 3 }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 1, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 2, leadershipRating: 2, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 1, medkits: 1, woundState: "healthy" },
+    { id: "player-2", name: "Automatic Rifle", side: "player", position: { x: 2, y: 5 }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 1, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 1, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 1, medkits: 0, woundState: "healthy" },
+    { id: "player-3", name: "Rifleman One", side: "player", position: { x: 2, y: 7 }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 0, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 1, armor: armor.flakVest.value, armorName: armor.flakVest.name, grenades: 1, medkits: 0, woundState: "healthy" },
+    { id: "player-4", name: "Marksman", side: "player", position: { x: 3, y: 4 }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.laserRifle }, weaponSkill: 1, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 0, armor: armor.flakVest.value, armorName: armor.flakVest.name, grenades: 0, medkits: 0, woundState: "healthy" },
+    { id: "player-5", name: "Close Support", side: "player", position: { x: 3, y: 8 }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.shotgun }, weaponSkill: 1, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 2, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 1, medkits: 1, woundState: "healthy" },
+    { id: "enemy-1", name: "Security Lieutenant", side: "enemy", position: { x: 12, y: 3 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.laserRifle }, weaponSkill: 2, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 2, leadershipRating: 2, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 0, medkits: 0, woundState: "healthy" },
+    { id: "enemy-2", name: "Security Gunner", side: "enemy", position: { x: 13, y: 5 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 1, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.battleDress.value, armorName: armor.battleDress.name, grenades: 0, medkits: 0, woundState: "healthy" },
+    { id: "enemy-3", name: "Security Rifleman", side: "enemy", position: { x: 12, y: 7 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.laserRifle }, weaponSkill: 1, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 0, medkits: 0, woundState: "healthy" },
+    { id: "enemy-4", name: "Strongpoint Guard", side: "enemy", position: { x: 15, y: 4 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 0, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 0, medkits: 0, woundState: "healthy" },
+    { id: "enemy-5", name: "Strongpoint Guard", side: "enemy", position: { x: 15, y: 6 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 0, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 0, medkits: 0, woundState: "healthy" },
+    { id: "enemy-6", name: "Security Reserve", side: "enemy", position: { x: 14, y: 8 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.autopistol }, weaponSkill: 0, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 0, medkits: 0, woundState: "healthy" },
+  ],
+});
+
+export const buildCaptureCommanderScenario = (): CombatScenario => {
+  const scenario = buildSuppressStrongpointScenario();
+  return {
+    ...scenario,
+    id: "capture-commander",
+    title: "Capture the Commander",
+    briefing: "Board the command annex and take Commander Voss alive. Lethal force against the commander will fail the mission.",
+    objective: "Stun and restrain Commander Voss alive. Other defenders may be neutralized or bypassed.",
+    victoryCondition: "capture-target",
+    captureTargetId: "enemy-1",
+    walls: [
+      wall("hull-top", 0, 0, 18, 0), wall("hull-right", 18, 0, 18, 12), wall("hull-bottom", 18, 12, 0, 12), wall("hull-left", 0, 12, 0, 0),
+      wall("outer-a", 6, 0, 6, 3), wall("outer-b", 6, 4, 6, 8), wall("outer-c", 6, 9, 6, 12),
+      wall("command-a", 12, 0, 12, 2), wall("command-b", 12, 3, 12, 9), wall("command-c", 12, 10, 12, 12),
+    ],
+    doors: [
+      { id: "outer-upper", from: { x: 6, y: 3 }, to: { x: 6, y: 4 }, open: false },
+      { id: "outer-lower", from: { x: 6, y: 8 }, to: { x: 6, y: 9 }, open: false },
+      { id: "command-upper", from: { x: 12, y: 2 }, to: { x: 12, y: 3 }, open: false },
+      { id: "command-lower", from: { x: 12, y: 9 }, to: { x: 12, y: 10 }, open: false },
+    ],
+    combatants: scenario.combatants.map((unit) => unit.id === "enemy-1" ? { ...unit, name: "Commander Voss", position: { x: 15, y: 5 }, leadershipRating: 3 } : unit),
+  };
+};
+
 export const characterCombatScenarios = [
-  { id: "boarding-action", title: "Boarding Action", summary: "Training encounter: breach the command room and secure its console.", build: registered(buildTrainingScenario) },
-  { id: "engine-room-sabotage", title: "Engine Room Sabotage", summary: "Larger engineering deck with two security doors and three defenders.", build: registered(buildEngineRoomScenario) },
-  { id: "cargo-deck-interdiction", title: "Cargo Deck Interdiction", summary: "Large cargo deck with alternate routes, four security doors, and five defenders.", build: registered(buildCargoDeckScenario) },
-  { id: "carrier-deck-assault", title: "Carrier Deck Assault", summary: "Very large carrier deck with two cross-deck routes, six security doors, and seven defenders.", build: registered(buildCarrierDeckScenario) },
-  { id: "detention-deck-rescue", title: "Detention Deck Rescue", summary: "Release a captured scout and escort them back across a guarded detention deck.", build: registered(buildRescueScenario) },
-  { id: "hold-the-airlock", title: "Hold the Airlock", summary: "Defend a central control zone against reinforcement waves through turn five.", build: registered(buildHoldAirlockScenario) },
-  { id: "armory-sweep", title: "Armory Sweep", summary: "Test short- and long-range weapons against clothing, flak, combat armor, and battle dress.", build: registered(buildArmorySweepScenario) },
-  { id: "capture-the-bridge", title: "Capture the Bridge", summary: "Disable bridge security, unlock access, and seize command control in a two-stage assault.", build: registered(buildCaptureBridgeScenario) },
-  { id: "zero-g-drift", title: "Zero-G Drift", summary: "Push off and drift through a compartment with handholds, walls, doors, and collision hazards.", build: registered(buildZeroGravityScenario) },
-  { id: "hull-breach", title: "Hull Breach", summary: "Contain decompression, cross a zero-G deck, and survive vacuum exposure.", build: registered(buildHullBreachScenario) },
-  { id: "damage-control", title: "Damage Control", summary: "Cross a large damaged engineering deck and suppress multiple critical fires.", build: registered(buildDamageControlScenario) },
+  { id: "boarding-action", teamSize: 2, title: "Boarding Action", summary: "Training encounter: breach the command room and secure its console.", build: registered(buildTrainingScenario) },
+  { id: "engine-room-sabotage", teamSize: 2, title: "Engine Room Sabotage", summary: "Larger engineering deck with two security doors and three defenders.", build: registered(buildEngineRoomScenario) },
+  { id: "cargo-deck-interdiction", teamSize: 2, title: "Cargo Deck Interdiction", summary: "Large cargo deck with alternate routes, four security doors, and five defenders.", build: registered(buildCargoDeckScenario) },
+  { id: "carrier-deck-assault", teamSize: 2, title: "Carrier Deck Assault", summary: "Very large carrier deck with two cross-deck routes, six security doors, and seven defenders.", build: registered(buildCarrierDeckScenario) },
+  { id: "suppress-strongpoint", teamSize: 5, title: "Suppress the Strongpoint", summary: "Five-crew coordinated-fire test against six concentrated defenders and their leader.", build: registered(buildSuppressStrongpointScenario) },
+  { id: "capture-commander", teamSize: 5, title: "Capture the Commander", summary: "Five-crew non-lethal assault: stun and restrain Commander Voss alive.", build: registered(buildCaptureCommanderScenario) },
+  { id: "detention-deck-rescue", teamSize: 2, title: "Detention Deck Rescue", summary: "Release a captured scout and escort them back across a guarded detention deck.", build: registered(buildRescueScenario) },
+  { id: "hold-the-airlock", teamSize: 2, title: "Hold the Airlock", summary: "Defend a central control zone against reinforcement waves through turn five.", build: registered(buildHoldAirlockScenario) },
+  { id: "armory-sweep", teamSize: 2, title: "Armory Sweep", summary: "Test short- and long-range weapons against clothing, flak, combat armor, and battle dress.", build: registered(buildArmorySweepScenario) },
+  { id: "capture-the-bridge", teamSize: 2, title: "Capture the Bridge", summary: "Disable bridge security, unlock access, and seize command control in a two-stage assault.", build: registered(buildCaptureBridgeScenario) },
+  { id: "zero-g-drift", teamSize: 2, title: "Zero-G Drift", summary: "Push off and drift through a compartment with handholds, walls, doors, and collision hazards.", build: registered(buildZeroGravityScenario) },
+  { id: "hull-breach", teamSize: 2, title: "Hull Breach", summary: "Contain decompression, cross a zero-G deck, and survive vacuum exposure.", build: registered(buildHullBreachScenario) },
+  { id: "damage-control", teamSize: 2, title: "Damage Control", summary: "Cross a large damaged engineering deck and suppress multiple critical fires.", build: registered(buildDamageControlScenario) },
 ];

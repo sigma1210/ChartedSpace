@@ -80,6 +80,7 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
     if (scenario.objects.filter((object) => object.kind === "prisoner").length !== 1 || scenario.objects.filter((object) => object.kind === "extraction").length !== 1) add("rescue-objectives", "Rescue scenarios require exactly one prisoner and one extraction objective.");
   }
   if (scenario.victoryCondition === "hold-zone" && (!scenario.holdUntilTurn || scenario.holdUntilTurn < 2 || scenario.objects.filter((object) => object.kind === "control").length !== 1)) add("hold-zone", "Hold scenarios require one control zone and a final turn of at least 2.");
+  if (scenario.victoryCondition === "capture-target" && (!scenario.captureTargetId || !scenario.combatants.some((unit) => unit.id === scenario.captureTargetId && unit.side === "enemy"))) add("capture-target", "Capture scenarios require a valid enemy capture target.");
   if (scenario.victoryCondition === "staged-objectives") {
     if (!scenario.stageObjectiveIds || scenario.stageObjectiveIds.length < 2 || scenario.stageObjectiveIds.some((id) => !scenario.objects.some((object) => object.id === id && object.kind === "console"))) add("staged-objectives", "Staged scenarios require at least two valid console objective IDs.");
     if (!scenario.stageUnlockDoorId || !scenario.doors.some((door) => door.id === scenario.stageUnlockDoorId)) add("stage-door", "Staged scenarios require a valid door unlocked by stage one.");

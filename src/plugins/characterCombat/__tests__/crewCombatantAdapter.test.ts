@@ -20,7 +20,7 @@ describe("character combat crew adapter", () => {
     expect(candidates[0]).toMatchObject({ id: "npc-crew", characterId: null, name: "Rook", gunCombat: 2, melee: 0 });
   });
 
-  it("defaults to the current or owner character and the strongest remaining combatant", () => {
+  it("defaults to the current or owner character and up to four ranked teammates", () => {
     const candidates = buildBoardingCandidates([
       crew({ id: "owner", characterId: "owner-character", isOwnerOperator: true }),
       crew({ id: "marine", characterId: "marine-character" }),
@@ -30,7 +30,7 @@ describe("character combat crew adapter", () => {
       character({ id: "marine-character", name: "Marine", skills: [{ name: "Gun Combat", level: 3 }] }),
       character({ id: "medic-character", name: "Medic", skills: [{ name: "Medic", level: 3 }] }),
     ]);
-    expect(defaultBoardingTeamIds(candidates, "owner-character")).toEqual(["owner", "marine"]);
+    expect(defaultBoardingTeamIds(candidates, "owner-character")).toEqual(["owner", "marine", "medic"]);
   });
 
   it("hydrates player names and skills while preserving scenario loadouts", () => {

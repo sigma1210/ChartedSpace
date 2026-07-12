@@ -51,7 +51,7 @@ export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice:
   const evadeModifier = targetEvading ? -2 : 0;
   const postureModifier = target.posture === "prone" ? -2 : 0;
   const bracedModifier = attackerBraced ? 1 : 0;
-  const hitModifier = attacker.weaponSkill + weaponAccuracy - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 1 : 0) - (fireMode === "covering" ? 2 : 0) + (fireMode === "automatic" ? 4 : 0) + arcModifier + evadeModifier + postureModifier + bracedModifier - (attackerSuppressed ? 1 : 0);
+  const hitModifier = attacker.weaponSkill + weaponAccuracy - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 1 : 0) - (fireMode === "covering" || fireMode === "suppressive" ? 2 : 0) + (fireMode === "automatic" ? 4 : 0) + arcModifier + evadeModifier + postureModifier + bracedModifier - (attackerSuppressed ? 1 : 0);
   const hitTotal = hitRoll + hitModifier;
   if (hitTotal < profile.targetNumber) return { ...profile, hit: false, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, attackArc, arcModifier, evadeModifier, postureModifier, bracedModifier, woundRoll: null, woundTotal: null, cover, woundState: target.woundState };
   const woundRoll = woundDice.first + woundDice.second;

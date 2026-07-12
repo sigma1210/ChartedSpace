@@ -222,6 +222,18 @@ export const grenadeBlastCells = (scenario: CombatScenario, center: GridPoint) =
 ].filter((point) => point.x >= 0 && point.y >= 0 && point.x < scenario.width && point.y < scenario.height
   && (samePoint(point, center) || boundaryClear(scenario, center, point)));
 
+export const grenadeLandingPoint = (scenario: CombatScenario, target: GridPoint, throwDice: { first: number; second: number }, weaponSkill: number, scatterDirection: 1 | 2 | 3 | 4, scatterDistance: 1 | 2) => {
+  if (throwDice.first + throwDice.second + weaponSkill >= 7) return { landing: target, hit: true };
+  const direction = scatterDirection === 1 ? { x: 0, y: -1 } : scatterDirection === 2 ? { x: 1, y: 0 } : scatterDirection === 3 ? { x: 0, y: 1 } : { x: -1, y: 0 };
+  return {
+    landing: {
+      x: Math.min(scenario.width - 1, Math.max(0, target.x + direction.x * scatterDistance)),
+      y: Math.min(scenario.height - 1, Math.max(0, target.y + direction.y * scatterDistance)),
+    },
+    hit: false,
+  };
+};
+
 export const grenadeCoverProtection = (scenario: CombatScenario, center: GridPoint, target: GridPoint) => {
   const adjacent = Math.abs(center.x - target.x) + Math.abs(center.y - target.y) === 1;
   return adjacent && scenario.objects.some((object) => object.kind === "cover" && samePoint(object.position, center)) ? 2 : 0;

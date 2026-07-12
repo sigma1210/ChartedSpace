@@ -24,12 +24,25 @@ export const armoryLoadouts: Record<ArmoryLoadoutId, { id: ArmoryLoadoutId; labe
 };
 
 export const applyArmoryLoadouts = (scenario: CombatScenario, loadoutIds: [ArmoryLoadoutId, ArmoryLoadoutId]) => {
-  if (scenario.id !== "armory-sweep" && scenario.id !== "capture-the-bridge") return scenario;
-  scenario.combatants.filter((unit) => unit.side === "player").slice(0, 2).forEach((unit, index) => {
+  if (scenario.id !== "armory-sweep" && scenario.id !== "capture-the-bridge" && scenario.id !== "suppress-strongpoint" && scenario.id !== "capture-commander") return scenario;
+  const players = scenario.combatants.filter((unit) => unit.side === "player");
+  players.slice(0, 2).forEach((unit, index) => {
     const loadout = armoryLoadouts[loadoutIds[index]];
     unit.weapon = { ...loadout.weapon };
     unit.armor = loadout.armor.value;
     unit.armorName = loadout.armor.name;
   });
+  if (scenario.id === "suppress-strongpoint") {
+    players[0].smokeGrenades = 1;
+    players[2].smokeGrenades = 1;
+    players[3].stunGrenades = 1;
+    const enemies = scenario.combatants.filter((unit) => unit.side === "enemy");
+    enemies[1].smokeGrenades = 1;
+    enemies[3].smokeGrenades = 1;
+  }
+  if (scenario.id === "capture-commander") {
+    players[2].stunGrenades = 1;
+    players[3].stunGrenades = 1;
+  }
   return scenario;
 };
