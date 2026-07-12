@@ -152,6 +152,7 @@ const resolveEnemyMorale = (state: CharacterCombatState, moraleRolls: MoraleRoll
       state.events.unshift(`${guard.name} failed ${reason} morale ${total}/${target}${leadershipBonus ? ` with +${leadershipBonus} leadership` : ""}: ${current} → ${next}`);
     } else state.events.unshift(`${guard.name} passed ${reason} morale ${total}/${target}${leadershipBonus ? ` with +${leadershipBonus} leadership` : ""}`);
   }
+  if (resolveCaptureOutcome(state)) return;
   if (enemies.length > 0 && enemies.every((unit) => unit.defeated) && scenario.id !== "hull-breach" && scenario.id !== "damage-control" && scenario.victoryCondition !== "rescue-extract" && scenario.victoryCondition !== "hold-zone" && scenario.victoryCondition !== "staged-objectives" && scenario.victoryCondition !== "capture-target") {
     state.status = "victory";
     state.selectedCombatantId = null;
@@ -799,6 +800,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       if (target.defeated) target.health = 0;
       state.events.unshift(`${target.name} caught in breaching blast: ${total} (${target.woundState})`);
     });
+    if (resolveCaptureOutcome(state)) return;
     door.locked = false;
     door.open = true;
     delete state.placedBreachingChargeByDoorId[door.id];
@@ -1286,6 +1288,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     });
     const fireCells = new Set((scenario!.fireCells ?? []).map(pointKey));
     scenario!.combatants.filter((unit) => !unit.defeated && !unit.surrendered && fireCells.has(pointKey(unit.position))).forEach((unit) => applyFireDamage(state, unit));
+    if (resolveCaptureOutcome(state)) return;
     if (scenario!.combatants.filter((unit) => unit.side === "player").every((unit) => unit.defeated)) {
       state.status = "defeat";
       state.selectedCombatantId = null;

@@ -305,6 +305,40 @@ describe("character combat 2D checkpoint", () => {
     expect(state.events.some((event) => event.includes("Mission failed: Commander Voss was incapacitated before capture"))).toBe(true);
   });
 
+  it("wins Capture the Commander when Commander Voss surrenders through morale", () => {
+    const scenario = buildCaptureCommanderScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const actor = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const casualty = scenario.combatants.find((unit) => unit.id === "enemy-4")!;
+    const commander = scenario.combatants.find((unit) => unit.id === scenario.captureTargetId)!;
+    actor.position = { x: 13, y: 4 };
+    casualty.position = { x: 14, y: 4 };
+    commander.position = { x: 15, y: 4 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, moraleStateByCombatantId: { ...state.moraleStateByCombatantId, [commander.id]: "panicked" } };
+    state = reducer(state, selectPlayerCombatant(actor.id));
+    state = reducer(state, previewAttack(casualty.id));
+    state = reducer(state, selectAttackMode("aimed"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 }, moraleRolls: { [commander.id]: { first: 1, second: 1 } } }));
+    expect(state.status).toBe("victory");
+    expect(state.scenario?.combatants.find((unit) => unit.id === commander.id)?.surrendered).toBe(true);
+  });
+
+  it("loses Capture the Commander when environmental fire incapacitates Commander Voss", () => {
+    const scenario = buildCaptureCommanderScenario();
+    const commander = scenario.combatants.find((unit) => unit.id === scenario.captureTargetId)!;
+    commander.woundState = "light";
+    commander.stunnedUntilTurn = 1;
+    scenario.fireCells = [{ ...commander.position }];
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== commander.id).forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id) };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [commander.id]: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+    expect(state.status).toBe("defeat");
+    expect(state.events.some((event) => event.includes("Mission failed: Commander Voss was incapacitated before capture"))).toBe(true);
+  });
+
   it("uses automatic fire to suppress a visible enemy without causing a wound", () => {
     const scenario = buildSuppressStrongpointScenario();
     scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 6, y: 7 };
