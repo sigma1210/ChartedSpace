@@ -1,6 +1,6 @@
 "use client";
 
-import { depressurizedCells, doorBlastCells, fireLaneCells, lightingLevelAt, pathContains, pointKey, validCoveringFireTargets } from "./geometry";
+import { depressurizedCells, doorBlastCells, fireLaneCells, lightingLevelAt, pathContains, pointKey, stagedObjectiveStatus, validCoveringFireTargets } from "./geometry";
 import type { CombatScenario, GridPoint, PlannedMove } from "./types";
 import { equipmentVisualFor } from "./equipmentPresentation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -68,8 +68,9 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
       const inSmoke = smokeKeys.has(pointKey(point));
       const inImpactBlast = impactBlastKeys.has(pointKey(point));
       const lighting = lightingLevelAt(scenario, point);
+      const terrain = scenario.terrainByCell?.[pointKey(point)];
       return <rect key={`${x}:${y}`} x={x * cell + 2} y={y * cell + 2} width={cell - 4} height={cell - 4}
-        fill={inBreachBlast ? "rgba(249,115,22,0.48)" : inImpactBlast ? "rgba(239,68,68,0.42)" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "rgba(250,204,21,0.32)" : overwatchTarget ? "rgba(232,121,249,0.12)" : coveringTarget ? "rgba(250,204,21,0.10)" : grenadeBlast ? "rgba(251,146,60,0.38)" : grenadeTarget ? "rgba(244,114,182,0.15)" : inPath ? advanceReadyPath ? "rgba(56,189,248,0.32)" : "rgba(251,191,36,0.28)" : hovered && reachable ? "rgba(103,232,249,0.28)" : reachable ? "rgba(52,211,153,0.13)" : inVacuum ? "#172554" : lighting === "dark" ? "#05080b" : lighting === "emergency" ? "#3a2418" : "#172631"}
+        fill={inBreachBlast ? "rgba(249,115,22,0.48)" : inImpactBlast ? "rgba(239,68,68,0.42)" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "rgba(250,204,21,0.32)" : overwatchTarget ? "rgba(232,121,249,0.12)" : coveringTarget ? "rgba(250,204,21,0.10)" : grenadeBlast ? "rgba(251,146,60,0.38)" : grenadeTarget ? "rgba(244,114,182,0.15)" : inPath ? advanceReadyPath ? "rgba(56,189,248,0.32)" : "rgba(251,191,36,0.28)" : hovered && reachable ? "rgba(103,232,249,0.28)" : reachable ? "rgba(52,211,153,0.13)" : inVacuum ? "#172554" : terrain === "difficult" ? "#4b4538" : terrain === "elevated" ? "#164e63" : terrain === "hazardous" ? "#6b2d3c" : lighting === "dark" ? "#05080b" : lighting === "emergency" ? "#3a2418" : "#172631"}
         stroke={overwatchTarget ? "#e879f9" : inFireLane || coveringTarget ? "#facc15" : grenadeBlast ? "#fb923c" : grenadeTarget ? "#f472b6" : inPath ? advanceReadyPath ? "#38bdf8" : "#fbbf24" : reachable ? "#34d399" : "#29404d"} strokeWidth={inFireLane || grenadeBlast || inPath || hovered ? 3 : 1}
         className={coveringTarget || overwatchTarget || grenadeTarget || (!grenadeTargeting && reachable) ? "cursor-pointer" : "cursor-default"}
         onMouseEnter={() => onHoverDestination(!grenadeTargeting && reachable ? point : null)} onMouseLeave={() => onHoverDestination(null)}
@@ -95,13 +96,16 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
     {scenario.objects.map((object) => {
       const x = object.position.x * cell + cell / 2;
       const y = object.position.y * cell + cell / 2;
+      const stageStatus = stagedObjectiveStatus(scenario, object.id);
+      const stageColor = stageStatus === "active" ? "#facc15" : stageStatus === "completed" ? "#34d399" : stageStatus === "locked" ? "#64748b" : null;
       return object.kind !== "cover" ? (
         <g key={object.id}>
           {object.kind === "extraction" && <><rect x={x - 29} y={y - 29} width="58" height="58" rx="8" fill="rgba(16,185,129,0.25)" stroke="#6ee7b7" strokeWidth="5" strokeDasharray="7 4" /><text x={x} y={y - 35} textAnchor="middle" fill="#a7f3d0" fontSize="12" fontWeight="bold" fontFamily="monospace">EXTRACTION ZONE · {object.position.x},{object.position.y}</text></>}
           {object.kind === "control" && <circle cx={x} cy={y} r="29" fill="rgba(168,85,247,0.22)" stroke="#c084fc" strokeWidth="5" strokeDasharray="7 4" />}
-          <rect x={x - 22} y={y - 18} width="44" height="36" rx="5" fill={object.kind === "extraction" ? "#064e3b" : object.kind === "prisoner" ? "#713f12" : object.kind === "control" ? "#581c87" : "#083344"} stroke={object.kind === "extraction" ? "#34d399" : object.kind === "prisoner" ? "#fbbf24" : object.kind === "control" ? "#c084fc" : "#22d3ee"} strokeWidth="3" />
+          {stageStatus === "active" && <circle cx={x} cy={y} r="29" fill="none" stroke="#facc15" strokeWidth="4" strokeDasharray="6 4" />}
+          <rect x={x - 22} y={y - 18} width="44" height="36" rx="5" fill={stageStatus === "locked" ? "#1e293b" : stageStatus === "completed" ? "#064e3b" : object.kind === "extraction" ? "#064e3b" : object.kind === "prisoner" ? "#713f12" : object.kind === "control" ? "#581c87" : "#083344"} stroke={stageColor ?? (object.kind === "extraction" ? "#34d399" : object.kind === "prisoner" ? "#fbbf24" : object.kind === "control" ? "#c084fc" : "#22d3ee")} strokeWidth="3" />
           <circle cx={x} cy={y} r="6" fill={object.kind === "extraction" ? "#6ee7b7" : object.kind === "prisoner" ? "#fde68a" : "#67e8f9"} />
-          <text x={x} y={y + 32} textAnchor="middle" fill="#e2e8f0" fontSize="10" fontFamily="monospace">{object.kind === "extraction" ? "EXTRACT" : object.kind === "prisoner" ? object.completed ? "RELEASED" : "PRISONER" : object.kind === "control" ? "HOLD ZONE" : "OBJECTIVE"}</text>
+          <text x={x} y={y + 32} textAnchor="middle" fill={stageColor ?? "#e2e8f0"} fontSize="10" fontWeight={stageStatus === "active" ? "bold" : "normal"} fontFamily="monospace">{stageStatus ? stageStatus.toUpperCase() : object.kind === "extraction" ? "EXTRACT" : object.kind === "prisoner" ? object.completed ? "RELEASED" : "PRISONER" : object.kind === "control" ? "HOLD ZONE" : "OBJECTIVE"}</text>
         </g>
       ) : (
         <g key={object.id}>

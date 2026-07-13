@@ -23,10 +23,10 @@ export const armoryLoadouts: Record<ArmoryLoadoutId, { id: ArmoryLoadoutId; labe
   heavy: { id: "heavy", label: "Heavy", weapon: characterCombatWeapons.gaussRifle, armor: characterCombatArmor.battleDress },
 };
 
-export const applyArmoryLoadouts = (scenario: CombatScenario, loadoutIds: [ArmoryLoadoutId, ArmoryLoadoutId]) => {
-  if (scenario.id !== "armory-sweep" && scenario.id !== "capture-the-bridge" && scenario.id !== "suppress-strongpoint" && scenario.id !== "capture-commander") return scenario;
+export const applyArmoryLoadouts = (scenario: CombatScenario, loadoutIds: ArmoryLoadoutId[]) => {
+  if (scenario.id !== "armory-sweep" && scenario.id !== "capture-the-bridge" && scenario.id !== "suppress-strongpoint" && scenario.id !== "capture-commander" && scenario.id !== "terrain-training" && scenario.id !== "elevated-strongpoint") return scenario;
   const players = scenario.combatants.filter((unit) => unit.side === "player");
-  players.slice(0, 2).forEach((unit, index) => {
+  players.slice(0, Math.min(5, loadoutIds.length)).forEach((unit, index) => {
     const loadout = armoryLoadouts[loadoutIds[index]];
     unit.weapon = { ...loadout.weapon };
     unit.armor = loadout.armor.value;

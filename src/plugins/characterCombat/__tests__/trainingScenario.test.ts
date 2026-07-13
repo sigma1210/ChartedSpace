@@ -1,15 +1,21 @@
-import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, grenadeLandingPoint, hasLineOfSight, openDoorsAdjacentTo, pointKey, proneRotationForFacing, proposedMoveFor, rangedEnemies, reachableMovement, routeAllowingClosedDoors, shortestPathToAny, treatableAllies, validGrenadeTargets, weaponRecoilDistance, zeroGravityPushes, zeroGravityRecoilPath } from "../geometry";
-import reducer, { adjustCameraZoom, beginCoveringFire, beginDragging, beginGrenadeTargeting, beginOverwatch, braceWeapon, cancelMovePreview, clearCombatScenario, closeDoor, confirmAttack, confirmBreachDoor, confirmCoveringFire, confirmExtinguishFire, confirmGrenade, confirmMove, confirmOpenDoor, confirmOverwatch, confirmSecureObjective, confirmTreatment, detonateBreachCharge, disengage, endPlayerTurn, evade, finishActivation, focusCameraOnSelected, goProne, loadCombatScenario, openDoor, panCameraBy, previewAttack, previewBreachDetonation, previewBreachDoor, previewCoveringFire, previewExtinguishFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewOverwatch, previewSecureObjective, previewTreatment, rally, rallyAlly, releaseDraggedCombatant, reloadWeapon, resetCamera, rotateCamera, rotateCameraBy, selectAttackMode, selectPlayerCombatant, setArmoryLoadout, setViewMode, standUp, startTrot, turnCombatant } from "../slice";
+import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverAssessment, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, dropDownOptions, elevationAttackModifier, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, grenadeLandingPoint, hasLineOfSight, openDoorsAdjacentTo, pointKey, proneRotationForFacing, proposedMoveFor, rangedEnemies, reachableMovement, routeAllowingClosedDoors, shortestPathToAny, structuralVerticalSpan, terrainHeightAt, treatableAllies, validGrenadeTargets, vaultOptions, weaponRecoilDistance, zeroGravityPushes, zeroGravityRecoilPath } from "../geometry";
+import reducer, { adjustCameraZoom, beginCoveringFire, beginDragging, beginGrenadeTargeting, beginOverwatch, braceWeapon, cancelMovePreview, clearCombatScenario, closeDoor, confirmAttack, confirmBreachDoor, confirmCoveringFire, confirmExtinguishFire, confirmGrenade, confirmMove, confirmOpenDoor, confirmOverwatch, confirmSecureObjective, confirmTreatment, detonateBreachCharge, disengage, endPlayerTurn, evade, finishActivation, focusCameraOnSelected, goProne, loadCombatScenario, openDoor, panCameraBy, previewAttack, previewBreachDetonation, previewBreachDoor, previewCoveringFire, previewDropDown, previewExtinguishFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewOverwatch, previewSecureObjective, previewTreatment, rally, rallyAlly, releaseDraggedCombatant, reloadWeapon, resetCamera, rotateCamera, rotateCameraBy, selectAttackMode, selectPlayerCombatant, setArmoryLoadout, setViewMode, standUp, startTrot, turnCombatant, vaultBarrier } from "../slice";
 import { buildTrainingScenario } from "../trainingScenario";
-import { buildArmorySweepScenario, buildBlackoutScenario, buildCaptureBridgeScenario, buildCaptureCommanderScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildDamageControlScenario, buildDoorReactionScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildHullBreachScenario, buildRescueScenario, buildSuppressStrongpointScenario, buildZeroGravityScenario, characterCombatScenarios } from "../scenarios";
+import { buildArmorySweepScenario, buildBlackoutScenario, buildCaptureBridgeScenario, buildCaptureCommanderScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildDamageControlScenario, buildDoorReactionScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildHullBreachScenario, buildRescueScenario, buildSuppressStrongpointScenario, buildTerrainTrainingScenario, buildZeroGravityScenario, characterCombatScenarios } from "../scenarios";
 import { attackArcAgainstTarget, resolveMelee, resolveSnapShot, snapShotTarget, woundStateForTotal } from "../combatResolution";
 import { validateCombatScenario } from "../scenarioValidator";
 import { applyArmoryLoadouts, characterCombatArmor, characterCombatWeapons } from "../equipment";
 import { equipmentVisualFor } from "../equipmentPresentation";
+import { diveOptions, reachableCrawling } from "../geometry";
+import { beginDive, previewDive } from "../slice";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "../enemyTactics";
 import type { WeaponProfile } from "../types";
 import { aimAtPlannedTarget, beginDoorCoverage, beginSmokeGrenadeTargeting, beginStunGrenadeTargeting, beginWithdrawal, cancelAttackPreview, cancelDoorCoverage, confirmDoorCoverage, coverDoor, guard, parry, previewDoorCoverage, previewMeleeAttack, previewSubdue, readyWeapon, refreshEnemyObservations, resolveCounterattack, restrainEnemy, scenarioAvoidingVisibleCoveredDoors, searchForEnemies, selectCalledShot, selectMeleeMode, toggleAdvanceReady, toggleCautiousMovement, toggleLamp } from "../slice";
 import { lightingLevelAt, visibilityAssessment } from "../geometry";
+import { climbUpOptions } from "../geometry";
+import { objectiveContesters, stagedObjectiveStatus } from "../geometry";
+import { previewClimbUp } from "../slice";
+import { buildElevatedStrongpointScenario } from "../scenarios";
 
 describe("character combat 2D checkpoint", () => {
   const missEnemyTurn = { enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }, "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } };
@@ -857,7 +863,7 @@ describe("character combat 2D checkpoint", () => {
   });
 
   it("provides two distinct selectable scenarios that load and reset independently", () => {
-    expect(characterCombatScenarios.map((entry) => entry.id)).toEqual(["boarding-action", "engine-room-sabotage", "engineering-blackout", "door-reaction-drill", "cargo-deck-interdiction", "carrier-deck-assault", "suppress-strongpoint", "capture-commander", "detention-deck-rescue", "hold-the-airlock", "armory-sweep", "capture-the-bridge", "zero-g-drift", "hull-breach", "damage-control"]);
+    expect(characterCombatScenarios.map((entry) => entry.id)).toEqual(["boarding-action", "engine-room-sabotage", "engineering-blackout", "door-reaction-drill", "cargo-deck-interdiction", "carrier-deck-assault", "terrain-training", "elevated-strongpoint", "suppress-strongpoint", "capture-commander", "detention-deck-rescue", "hold-the-airlock", "armory-sweep", "capture-the-bridge", "zero-g-drift", "hull-breach", "damage-control"]);
     const boarding = buildTrainingScenario();
     const engine = buildEngineRoomScenario();
     expect(engine).toMatchObject({ id: "engine-room-sabotage", width: 14, height: 9 });
@@ -872,6 +878,627 @@ describe("character combat 2D checkpoint", () => {
     expect(state).toMatchObject({ status: "active", turn: 1, selectedCombatantId: null, actedCombatantIds: [], events: [] });
     expect(state.scenario?.id).toBe("engine-room-sabotage");
     expect(state.actionPointsById["enemy-3"]).toBe(6);
+  });
+
+  it("provides a valid terrain training map with four visually distinct test areas", () => {
+    expect(structuralVerticalSpan(0, 0.9)).toEqual({ height: 0.9, centerY: 0.45 });
+    expect(structuralVerticalSpan(0.65, 0.9)).toEqual({ height: 1.55, centerY: 0.775 });
+    const scenario = buildTerrainTrainingScenario();
+    expect(validateCombatScenario(scenario)).toEqual([]);
+    expect(scenario).toMatchObject({ id: "terrain-training", width: 20, height: 14, victoryCondition: "secure-objective" });
+    expect(Object.values(scenario.terrainByCell ?? {}).filter((terrain) => terrain === "difficult")).toHaveLength(16);
+    expect(Object.values(scenario.terrainByCell ?? {}).filter((terrain) => terrain === "elevated")).toHaveLength(20);
+    expect(Object.values(scenario.terrainByCell ?? {}).filter((terrain) => terrain === "hazardous")).toHaveLength(15);
+    expect(scenario.objects.filter((object) => object.label === "Low Vault Barrier")).toHaveLength(3);
+    expect(scenario.walls.some((wall) => wall.id.startsWith("platform-"))).toBe(false);
+    expect(scenario.doors.map((door) => door.id)).toEqual(["hazard-gate"]);
+    expect(scenario.elevationAccessCells).toEqual([{ x: 13, y: 6 }]);
+    expect(terrainHeightAt(scenario, { x: 13, y: 3 })).toBe(0.65);
+    expect(terrainHeightAt(scenario, { x: 5, y: 3 })).toBe(0);
+  });
+
+  it("provides a valid five-person elevated strongpoint assault with selectable lead kits", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    expect(validateCombatScenario(scenario)).toEqual([]);
+    expect(scenario).toMatchObject({ id: "elevated-strongpoint", width: 24, height: 16, victoryCondition: "staged-objectives", stageObjectiveIds: ["west-control", "east-control"] });
+    expect(scenario.combatants.filter((unit) => unit.side === "player")).toHaveLength(5);
+    expect(scenario.combatants.filter((unit) => unit.side === "enemy")).toHaveLength(7);
+    expect(Object.values(scenario.terrainByCell ?? {}).filter((terrain) => terrain === "elevated")).toHaveLength(40);
+    expect(scenario.defendedObjectiveByCombatantId).toEqual({
+      "enemy-1": "west-control",
+      "enemy-2": "west-control",
+      "enemy-5": "east-control",
+      "enemy-6": "east-control",
+      "enemy-7": "east-control",
+    });
+    expect(scenario.flankBiasByCombatantId).toEqual({ "enemy-3": "left", "enemy-4": "right" });
+
+    const equipped = applyArmoryLoadouts(buildElevatedStrongpointScenario(), ["heavy", "assault"]);
+    expect(equipped.combatants.filter((unit) => unit.side === "player").slice(0, 2)).toMatchObject([
+      { weapon: characterCombatWeapons.gaussRifle, armorName: "Battle Dress", armor: 4 },
+      { weapon: characterCombatWeapons.smg, armorName: "Combat Armor", armor: 2 },
+    ]);
+  });
+
+  it("keeps an assigned strongpoint defender near its active control station", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const defender = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== defender.id).forEach((unit) => { unit.defeated = true; });
+    player.position = { x: 1, y: 3 };
+    defender.weapon = { ...defender.weapon, effectiveRange: 0, longRange: 0, extremeRange: 0 };
+    const start = { ...defender.position };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [defender.id]: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === defender.id)?.position).toEqual(start);
+    expect(state.events.some((event) => event === "West Gunner held defensive assignment at West Fire-Control Station")).toBe(true);
+  });
+
+  it("releases a strongpoint defender after its assigned station is secured", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const defender = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== defender.id).forEach((unit) => { unit.defeated = true; });
+    scenario.objects.find((object) => object.id === "west-control")!.completed = true;
+    player.position = { x: 1, y: 3 };
+    defender.weapon = { ...defender.weapon, effectiveRange: 0, longRange: 0, extremeRange: 0 };
+    const start = { ...defender.position };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [defender.id]: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === defender.id)?.position).not.toEqual(start);
+    expect(state.events.some((event) => event.includes("held defensive assignment"))).toBe(false);
+  });
+
+  it("sends the strongpoint patrols toward opposite flanks", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const centerPatrol = scenario.combatants.find((unit) => unit.id === "enemy-3")!;
+    const hazardPatrol = scenario.combatants.find((unit) => unit.id === "enemy-4")!;
+    scenario.combatants.filter((unit) => ![player.id, centerPatrol.id, hazardPatrol.id].includes(unit.id)).forEach((unit) => { unit.defeated = true; });
+    scenario.terrainByCell = {};
+    scenario.objects = [];
+    player.position = { x: 5, y: 5 };
+    player.facing = "east";
+    centerPatrol.position = { x: 9, y: 4 };
+    hazardPatrol.position = { x: 9, y: 6 };
+    centerPatrol.weapon = { ...centerPatrol.weapon, effectiveRange: 0, longRange: 0, extremeRange: 0 };
+    hazardPatrol.weapon = { ...hazardPatrol.weapon, effectiveRange: 0, longRange: 0, extremeRange: 0 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: {
+      [centerPatrol.id]: { hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } },
+      [hazardPatrol.id]: { hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } },
+    } }));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === centerPatrol.id)?.position).toEqual({ x: 6, y: 4 });
+    expect(state.scenario?.combatants.find((unit) => unit.id === hazardPatrol.id)?.position).toEqual({ x: 6, y: 6 });
+    expect(state.events.some((event) => event.includes("Center Patrol advanced on the left flank"))).toBe(true);
+    expect(state.events.some((event) => event.includes("Hazard Patrol advanced on the right flank"))).toBe(true);
+  });
+
+  it("requires both elevated strongpoint controls even when defenders remain", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 10, y: 4 };
+    scenario.combatants.find((unit) => unit.id === "player-2")!.position = { x: 18, y: 10 };
+    scenario.combatants.find((unit) => unit.id === "enemy-1")!.position = { x: 12, y: 3 };
+    scenario.combatants.find((unit) => unit.id === "enemy-7")!.position = { x: 17, y: 10 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    expect(stagedObjectiveStatus(state.scenario!, "west-control")).toBe("active");
+    expect(stagedObjectiveStatus(state.scenario!, "east-control")).toBe("locked");
+    state = reducer(state, selectPlayerCombatant("player-2"));
+    state = reducer(state, previewSecureObjective("east-control"));
+    expect(state.plannedObjectiveId).toBeNull();
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewSecureObjective("west-control"));
+    state = reducer(state, confirmSecureObjective());
+    expect(state.status).toBe("active");
+    expect(state.scenario?.objects.find((object) => object.id === "west-control")?.completed).toBe(true);
+    expect(stagedObjectiveStatus(state.scenario!, "west-control")).toBe("completed");
+    expect(stagedObjectiveStatus(state.scenario!, "east-control")).toBe("active");
+    expect(state.scenario?.objective).toBe("Current objective: secure East Defense-Control Station.");
+    expect(state.events[0]).toContain("East Defense-Control Station is now active");
+    expect(state.scenario?.combatants.some((unit) => unit.side === "enemy" && !unit.defeated)).toBe(true);
+
+    state = reducer(state, selectPlayerCombatant("player-2"));
+    state = reducer(state, previewSecureObjective("east-control"));
+    state = reducer(state, confirmSecureObjective());
+    expect(state.status).toBe("victory");
+  });
+
+  it("blocks a contested strongpoint control until its adjacent defender breaks", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const defender = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 10, y: 4 };
+    defender.position = { x: 9, y: 3 };
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== defender.id).forEach((unit) => { unit.position = { x: 15 + Number(unit.id.at(-1)), y: 14 }; });
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    expect(objectiveContesters(state.scenario!, "west-control", state.moraleStateByCombatantId, state.turn).map((unit) => unit.id)).toEqual([defender.id]);
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewSecureObjective("west-control"));
+    expect(state.plannedObjectiveId).toBeNull();
+
+    state = { ...state, moraleStateByCombatantId: { ...state.moraleStateByCombatantId, [defender.id]: "panicked" } };
+    expect(objectiveContesters(state.scenario!, "west-control", state.moraleStateByCombatantId, state.turn)).toEqual([]);
+    state = reducer(state, previewSecureObjective("west-control"));
+    expect(state.plannedObjectiveId).toBe("west-control");
+  });
+
+  it("allows a cleared or stunned strongpoint control to be secured", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const defender = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 10, y: 4 };
+    defender.position = { x: 9, y: 3 };
+    defender.stunnedUntilTurn = 1;
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== defender.id).forEach((unit) => { unit.defeated = true; });
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    expect(objectiveContesters(state.scenario!, "west-control", state.moraleStateByCombatantId, state.turn)).toEqual([]);
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewSecureObjective("west-control"));
+    expect(state.plannedObjectiveId).toBe("west-control");
+
+    const clearedScenario = buildElevatedStrongpointScenario();
+    clearedScenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 10, y: 4 };
+    clearedScenario.combatants.filter((unit) => unit.side === "enemy").forEach((unit) => { unit.defeated = true; });
+    state = reducer(undefined, loadCombatScenario(clearedScenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewSecureObjective("west-control"));
+    expect(state.plannedObjectiveId).toBe("west-control");
+  });
+
+  it("moves an assigned defender to contest a threatened station when it has no shot", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const defender = scenario.combatants.find((unit) => unit.id === "enemy-2")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== defender.id).forEach((unit) => { unit.defeated = true; });
+    player.position = { x: 10, y: 4 };
+    defender.position = { x: 9, y: 5 };
+    defender.weapon = { ...defender.weapon, effectiveRange: 0, longRange: 0, extremeRange: 0 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [defender.id]: { hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } } } }));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === defender.id)?.position).toEqual({ x: 9, y: 3 });
+    expect(state.events.some((event) => event.includes("West Guard moved to contest West Fire-Control Station"))).toBe(true);
+  });
+
+  it("keeps an assigned defender firing when it can attack a station threat", () => {
+    const scenario = buildElevatedStrongpointScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const defender = scenario.combatants.find((unit) => unit.id === "enemy-2")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== defender.id).forEach((unit) => { unit.defeated = true; });
+    player.position = { x: 10, y: 4 };
+    defender.position = { x: 9, y: 5 };
+    const start = { ...defender.position };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [defender.id]: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+
+    expect(state.scenario?.combatants.find((unit) => unit.id === defender.id)?.position).toEqual(start);
+    expect(state.events.some((event) => event.includes("West Guard automatic fired at Assault Lead") || event.includes("West Guard suppressive fired at Assault Lead"))).toBe(true);
+  });
+
+  it("allows platform movement through the staircase and blocks exposed raised edges", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+
+    player.position = { x: 13, y: 7 };
+    expect(reachableMovement(scenario, player.id, 2).has(pointKey({ x: 13, y: 5 }))).toBe(true);
+
+    player.position = { x: 12, y: 6 };
+    expect(reachableMovement(scenario, player.id, 1).has(pointKey({ x: 12, y: 5 }))).toBe(false);
+
+    player.position = { x: 13, y: 5 };
+    expect(reachableMovement(scenario, player.id, 1).has(pointKey({ x: 13, y: 6 }))).toBe(true);
+  });
+
+  it("moves diagonally for 2 AP and charges an additional AP for difficult terrain", () => {
+    const scenario = buildTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.terrainByCell = {};
+    player.position = { x: 1, y: 1 };
+
+    expect(reachableMovement(scenario, player.id, 2).get("2:2")).toMatchObject({ destination: { x: 2, y: 2 }, path: [{ x: 2, y: 2 }], cost: 2 });
+    scenario.terrainByCell["2:2"] = "difficult";
+    expect(reachableMovement(scenario, player.id, 2).has("2:2")).toBe(false);
+    expect(reachableMovement(scenario, player.id, 3).get("2:2")?.cost).toBe(3);
+  });
+
+  it("prevents diagonal movement through blocked corners and door boundaries", () => {
+    const scenario = buildTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [{ id: "corner-cover", kind: "cover", position: { x: 2, y: 1 }, label: "Corner Cover" }];
+    player.position = { x: 1, y: 1 };
+    expect(reachableMovement(scenario, player.id, 2).get("2:2")?.path).toHaveLength(2);
+
+    scenario.objects = [];
+    scenario.doors = [{ id: "corner-door", from: { x: 2, y: 1 }, to: { x: 2, y: 2 }, open: true }];
+    const reachable = reachableMovement(scenario, player.id, 2);
+    expect(reachable.get("2:1")?.cost).toBe(1);
+    expect(reachable.get("2:2")?.path).toHaveLength(2);
+  });
+
+  it("previews and confirms a diagonal player move using the shared AP cost", () => {
+    const scenario = buildTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    player.position = { x: 1, y: 1 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewMove({ x: 2, y: 2 }));
+    expect(state.plannedMove).toMatchObject({ path: [{ x: 2, y: 2 }], cost: 2 });
+    state = reducer(state, confirmMove());
+    expect(state.scenario?.combatants.find((unit) => unit.id === player.id)?.position).toEqual({ x: 2, y: 2 });
+    expect(state.actionPointsById[player.id]).toBe(4);
+  });
+
+  it("dives to a legal adjacent square for 3 AP and ends prone", () => {
+    const scenario = buildTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    player.position = { x: 1, y: 1 };
+
+    expect(diveOptions(scenario, player.id).get("2:2")).toMatchObject({ cost: 3, kind: "dive" });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, beginDive());
+    expect(state.diveTargeting).toBe(true);
+    state = reducer(state, previewDive({ x: 2, y: 2 }));
+    expect(state.plannedMove).toMatchObject({ destination: { x: 2, y: 2 }, cost: 3, kind: "dive" });
+    state = reducer(state, confirmMove());
+    expect(state.scenario?.combatants.find((unit) => unit.id === player.id)).toMatchObject({ position: { x: 2, y: 2 }, posture: "prone" });
+    expect(state.actionPointsById[player.id]).toBe(3);
+    expect(state.events[0]).toContain("dove to 2,2 and went prone");
+  });
+
+  it("crawls up to two squares for 2 AP per square and remains prone", () => {
+    const scenario = buildTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.terrainByCell = {};
+    player.position = { x: 1, y: 1 };
+    player.posture = "prone";
+
+    const options = reachableCrawling(scenario, player.id, 6);
+    expect(options.get("2:2")).toMatchObject({ cost: 2, kind: "crawl", path: [{ x: 2, y: 2 }] });
+    expect(options.get("3:3")).toMatchObject({ cost: 4, kind: "crawl", path: [{ x: 2, y: 2 }, { x: 3, y: 3 }] });
+    expect(options.has("4:4")).toBe(false);
+
+    scenario.terrainByCell["2:2"] = "difficult";
+    expect(reachableCrawling(scenario, player.id, 2).has("2:2")).toBe(false);
+    expect(reachableCrawling(scenario, player.id, 3).get("2:2")?.cost).toBe(3);
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewMove({ x: 2, y: 2 }));
+    expect(state.plannedMove).toMatchObject({ cost: 3, kind: "crawl" });
+    state = reducer(state, confirmMove());
+    expect(state.scenario?.combatants.find((unit) => unit.id === player.id)).toMatchObject({ position: { x: 2, y: 2 }, posture: "prone" });
+    expect(state.actionPointsById[player.id]).toBe(3);
+    expect(state.events[0]).toContain("crawled to 2,2 (3 AP)");
+  });
+
+  it("grants high ground to a standing ranged attacker only", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+
+    attacker.position = { x: 13, y: 3 };
+    target.position = { x: 17, y: 3 };
+    attacker.posture = "standing";
+    expect(elevationAttackModifier(scenario, attacker, target)).toBe(1);
+
+    attacker.posture = "prone";
+    expect(elevationAttackModifier(scenario, attacker, target)).toBe(0);
+
+    attacker.posture = "standing";
+    target.position = { x: 14, y: 3 };
+    expect(elevationAttackModifier(scenario, attacker, target)).toBe(0);
+    expect(elevationAttackModifier(scenario, target, attacker)).toBe(0);
+  });
+
+  it("lets high ground fire over low cover while walls still block sight", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+
+    attacker.position = { x: 13, y: 3 };
+    target.position = { x: 8, y: 3 };
+    expect(hasLineOfSight(scenario, attacker.position, target.position)).toBe(true);
+    expect(coverProtection(scenario, attacker.id, target.id)).toBe(0);
+
+    attacker.position = { x: 7, y: 3 };
+    target.position = { x: 10, y: 3 };
+    expect(coverProtection(scenario, attacker.id, target.id)).toBe(2);
+
+    attacker.position = { x: 13, y: 3 };
+    target.position = { x: 8, y: 3 };
+    scenario.walls.push({ id: "elevation-los-test-wall", from: { x: 10, y: 2 }, to: { x: 10, y: 5 } });
+    expect(hasLineOfSight(scenario, attacker.position, target.position)).toBe(false);
+  });
+
+  it("protects an elevated target behind a platform edge but not through its access ramp", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+
+    attacker.position = { x: 9, y: 5 };
+    target.position = { x: 11, y: 5 };
+    expect(coverAssessment(scenario, attacker.id, target.id)).toEqual({ value: 2, source: "platform-edge" });
+
+    attacker.position = { x: 13, y: 7 };
+    target.position = { x: 13, y: 5 };
+    expect(coverAssessment(scenario, attacker.id, target.id)).toEqual({ value: 0, source: null });
+
+    attacker.position = { x: 13, y: 3 };
+    target.position = { x: 14, y: 3 };
+    expect(coverAssessment(scenario, attacker.id, target.id).source).not.toBe("platform-edge");
+  });
+
+  it("offers exposed lower cells for dropping but excludes the ramp and occupied destinations", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 11, y: 5 };
+    expect(dropDownOptions(scenario, player.id)).toContainEqual({ x: 10, y: 5 });
+
+    player.position = { x: 13, y: 5 };
+    expect(dropDownOptions(scenario, player.id)).not.toContainEqual({ x: 13, y: 6 });
+
+    player.position = { x: 11, y: 5 };
+    scenario.combatants.find((unit) => unit.id === "enemy-1")!.position = { x: 10, y: 5 };
+    expect(dropDownOptions(scenario, player.id)).not.toContainEqual({ x: 10, y: 5 });
+  });
+
+  it("resolves successful and failed drop-down footing checks", () => {
+    const successfulScenario = buildTerrainTrainingScenario();
+    successfulScenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 11, y: 5 };
+    let state = reducer(undefined, loadCombatScenario(successfulScenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewDropDown({ x: 10, y: 5 }));
+    expect(state.plannedMove).toMatchObject({ destination: { x: 10, y: 5 }, cost: 3, kind: "drop" });
+    state = reducer(state, confirmMove({ hitDice: { first: 4, second: 3 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === "player-1")?.position).toEqual({ x: 10, y: 5 });
+    expect(state.scenario?.combatants.find((unit) => unit.id === "player-1")?.posture ?? "standing").toBe("standing");
+    expect(state.actionPointsById["player-1"]).toBe(3);
+
+    const failedScenario = buildTerrainTrainingScenario();
+    failedScenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 11, y: 5 };
+    state = reducer(undefined, loadCombatScenario(failedScenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewDropDown({ x: 10, y: 5 }));
+    state = reducer(state, confirmMove({ hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === "player-1")).toMatchObject({ position: { x: 10, y: 5 }, posture: "prone" });
+    expect(state.actionPointsById["player-1"]).toBe(0);
+  });
+
+  it("offers exposed elevated cells for climbing but excludes the ramp and occupied destinations", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 10, y: 5 };
+    expect(climbUpOptions(scenario, player.id)).toContainEqual({ x: 11, y: 5 });
+
+    player.position = { x: 13, y: 6 };
+    expect(climbUpOptions(scenario, player.id)).not.toContainEqual({ x: 13, y: 5 });
+
+    player.position = { x: 10, y: 5 };
+    scenario.combatants.find((unit) => unit.id === "enemy-1")!.position = { x: 11, y: 5 };
+    expect(climbUpOptions(scenario, player.id)).not.toContainEqual({ x: 11, y: 5 });
+  });
+
+  it("moves up on a successful climb and remains below prone on failure", () => {
+    const successfulScenario = buildTerrainTrainingScenario();
+    successfulScenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 10, y: 5 };
+    let state = reducer(undefined, loadCombatScenario(successfulScenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewClimbUp({ x: 11, y: 5 }));
+    expect(state.plannedMove).toMatchObject({ destination: { x: 11, y: 5 }, cost: 6, kind: "climb" });
+    state = reducer(state, confirmMove({ hitDice: { first: 4, second: 3 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === "player-1")?.position).toEqual({ x: 11, y: 5 });
+    expect(state.actionPointsById["player-1"]).toBe(0);
+
+    const failedScenario = buildTerrainTrainingScenario();
+    failedScenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 10, y: 5 };
+    state = reducer(undefined, loadCombatScenario(failedScenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewClimbUp({ x: 11, y: 5 }));
+    state = reducer(state, confirmMove({ hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === "player-1")).toMatchObject({ position: { x: 10, y: 5 }, posture: "prone" });
+    expect(state.actionPointsById["player-1"]).toBe(0);
+  });
+
+  it("prevents melee engagement across exposed platform edges but allows it at the ramp", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+
+    player.position = { x: 10, y: 5 };
+    enemy.position = { x: 11, y: 5 };
+    expect(adjacentEnemies(scenario, player.id)).toEqual([]);
+    expect(adjacentEnemies(scenario, enemy.id)).toEqual([]);
+
+    player.position = { x: 13, y: 6 };
+    enemy.position = { x: 13, y: 5 };
+    expect(adjacentEnemies(scenario, player.id).map((unit) => unit.id)).toEqual([enemy.id]);
+    expect(adjacentEnemies(scenario, enemy.id).map((unit) => unit.id)).toEqual([player.id]);
+
+    player.position = { x: 12, y: 3 };
+    enemy.position = { x: 13, y: 3 };
+    expect(adjacentEnemies(scenario, player.id).map((unit) => unit.id)).toEqual([enemy.id]);
+  });
+
+  it("blocks ground-level sight through a raised platform while preserving sight to and from its surface", () => {
+    const scenario = buildTerrainTrainingScenario();
+    scenario.smokeCells = [];
+
+    expect(hasLineOfSight(scenario, { x: 10, y: 3 }, { x: 16, y: 3 })).toBe(false);
+    expect(hasLineOfSight(scenario, { x: 10, y: 3 }, { x: 15, y: 3 })).toBe(true);
+    expect(hasLineOfSight(scenario, { x: 11, y: 3 }, { x: 16, y: 3 })).toBe(true);
+
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    player.position = { x: 10, y: 3 };
+    enemy.position = { x: 16, y: 3 };
+    expect(rangedEnemies(scenario, player.id)).toEqual([]);
+    expect(validGrenadeTargets(scenario, player.id).map(pointKey)).not.toContain(pointKey(enemy.position));
+  });
+
+  it("charges two movement points to enter difficult terrain and routes around costly ground", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 3, y: 4 };
+    const reachable = reachableMovement(scenario, player.id, 4);
+    expect(reachable.get(pointKey({ x: 4, y: 4 }))?.cost).toBe(2);
+    expect(reachable.get(pointKey({ x: 5, y: 4 }))?.cost).toBe(4);
+    expect(reachable.has(pointKey({ x: 6, y: 4 }))).toBe(false);
+
+    scenario.terrainByCell = { "2:1": "difficult", "3:1": "difficult", "4:1": "difficult" };
+    player.position = { x: 1, y: 1 };
+    const route = shortestPathToAny(scenario, player.id, [{ x: 5, y: 1 }]);
+    expect(route).not.toBeNull();
+    expect(route?.some((point) => point.y !== 1)).toBe(true);
+    expect(route?.some((point) => scenario.terrainByCell?.[pointKey(point)] === "difficult")).toBe(false);
+  });
+
+  it("checks hazardous footing once per player move and ends the activation on failure", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 5, y: 8 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewMove({ x: 5, y: 9 }));
+    state = reducer(state, confirmMove({ hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === player.id)?.posture).toBe("prone");
+    expect(state.actionPointsById[player.id]).toBe(0);
+    expect(state.events[0]).toBe("Terrain Lead failed hazardous footing 6/7: prone, activation ended");
+
+    const passingScenario = buildTerrainTrainingScenario();
+    const passingPlayer = passingScenario.combatants.find((unit) => unit.id === "player-1")!;
+    passingPlayer.position = { x: 5, y: 8 };
+    state = reducer(undefined, loadCombatScenario(passingScenario));
+    state = reducer(state, selectPlayerCombatant(passingPlayer.id));
+    state = reducer(state, previewMove({ x: 5, y: 9 }));
+    state = reducer(state, confirmMove({ hitDice: { first: 4, second: 3 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === passingPlayer.id)?.posture ?? "standing").toBe("standing");
+    expect(state.actionPointsById[passingPlayer.id]).toBe(5);
+    expect(state.events[0]).toBe("Terrain Lead passed hazardous footing 7/7");
+  });
+
+  it("applies the same hazardous footing failure to enemy movement", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-3")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    player.position = { x: 5, y: 7 };
+    enemy.position = { x: 5, y: 11 };
+    enemy.weapon = { ...enemy.weapon, effectiveRange: 0, longRange: 0, extremeRange: 0 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [enemy.id]: { hitDice: { first: 2, second: 2 }, woundDice: { first: 1, second: 1 } } } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === enemy.id)?.posture).toBe("prone");
+    expect(state.events.some((event) => event === "Course Controller failed hazardous footing 4/7: prone, activation ended")).toBe(true);
+  });
+
+  it("vaults a low barrier for 3 AP and rejects occupied landing cells", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 8, y: 3 };
+    expect(vaultOptions(scenario, player.id)).toEqual([expect.objectContaining({ barrier: expect.objectContaining({ id: "vault-1" }), landing: { x: 10, y: 3 } })]);
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, vaultBarrier("vault-1"));
+    expect(state.scenario?.combatants.find((unit) => unit.id === player.id)).toMatchObject({ position: { x: 10, y: 3 }, facing: "east" });
+    expect(state.actionPointsById[player.id]).toBe(3);
+    expect(state.events[0]).toBe("Terrain Lead vaulted Low Vault Barrier to 10,3 (3 AP)");
+
+    const blockedScenario = buildTerrainTrainingScenario();
+    blockedScenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 8, y: 3 };
+    blockedScenario.combatants.find((unit) => unit.id === "enemy-1")!.position = { x: 10, y: 3 };
+    expect(vaultOptions(blockedScenario, "player-1")).toEqual([]);
+  });
+
+  it("allows an enemy to vault a low barrier when it improves its approach", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-3")!;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    player.position = { x: 7, y: 3 };
+    enemy.position = { x: 10, y: 3 };
+    enemy.weapon = { ...enemy.weapon, effectiveRange: 0, longRange: 0, extremeRange: 0 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: [player.id] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [enemy.id]: { hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } } } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === enemy.id)?.position).toEqual({ x: 8, y: 3 });
+    expect(state.events.some((event) => event === "Course Controller vaulted Low Vault Barrier to 8,3 (3 AP)")).toBe(true);
+  });
+
+  it("applies selected Heavy and Assault kits to the Terrain Training team", () => {
+    const scenario = applyArmoryLoadouts(buildTerrainTrainingScenario(), ["heavy", "assault"]);
+    const players = scenario.combatants.filter((unit) => unit.side === "player");
+    expect(players[0]).toMatchObject({ name: "Terrain Lead", weapon: characterCombatWeapons.gaussRifle, armorName: "Battle Dress", armor: 4 });
+    expect(players[1]).toMatchObject({ name: "Terrain Support", weapon: characterCombatWeapons.smg, armorName: "Combat Armor", armor: 2 });
+  });
+
+  it("keeps Terrain Training active after all enemies are neutralized and wins only at the finish console", () => {
+    const scenario = buildTerrainTrainingScenario();
+    const lead = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const support = scenario.combatants.find((unit) => unit.id === "player-2")!;
+    const finalEnemy = scenario.combatants.find((unit) => unit.id === "enemy-3")!;
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== finalEnemy.id).forEach((unit) => { unit.defeated = true; unit.health = 0; unit.woundState = "unconscious"; });
+    lead.position = { x: 2, y: 2 };
+    support.position = { x: 4, y: 3 };
+    finalEnemy.position = { x: 3, y: 2 };
+    finalEnemy.facing = "east";
+    finalEnemy.meleeRating = 0;
+    finalEnemy.armor = 0;
+    scenario.objects.find((object) => object.id === "finish-marker")!.position = { x: 4, y: 2 };
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(lead.id));
+    state = reducer(state, previewSubdue(finalEnemy.id));
+    state = reducer(state, confirmAttack({ hitDice: { first: 6, second: 1 }, woundDice: { first: 1, second: 1 }, attackMode: "melee", meleeMode: "subdue" }));
+    expect(state.scenario?.combatants.filter((unit) => unit.side === "enemy").every((unit) => unit.defeated)).toBe(true);
+    expect(state.status).toBe("active");
+
+    state = reducer(state, selectPlayerCombatant(support.id));
+    state = reducer(state, previewSecureObjective("finish-marker"));
+    state = reducer(state, confirmSecureObjective());
+    expect(state.status).toBe("victory");
+    expect(state.events[0]).toBe("Terrain Support secured Terrain Course Finish");
   });
 
   it("provides a valid five-crew suppression scenario with a concentrated enemy section", () => {
@@ -1023,6 +1650,71 @@ describe("character combat 2D checkpoint", () => {
     state = reducer(state, endPlayerTurn({ enemyRolls }));
     expect(state.suppressedCombatantIds).not.toContain("enemy-1");
     expect(state.events.some((event) => event.includes("Security Lieutenant rallied themself"))).toBe(true);
+  });
+
+  it("lets a suppressed enemy dive toward adjacent cover when its rally would fail", () => {
+    const scenario = buildTrainingScenario();
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [{ id: "dive-cover", kind: "cover", position: { x: 5, y: 4 }, label: "Dive Cover" }];
+    enemy.position = { x: 3, y: 4 };
+    enemy.posture = "standing";
+    scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 0, y: 0 };
+    scenario.combatants.find((unit) => unit.id === "player-2")!.position = { x: 0, y: 1 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    const playerIds = scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id);
+    state = { ...state, actedCombatantIds: playerIds, suppressedCombatantIds: [enemy.id] };
+    const enemyRolls = { [enemy.id]: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } };
+    state = reducer(state, endPlayerTurn({ enemyRolls }));
+    const movedEnemy = state.scenario?.combatants.find((unit) => unit.id === enemy.id);
+    expect(movedEnemy?.posture).toBe("prone");
+    expect(movedEnemy?.position).not.toEqual({ x: 3, y: 4 });
+    expect(state.events.some((event) => event.includes("dove to cover") && event.includes("went prone"))).toBe(true);
+  });
+
+  it("makes a prone enemy crawl toward a distant player using crawl costs", () => {
+    const scenario = buildTrainingScenario();
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    enemy.position = { x: 9, y: 7 };
+    enemy.posture = "prone";
+    scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 0, y: 0 };
+    scenario.combatants.find((unit) => unit.id === "player-2")!.defeated = true;
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: ["player-1", "player-2"] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [enemy.id]: { hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } } } }));
+    const movedEnemy = state.scenario?.combatants.find((unit) => unit.id === enemy.id);
+    expect(movedEnemy?.posture).toBe("prone");
+    expect(movedEnemy?.position).not.toEqual({ x: 9, y: 7 });
+    expect(state.events.some((event) => event.includes("Security Guard crawled") && event.includes("4 AP"))).toBe(true);
+  });
+
+  it("makes a prone enemy stand when every useful crawl is blocked", () => {
+    const scenario = buildTrainingScenario();
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    scenario.combatants.filter((unit) => unit.side === "enemy" && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    scenario.walls = [];
+    scenario.doors = [];
+    enemy.position = { x: 9, y: 7 };
+    enemy.posture = "prone";
+    scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 0, y: 0 };
+    scenario.combatants.find((unit) => unit.id === "player-2")!.defeated = true;
+    scenario.objects = [
+      { id: "block-west", kind: "cover", position: { x: 8, y: 7 }, label: "Block" },
+      { id: "block-north", kind: "cover", position: { x: 9, y: 6 }, label: "Block" },
+      { id: "block-northwest", kind: "cover", position: { x: 8, y: 6 }, label: "Block" },
+      { id: "block-east", kind: "cover", position: { x: 10, y: 7 }, label: "Block" },
+    ];
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, actedCombatantIds: ["player-1", "player-2"] };
+    state = reducer(state, endPlayerTurn({ enemyRolls: { [enemy.id]: { hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } } } }));
+    expect(state.scenario?.combatants.find((unit) => unit.id === enemy.id)?.posture).toBe("standing");
+    expect(state.events.some((event) => event.includes("Security Guard stood up (2 AP)"))).toBe(true);
   });
 
   it("keeps an enemy suppressed after a failed rally attempt", () => {
@@ -1190,16 +1882,16 @@ describe("character combat 2D checkpoint", () => {
     expect(proneRotationForFacing("west")).toEqual([0, 0, Math.PI / 2]);
   });
 
-  it("limits prone movement to one square and prevents trotting", () => {
+  it("allows prone crawling up to two squares and prevents trotting", () => {
     let state = reducer(undefined, loadCombatScenario(buildTrainingScenario()));
     state = reducer(state, selectPlayerCombatant("player-1"));
     state = reducer(state, goProne());
     state = reducer(state, startTrot());
     expect(state.trottingCombatantIds).toEqual([]);
     state = reducer(state, previewMove({ x: 4, y: 4 }));
-    expect(state.plannedMove).toBeNull();
+    expect(state.plannedMove).toMatchObject({ destination: { x: 4, y: 4 }, cost: 4, kind: "crawl" });
     state = reducer(state, previewMove({ x: 3, y: 4 }));
-    expect(state.plannedMove).toMatchObject({ destination: { x: 3, y: 4 }, cost: 1 });
+    expect(state.plannedMove).toMatchObject({ destination: { x: 3, y: 4 }, cost: 2, kind: "crawl" });
   });
 
   it("applies a minus-two ranged hit modifier against a prone target and resets with a fresh scenario", () => {
@@ -1247,7 +1939,7 @@ describe("character combat 2D checkpoint", () => {
     state = reducer(state, confirmMove());
     expect(state.bracedCombatantIds).toEqual([]);
 
-    state = { ...state, bracedCombatantIds: ["player-1"] };
+    state = { ...state, bracedCombatantIds: ["player-1"], actionPointsById: { ...state.actionPointsById, "player-1": 3 } };
     state = reducer(state, standUp());
     expect(state.bracedCombatantIds).toEqual([]);
 
@@ -1725,6 +2417,19 @@ describe("character combat 2D checkpoint", () => {
     expect(state.armoryLoadoutIds).toEqual(["heavy", "assault"]);
   });
 
+  it("stores and applies five team loadouts while enforcing one Heavy kit across every slot", () => {
+    let state = reducer(undefined, setArmoryLoadout({ index: 2, loadoutId: "assault" }));
+    state = reducer(state, setArmoryLoadout({ index: 3, loadoutId: "heavy" }));
+    state = reducer(state, setArmoryLoadout({ index: 4, loadoutId: "scout" }));
+    state = reducer(state, setArmoryLoadout({ index: 0, loadoutId: "heavy" }));
+    expect(state.extendedArmoryLoadoutIds).toEqual(["scout", "breacher", "assault", "heavy", "scout"]);
+
+    const scenario = applyArmoryLoadouts(buildElevatedStrongpointScenario(), state.extendedArmoryLoadoutIds!);
+    const players = scenario.combatants.filter((unit) => unit.side === "player");
+    expect(players.map((unit) => unit.weapon.name)).toEqual(["Laser Rifle", "Shotgun", "Submachine Gun", "Gauss Rifle", "Laser Rifle"]);
+    expect(players.map((unit) => unit.armorName)).toEqual(["Flak Vest", "Combat Armor", "Combat Armor", "Battle Dress", "Flak Vest"]);
+  });
+
   it("derives consistent weapon and armor presentation for both combat boards", () => {
     const scenario = buildArmorySweepScenario();
     const laser = equipmentVisualFor(scenario.combatants.find((unit) => unit.id === "player-1")!);
@@ -1851,6 +2556,20 @@ describe("character combat 2D checkpoint", () => {
     expect(grenadeBlastCells(scenario, { x: 7, y: 3 }).map(pointKey)).not.toContain(pointKey({ x: 8, y: 3 }));
     scenario.doors[0].open = true;
     expect(grenadeBlastCells(scenario, { x: 7, y: 3 }).map(pointKey)).toContain(pointKey({ x: 8, y: 3 }));
+  });
+
+  it("contains grenade effects at platform edges but lets them propagate through the access ramp", () => {
+    const scenario = buildTerrainTrainingScenario();
+
+    const elevatedBlast = new Set(grenadeBlastCells(scenario, { x: 11, y: 5 }).map(pointKey));
+    expect(elevatedBlast.has(pointKey({ x: 12, y: 5 }))).toBe(true);
+    expect(elevatedBlast.has(pointKey({ x: 10, y: 5 }))).toBe(false);
+
+    const groundBlast = new Set(grenadeBlastCells(scenario, { x: 10, y: 5 }).map(pointKey));
+    expect(groundBlast.has(pointKey({ x: 11, y: 5 }))).toBe(false);
+
+    const rampBlast = new Set(grenadeBlastCells(scenario, { x: 13, y: 5 }).map(pointKey));
+    expect(rampBlast.has(pointKey({ x: 13, y: 6 }))).toBe(true);
   });
 
   it("lands accurate grenade throws and scatters misses in each cardinal direction", () => {
@@ -3434,7 +4153,7 @@ describe("character combat 2D checkpoint", () => {
     patient.defeated = true;
     patient.health = 0;
     patient.woundState = "unconscious";
-    const move = [...reachableMovement(scenario, carrier.id, 2).values()].find((candidate) => candidate.cost === 2)!;
+    const move = [...reachableMovement(scenario, carrier.id, 2).values()].find((candidate) => candidate.cost === 2 && candidate.path.length === 2)!;
     let state = reducer(undefined, loadCombatScenario(scenario));
     state = reducer(state, selectPlayerCombatant(carrier.id));
     state = reducer(state, beginDragging(patient.id));

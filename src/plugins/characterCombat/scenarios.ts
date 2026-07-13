@@ -1,4 +1,4 @@
-import type { CombatScenario, WallSegment } from "./types";
+import type { CombatScenario, WallSegment, WeaponProfile } from "./types";
 import { buildTrainingScenario } from "./trainingScenario";
 import { assertValidCombatScenario } from "./scenarioValidator";
 import { characterCombatArmor as armor, characterCombatWeapons as weapons } from "./equipment";
@@ -394,6 +394,106 @@ export const buildDamageControlScenario = (): CombatScenario => {
   };
 };
 
+export const buildTerrainTrainingScenario = (): CombatScenario => {
+  const terrainByCell: NonNullable<CombatScenario["terrainByCell"]> = {};
+  for (let x = 4; x <= 7; x += 1) for (let y = 2; y <= 5; y += 1) terrainByCell[`${x}:${y}`] = "difficult";
+  for (let x = 11; x <= 15; x += 1) for (let y = 2; y <= 5; y += 1) terrainByCell[`${x}:${y}`] = "elevated";
+  for (let x = 5; x <= 9; x += 1) for (let y = 9; y <= 11; y += 1) terrainByCell[`${x}:${y}`] = "hazardous";
+  return {
+    id: "terrain-training",
+    title: "Terrain Training Ground",
+    briefing: "Inspect a combined-arms training ground before terrain rules are activated. Brown-gray cells mark debris, blue cells mark the raised platform, red-purple cells mark unstable flooring, and cargo barriers mark the future vault course.",
+    objective: "Inspect and traverse the four terrain test zones, then activate the Terrain Course Finish console. Neutralizing the range safety team does not complete the course.",
+    victoryCondition: "secure-objective",
+    width: 20,
+    height: 14,
+    terrainByCell,
+    elevationAccessCells: [{ x: 13, y: 6 }],
+    walls: [
+      wall("boundary-top", 0, 0, 20, 0), wall("boundary-right", 20, 0, 20, 14), wall("boundary-bottom", 20, 14, 0, 14), wall("boundary-left", 0, 14, 0, 0),
+      wall("hazard-rail-a", 4, 8, 7, 8), wall("hazard-rail-b", 8, 8, 10, 8),
+    ],
+    doors: [{ id: "hazard-gate", from: { x: 7, y: 8 }, to: { x: 8, y: 8 }, open: true }],
+    objects: [
+      { id: "vault-1", kind: "cover", position: { x: 9, y: 3 }, label: "Low Vault Barrier" },
+      { id: "vault-2", kind: "cover", position: { x: 9, y: 6 }, label: "Low Vault Barrier" },
+      { id: "vault-3", kind: "cover", position: { x: 9, y: 10 }, label: "Low Vault Barrier" },
+      { id: "debris-1", kind: "cover", position: { x: 5, y: 3 }, label: "Debris Pile" },
+      { id: "debris-2", kind: "cover", position: { x: 7, y: 5 }, label: "Debris Pile" },
+      { id: "platform-cover", kind: "cover", position: { x: 14, y: 3 }, label: "Platform Barricade" },
+      { id: "finish-marker", kind: "console", position: { x: 18, y: 7 }, label: "Terrain Course Finish" },
+    ],
+    combatants: [
+      { id: "player-1", name: "Terrain Lead", side: "player", position: { x: 1, y: 6 }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 1, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 2, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 1, medkits: 1, woundState: "healthy" },
+      { id: "player-2", name: "Terrain Support", side: "player", position: { x: 1, y: 7 }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.shotgun }, weaponSkill: 1, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 1, armor: armor.flakVest.value, armorName: armor.flakVest.name, grenades: 1, medkits: 1, woundState: "healthy" },
+      { id: "enemy-1", name: "Platform Observer", side: "enemy", position: { x: 13, y: 3 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.autopistol }, weaponSkill: 0, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.flakVest.value, armorName: armor.flakVest.name, grenades: 0, medkits: 0, woundState: "healthy" },
+      { id: "enemy-2", name: "Hazard Marshal", side: "enemy", position: { x: 11, y: 10 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.autopistol }, weaponSkill: 0, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.flakVest.value, armorName: armor.flakVest.name, grenades: 0, medkits: 0, woundState: "healthy" },
+      { id: "enemy-3", name: "Course Controller", side: "enemy", position: { x: 17, y: 7 }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapons.smg }, weaponSkill: 1, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 0, medkits: 0, woundState: "healthy" },
+    ],
+  };
+};
+
+export const buildElevatedStrongpointScenario = (): CombatScenario => {
+  const terrainByCell: NonNullable<CombatScenario["terrainByCell"]> = {};
+  for (let x = 7; x <= 11; x += 1) for (let y = 2; y <= 5; y += 1) terrainByCell[`${x}:${y}`] = "elevated";
+  for (let x = 16; x <= 20; x += 1) for (let y = 8; y <= 11; y += 1) terrainByCell[`${x}:${y}`] = "elevated";
+  for (let x = 10; x <= 14; x += 1) for (let y = 7; y <= 9; y += 1) terrainByCell[`${x}:${y}`] = "difficult";
+  for (let x = 4; x <= 7; x += 1) for (let y = 11; y <= 13; y += 1) terrainByCell[`${x}:${y}`] = "hazardous";
+  const player = (id: string, name: string, x: number, y: number, weapon: WeaponProfile = weapons.smg): CombatScenario["combatants"][number] => ({ id, name, side: "player", position: { x, y }, facing: "east", health: 1, defeated: false, surrendered: false, weapon: { ...weapon }, weaponSkill: 1, meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 1, armor: armor.combatArmor.value, armorName: armor.combatArmor.name, grenades: 1, medkits: 1, woundState: "healthy" });
+  const enemy = (id: string, name: string, x: number, y: number, weapon: WeaponProfile = weapons.autopistol): CombatScenario["combatants"][number] => ({ id, name, side: "enemy", position: { x, y }, facing: "west", health: 1, defeated: false, surrendered: false, weapon: { ...weapon }, weaponSkill: 1, meleeWeapon: { name: "Baton", penetration: 0 }, meleeRating: 1, armor: armor.flakVest.value, armorName: armor.flakVest.name, grenades: 0, medkits: 0, woundState: "healthy" });
+  return {
+    id: "elevated-strongpoint",
+    title: "Elevated Strongpoint Assault",
+    briefing: "A five-person assault team must cross broken ground and seize two defended elevated control stations. Ramps offer safer access, while climbing and dropping create faster exposed routes.",
+    objective: "Secure the West Fire-Control Station, then secure the East Defense-Control Station. Eliminating defenders alone does not complete the assault.",
+    victoryCondition: "staged-objectives",
+    stageObjectiveIds: ["west-control", "east-control"],
+    contestedObjectiveIds: ["west-control", "east-control"],
+    defendedObjectiveByCombatantId: {
+      "enemy-1": "west-control",
+      "enemy-2": "west-control",
+      "enemy-5": "east-control",
+      "enemy-6": "east-control",
+      "enemy-7": "east-control",
+    },
+    flankBiasByCombatantId: {
+      "enemy-3": "left",
+      "enemy-4": "right",
+    },
+    width: 24,
+    height: 16,
+    terrainByCell,
+    elevationAccessCells: [{ x: 9, y: 6 }, { x: 18, y: 7 }],
+    walls: [wall("boundary-top", 0, 0, 24, 0), wall("boundary-right", 24, 0, 24, 16), wall("boundary-bottom", 24, 16, 0, 16), wall("boundary-left", 0, 16, 0, 0)],
+    doors: [],
+    objects: [
+      { id: "west-control", kind: "console", position: { x: 10, y: 3 }, label: "West Fire-Control Station" },
+      { id: "east-control", kind: "console", position: { x: 19, y: 10 }, label: "East Defense-Control Station" },
+      { id: "west-barricade", kind: "cover", position: { x: 8, y: 3 }, label: "Platform Barricade" },
+      { id: "west-edge-cover", kind: "cover", position: { x: 11, y: 4 }, label: "Platform Barricade" },
+      { id: "east-barricade", kind: "cover", position: { x: 17, y: 9 }, label: "Platform Barricade" },
+      { id: "east-edge-cover", kind: "cover", position: { x: 20, y: 10 }, label: "Platform Barricade" },
+      { id: "center-vault", kind: "cover", position: { x: 13, y: 6 }, label: "Low Vault Barrier" },
+      { id: "debris-a", kind: "cover", position: { x: 5, y: 7 }, label: "Debris Pile" },
+      { id: "debris-b", kind: "cover", position: { x: 14, y: 12 }, label: "Debris Pile" },
+    ],
+    combatants: [
+      player("player-1", "Assault Lead", 1, 5, weapons.gaussRifle),
+      player("player-2", "Assault Support", 1, 6, weapons.smg),
+      player("player-3", "Assault Breacher", 1, 7, weapons.shotgun),
+      player("player-4", "Assault Scout", 1, 8, weapons.laserRifle),
+      player("player-5", "Assault Medic", 1, 9, weapons.autopistol),
+      enemy("enemy-1", "West Gunner", 9, 3, weapons.gaussRifle),
+      enemy("enemy-2", "West Guard", 11, 5, weapons.smg),
+      enemy("enemy-3", "Center Patrol", 13, 8, weapons.shotgun),
+      enemy("enemy-4", "Hazard Patrol", 7, 12, weapons.autopistol),
+      enemy("enemy-5", "East Gunner", 18, 9, weapons.laserRifle),
+      enemy("enemy-6", "East Guard", 20, 11, weapons.smg),
+      enemy("enemy-7", "Strongpoint Commander", 19, 9, weapons.smg),
+    ],
+  };
+};
+
 export const buildSuppressStrongpointScenario = (): CombatScenario => ({
   id: "suppress-strongpoint",
   title: "Suppress the Strongpoint",
@@ -462,6 +562,8 @@ export const characterCombatScenarios = [
   { id: "door-reaction-drill", teamSize: 2, title: "Doorway Reaction Drill", summary: "Cover either of two closed approaches and test reactions when security opens or crosses a doorway.", build: registered(buildDoorReactionScenario) },
   { id: "cargo-deck-interdiction", teamSize: 2, title: "Cargo Deck Interdiction", summary: "Large cargo deck with alternate routes, four security doors, and five defenders.", build: registered(buildCargoDeckScenario) },
   { id: "carrier-deck-assault", teamSize: 2, title: "Carrier Deck Assault", summary: "Very large carrier deck with two cross-deck routes, six security doors, and seven defenders.", build: registered(buildCarrierDeckScenario) },
+  { id: "terrain-training", teamSize: 2, title: "Terrain Training Ground", summary: "Inspect debris, vault barriers, a raised platform, and unstable flooring before terrain rules are activated.", build: registered(buildTerrainTrainingScenario) },
+  { id: "elevated-strongpoint", teamSize: 5, title: "Elevated Strongpoint Assault", summary: "Five-crew assault across broken ground to seize two defended elevated control stations.", build: registered(buildElevatedStrongpointScenario) },
   { id: "suppress-strongpoint", teamSize: 5, title: "Suppress the Strongpoint", summary: "Five-crew coordinated-fire test against six concentrated defenders and their leader.", build: registered(buildSuppressStrongpointScenario) },
   { id: "capture-commander", teamSize: 5, title: "Capture the Commander", summary: "Five-crew non-lethal assault: stun and restrain Commander Voss alive.", build: registered(buildCaptureCommanderScenario) },
   { id: "detention-deck-rescue", teamSize: 2, title: "Detention Deck Rescue", summary: "Release a captured scout and escort them back across a guarded detention deck.", build: registered(buildRescueScenario) },

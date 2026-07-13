@@ -83,8 +83,19 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
   if (scenario.victoryCondition === "capture-target" && (!scenario.captureTargetId || !scenario.combatants.some((unit) => unit.id === scenario.captureTargetId && unit.side === "enemy"))) add("capture-target", "Capture scenarios require a valid enemy capture target.");
   if (scenario.victoryCondition === "staged-objectives") {
     if (!scenario.stageObjectiveIds || scenario.stageObjectiveIds.length < 2 || scenario.stageObjectiveIds.some((id) => !scenario.objects.some((object) => object.id === id && object.kind === "console"))) add("staged-objectives", "Staged scenarios require at least two valid console objective IDs.");
-    if (!scenario.stageUnlockDoorId || !scenario.doors.some((door) => door.id === scenario.stageUnlockDoorId)) add("stage-door", "Staged scenarios require a valid door unlocked by stage one.");
+    if (scenario.stageUnlockDoorId && !scenario.doors.some((door) => door.id === scenario.stageUnlockDoorId)) add("stage-door", "A staged scenario unlock door must reference a valid door.");
   }
+  Object.entries(scenario.defendedObjectiveByCombatantId ?? {}).forEach(([combatantId, objectiveId]) => {
+    if (!scenario.combatants.some((unit) => unit.id === combatantId && unit.side === "enemy")) add("defender-assignment", `Defensive assignment ${combatantId} must reference an enemy combatant.`);
+    if (!scenario.objects.some((object) => object.id === objectiveId && object.kind !== "cover")) add("defender-assignment", `Defensive assignment ${combatantId} must reference a valid objective.`);
+  });
+  Object.keys(scenario.flankBiasByCombatantId ?? {}).forEach((combatantId) => {
+    if (!scenario.combatants.some((unit) => unit.id === combatantId && unit.side === "enemy")) add("flank-assignment", `Flank assignment ${combatantId} must reference an enemy combatant.`);
+    if (scenario.defendedObjectiveByCombatantId?.[combatantId]) add("flank-assignment", `Flank assignment ${combatantId} cannot also have a defensive assignment.`);
+  });
+  (scenario.contestedObjectiveIds ?? []).forEach((objectiveId) => {
+    if (!scenario.objects.some((object) => object.id === objectiveId && object.kind !== "cover" && object.kind !== "control")) add("contested-objective", `Contested objective ${objectiveId} must reference an actionable objective.`);
+  });
   const disconnected = [...walkable].filter((cell) => !reachable.has(cell));
   if (start && disconnected.length > 0) add("disconnected-deck", `${disconnected.length} walkable deck cells are disconnected; first: ${disconnected[0]}.`);
   return errors;
