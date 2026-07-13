@@ -262,6 +262,24 @@ export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: Gr
   return true;
 };
 
+export const lightingLevelAt = (scenario: CombatScenario, point: GridPoint) => scenario.flareCells?.some((cell) => samePoint(cell, point)) ? "illuminated" : scenario.lightingByCell?.[pointKey(point)] ?? scenario.defaultLighting ?? "illuminated";
+
+export const visibilityAssessment = (scenario: CombatScenario, attacker: Combatant, target: Combatant) => {
+  if (target.concealed) return { visible: false, modifier: 0, level: lightingLevelAt(scenario, target.position), reason: "concealed" as const };
+  if (!hasLineOfSight(scenario, attacker.position, target.position)) return { visible: false, modifier: 0, level: lightingLevelAt(scenario, target.position), reason: "blocked" as const };
+  const level = lightingLevelAt(scenario, target.position);
+  const range = Math.ceil(Math.hypot(target.position.x - attacker.position.x, target.position.y - attacker.position.y));
+  if (level === "illuminated" || target.lampOn) return { visible: true, modifier: 0, level, reason: target.lampOn && level === "dark" ? "lamp-revealed" as const : "lit" as const };
+  if (attacker.lampOn && attacker.hasLamp) {
+    const facing = attacker.facing === "north" ? { x: 0, y: -1 } : attacker.facing === "east" ? { x: 1, y: 0 } : attacker.facing === "south" ? { x: 0, y: 1 } : { x: -1, y: 0 };
+    const offset = { x: target.position.x - attacker.position.x, y: target.position.y - attacker.position.y };
+    if (range <= 6 && offset.x * facing.x + offset.y * facing.y > 0) return { visible: true, modifier: 0, level, reason: "lamp" as const };
+  }
+  if (level === "emergency") return { visible: true, modifier: attacker.visionMode === "enhanced" ? 0 : -2, level, reason: "emergency" as const };
+  if (attacker.visionMode === "enhanced" && range <= 6) return { visible: true, modifier: -2, level, reason: "enhanced" as const };
+  return { visible: false, modifier: 0, level, reason: "dark" as const };
+};
+
 const tracedCells = (from: GridPoint, to: GridPoint) => {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -302,7 +320,7 @@ export const coverProtection = (scenario: CombatScenario, attackerId: string, ta
 export const rangedEnemies = (scenario: CombatScenario, combatantId: string) => {
   const attacker = scenario.combatants.find((unit) => unit.id === combatantId && !unit.defeated);
   if (!attacker) return [];
-  return scenario.combatants.filter((target) => target.side !== attacker.side && !target.defeated && snapShotTarget(attacker, target) && hasLineOfSight(scenario, attacker.position, target.position));
+  return scenario.combatants.filter((target) => target.side !== attacker.side && !target.defeated && snapShotTarget(attacker, target) && visibilityAssessment(scenario, attacker, target).visible);
 };
 
 export const reachableMovement = (scenario: CombatScenario, combatantId: string, allowance = 4) => {

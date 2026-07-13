@@ -40,6 +40,67 @@ export const buildEngineRoomScenario = (): CombatScenario => ({
   ],
 });
 
+export const buildBlackoutScenario = (): CombatScenario => {
+  const scenario = buildEngineRoomScenario();
+  const lightingByCell = Object.fromEntries(Array.from({ length: scenario.width }, (_, x) => Array.from({ length: scenario.height }, (_, y) => [
+    `${x}:${y}`,
+    x <= 3 ? "illuminated" : x <= 8 ? "emergency" : "dark",
+  ])).flat()) as CombatScenario["lightingByCell"];
+  return {
+    ...scenario,
+    id: "engineering-blackout",
+    title: "Engineering Blackout",
+    briefing: "Main power has failed across engineering. Cross emergency-lit machinery spaces and enter the blacked-out drive room.",
+    objective: "Use lamps and enhanced vision to reach and disable the drive-control console.",
+    defaultLighting: "dark",
+    lightingByCell,
+    combatants: scenario.combatants.map((unit) => unit.id === "player-1"
+      ? { ...unit, name: "Lamp Team Lead", hasLamp: true, lampOn: false, flareGrenades: 1 }
+      : unit.id === "player-2"
+        ? { ...unit, name: "Enhanced-Vision Support", visionMode: "enhanced" }
+        : unit.id === "enemy-1"
+          ? { ...unit, name: "Engineer with Lamp", hasLamp: true, lampOn: false, concealed: true }
+          : unit.id === "enemy-2"
+            ? { ...unit, name: "Enhanced-Vision Guard", visionMode: "enhanced", concealed: true }
+            : { ...unit, concealed: true }),
+  };
+};
+
+export const buildDoorReactionScenario = (): CombatScenario => {
+  const source = buildEngineRoomScenario();
+  return {
+    ...source,
+    id: "door-reaction-drill",
+    title: "Doorway Reaction Drill",
+    briefing: "Security teams are advancing through a two-door training bulkhead. Cover one approach and watch whether they open it, cross it, or take the alternate route.",
+    objective: "Hold the access side and neutralize the security team.",
+    width: 12,
+    height: 8,
+    defaultLighting: undefined,
+    lightingByCell: undefined,
+    fireCells: [],
+    smokeCells: [],
+    walls: [
+      wall("drill-top", 0, 0, 12, 0), wall("drill-right", 12, 0, 12, 8), wall("drill-bottom", 12, 8, 0, 8), wall("drill-left", 0, 8, 0, 0),
+      wall("center-upper", 6, 0, 6, 2), wall("center-middle", 6, 3, 6, 5), wall("center-lower", 6, 6, 6, 8),
+    ],
+    doors: [
+      { id: "upper-security-door", from: { x: 6, y: 2 }, to: { x: 6, y: 3 }, open: false },
+      { id: "lower-security-door", from: { x: 6, y: 5 }, to: { x: 6, y: 6 }, open: false },
+    ],
+    objects: [
+      { id: "drill-console", kind: "console", position: { x: 1, y: 4 }, label: "Defense Control" },
+      { id: "upper-cover", kind: "cover", position: { x: 4, y: 1 }, label: "Training Barricade" },
+      { id: "lower-cover", kind: "cover", position: { x: 4, y: 6 }, label: "Training Barricade" },
+    ],
+    combatants: source.combatants.map((unit) => unit.id === "player-1" ? { ...unit, position: { x: 3, y: 2 }, facing: "east" }
+      : unit.id === "player-2" ? { ...unit, position: { x: 3, y: 5 }, facing: "east" }
+        : unit.id === "enemy-1" ? { ...unit, name: "Upper Breacher", position: { x: 8, y: 2 }, facing: "west", breachingCharges: 1 }
+          : unit.id === "enemy-2" ? { ...unit, name: "Lower Breacher", position: { x: 8, y: 5 }, facing: "west" }
+            : { ...unit, name: "Security Reserve", position: { x: 10, y: 4 }, facing: "west" }),
+  };
+};
+
 export const buildCargoDeckScenario = (): CombatScenario => ({
   id: "cargo-deck-interdiction",
   title: "Cargo Deck Interdiction",
@@ -397,6 +458,8 @@ export const buildCaptureCommanderScenario = (): CombatScenario => {
 export const characterCombatScenarios = [
   { id: "boarding-action", teamSize: 2, title: "Boarding Action", summary: "Training encounter: breach the command room and secure its console.", build: registered(buildTrainingScenario) },
   { id: "engine-room-sabotage", teamSize: 2, title: "Engine Room Sabotage", summary: "Larger engineering deck with two security doors and three defenders.", build: registered(buildEngineRoomScenario) },
+  { id: "engineering-blackout", teamSize: 2, title: "Engineering Blackout", summary: "Test emergency lighting, darkness, a directional lamp, and enhanced vision.", build: registered(buildBlackoutScenario) },
+  { id: "door-reaction-drill", teamSize: 2, title: "Doorway Reaction Drill", summary: "Cover either of two closed approaches and test reactions when security opens or crosses a doorway.", build: registered(buildDoorReactionScenario) },
   { id: "cargo-deck-interdiction", teamSize: 2, title: "Cargo Deck Interdiction", summary: "Large cargo deck with alternate routes, four security doors, and five defenders.", build: registered(buildCargoDeckScenario) },
   { id: "carrier-deck-assault", teamSize: 2, title: "Carrier Deck Assault", summary: "Very large carrier deck with two cross-deck routes, six security doors, and seven defenders.", build: registered(buildCarrierDeckScenario) },
   { id: "suppress-strongpoint", teamSize: 5, title: "Suppress the Strongpoint", summary: "Five-crew coordinated-fire test against six concentrated defenders and their leader.", build: registered(buildSuppressStrongpointScenario) },

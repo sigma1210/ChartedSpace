@@ -1,18 +1,453 @@
 import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, grenadeLandingPoint, hasLineOfSight, openDoorsAdjacentTo, pointKey, proneRotationForFacing, proposedMoveFor, rangedEnemies, reachableMovement, routeAllowingClosedDoors, shortestPathToAny, treatableAllies, validGrenadeTargets, weaponRecoilDistance, zeroGravityPushes, zeroGravityRecoilPath } from "../geometry";
 import reducer, { adjustCameraZoom, beginCoveringFire, beginDragging, beginGrenadeTargeting, beginOverwatch, braceWeapon, cancelMovePreview, clearCombatScenario, closeDoor, confirmAttack, confirmBreachDoor, confirmCoveringFire, confirmExtinguishFire, confirmGrenade, confirmMove, confirmOpenDoor, confirmOverwatch, confirmSecureObjective, confirmTreatment, detonateBreachCharge, disengage, endPlayerTurn, evade, finishActivation, focusCameraOnSelected, goProne, loadCombatScenario, openDoor, panCameraBy, previewAttack, previewBreachDetonation, previewBreachDoor, previewCoveringFire, previewExtinguishFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewOverwatch, previewSecureObjective, previewTreatment, rally, rallyAlly, releaseDraggedCombatant, reloadWeapon, resetCamera, rotateCamera, rotateCameraBy, selectAttackMode, selectPlayerCombatant, setArmoryLoadout, setViewMode, standUp, startTrot, turnCombatant } from "../slice";
 import { buildTrainingScenario } from "../trainingScenario";
-import { buildArmorySweepScenario, buildCaptureBridgeScenario, buildCaptureCommanderScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildDamageControlScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildHullBreachScenario, buildRescueScenario, buildSuppressStrongpointScenario, buildZeroGravityScenario, characterCombatScenarios } from "../scenarios";
+import { buildArmorySweepScenario, buildBlackoutScenario, buildCaptureBridgeScenario, buildCaptureCommanderScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildDamageControlScenario, buildDoorReactionScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildHullBreachScenario, buildRescueScenario, buildSuppressStrongpointScenario, buildZeroGravityScenario, characterCombatScenarios } from "../scenarios";
 import { attackArcAgainstTarget, resolveMelee, resolveSnapShot, snapShotTarget, woundStateForTotal } from "../combatResolution";
 import { validateCombatScenario } from "../scenarioValidator";
 import { applyArmoryLoadouts, characterCombatArmor, characterCombatWeapons } from "../equipment";
 import { equipmentVisualFor } from "../equipmentPresentation";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "../enemyTactics";
 import type { WeaponProfile } from "../types";
-import { beginSmokeGrenadeTargeting, beginStunGrenadeTargeting, restrainEnemy } from "../slice";
+import { aimAtPlannedTarget, beginDoorCoverage, beginSmokeGrenadeTargeting, beginStunGrenadeTargeting, beginWithdrawal, cancelAttackPreview, cancelDoorCoverage, confirmDoorCoverage, coverDoor, guard, parry, previewDoorCoverage, previewMeleeAttack, previewSubdue, readyWeapon, refreshEnemyObservations, resolveCounterattack, restrainEnemy, scenarioAvoidingVisibleCoveredDoors, searchForEnemies, selectCalledShot, selectMeleeMode, toggleAdvanceReady, toggleCautiousMovement, toggleLamp } from "../slice";
+import { lightingLevelAt, visibilityAssessment } from "../geometry";
 
 describe("character combat 2D checkpoint", () => {
   const missEnemyTurn = { enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }, "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } };
   const lethalEnemyTurn = { enemyRolls: { "enemy-1": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } }, "enemy-2": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } } };
+
+  it("defaults existing scenarios to illuminated visibility", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.fireCells = [];
+    scenario.smokeCells = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 4 };
+    target.position = { x: 4, y: 4 };
+    expect(lightingLevelAt(scenario, target.position)).toBe("illuminated");
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: true, modifier: 0, level: "illuminated" });
+  });
+
+  it("blocks normal vision in darkness while enhanced vision has limited penalized range", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.defaultLighting = "dark";
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 4 };
+    target.position = { x: 5, y: 4 };
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: false, reason: "dark" });
+    expect(rangedEnemies(scenario, attacker.id).map((unit) => unit.id)).not.toContain(target.id);
+    attacker.visionMode = "enhanced";
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: true, modifier: -2, reason: "enhanced" });
+    target.position = { x: 8, y: 4 };
+    expect(visibilityAssessment(scenario, attacker, target).visible).toBe(false);
+  });
+
+  it("uses a forward lamp cone in darkness and reveals a lit lamp user", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.defaultLighting = "dark";
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 4, y: 4 };
+    attacker.facing = "east";
+    attacker.hasLamp = true;
+    attacker.lampOn = true;
+    target.position = { x: 8, y: 4 };
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: true, modifier: 0, reason: "lamp" });
+    target.position = { x: 2, y: 4 };
+    expect(visibilityAssessment(scenario, attacker, target).visible).toBe(false);
+    target.lampOn = true;
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: true, reason: "lamp-revealed" });
+  });
+
+  it("lets a normal-vision enemy activate its lamp when darkness hides every target", () => {
+    const scenario = buildBlackoutScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.smokeCells = [];
+    scenario.combatants.forEach((unit) => {
+      if (unit.id === "player-1") unit.position = { x: 9, y: 3 };
+      else if (unit.id === "enemy-1") { unit.position = { x: 12, y: 3 }; unit.facing = "west"; }
+      else unit.defeated = true;
+    });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, finishActivation());
+    state = reducer(state, endPlayerTurn({ enemyRolls: {} }));
+    const lampEnemy = state.scenario!.combatants.find((unit) => unit.id === "enemy-1")!;
+    const player = state.scenario!.combatants.find((unit) => unit.id === "player-1")!;
+    expect(lampEnemy.lampOn).toBe(true);
+    expect(state.events.some((event) => event.includes("switched lamp on"))).toBe(true);
+    expect(state.soundContacts).toEqual([expect.objectContaining({ sourceEnemyId: lampEnemy.id, kind: "equipment", point: { x: 13, y: 4 } })]);
+    expect(state.soundContacts?.[0].point).not.toEqual(lampEnemy.position);
+    expect(visibilityAssessment(state.scenario!, player, lampEnemy)).toMatchObject({ visible: true, reason: "lamp-revealed" });
+  });
+
+  it("stores visible enemies and preserves their last-known position after sight is lost", () => {
+    const scenario = buildBlackoutScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.smokeCells = [];
+    const observer = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    observer.position = { x: 9, y: 3 };
+    observer.facing = "east";
+    observer.lampOn = true;
+    enemy.position = { x: 11, y: 3 };
+    enemy.lampOn = false;
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(observer.id));
+    state = reducer(state, refreshEnemyObservations());
+    expect(state.observedEnemyIds).toContain(enemy.id);
+    expect(state.lastKnownEnemyPositions?.[enemy.id]).toEqual({ x: 11, y: 3 });
+    state = reducer(state, toggleLamp());
+    state = reducer(state, refreshEnemyObservations());
+    expect(state.observedEnemyIds).not.toContain(enemy.id);
+    expect(state.lastKnownEnemyPositions?.[enemy.id]).toEqual({ x: 11, y: 3 });
+  });
+
+  it("shares team observations without granting the selected character a firing solution", () => {
+    const scenario = buildBlackoutScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.smokeCells = [];
+    const normal = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enhanced = scenario.combatants.find((unit) => unit.id === "player-2")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    normal.position = { x: 2, y: 2 };
+    normal.lampOn = false;
+    enhanced.position = { x: 9, y: 3 };
+    enemy.position = { x: 12, y: 3 };
+    enemy.lampOn = false;
+    enemy.concealed = false;
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(normal.id));
+    state = reducer(state, refreshEnemyObservations());
+    expect(state.observedEnemyIds).toContain(enemy.id);
+    expect(state.observersByEnemyId?.[enemy.id]).toEqual([enhanced.id]);
+    expect(rangedEnemies(state.scenario!, normal.id).map((unit) => unit.id)).not.toContain(enemy.id);
+    expect(rangedEnemies(state.scenario!, enhanced.id).map((unit) => unit.id)).toContain(enemy.id);
+  });
+
+  it("spends 3 AP to search for and reveal a concealed enemy", () => {
+    const scenario = buildBlackoutScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.smokeCells = [];
+    const searcher = scenario.combatants.find((unit) => unit.id === "player-2")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-2")!;
+    searcher.position = { x: 9, y: 3 };
+    enemy.position = { x: 14, y: 3 };
+    enemy.concealed = true;
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(searcher.id));
+    state = reducer(state, refreshEnemyObservations());
+    expect(state.observedEnemyIds).not.toContain(enemy.id);
+    state = reducer(state, searchForEnemies());
+    state = reducer(state, refreshEnemyObservations());
+    expect(state.actionPointsById[searcher.id]).toBe(3);
+    expect(state.scenario!.combatants.find((unit) => unit.id === enemy.id)?.concealed).toBe(false);
+    expect(state.observedEnemyIds).toContain(enemy.id);
+    expect(state.events.some((event) => event.includes("searched") && event.includes("detected"))).toBe(true);
+  });
+
+  it("doubles cautious movement cost and suppresses player movement noise", () => {
+    const scenario = buildBlackoutScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.position = { x: 1, y: 4 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, toggleCautiousMovement());
+    state = reducer(state, previewMove({ x: 3, y: 4 }));
+    expect(state.plannedMove?.cost).toBe(4);
+    state = reducer(state, confirmMove());
+    expect(state.actionPointsById[player.id]).toBe(2);
+    expect(state.playerNoiseContacts ?? []).toEqual([]);
+
+    state = reducer(undefined, loadCombatScenario(buildBlackoutScenario()));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewMove({ x: 2, y: 4 }));
+    state = reducer(state, confirmMove());
+    expect(state.playerNoiseContacts).toEqual([expect.objectContaining({ sourcePlayerId: "player-1", point: { x: 1, y: 4 } })]);
+  });
+
+  it("moves a concealed enemy toward an approximate audible movement sector", () => {
+    const scenario = buildBlackoutScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.fireCells = [];
+    scenario.smokeCells = [];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 9, y: 4 };
+    enemy.position = { x: 13, y: 4 };
+    enemy.concealed = true;
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, previewMove({ x: 10, y: 4 }));
+    state = reducer(state, confirmMove());
+    state = reducer(state, finishActivation());
+    state = reducer(state, endPlayerTurn({ enemyRolls: {} }));
+    const movedEnemy = state.scenario!.combatants.find((unit) => unit.id === enemy.id)!;
+    expect(movedEnemy.position).toEqual({ x: 11, y: 4 });
+    expect(state.investigationTargetByEnemyId?.[enemy.id]).toBeUndefined();
+    expect(state.events.some((event) => event.includes("investigated sound sector 10,4"))).toBe(true);
+  });
+
+  it("clears blackout intelligence state when switching to Boarding Action", () => {
+    let state = reducer(undefined, loadCombatScenario(buildBlackoutScenario()));
+    state = {
+      ...state,
+      grenadeKind: "flare",
+      flareClearsAtTurnByCell: { "4:4": 3 },
+      observedEnemyIds: ["enemy-1"],
+      lastKnownEnemyPositions: { "enemy-1": { x: 9, y: 4 } },
+      observersByEnemyId: { "enemy-1": ["player-1"] },
+      soundContacts: [{ id: "sound:enemy-1:1", sourceEnemyId: "enemy-1", point: { x: 10, y: 4 }, kind: "movement", expiresAtTurn: 3 }],
+      playerNoiseContacts: [{ sourcePlayerId: "player-1", point: { x: 1, y: 4 }, expiresAtTurn: 2 }],
+      cautiousMovementCombatantIds: ["player-1"],
+      investigationTargetByEnemyId: { "enemy-1": { x: 1, y: 4 } },
+    };
+    state = reducer(state, loadCombatScenario(buildTrainingScenario()));
+    expect(state.scenario?.id).toBe("boarding-action");
+    expect(state.grenadeKind).toBeNull();
+    expect(state.flareClearsAtTurnByCell).toEqual({});
+    expect(state.observedEnemyIds).toEqual([]);
+    expect(state.lastKnownEnemyPositions).toEqual({});
+    expect(state.observersByEnemyId).toEqual({});
+    expect(state.soundContacts).toEqual([]);
+    expect(state.playerNoiseContacts).toEqual([]);
+    expect(state.cautiousMovementCombatantIds).toEqual([]);
+    expect(state.investigationTargetByEnemyId).toEqual({});
+  });
+
+  it("reserves a closed doorway as a one-shot overwatch lane", () => {
+    const scenario = buildBlackoutScenario();
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, coverDoor("engineering-access"));
+    expect(state.coveredDoorByCombatantId).toEqual({ "player-1": "engineering-access" });
+    expect(state.overwatchLanes).toEqual([expect.objectContaining({ attackerId: "player-1", cells: [{ x: 4, y: 3 }] })]);
+    expect(state.actionPointsById["player-1"]).toBe(0);
+    expect(state.actedCombatantIds).toContain("player-1");
+  });
+
+  it("provides a valid two-route doorway reaction drill", () => {
+    const scenario = buildDoorReactionScenario();
+    expect(validateCombatScenario(scenario)).toEqual([]);
+    expect(scenario).toMatchObject({ id: "door-reaction-drill", width: 12, height: 8 });
+    expect(scenario.doors.map((door) => door.id)).toEqual(["upper-security-door", "lower-security-door"]);
+    expect(scenario.doors.every((door) => !door.open)).toBe(true);
+    expect(scenario.combatants.filter((unit) => unit.side === "player")).toHaveLength(2);
+    expect(scenario.combatants.filter((unit) => unit.side === "enemy")).toHaveLength(3);
+  });
+
+  it("routes around a visible covered door when the alternate door remains available", () => {
+    const scenario = buildDoorReactionScenario();
+    const tactical = scenarioAvoidingVisibleCoveredDoors(scenario, new Set(["upper-security-door"]));
+    const route = routeAllowingClosedDoors(tactical, "enemy-1", [{ x: 4, y: 2 }]);
+    expect(route?.door?.id).toBe("lower-security-door");
+    expect(tactical.walls.some((wall) => wall.id === "avoided:upper-security-door")).toBe(true);
+    expect(tactical.doors.some((door) => door.id === "upper-security-door")).toBe(false);
+  });
+
+  it("clears covered-door state and its lane when the covering character moves", () => {
+    const scenario = buildBlackoutScenario();
+    scenario.walls = [];
+    scenario.doors = [{ id: "engineering-access", from: { x: 4, y: 3 }, to: { x: 4, y: 4 }, open: false }];
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, coverDoor("engineering-access"));
+    state = { ...state, actionPointsById: { ...state.actionPointsById, "player-1": 6 }, actedCombatantIds: [] };
+    state = reducer(state, previewMove({ x: 2, y: 4 }));
+    state = reducer(state, confirmMove());
+    expect(state.coveredDoorByCombatantId).toEqual({});
+    expect(state.overwatchLanes).toEqual([]);
+    expect(state.events.some((event) => event.includes("stopped covering engineering-access: character moved"))).toBe(true);
+  });
+
+  it("expires unused covered-door state when the next activation begins", () => {
+    let state = reducer(undefined, loadCombatScenario(buildBlackoutScenario()));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, coverDoor("engineering-access"));
+    state = { ...state, actionPointsById: { ...state.actionPointsById, "player-1": 6 }, actedCombatantIds: [] };
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    expect(state.coveredDoorByCombatantId).toEqual({});
+    expect(state.overwatchLanes).toEqual([]);
+  });
+
+  it("manually cancels door coverage without refunding AP or consuming ammunition", () => {
+    let state = reducer(undefined, loadCombatScenario(buildBlackoutScenario()));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    const ammunition = state.ammunitionById["player-1"];
+    state = reducer(state, coverDoor("engineering-access"));
+    state = reducer(state, cancelDoorCoverage("player-1"));
+    expect(state.coveredDoorByCombatantId).toEqual({});
+    expect(state.overwatchLanes).toEqual([]);
+    expect(state.actionPointsById["player-1"]).toBe(0);
+    expect(state.ammunitionById["player-1"]).toBe(ammunition);
+    expect(state.events[0]).toContain("manually canceled");
+  });
+
+  it("selects and confirms either doorway independently", () => {
+    let state = reducer(undefined, loadCombatScenario(buildDoorReactionScenario()));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, beginDoorCoverage());
+    state = reducer(state, previewDoorCoverage("lower-security-door"));
+    expect(state.plannedCoveredDoorId).toBe("lower-security-door");
+    state = reducer(state, confirmDoorCoverage());
+    expect(state.coveredDoorByCombatantId).toEqual({ "player-1": "lower-security-door" });
+
+    state = reducer(undefined, loadCombatScenario(buildDoorReactionScenario()));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, beginDoorCoverage());
+    state = reducer(state, previewDoorCoverage("upper-security-door"));
+    state = reducer(state, confirmDoorCoverage());
+    expect(state.coveredDoorByCombatantId).toEqual({ "player-1": "upper-security-door" });
+  });
+
+  it("resolves a breacher's forced entry before clearing covered-door reaction state", () => {
+    const scenario = buildDoorReactionScenario();
+    const breacher = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    breacher.position = { x: 6, y: 2 };
+    scenario.combatants.filter((unit) => unit.id !== "player-1" && unit.id !== breacher.id).forEach((unit) => { unit.defeated = true; });
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, coverDoor("upper-security-door"));
+    state = reducer(state, endPlayerTurn({ enemyRolls: { "enemy-1": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } } }));
+    expect(state.scenario!.doors.find((door) => door.id === "upper-security-door")?.open).toBe(true);
+    expect(state.scenario!.combatants.find((unit) => unit.id === "enemy-1")?.breachingCharges).toBe(0);
+    expect(state.coveredDoorByCombatantId).toEqual({});
+    expect(state.overwatchLanes).toEqual([]);
+    expect(state.events.some((event) => event.includes("forcibly breached covered upper-security-door"))).toBe(true);
+  });
+
+  it("readies a weapon for +1 and clears readiness when the character moves", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 3 };
+    target.position = { x: 3, y: 3 };
+    const normal = resolveSnapShot(attacker, target, { first: 3, second: 3 }, { first: 1, second: 1 });
+    const ready = resolveSnapShot(attacker, target, { first: 3, second: 3 }, { first: 1, second: 1 }, 0, "snap", false, false, false, 0, true);
+    expect(ready!.hitTotal).toBe(normal!.hitTotal + 1);
+    expect(ready!.readyModifier).toBe(1);
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, readyWeapon());
+    expect(state.weaponReadyCombatantIds).toContain(attacker.id);
+    expect(state.actionPointsById[attacker.id]).toBe(4);
+    state = reducer(state, previewMove({ x: 2, y: 3 }));
+    state = reducer(state, confirmMove());
+    expect(state.weaponReadyCombatantIds).not.toContain(attacker.id);
+  });
+
+  it("advances up to two squares for 4 AP and ends weapon ready", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    attacker.position = { x: 1, y: 3 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, toggleAdvanceReady());
+    state = reducer(state, previewMove({ x: 3, y: 3 }));
+    expect(state.plannedMove?.cost).toBe(4);
+    state = reducer(state, confirmMove());
+    expect(state.scenario!.combatants.find((unit) => unit.id === attacker.id)?.position).toEqual({ x: 3, y: 3 });
+    expect(state.actionPointsById[attacker.id]).toBe(2);
+    expect(state.weaponReadyCombatantIds).toContain(attacker.id);
+    expect(state.advanceReadyCombatantIds).not.toContain(attacker.id);
+  });
+
+  it("aims at a selected target for 2 AP, adds +1, and clears after firing", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 3 };
+    target.position = { x: 3, y: 3 };
+    const normal = resolveSnapShot(attacker, target, { first: 3, second: 3 }, { first: 1, second: 1 });
+    const aimed = resolveSnapShot(attacker, target, { first: 3, second: 3 }, { first: 1, second: 1 }, 0, "snap", false, false, false, 0, false, true);
+    expect(aimed!.hitTotal).toBe(normal!.hitTotal + 1);
+    expect(aimed!.aimModifier).toBe(1);
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, previewAttack(target.id));
+    state = reducer(state, aimAtPlannedTarget());
+    expect(state.actionPointsById[attacker.id]).toBe(4);
+    expect(state.aimedTargetByCombatantId?.[attacker.id]).toBe(target.id);
+    state = reducer(state, selectAttackMode("snap"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 3, second: 3 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.aimedTargetByCombatantId?.[attacker.id]).toBeUndefined();
+  });
+
+  it("applies a weapon called shot on a successful aimed hit", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 3 };
+    target.position = { x: 3, y: 3 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, previewAttack(target.id));
+    state = reducer(state, aimAtPlannedTarget());
+    state = reducer(state, selectCalledShot("weapon"));
+    state = reducer(state, selectAttackMode("snap"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.weaponDamagedCombatantIds).toContain(target.id);
+    expect(state.calledShotByCombatantId?.[attacker.id]).toBeUndefined();
+  });
+
+  it("applies emergency-light penalties, enhanced-vision immunity, and smoke precedence", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 4 };
+    target.position = { x: 4, y: 4 };
+    scenario.lightingByCell = { [pointKey(target.position)]: "emergency" };
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: true, modifier: -2 });
+    attacker.visionMode = "enhanced";
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: true, modifier: 0 });
+    scenario.smokeCells = [{ x: 3, y: 4 }];
+    attacker.hasLamp = true;
+    attacker.lampOn = true;
+    expect(visibilityAssessment(scenario, attacker, target)).toMatchObject({ visible: false, reason: "blocked" });
+  });
+
+  it("applies the shared emergency-light modifier during Redux attack resolution", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 4 };
+    target.position = { x: 4, y: 4 };
+    scenario.lightingByCell = { [pointKey(target.position)]: "emergency" };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, previewAttack(target.id));
+    state = reducer(state, selectAttackMode("aimed"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.events.some((event) => event.includes("hit 11/8"))).toBe(true);
+  });
 
   it("classifies front, side, and rear exposure relative to every target facing", () => {
     const targetPosition = { x: 5, y: 5 };
@@ -57,6 +492,189 @@ describe("character combat 2D checkpoint", () => {
     const rearMelee = resolveMelee(attacker, target, 3);
     expect([frontMelee.arcModifier, sideMelee.arcModifier, rearMelee.arcModifier]).toEqual([0, 1, 2]);
     expect([frontMelee.total, sideMelee.total, rearMelee.total]).toEqual([4, 5, 6]);
+  });
+
+  it("offers unarmed, blade, and rifle-strike melee techniques with distinct costs and modifiers", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 1 };
+    target.position = { x: 2, y: 1 };
+    const unarmed = resolveMelee(attacker, target, 3, false, 1, 0);
+    const blade = resolveMelee(attacker, target, 3);
+    const rifle = resolveMelee(attacker, target, 3, false, -1, attacker.meleeWeapon.penetration + 2);
+    expect(unarmed.techniqueHitModifier).toBe(1);
+    expect(blade.techniquePenetration).toBe(attacker.meleeWeapon.penetration);
+    expect(rifle.techniquePenetration).toBe(attacker.meleeWeapon.penetration + 2);
+
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, previewAttack(target.id));
+    state = reducer(state, selectAttackMode("melee"));
+    state = reducer(state, selectMeleeMode("unarmed"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.actionPointsById[attacker.id]).toBe(4);
+    expect(state.events[0]).toContain("used unarmed");
+  });
+
+  it("subdues without wounds, stunning on 5+ and failing below 5", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 1 };
+    target.position = { x: 2, y: 1 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, previewAttack(target.id));
+    state = reducer(state, selectAttackMode("melee"));
+    state = reducer(state, selectMeleeMode("subdue"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 5, second: 1 }, woundDice: { first: 6, second: 6 } }));
+    expect(state.scenario!.combatants.find((unit) => unit.id === target.id)).toMatchObject({ woundState: "healthy", defeated: false, stunnedUntilTurn: 2 });
+    expect(state.actionPointsById[attacker.id]).toBe(3);
+
+    const failedScenario = buildTrainingScenario();
+    failedScenario.walls = [];
+    failedScenario.doors = [];
+    failedScenario.combatants.find((unit) => unit.id === attacker.id)!.position = { x: 1, y: 1 };
+    failedScenario.combatants.find((unit) => unit.id === target.id)!.position = { x: 2, y: 1 };
+    state = reducer(undefined, loadCombatScenario(failedScenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, previewAttack(target.id));
+    state = reducer(state, selectAttackMode("melee"));
+    state = reducer(state, selectMeleeMode("subdue"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 3, second: 1 }, woundDice: { first: 6, second: 6 } }));
+    expect(state.scenario!.combatants.find((unit) => unit.id === target.id)?.stunnedUntilTurn).toBeUndefined();
+    expect(state.events[0]).toContain("failed to subdue");
+  });
+
+  it("keeps adjacent concealed enemies selectable for melee and subdual when they cannot be shot", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 1 };
+    target.position = { x: 2, y: 1 };
+    target.concealed = true;
+    expect(rangedEnemies(scenario, attacker.id)).not.toContainEqual(expect.objectContaining({ id: target.id }));
+    expect(adjacentEnemies(scenario, attacker.id)).toContainEqual(expect.objectContaining({ id: target.id }));
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(attacker.id));
+    state = reducer(state, previewAttack(target.id));
+    expect(state.plannedAttackTargetId).toBe(target.id);
+    expect(state.plannedAttackMode).toBe("melee");
+    state = reducer(state, selectMeleeMode("subdue"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 5, second: 1 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario!.combatants.find((unit) => unit.id === target.id)?.stunnedUntilTurn).toBe(2);
+  });
+
+  it("keeps a stationary suppressed and panicked guard available to two adjacent melee attackers across turns", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const first = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const second = scenario.combatants.find((unit) => unit.id === "player-2")!;
+    const guard = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    first.position = { x: 1, y: 2 };
+    guard.position = { x: 2, y: 2 };
+    second.position = { x: 2, y: 3 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, turn: 3, suppressedCombatantIds: [guard.id], moraleStateByCombatantId: { ...state.moraleStateByCombatantId, [guard.id]: "panicked" }, actionPointsById: { ...state.actionPointsById, [first.id]: 6, [second.id]: 6 }, actedCombatantIds: [] };
+    expect(adjacentEnemies(state.scenario!, first.id).map((unit) => unit.id)).toContain(guard.id);
+    expect(adjacentEnemies(state.scenario!, second.id).map((unit) => unit.id)).toContain(guard.id);
+    state = reducer(state, selectPlayerCombatant(first.id));
+    state = reducer(state, previewMeleeAttack(guard.id));
+    expect(state.plannedAttackTargetId).toBe(guard.id);
+    expect(state.plannedAttackMode).toBe("melee");
+    state = reducer(state, selectMeleeMode("subdue"));
+    expect(state.plannedMeleeMode).toBe("subdue");
+    state = reducer(state, cancelAttackPreview());
+    state = reducer(state, selectPlayerCombatant(second.id));
+    state = reducer(state, previewAttack(guard.id));
+    expect(state.plannedAttackTargetId).toBe(guard.id);
+  });
+
+  it("directly subdues and then restrains an adjacent suppressed panicked crew member", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const first = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const second = scenario.combatants.find((unit) => unit.id === "player-2")!;
+    const crew = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    first.position = { x: 1, y: 2 };
+    crew.position = { x: 2, y: 2 };
+    second.position = { x: 2, y: 3 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, turn: 3, suppressedCombatantIds: [crew.id], moraleStateByCombatantId: { ...state.moraleStateByCombatantId, [crew.id]: "panicked" } };
+    state = reducer(state, selectPlayerCombatant(first.id));
+    state = reducer(state, previewSubdue(crew.id));
+    expect(state).toMatchObject({ plannedAttackTargetId: crew.id, plannedAttackMode: "melee", plannedMeleeMode: "subdue" });
+    state = reducer(state, confirmAttack({ hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario!.combatants.find((unit) => unit.id === crew.id)?.stunnedUntilTurn).toBe(4);
+    state = reducer(state, selectPlayerCombatant(second.id));
+    state = reducer(state, restrainEnemy(crew.id));
+    expect(state.scenario!.combatants.find((unit) => unit.id === crew.id)).toMatchObject({ surrendered: true, defeated: true });
+  });
+
+  it("never resolves Subdue as suppressive fire when stale ranged mode remains", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const attacker = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const target = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    attacker.position = { x: 1, y: 1 };
+    target.position = { x: 2, y: 1 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    const startingAmmo = state.ammunitionById[attacker.id];
+    state = { ...state, selectedCombatantId: attacker.id, plannedAttackTargetId: target.id, plannedAttackMode: "suppressive", plannedMeleeMode: "subdue", events: [`${attacker.name} suppressive fired at ${target.name}: earlier event`] };
+    state = reducer(state, confirmAttack({ hitDice: { first: 5, second: 1 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.ammunitionById[attacker.id]).toBe(startingAmmo);
+    expect(state.scenario!.combatants.find((unit) => unit.id === target.id)?.stunnedUntilTurn).toBe(2);
+    expect(state.events[0]).toContain("subdued");
+    expect(state.events[0]).not.toContain("suppressive fired");
+  });
+
+  it("lets melee defense stop subdual and strongly subdues into restraint with morale pressure", () => {
+    const defendedScenario = buildTrainingScenario();
+    defendedScenario.walls = [];
+    defendedScenario.doors = [];
+    const defender = defendedScenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    defendedScenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 1, y: 1 };
+    defender.position = { x: 2, y: 1 };
+    let state = reducer(undefined, loadCombatScenario(defendedScenario));
+    state = { ...state, parryingCombatantIds: [defender.id] };
+    state = reducer(state, selectPlayerCombatant("player-1"));
+    state = reducer(state, previewAttack(defender.id));
+    state = reducer(state, selectAttackMode("melee"));
+    state = reducer(state, selectMeleeMode("subdue"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 5, second: 1 }, woundDice: { first: 1, second: 1 } }));
+    expect(state.scenario!.combatants.find((unit) => unit.id === defender.id)?.stunnedUntilTurn).toBeUndefined();
+    expect(state.parryingCombatantIds).not.toContain(defender.id);
+
+    const strongScenario = buildTrainingScenario();
+    strongScenario.walls = [];
+    strongScenario.doors = [];
+    const strongAttacker = strongScenario.combatants.find((unit) => unit.id === "player-1")!;
+    const strongTarget = strongScenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    const witness = strongScenario.combatants.find((unit) => unit.id === "enemy-2")!;
+    strongAttacker.position = { x: 1, y: 1 };
+    strongAttacker.meleeRating = 4;
+    strongTarget.position = { x: 2, y: 1 };
+    strongTarget.meleeRating = 0;
+    strongTarget.armor = 0;
+    witness.position = { x: 3, y: 1 };
+    state = reducer(undefined, loadCombatScenario(strongScenario));
+    state = reducer(state, selectPlayerCombatant(strongAttacker.id));
+    state = reducer(state, previewAttack(strongTarget.id));
+    state = reducer(state, selectAttackMode("melee"));
+    state = reducer(state, selectMeleeMode("subdue"));
+    state = reducer(state, confirmAttack({ hitDice: { first: 3, second: 1 }, woundDice: { first: 1, second: 1 }, moraleRolls: { [witness.id]: { first: 1, second: 1 } } }));
+    expect(state.scenario!.combatants.find((unit) => unit.id === strongTarget.id)).toMatchObject({ surrendered: true, defeated: true, woundState: "healthy" });
+    expect(state.moraleStateByCombatantId?.[witness.id]).toBe("shaken");
   });
 
   it("spends 3 AP to evade ranged fire, leaves melee unchanged, and expires after the enemy phase", () => {
@@ -239,7 +857,7 @@ describe("character combat 2D checkpoint", () => {
   });
 
   it("provides two distinct selectable scenarios that load and reset independently", () => {
-    expect(characterCombatScenarios.map((entry) => entry.id)).toEqual(["boarding-action", "engine-room-sabotage", "cargo-deck-interdiction", "carrier-deck-assault", "suppress-strongpoint", "capture-commander", "detention-deck-rescue", "hold-the-airlock", "armory-sweep", "capture-the-bridge", "zero-g-drift", "hull-breach", "damage-control"]);
+    expect(characterCombatScenarios.map((entry) => entry.id)).toEqual(["boarding-action", "engine-room-sabotage", "engineering-blackout", "door-reaction-drill", "cargo-deck-interdiction", "carrier-deck-assault", "suppress-strongpoint", "capture-commander", "detention-deck-rescue", "hold-the-airlock", "armory-sweep", "capture-the-bridge", "zero-g-drift", "hull-breach", "damage-control"]);
     const boarding = buildTrainingScenario();
     const engine = buildEngineRoomScenario();
     expect(engine).toMatchObject({ id: "engine-room-sabotage", width: 14, height: 9 });
@@ -2399,6 +3017,7 @@ describe("character combat 2D checkpoint", () => {
     const scenario = buildTrainingScenario();
     scenario.doors[0].open = true;
     scenario.combatants.find((unit) => unit.id === "player-1")!.position = { x: 8, y: 3 };
+    scenario.combatants.find((unit) => unit.id === "enemy-1")!.position = { x: 10, y: 3 };
     let state = reducer(undefined, loadCombatScenario(scenario));
     state = reducer(state, selectPlayerCombatant("player-1"));
     state = reducer(state, previewMove({ x: 8, y: 4 }));
@@ -2653,6 +3272,10 @@ describe("character combat 2D checkpoint", () => {
     let state = reducer(undefined, loadCombatScenario(scenario));
     state = reducer(state, selectPlayerCombatant(player.id));
     state = reducer(state, previewMove({ x: 1, y: 2 }));
+    expect(state.plannedMove).toBeNull();
+    state = reducer(state, beginWithdrawal());
+    expect(state.actionPointsById[player.id]).toBe(3);
+    state = reducer(state, previewMove({ x: 1, y: 2 }));
     state = reducer(state, confirmMove({ hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 }, reactionMeleeRollsByCombatantId: { [enemy.id]: 6 } }));
 
     const stopped = state.scenario!.combatants.find((unit) => unit.id === player.id)!;
@@ -2662,7 +3285,7 @@ describe("character combat 2D checkpoint", () => {
     expect(state.events.some((event) => event.includes("movement stopped by reaction melee"))).toBe(true);
   });
 
-  it("spends three AP to disengage and then leaves adjacency without reaction melee", () => {
+  it("spends five AP to withdraw defensively up to two squares without reaction melee", () => {
     const scenario = buildTrainingScenario();
     scenario.walls = [];
     scenario.doors = [];
@@ -2677,15 +3300,100 @@ describe("character combat 2D checkpoint", () => {
     let state = reducer(undefined, loadCombatScenario(scenario));
     state = reducer(state, selectPlayerCombatant(player.id));
     state = reducer(state, disengage());
-    expect(state.actionPointsById[player.id]).toBe(3);
+    expect(state.actionPointsById[player.id]).toBe(1);
     expect(state.disengagedCombatantIds).toContain(player.id);
     state = reducer(state, previewMove({ x: 1, y: 2 }));
+    expect(state.plannedMove?.cost).toBe(0);
     state = reducer(state, confirmMove({ hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 }, reactionMeleeRollsByCombatantId: { [enemy.id]: 6 } }));
 
     expect(state.scenario!.combatants.find((unit) => unit.id === player.id)?.position).toEqual({ x: 1, y: 2 });
     expect(state.scenario!.combatants.find((unit) => unit.id === player.id)?.defeated).toBe(false);
     expect(state.disengagedCombatantIds).not.toContain(player.id);
     expect(state.reactionMeleeUsedCombatantIds).not.toContain(enemy.id);
+  });
+
+  it("consumes parry on the next withdrawal reaction and applies its melee penalty", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 2, y: 2 };
+    enemy.position = { x: 3, y: 2 };
+    scenario.combatants.filter((unit) => unit.id !== player.id && unit.id !== enemy.id).forEach((unit) => { unit.defeated = true; });
+    expect(resolveMelee(enemy, player, 4, false, 0, enemy.meleeWeapon.penetration, -2).defenderModifier).toBe(-2);
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, parry());
+    expect(state.actionPointsById[player.id]).toBe(4);
+    state = reducer(state, beginWithdrawal());
+    state = reducer(state, previewMove({ x: 1, y: 2 }));
+    state = reducer(state, confirmMove({ hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 }, reactionMeleeRollsByCombatantId: { [enemy.id]: 4 } }));
+    expect(state.parryingCombatantIds).not.toContain(player.id);
+  });
+
+  it("guards through the enemy phase and clears at the next activation", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 2, y: 2 };
+    enemy.position = { x: 3, y: 2 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, guard());
+    expect(state.guardingCombatantIds).toContain(player.id);
+    expect(state.actedCombatantIds).toContain(player.id);
+    state = reducer(state, selectPlayerCombatant("player-2"));
+    state = reducer(state, finishActivation());
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+    expect(state.guardingCombatantIds).toEqual([]);
+    expect(state.turn).toBe(2);
+  });
+
+  it("pauses the enemy phase for a successful parry counterattack and resumes without duplicate attacks", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    player.position = { x: 2, y: 2 };
+    enemy.position = { x: 3, y: 2 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = reducer(state, selectPlayerCombatant(player.id));
+    state = reducer(state, parry());
+    state = reducer(state, finishActivation());
+    state = reducer(state, selectPlayerCombatant("player-2"));
+    state = reducer(state, finishActivation());
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+    expect(state.turn).toBe(1);
+    expect(state.pendingCounterattack).toEqual({ defenderId: player.id, attackerId: enemy.id });
+    expect(state.processedEnemyPhaseCombatantIds).toContain(enemy.id);
+    state = reducer(state, resolveCounterattack({ accept: true, mode: "blade", roll: 6 }));
+    expect(state.pendingCounterattack).toBeNull();
+    expect(state.events.some((event) => event.includes("counterattacked"))).toBe(true);
+    state = reducer(state, endPlayerTurn(missEnemyTurn));
+    expect(state.turn).toBe(2);
+    expect(state.processedEnemyPhaseCombatantIds).toEqual([]);
+  });
+
+  it("allows declining a counterattack and rejects one invalidated by prone posture", () => {
+    const scenario = buildTrainingScenario();
+    scenario.walls = [];
+    scenario.doors = [];
+    const defender = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    const attacker = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    defender.position = { x: 2, y: 2 };
+    attacker.position = { x: 3, y: 2 };
+    let state = reducer(undefined, loadCombatScenario(scenario));
+    state = { ...state, pendingCounterattack: { defenderId: defender.id, attackerId: attacker.id } };
+    state = reducer(state, resolveCounterattack({ accept: false }));
+    expect(state.events[0]).toContain("declined");
+    state = { ...state, pendingCounterattack: { defenderId: defender.id, attackerId: attacker.id }, scenario: { ...state.scenario!, combatants: state.scenario!.combatants.map((unit) => unit.id === defender.id ? { ...unit, posture: "prone" as const } : unit) } };
+    state = reducer(state, resolveCounterattack({ accept: true, mode: "blade", roll: 6 }));
+    expect(state.events[0]).toBe("Counterattack opportunity expired");
   });
 
   it("traces fire lanes only through visible squares and stops at closed doors", () => {

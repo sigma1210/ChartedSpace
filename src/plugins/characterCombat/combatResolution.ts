@@ -2,8 +2,8 @@ import type { Combatant, FireMode, WeaponProfile, WeaponRangeBand, WoundState } 
 
 export interface DicePair { first: number; second: number }
 export type AttackArc = "front" | "side" | "rear";
-export interface SnapShotResult { hit: boolean; hitRoll: number; hitModifier: number; hitTotal: number; targetNumber: number; range: number; rangeBand: WeaponRangeBand; weaponAccuracy: number; weaponPenetration: number; attackArc: AttackArc; arcModifier: number; evadeModifier: number; postureModifier: number; bracedModifier: number; woundRoll: number | null; woundTotal: number | null; cover: number; woundState: WoundState }
-export interface MeleeResult { roll: number; modifier: number; total: number; attackArc: AttackArc; arcModifier: number; postureModifier: number; woundState: WoundState }
+export interface SnapShotResult { hit: boolean; hitRoll: number; hitModifier: number; hitTotal: number; targetNumber: number; range: number; rangeBand: WeaponRangeBand; weaponAccuracy: number; weaponPenetration: number; attackArc: AttackArc; arcModifier: number; evadeModifier: number; postureModifier: number; bracedModifier: number; visibilityModifier: number; readyModifier: number; aimModifier: number; situationalHitModifier: number; situationalWoundModifier: number; woundRoll: number | null; woundTotal: number | null; cover: number; woundState: WoundState }
+export interface MeleeResult { roll: number; modifier: number; total: number; attackArc: AttackArc; arcModifier: number; postureModifier: number; techniqueHitModifier: number; techniquePenetration: number; defenderModifier: number; woundState: WoundState }
 
 export const rollDicePair = (): DicePair => ({ first: Math.floor(Math.random() * 6) + 1, second: Math.floor(Math.random() * 6) + 1 });
 export const distanceInSquares = (attacker: Combatant, target: Combatant) => Math.ceil(Math.hypot(target.position.x - attacker.position.x, target.position.y - attacker.position.y));
@@ -30,17 +30,17 @@ export const weaponAccuracyForRange = (weapon: WeaponProfile, rangeBand: WeaponR
 export const weaponPenetrationForRange = (weapon: WeaponProfile, rangeBand: WeaponRangeBand) => weapon.penetrationByRange?.[rangeBand] ?? weapon.penetration;
 
 export const woundStateForTotal = (total: number): WoundState => total <= 4 ? "healthy" : total <= 6 ? "light" : total <= 8 ? "serious" : total <= 10 ? "unconscious" : "dead";
-export const resolveMelee = (attacker: Combatant, target: Combatant, die: number, attackerSuppressed = false): MeleeResult => {
+export const resolveMelee = (attacker: Combatant, target: Combatant, die: number, attackerSuppressed = false, techniqueHitModifier = 0, techniquePenetration = attacker.meleeWeapon.penetration, defenderModifier = 0): MeleeResult => {
   const attackArc = attackArcAgainstTarget(attacker, target);
   const arcModifier = attackArcModifier(attackArc);
   const postureModifier = (attacker.posture === "prone" ? -2 : 0) + (target.posture === "prone" ? 2 : 0);
-  const modifier = attacker.meleeRating - target.meleeRating + attacker.meleeWeapon.penetration - target.armor - (attacker.woundState === "light" ? 1 : 0) + arcModifier + postureModifier - (attackerSuppressed ? 1 : 0);
+  const modifier = attacker.meleeRating - target.meleeRating + techniquePenetration - target.armor - (attacker.woundState === "light" ? 1 : 0) + arcModifier + postureModifier + techniqueHitModifier + defenderModifier - (attackerSuppressed ? 1 : 0);
   const total = die + modifier;
   const woundState: WoundState = total <= 2 ? "healthy" : total <= 4 ? "light" : total === 5 ? "serious" : total === 6 ? "unconscious" : "dead";
-  return { roll: die, modifier, total, attackArc, arcModifier, postureModifier, woundState };
+  return { roll: die, modifier, total, attackArc, arcModifier, postureModifier, techniqueHitModifier, techniquePenetration, defenderModifier, woundState };
 };
 
-export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice: DicePair, woundDice: DicePair, cover = 0, fireMode: FireMode = "snap", targetEvading = false, attackerSuppressed = false, attackerBraced = false): SnapShotResult | null => {
+export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice: DicePair, woundDice: DicePair, cover = 0, fireMode: FireMode = "snap", targetEvading = false, attackerSuppressed = false, attackerBraced = false, visibilityModifier = 0, attackerReady = false, attackerAimed = false, situationalHitModifier = 0, situationalWoundModifier = 0): SnapShotResult | null => {
   const profile = snapShotTarget(attacker, target);
   if (!profile) return null;
   const hitRoll = hitDice.first + hitDice.second;
@@ -51,10 +51,12 @@ export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice:
   const evadeModifier = targetEvading ? -2 : 0;
   const postureModifier = target.posture === "prone" ? -2 : 0;
   const bracedModifier = attackerBraced ? 1 : 0;
-  const hitModifier = attacker.weaponSkill + weaponAccuracy - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 1 : 0) - (fireMode === "covering" || fireMode === "suppressive" ? 2 : 0) + (fireMode === "automatic" ? 4 : 0) + arcModifier + evadeModifier + postureModifier + bracedModifier - (attackerSuppressed ? 1 : 0);
+  const readyModifier = attackerReady ? 1 : 0;
+  const aimModifier = attackerAimed ? 1 : 0;
+  const hitModifier = attacker.weaponSkill + weaponAccuracy - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 1 : 0) - (fireMode === "covering" || fireMode === "suppressive" ? 2 : 0) + (fireMode === "automatic" ? 4 : 0) + arcModifier + evadeModifier + postureModifier + bracedModifier + readyModifier + aimModifier + visibilityModifier + situationalHitModifier - (attackerSuppressed ? 1 : 0);
   const hitTotal = hitRoll + hitModifier;
-  if (hitTotal < profile.targetNumber) return { ...profile, hit: false, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, attackArc, arcModifier, evadeModifier, postureModifier, bracedModifier, woundRoll: null, woundTotal: null, cover, woundState: target.woundState };
+  if (hitTotal < profile.targetNumber) return { ...profile, hit: false, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, attackArc, arcModifier, evadeModifier, postureModifier, bracedModifier, visibilityModifier, readyModifier, aimModifier, situationalHitModifier, situationalWoundModifier, woundRoll: null, woundTotal: null, cover, woundState: target.woundState };
   const woundRoll = woundDice.first + woundDice.second;
-  const woundTotal = woundRoll + weaponPenetration - target.armor - cover;
-  return { ...profile, hit: true, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, attackArc, arcModifier, evadeModifier, postureModifier, bracedModifier, woundRoll, woundTotal, cover, woundState: woundStateForTotal(woundTotal) };
+  const woundTotal = woundRoll + weaponPenetration - target.armor - cover + situationalWoundModifier;
+  return { ...profile, hit: true, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, attackArc, arcModifier, evadeModifier, postureModifier, bracedModifier, visibilityModifier, readyModifier, aimModifier, situationalHitModifier, situationalWoundModifier, woundRoll, woundTotal, cover, woundState: woundStateForTotal(woundTotal) };
 };

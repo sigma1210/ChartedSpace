@@ -4,8 +4,8 @@ import { Canvas } from "@react-three/fiber";
 import { Html, Line, OrthographicCamera } from "@react-three/drei";
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { adjacentObjectives, closedDoorsAdjacentTo, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, pathContains, pointKey, proneRotationForFacing, rangedEnemies, reachableMovement, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
-import { adjustCameraZoom, panCameraBy, previewAttack, previewCoveringFire, previewGrenadeTarget, previewMove, previewOpenDoor, previewOverwatch, previewSecureObjective, rotateCameraBy, selectPlayerCombatant, setHoveredDestination } from "./slice";
+import { adjacentEnemies, adjacentObjectives, closedDoorsAdjacentTo, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, lightingLevelAt, pathContains, pointKey, proneRotationForFacing, rangedEnemies, reachableMovement, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
+import { adjustCameraZoom, panCameraBy, previewAttack, previewCoveringFire, previewDoorCoverage, previewGrenadeTarget, previewMove, previewOpenDoor, previewOverwatch, previewSecureObjective, rotateCameraBy, selectPlayerCombatant, setHoveredDestination } from "./slice";
 import type { DoorSegment, WallSegment } from "./types";
 import { equipmentVisualFor } from "./equipmentPresentation";
 
@@ -30,23 +30,26 @@ const SegmentMesh = ({ segment, width, height, color, wallHeight = 0.9, cutaway 
   return <mesh position={[x, visibleHeight / 2, z]} castShadow={!cutaway} receiveShadow><boxGeometry args={horizontal ? [length, visibleHeight, 0.12] : [0.12, visibleHeight, length]} /><meshStandardMaterial color={color} roughness={0.72} transparent={cutaway} opacity={cutaway ? 0.42 : 1} /></mesh>;
 };
 
-const DoorMesh = ({ door, width, height, actionable, charged, onOpen }: { door: DoorSegment; width: number; height: number; actionable: boolean; charged: boolean; onOpen: () => void }) => {
+const DoorMesh = ({ door, width, height, actionable, coverSelectable, coverSelected, charged, covered, onOpen }: { door: DoorSegment; width: number; height: number; actionable: boolean; coverSelectable: boolean; coverSelected: boolean; charged: boolean; covered: boolean; onOpen: () => void }) => {
   const horizontal = door.from.y === door.to.y;
   const length = horizontal ? Math.abs(door.to.x - door.from.x) : Math.abs(door.to.y - door.from.y);
   const wallHeight = door.open ? 0.08 : 0.72;
   const x = (door.from.x + door.to.x) / 2 - width / 2;
   const z = (door.from.y + door.to.y) / 2 - height / 2;
-  return <mesh position={[x, wallHeight / 2, z]} castShadow receiveShadow onClick={(event) => { if (actionable) { event.stopPropagation(); onOpen(); } }}>
+  return <mesh position={[x, wallHeight / 2, z]} castShadow receiveShadow onClick={(event) => { if (actionable || coverSelectable) { event.stopPropagation(); onOpen(); } }}>
     <boxGeometry args={horizontal ? [length, wallHeight, actionable ? 0.2 : 0.12] : [actionable ? 0.2 : 0.12, wallHeight, length]} />
-    <meshStandardMaterial color={door.open ? "#34d399" : charged ? "#fb7185" : actionable ? "#fbbf24" : "#f59e0b"} emissive={charged ? "#881337" : actionable ? "#78350f" : "#000000"} roughness={0.72} />
+    <meshStandardMaterial color={door.open ? "#34d399" : coverSelected ? "#ffffff" : coverSelectable || covered ? "#fde047" : charged ? "#fb7185" : actionable ? "#fbbf24" : "#f59e0b"} emissive={coverSelectable || covered ? "#854d0e" : charged ? "#881337" : actionable ? "#78350f" : "#000000"} roughness={0.72} />
     {actionable && <Html center position={[0, 0.68, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-amber-300 bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-100">OPEN DOOR</div></Html>}
     {charged && <Html center position={[0, 0.92, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-rose-300 bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-100">CHARGE PLACED</div></Html>}
+    {covered && <Html center position={[0, 1.12, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-yellow-200 bg-black/90 px-1.5 py-0.5 font-mono text-[9px] font-bold text-yellow-100">DOOR COVERED</div></Html>}
+    {coverSelectable && <Html center position={[0, 1.34, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-yellow-200 bg-black/90 px-1.5 py-0.5 font-mono text-[9px] font-bold text-yellow-100">{coverSelected ? "SELECTED" : "SELECT TO COVER"}</div></Html>}
   </mesh>;
 };
 
 const CombatScene3D = () => {
   const dispatch = useAppDispatch();
-  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, lastGrenadeImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, suppressedCombatantIds, draggingCombatantByCarrierId, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId } = useAppSelector((state) => state.plugins.characterCombat);
+  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, lastGrenadeImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, suppressedCombatantIds, draggingCombatantByCarrierId, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, parryingCombatantIds, guardingCombatantIds } = useAppSelector((state) => state.plugins.characterCombat);
+  const advanceReadyPath = selectedCombatantId ? advanceReadyCombatantIds?.includes(selectedCombatantId) ?? false : false;
   if (!scenario) return null;
   const span = Math.max(scenario.width, scenario.height);
   const focusX = (camera.focus ? camera.focus.x + 0.5 - scenario.width / 2 : 0) + camera.pan.x;
@@ -60,13 +63,15 @@ const CombatScene3D = () => {
   const selectedActionPoints = selectedCombatantId ? actionPointsById[selectedCombatantId] ?? 0 : 0;
   const selectedHasActed = selectedCombatantId ? actedCombatantIds.includes(selectedCombatantId) || selectedActionPoints === 0 : false;
   const selectedUnit = scenario.combatants.find((unit) => unit.id === selectedCombatantId);
+  const doorCoverTargetIds = new Set(doorCoverTargeting && selectedUnit ? scenario.doors.filter((door) => !door.open && Math.abs((door.from.x + door.to.x) / 2 - (selectedUnit.position.x + 0.5)) + Math.abs((door.from.y + door.to.y) / 2 - (selectedUnit.position.y + 0.5)) <= 7).map((door) => door.id) : []);
   const selectedIsTrotting = selectedCombatantId ? trottingCombatantIds.includes(selectedCombatantId) : false;
   const selectedIsProne = selectedUnit?.posture === "prone";
   const selectedIsSuppressed = selectedCombatantId ? suppressedCombatantIds.includes(selectedCombatantId) : false;
   const selectedIsDragging = selectedCombatantId ? Boolean(draggingCombatantByCarrierId[selectedCombatantId]) : false;
   const reachable = status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? scenario.gravityMode === "zero-g" ? selectedActionPoints >= 3 ? zeroGravityPushes(scenario, selectedCombatantId) : new Map() : reachableMovement(scenario, selectedCombatantId, Math.min(selectedIsProne ? 1 : selectedIsDragging || selectedIsSuppressed ? 2 : selectedIsTrotting ? 6 : 4, selectedActionPoints)) : new Map();
-  const validTargetIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting && !selectedIsTrotting ? rangedEnemies(scenario, selectedCombatantId).map((unit) => unit.id) : []);
+  const validTargetIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting && !selectedIsTrotting ? [...rangedEnemies(scenario, selectedCombatantId), ...adjacentEnemies(scenario, selectedCombatantId)].map((unit) => unit.id) : []);
   const maintainedTargetId = selectedCombatantId ? maintainedTargetByCombatantId[selectedCombatantId] : null;
+  const aimedTargetId = selectedCombatantId ? aimedTargetByCombatantId?.[selectedCombatantId] : null;
   const coveringCombatantIds = new Set(coveringFireLanes.map((lane) => lane.attackerId));
   const overwatchCombatantIds = new Set(overwatchLanes.map((lane) => lane.attackerId));
   const actionableDoorIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && selectedActionPoints >= 6 && !grenadeTargeting ? closedDoorsAdjacentTo(scenario, selectedCombatantId).map((door) => door.id) : []);
@@ -90,6 +95,9 @@ const CombatScene3D = () => {
     <color attach="background" args={["#03070a"]} />
     <ambientLight intensity={0.85} />
     <directionalLight position={[8, 14, 9]} intensity={2.2} castShadow />
+    {scenario.combatants.filter((unit) => unit.lampOn && !unit.defeated).map((unit) => <pointLight key={`lamp:${unit.id}`} position={[unit.position.x + 0.5 - scenario.width / 2, 1.2, unit.position.y + 0.5 - scenario.height / 2]} color="#fde68a" intensity={5} distance={6} decay={2} />)}
+    {(scenario.flareCells ?? []).map((point) => <group key={`flare:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.16, point.y + 0.5 - scenario.height / 2]}><mesh rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[0.25, 0.42, 24]} /><meshBasicMaterial color="#fde68a" transparent opacity={0.62} /></mesh></group>)}
+    {(scenario.flareCells?.length ?? 0) > 0 && <pointLight position={[scenario.flareCells![0].x + 0.5 - scenario.width / 2, 1.4, scenario.flareCells![0].y + 0.5 - scenario.height / 2]} color="#fef3c7" intensity={7} distance={5} decay={2} />}
     <OrthographicCamera makeDefault position={[focusX + cameraX * span * 1.25 * Math.cos(camera.elevation), span * 1.25 * Math.sin(camera.elevation), focusZ + cameraZ * span * 1.25 * Math.cos(camera.elevation)]} zoom={camera.zoom} near={0.1} far={100} onUpdate={(activeCamera) => activeCamera.lookAt(focusX, 0, focusZ)} />
 
     {Array.from({ length: scenario.width }, (_, x) => Array.from({ length: scenario.height }, (_, y) => {
@@ -108,13 +116,14 @@ const CombatScene3D = () => {
       const inImpactBlast = impactBlastKeys.has(key);
       const inPath = plannedMove ? pathContains(plannedMove.path, point) : false;
       const hovered = hoveredDestination?.x === x && hoveredDestination?.y === y;
-      const color = inBreachBlast ? "#c2410c" : inImpactBlast ? "#b91c1c" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "#a16207" : overwatchTarget ? "#701a75" : coveringTarget ? "#713f12" : inGrenadeBlast ? "#ea580c" : canTargetGrenade ? "#9d174d" : inPath ? "#d97706" : hovered && canMove ? "#0891b2" : canMove ? "#14532d" : inVacuum ? "#172554" : (x + y) % 2 === 0 ? "#172631" : "#13222c";
+      const lighting = lightingLevelAt(scenario, point);
+      const color = inBreachBlast ? "#c2410c" : inImpactBlast ? "#b91c1c" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "#a16207" : overwatchTarget ? "#701a75" : coveringTarget ? "#713f12" : inGrenadeBlast ? "#ea580c" : canTargetGrenade ? "#9d174d" : inPath ? advanceReadyPath ? "#0284c7" : "#d97706" : hovered && canMove ? "#0891b2" : canMove ? "#14532d" : inVacuum ? "#172554" : lighting === "dark" ? "#030507" : lighting === "emergency" ? "#3b2117" : (x + y) % 2 === 0 ? "#172631" : "#13222c";
       return <mesh key={`floor:${key}`} position={[x + 0.5 - scenario.width / 2, -0.05, y + 0.5 - scenario.height / 2]} receiveShadow
         onPointerOver={(event) => { if (canMove) { event.stopPropagation(); dispatch(setHoveredDestination(point)); } }}
         onPointerOut={() => { if (hovered) dispatch(setHoveredDestination(null)); }}
         onClick={(event) => { event.stopPropagation(); if (coveringTarget) dispatch(previewCoveringFire(point)); else if (overwatchTarget) dispatch(previewOverwatch(point)); else if (canTargetGrenade) dispatch(previewGrenadeTarget(point)); else if (canMove && !coveringFireTargeting && !overwatchTargeting) dispatch(previewMove(point)); else if (!grenadeTargeting && !coveringFireTargeting && !overwatchTargeting) dispatch(selectPlayerCombatant(null)); }}>
         <boxGeometry args={[0.94, inGrenadeBlast || inPath || hovered ? 0.14 : 0.1, 0.94]} />
-        <meshStandardMaterial color={color} emissive={inGrenadeBlast ? "#9a3412" : canTargetGrenade ? "#500724" : inPath ? "#78350f" : canMove ? "#052e16" : "#000000"} roughness={0.9} />
+        <meshStandardMaterial color={color} emissive={inGrenadeBlast ? "#9a3412" : canTargetGrenade ? "#500724" : inPath ? advanceReadyPath ? "#075985" : "#78350f" : canMove ? "#052e16" : "#000000"} roughness={0.9} />
       </mesh>;
     }))}
     {lastGrenadeImpact && <group>
@@ -132,7 +141,7 @@ const CombatScene3D = () => {
     {(scenario.handholds ?? []).map((point) => <mesh key={`handhold:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.08, point.y + 0.5 - scenario.height / 2]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.25, 0.05, 8, 24]} /><meshBasicMaterial color="#60a5fa" /></mesh>)}
 
     {scenario.walls.map((wall) => <SegmentMesh key={wall.id} segment={wall} width={scenario.width} height={scenario.height} color="#b8c8d0" cutaway={cameraFacingOuterWall(wall)} />)}
-    {scenario.doors.map((door) => <DoorMesh key={door.id} door={door} width={scenario.width} height={scenario.height} actionable={actionableDoorIds.has(door.id)} charged={Boolean(placedBreachingChargeByDoorId[door.id])} onOpen={() => dispatch(previewOpenDoor(door.id))} />)}
+    {scenario.doors.map((door) => <DoorMesh key={door.id} door={door} width={scenario.width} height={scenario.height} actionable={actionableDoorIds.has(door.id)} coverSelectable={doorCoverTargetIds.has(door.id)} coverSelected={plannedCoveredDoorId === door.id} charged={Boolean(placedBreachingChargeByDoorId[door.id])} covered={Object.values(coveredDoorByCombatantId ?? {}).includes(door.id)} onOpen={() => dispatch(doorCoverTargetIds.has(door.id) ? previewDoorCoverage(door.id) : previewOpenDoor(door.id))} />)}
 
     {scenario.objects.map((object) => {
       const objective = object.kind !== "cover";
@@ -150,7 +159,9 @@ const CombatScene3D = () => {
       </group> : <mesh key={object.id} position={position} castShadow receiveShadow><boxGeometry args={[0.76, 0.64, 0.76]} /><meshStandardMaterial color="#725338" roughness={0.85} /></mesh>;
     })}
 
-    {scenario.combatants.filter((unit) => !unit.reinforcementTurn || unit.reinforcementTurn <= turn).map((unit) => {
+    {Object.entries(lastKnownEnemyPositions ?? {}).filter(([id]) => !(observedEnemyIds ?? []).includes(id)).map(([id, point]) => <group key={`last-known:${id}`} position={[point.x + 0.5 - scenario.width / 2, 0.08, point.y + 0.5 - scenario.height / 2]}><mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.34, 0.035, 8, 28]} /><meshBasicMaterial color="#94a3b8" transparent opacity={0.55} /></mesh><Html center position={[0, 0.38, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-slate-400 bg-black/75 px-1 font-mono text-[8px] text-slate-300">LAST KNOWN</div></Html></group>)}
+    {(soundContacts ?? []).map((contact) => <group key={contact.id} position={[contact.point.x + 0.5 - scenario.width / 2, 0.1, contact.point.y + 0.5 - scenario.height / 2]}><mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.46, 0.045, 8, 28]} /><meshBasicMaterial color="#67e8f9" transparent opacity={0.7} /></mesh><Html center position={[0, 0.48, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-cyan-300 bg-black/80 px-1 font-mono text-[8px] text-cyan-100">SOUND CONTACT · {contact.kind.toUpperCase()}</div></Html></group>)}
+    {scenario.combatants.filter((unit) => (!unit.reinforcementTurn || unit.reinforcementTurn <= turn) && (unit.side === "player" || (observedEnemyIds ?? []).includes(unit.id))).map((unit) => {
       const selected = unit.id === selectedCombatantId;
       const inactive = unit.defeated;
       const color = unit.surrendered ? "#eab308" : inactive ? "#64748b" : unit.side === "player" ? "#10b981" : "#dc2626";
@@ -158,9 +169,11 @@ const CombatScene3D = () => {
       const validTarget = validTargetIds.has(unit.id);
       const plannedTarget = unit.id === plannedAttackTargetId;
       const maintainedTarget = unit.id === maintainedTargetId;
+      const aimedTarget = unit.id === aimedTargetId;
       const covered = selectedCombatantId ? coverProtection(scenario, selectedCombatantId, unit.id) > 0 : false;
       const covering = coveringCombatantIds.has(unit.id);
       const overwatched = overwatchCombatantIds.has(unit.id);
+      const weaponReady = weaponReadyCombatantIds?.includes(unit.id) ?? false;
       const grenadeRisk = grenadeBlastKeys.has(pointKey(unit.position));
       const equipment = equipmentVisualFor(unit);
       const facing = unit.facing === "east" ? { position: [0.34, 0.12, 0] as [number, number, number], rotation: [0, 0, -Math.PI / 2] as [number, number, number] }
@@ -174,9 +187,13 @@ const CombatScene3D = () => {
         {selected && <mesh position={[0, 0.02, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.43, 0.05, 8, 32]} /><meshBasicMaterial color="#f8fafc" /></mesh>}
         {validTarget && <mesh position={[0, 0.04, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[plannedTarget ? 0.52 : 0.46, plannedTarget ? 0.075 : 0.045, 8, 32]} /><meshBasicMaterial color={plannedTarget ? "#fef2f2" : "#ef4444"} /></mesh>}
         {maintainedTarget && <mesh position={[0, 0.08, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.56, 0.025, 8, 32]} /><meshBasicMaterial color="#22d3ee" /></mesh>}
+        {aimedTarget && <mesh position={[0, 0.1, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.66, 0.035, 8, 32]} /><meshBasicMaterial color="#67e8f9" /></mesh>}
+        {(weaponDamagedCombatantIds?.includes(unit.id) || mobilityImpairedCombatantIds?.includes(unit.id)) && <Html center position={[0, 1.62, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-rose-300 bg-black/85 px-1 font-mono text-[8px] font-bold text-rose-100">{weaponDamagedCombatantIds?.includes(unit.id) ? "WEAPON −1" : "MOBILITY −2"}</div></Html>}
+        {(parryingCombatantIds?.includes(unit.id) || guardingCombatantIds?.includes(unit.id)) && <Html center position={[0, 1.82, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-violet-300 bg-black/85 px-1 font-mono text-[8px] font-bold text-violet-100">{parryingCombatantIds?.includes(unit.id) ? "PARRY −2" : "GUARD −1"}</div></Html>}
         {grenadeRisk && <mesh position={[0, 0.12, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.61, 0.065, 8, 32]} /><meshBasicMaterial color="#fb923c" /></mesh>}
         {covering && <mesh position={[-0.34, 0.18, 0]}><boxGeometry args={[0.12, 0.12, 0.12]} /><meshBasicMaterial color="#facc15" /></mesh>}
         {overwatched && <mesh position={[0.34, 0.18, 0]}><boxGeometry args={[0.12, 0.12, 0.12]} /><meshBasicMaterial color="#e879f9" /></mesh>}
+        {weaponReady && <><mesh position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.62, 0.035, 8, 32]} /><meshBasicMaterial color="#38bdf8" /></mesh><Html center position={[0, 1.42, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-sky-300 bg-black/85 px-1 font-mono text-[8px] font-bold text-sky-100">READY +1</div></Html></>}
         {validTarget && covered && <mesh position={[0, 0.16, 0.36]}><boxGeometry args={[0.32, 0.08, 0.08]} /><meshBasicMaterial color="#f59e0b" /></mesh>}
         <mesh position={[0, 0.38, 0]} castShadow>{equipment.armorClass === "light" && unit.side === "player" ? <cylinderGeometry args={[0.18, 0.25, 0.58, 12]} /> : <boxGeometry args={equipment.armorClass === "battle-dress" ? [0.56, 0.66, 0.46] : equipment.armorClass === "combat" ? [0.48, 0.62, 0.4] : [0.42, 0.58, 0.32]} />}<meshStandardMaterial color={color} roughness={0.65} /></mesh>
         {(equipment.armorClass === "combat" || equipment.armorClass === "battle-dress") && <><mesh position={[-0.34, 0.58, 0]} castShadow><boxGeometry args={[equipment.armorClass === "battle-dress" ? 0.22 : 0.16, 0.18, 0.38]} /><meshStandardMaterial color={color} /></mesh><mesh position={[0.34, 0.58, 0]} castShadow><boxGeometry args={[equipment.armorClass === "battle-dress" ? 0.22 : 0.16, 0.18, 0.38]} /><meshStandardMaterial color={color} /></mesh></>}
