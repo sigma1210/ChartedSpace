@@ -74,6 +74,17 @@ export const adjacentEnemies = (scenario: CombatScenario, combatantId: string) =
     && !scenario.doors.some((door) => !door.open && wallBlocksStep(unit.position, candidate.position, door)));
 };
 
+export const meleeEnemies = (scenario: CombatScenario, combatantId: string) => {
+  const unit = scenario.combatants.find((combatant) => combatant.id === combatantId && !combatant.defeated);
+  if (!unit) return [];
+  return scenario.combatants.filter((candidate) => candidate.side !== unit.side && !candidate.defeated
+    && (samePoint(candidate.position, unit.position) || (Math.max(Math.abs(candidate.position.x - unit.position.x), Math.abs(candidate.position.y - unit.position.y)) === 1 && inFieldOfFire(unit, candidate.position)))
+    && (terrainHeightAt(scenario, candidate.position) === terrainHeightAt(scenario, unit.position)
+      || (scenario.elevationAccessCells ?? []).some((access) => samePoint(access, candidate.position) || samePoint(access, unit.position)))
+    && (samePoint(candidate.position, unit.position) || (!scenario.walls.some((wall) => wallBlocksStep(unit.position, candidate.position, wall))
+      && !scenario.doors.some((door) => !door.open && wallBlocksStep(unit.position, candidate.position, door)))));
+};
+
 export const adjacentObjectives = (scenario: CombatScenario, combatantId: string) => {
   const unit = scenario.combatants.find((combatant) => combatant.id === combatantId && !combatant.defeated);
   if (!unit) return [];
@@ -161,7 +172,7 @@ export const treatableAllies = (scenario: CombatScenario, combatantId: string) =
     && (patient.id === medic.id || Math.abs(patient.position.x - medic.position.x) + Math.abs(patient.position.y - medic.position.y) === 1));
 };
 
-const validStep = (scenario: CombatScenario, movingId: string, from: GridPoint, to: GridPoint) => {
+const validStep = (scenario: CombatScenario, movingId: string, from: GridPoint, to: GridPoint, allowOccupiedDestination = false) => {
   if (to.x < 0 || to.y < 0 || to.x >= scenario.width || to.y >= scenario.height) return false;
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
@@ -176,7 +187,7 @@ const validStep = (scenario: CombatScenario, movingId: string, from: GridPoint, 
   }
   const changesElevation = terrainHeightAt(scenario, from) !== terrainHeightAt(scenario, to);
   if (changesElevation && !(scenario.elevationAccessCells ?? []).some((point) => samePoint(point, from) || samePoint(point, to))) return false;
-  if (blockedCells(scenario, movingId).has(pointKey(to))) return false;
+  if (!allowOccupiedDestination && blockedCells(scenario, movingId).has(pointKey(to))) return false;
   if (!diagonal && scenario.walls.some((segment) => wallBlocksStep(from, to, segment))) return false;
   if (!diagonal && scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door))) return false;
   return true;
@@ -641,7 +652,9 @@ export const reachableMovement = (scenario: CombatScenario, combatantId: string,
     if (current.cost !== bestCost.get(stateKey(current.point, current.facing)) || current.cost >= allowance || current.path.length >= maxSteps) continue;
     const candidates = movementNeighbors(current.point);
     for (const destination of candidates) {
-      if (!validStep(scenario, combatantId, current.point, destination)) continue;
+      const activeOccupants = scenario.combatants.filter((candidate) => candidate.id !== combatantId && !candidate.defeated && samePoint(candidate.position, destination));
+      const enemyEntry = !trotting && activeOccupants.some((candidate) => candidate.side !== unit.side && !candidate.surrendered) && activeOccupants.length < 4;
+      if (!validStep(scenario, combatantId, current.point, destination, enemyEntry)) continue;
       for (const nextFacing of movementFacingChoices(current.facing, current.point, destination, trotting)) {
         const turns = turnDistance(current.facing, nextFacing);
         const stepCost = movementStepCost(scenario, current.point, destination, nextFacing, trotting);
@@ -652,24 +665,39 @@ export const reachableMovement = (scenario: CombatScenario, combatantId: string,
         const path = [...current.path, destination];
         const breakdown = [...current.breakdown, ...(turns ? [`turn ${turns}`] : []), `${current.point.x !== destination.x && current.point.y !== destination.y ? "forward diagonal" : "forward"} ${stepCost}`];
         const existing = results.get(pointKey(destination));
-        if (!existing || cost < existing.cost) results.set(pointKey(destination), { combatantId, destination, path, cost, finalFacing: nextFacing, costBreakdown: breakdown });
-        queue.push({ point: destination, path, cost, facing: nextFacing, breakdown });
+        if (!existing || cost < existing.cost) results.set(pointKey(destination), { combatantId, destination, path, cost, kind: enemyEntry ? "enemy-entry" : undefined, finalFacing: nextFacing, costBreakdown: breakdown });
+        if (!enemyEntry) queue.push({ point: destination, path, cost, facing: nextFacing, breakdown });
       }
     }
   }
   return results;
 };
 
-export const chargeMoves = (scenario: CombatScenario, combatantId: string) => {
+export const ahlMeleeDiveMoves = (scenario: CombatScenario, combatantId: string) => {
   const attacker = scenario.combatants.find((unit) => unit.id === combatantId && !unit.defeated && unit.posture !== "prone");
   const results = new Map<string, PlannedMove>();
-  if (!attacker || scenario.gravityMode === "zero-g" || adjacentEnemies(scenario, combatantId).length > 0) return results;
+  if (!attacker || scenario.gravityMode === "zero-g") return results;
+  const approaches = reachableMovement(scenario, combatantId, 6, true, 5);
   scenario.combatants.filter((target) => target.side !== attacker.side && !target.defeated && !target.surrendered).forEach((target) => {
-    const goals = orthogonalNeighbors(target.position).filter((point) => point.x >= 0 && point.y >= 0 && point.x < scenario.width && point.y < scenario.height);
-    const path = shortestPathToAny(scenario, combatantId, goals);
-    if (!path || path.length === 0 || path.length > 3) return;
-    const destination = path[path.length - 1];
-    results.set(target.id, { combatantId, destination, path, cost: 6, kind: "charge" });
+    const candidates = [{ combatantId, destination: attacker.position, path: [], cost: 0, finalFacing: attacker.facing } as PlannedMove, ...approaches.values()]
+      .filter((move) => Math.max(Math.abs(move.destination.x - target.position.x), Math.abs(move.destination.y - target.position.y)) === 1)
+      .filter((move) => terrainHeightAt(scenario, move.destination) === terrainHeightAt(scenario, target.position)
+        || (scenario.elevationAccessCells ?? []).some((access) => samePoint(access, move.destination) || samePoint(access, target.position)))
+      .filter((move) => !scenario.walls.some((wall) => wallBlocksStep(move.destination, target.position, wall))
+        && !scenario.doors.some((door) => !door.open && wallBlocksStep(move.destination, target.position, door)))
+      .sort((first, second) => first.cost - second.cost || first.path.length - second.path.length);
+    const approach = candidates[0];
+    if (!approach) return;
+    results.set(target.id, {
+      combatantId,
+      destination: { ...target.position },
+      path: [...approach.path, { ...target.position }],
+      cost: approach.cost,
+      kind: "melee-dive",
+      finalFacing: approach.finalFacing,
+      costBreakdown: [...(approach.costBreakdown ?? []), "AHL dive 0"],
+      meleeTargetId: target.id,
+    });
   });
   return results;
 };
@@ -728,5 +756,18 @@ export const proposedMoveFor = (scenario: CombatScenario, combatantId: string, d
 
 export const pathContains = (path: GridPoint[], point: GridPoint) => path.some((entry) => samePoint(entry, point));
 export const terrainHeightAt = (scenario: Pick<CombatScenario, "terrainByCell">, point: GridPoint) => scenario.terrainByCell?.[pointKey(point)] === "elevated" ? 0.65 : 0;
+
+const reactionAdjacent = (scenario: CombatScenario, reactor: GridPoint, mover: GridPoint) => {
+  const dx = Math.abs(reactor.x - mover.x);
+  const dy = Math.abs(reactor.y - mover.y);
+  return Math.max(dx, dy) === 1
+    && terrainHeightAt(scenario, reactor) === terrainHeightAt(scenario, mover)
+    && hasLineOfSight(scenario, reactor, mover);
+};
+
+export const adjacencyEntryStepIndex = (scenario: CombatScenario, reactor: GridPoint, moverOrigin: GridPoint, path: GridPoint[]) => path.findIndex((step, index) => {
+  const previous = index === 0 ? moverOrigin : path[index - 1];
+  return !reactionAdjacent(scenario, reactor, previous) && reactionAdjacent(scenario, reactor, step);
+});
 export const elevationAttackModifier = (scenario: Pick<CombatScenario, "terrainByCell">, attacker: Pick<Combatant, "position" | "posture">, target: Pick<Combatant, "position">) => attacker.posture !== "prone" && terrainHeightAt(scenario, attacker.position) > terrainHeightAt(scenario, target.position) ? 1 : 0;
 export const structuralVerticalSpan = (baseHeight: number, aboveSurfaceHeight: number) => ({ height: baseHeight + aboveSurfaceHeight, centerY: (baseHeight + aboveSurfaceHeight) / 2 });

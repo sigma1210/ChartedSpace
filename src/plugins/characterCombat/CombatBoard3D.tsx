@@ -9,7 +9,8 @@ import { adjustCameraZoom, panCameraBy, previewAttack, previewCoveringFire, prev
 import type { CombatScenario, DoorSegment, WallSegment } from "./types";
 import { equipmentVisualFor } from "./equipmentPresentation";
 import { diveOptions, reachableCrawling } from "./geometry";
-import { previewDive } from "./slice";
+import { ahlMeleeDiveMoves } from "./geometry";
+import { previewAhlMeleeDive, previewDive } from "./slice";
 import { previewStructuralTarget } from "./slice";
 
 const WeaponMesh = ({ category, facing }: { category: ReturnType<typeof equipmentVisualFor>["weaponCategory"]; facing: "north" | "east" | "south" | "west" }) => {
@@ -64,7 +65,7 @@ interface FloorTile3D { point: { x: number; y: number }; worldX: number; worldZ:
 const CombatScene3D = () => {
   const dispatch = useAppDispatch();
   const { structuralTargeting, plannedStructuralTargetId, structuralDamageById } = useAppSelector((state) => state.plugins.characterCombat);
-  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, grenadeKind, lastGrenadeImpact, lastWeaponImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, parryingCombatantIds, guardingCombatantIds, diveTargeting } = useAppSelector((state) => state.plugins.characterCombat);
+  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, grenadeKind, lastGrenadeImpact, lastWeaponImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, diveTargeting, ahlMeleeDeclarations, lastResolvedAhlMeleeDeclarations } = useAppSelector((state) => state.plugins.characterCombat);
   const advanceReadyPath = selectedCombatantId ? advanceReadyCombatantIds?.includes(selectedCombatantId) ?? false : false;
   if (!scenario) return null;
   const span = Math.max(scenario.width, scenario.height);
@@ -83,7 +84,8 @@ const CombatScene3D = () => {
   const selectedIsTrotting = selectedCombatantId ? trottingCombatantIds.includes(selectedCombatantId) : false;
   const selectedIsProne = selectedUnit?.posture === "prone";
   const reachable = diveTargeting && selectedCombatantId ? diveOptions(scenario, selectedCombatantId) : status === "active" && selectedCombatantId && selectedIsProne && !selectedHasActed && !grenadeTargeting ? reachableCrawling(scenario, selectedCombatantId, selectedActionPoints) : status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? scenario.gravityMode === "zero-g" ? selectedActionPoints >= 3 ? zeroGravityPushes(scenario, selectedCombatantId) : new Map() : reachableMovement(scenario, selectedCombatantId, selectedActionPoints, selectedIsTrotting) : new Map();
-  const validTargetIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting && !selectedIsTrotting ? [...rangedEnemies(scenario, selectedCombatantId), ...adjacentEnemies(scenario, selectedCombatantId)].map((unit) => unit.id) : []);
+  const meleeDiveMoves = status === "active" && selectedCombatantId && selectedIsTrotting ? ahlMeleeDiveMoves(scenario, selectedCombatantId) : new Map();
+  const validTargetIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? (selectedIsTrotting ? scenario.combatants.filter((unit) => meleeDiveMoves.has(unit.id) && (!unit.concealed || observedEnemyIds?.includes(unit.id))) : [...rangedEnemies(scenario, selectedCombatantId), ...adjacentEnemies(scenario, selectedCombatantId)]).map((unit) => unit.id) : []);
   const maintainedTargetId = selectedCombatantId ? maintainedTargetByCombatantId[selectedCombatantId] : null;
   const aimedTargetId = selectedCombatantId ? aimedTargetByCombatantId?.[selectedCombatantId] : null;
   const coveringCombatantIds = new Set(coveringFireLanes.map((lane) => lane.attackerId));
@@ -213,6 +215,14 @@ const CombatScene3D = () => {
 
     {Object.entries(lastKnownEnemyPositions ?? {}).filter(([id]) => !(observedEnemyIds ?? []).includes(id)).map(([id, point]) => <group key={`last-known:${id}`} position={[point.x + 0.5 - scenario.width / 2, 0.08, point.y + 0.5 - scenario.height / 2]}><mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.34, 0.035, 8, 28]} /><meshBasicMaterial color="#94a3b8" transparent opacity={0.55} /></mesh><Html center position={[0, 0.38, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-slate-400 bg-black/75 px-1 font-mono text-[8px] text-slate-300">LAST KNOWN</div></Html></group>)}
     {(soundContacts ?? []).map((contact) => <group key={contact.id} position={[contact.point.x + 0.5 - scenario.width / 2, 0.1, contact.point.y + 0.5 - scenario.height / 2]}><mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.46, 0.045, 8, 28]} /><meshBasicMaterial color="#67e8f9" transparent opacity={0.7} /></mesh><Html center position={[0, 0.48, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-cyan-300 bg-black/80 px-1 font-mono text-[8px] text-cyan-100">SOUND CONTACT · {contact.kind.toUpperCase()}</div></Html></group>)}
+    {((ahlMeleeDeclarations?.length ? ahlMeleeDeclarations : lastResolvedAhlMeleeDeclarations) ?? []).map((declaration, index) => {
+      const attacker = scenario.combatants.find((unit) => unit.id === declaration.attackerId);
+      const target = scenario.combatants.find((unit) => unit.id === declaration.targetId);
+      if (!attacker || !target) return null;
+      const start: [number, number, number] = [attacker.position.x + 0.5 - scenario.width / 2, 0.75 + terrainHeightAt(scenario, attacker.position), attacker.position.y + 0.5 - scenario.height / 2];
+      const end: [number, number, number] = [target.position.x + 0.5 - scenario.width / 2, 0.75 + terrainHeightAt(scenario, target.position), target.position.y + 0.5 - scenario.height / 2];
+      return <group key={`melee-link:${declaration.attackerId}:${declaration.targetId}`}><Line points={[start, end]} color="#fbbf24" lineWidth={4} dashed dashSize={0.18} gapSize={0.1} /><Html center position={[(start[0] + end[0]) / 2, Math.max(start[1], end[1]) + 0.3 + index * 0.08, (start[2] + end[2]) / 2]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-amber-300 bg-black/90 px-1 font-mono text-[8px] font-bold text-amber-100">MELEE {index + 1}</div></Html></group>;
+    })}
     {scenario.combatants.filter((unit) => (!unit.reinforcementTurn || unit.reinforcementTurn <= turn) && (unit.side === "player" || (observedEnemyIds ?? []).includes(unit.id))).map((unit) => {
       const selected = unit.id === selectedCombatantId;
       const inactive = unit.defeated;
@@ -234,14 +244,13 @@ const CombatScene3D = () => {
             : { position: [0, 0.12, -0.34] as [number, number, number], rotation: [-Math.PI / 2, 0, 0] as [number, number, number] };
       const showLabel = selected || validTarget || plannedTarget;
       return <group key={unit.id} position={[unit.position.x + 0.5 - scenario.width / 2, (unit.posture === "prone" ? 0.28 : 0.12) + terrainHeightAt(scenario, unit.position), unit.position.y + 0.5 - scenario.height / 2]} rotation={inactive && !unit.surrendered ? [0, 0, Math.PI / 2] : unit.posture === "prone" ? proneRotationForFacing(unit.facing) : [0, 0, 0]}
-        onClick={(event) => { if (selectable || validTarget) event.stopPropagation(); if (selectable) dispatch(selectPlayerCombatant(unit.id)); else if (validTarget) dispatch(previewAttack(unit.id)); }}>
+        onClick={(event) => { if (selectable || validTarget) event.stopPropagation(); if (selectable) dispatch(selectPlayerCombatant(unit.id)); else if (validTarget) dispatch(meleeDiveMoves.has(unit.id) ? previewAhlMeleeDive(unit.id) : previewAttack(unit.id)); }}>
         {showLabel && <Html center position={[0, 1.18, 0]} style={{ pointerEvents: "none" }}><div className={`whitespace-nowrap border bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold ${unit.side === "player" ? "border-emerald-300 text-emerald-100" : "border-red-300 text-red-100"}`}>{unit.name.toUpperCase()}{scenario.captureTargetId === unit.id ? " · CAPTURE ALIVE" : ""}{leaderIdBySide?.[unit.side] === unit.id ? " · LEADER" : ""}{unit.stunnedUntilTurn ? " · STUNNED" : ""}{(moraleStateByCombatantId?.[unit.id] ?? "steady") !== "steady" ? ` · ${(moraleStateByCombatantId?.[unit.id] ?? "steady").toUpperCase()}` : ""}{unit.posture === "prone" ? " · PRONE" : ""}{unit.woundState !== "healthy" ? ` · ${unit.woundState.toUpperCase()}` : ""}</div></Html>}
         {selected && <mesh position={[0, 0.02, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.43, 0.05, 8, 32]} /><meshBasicMaterial color="#f8fafc" /></mesh>}
         {validTarget && <mesh position={[0, 0.04, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[plannedTarget ? 0.52 : 0.46, plannedTarget ? 0.075 : 0.045, 8, 32]} /><meshBasicMaterial color={plannedTarget ? "#fef2f2" : "#ef4444"} /></mesh>}
         {maintainedTarget && <mesh position={[0, 0.08, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.56, 0.025, 8, 32]} /><meshBasicMaterial color="#22d3ee" /></mesh>}
         {aimedTarget && <mesh position={[0, 0.1, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.66, 0.035, 8, 32]} /><meshBasicMaterial color="#67e8f9" /></mesh>}
         {(weaponDamagedCombatantIds?.includes(unit.id) || mobilityImpairedCombatantIds?.includes(unit.id)) && <Html center position={[0, 1.62, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-rose-300 bg-black/85 px-1 font-mono text-[8px] font-bold text-rose-100">{weaponDamagedCombatantIds?.includes(unit.id) ? "WEAPON −1" : "MOBILITY −2"}</div></Html>}
-        {(parryingCombatantIds?.includes(unit.id) || guardingCombatantIds?.includes(unit.id)) && <Html center position={[0, 1.82, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-violet-300 bg-black/85 px-1 font-mono text-[8px] font-bold text-violet-100">{parryingCombatantIds?.includes(unit.id) ? "PARRY −2" : "GUARD −1"}</div></Html>}
         {grenadeRisk && <mesh position={[0, 0.12, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.61, 0.065, 8, 32]} /><meshBasicMaterial color="#fb923c" /></mesh>}
         {covering && <mesh position={[-0.34, 0.18, 0]}><boxGeometry args={[0.12, 0.12, 0.12]} /><meshBasicMaterial color="#facc15" /></mesh>}
         {overwatched && <mesh position={[0.34, 0.18, 0]}><boxGeometry args={[0.12, 0.12, 0.12]} /><meshBasicMaterial color="#e879f9" /></mesh>}

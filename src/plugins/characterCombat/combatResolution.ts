@@ -3,7 +3,8 @@ import type { Combatant, FireMode, WeaponProfile, WeaponRangeBand, WoundState } 
 export interface DicePair { first: number; second: number }
 export type AttackArc = "front" | "side" | "rear";
 export interface SnapShotResult { hit: boolean; hitRoll: number; hitModifier: number; hitTotal: number; targetNumber: number; range: number; rangeBand: WeaponRangeBand; weaponAccuracy: number; weaponPenetration: number; attackArc: AttackArc; arcModifier: number; evadeModifier: number; postureModifier: number; bracedModifier: number; visibilityModifier: number; readyModifier: number; aimModifier: number; situationalHitModifier: number; situationalWoundModifier: number; woundRoll: number | null; woundTotal: number | null; cover: number; woundState: WoundState }
-export interface MeleeResult { roll: number; modifier: number; total: number; attackArc: AttackArc; arcModifier: number; postureModifier: number; techniqueHitModifier: number; techniquePenetration: number; defenderModifier: number; woundState: WoundState }
+export type AhlMeleeEffect = "none" | "stun" | "light" | "unconscious" | "dead";
+export interface AhlMeleeResult { roll: number; modifiedRoll: number; differential: number; tableDifferential: -6 | -4 | -2 | 0 | 1 | 3 | 5 | 7 | 9; armorColumnShift: number; effect: AhlMeleeEffect }
 
 export const rollDicePair = (): DicePair => ({ first: Math.floor(Math.random() * 6) + 1, second: Math.floor(Math.random() * 6) + 1 });
 export const distanceInSquares = (attacker: Combatant, target: Combatant) => {
@@ -51,14 +52,28 @@ export const accumulateWound = (current: WoundState, incoming: WoundState, recor
   if (current === "light" || incoming === "light") return { woundState: "light", seriousWounds: 0 };
   return { woundState: "healthy", seriousWounds: 0 };
 };
-export const resolveMelee = (attacker: Combatant, target: Combatant, die: number, attackerSuppressed = false, techniqueHitModifier = 0, techniquePenetration = attacker.meleeWeapon.penetration, defenderModifier = 0): MeleeResult => {
-  const attackArc = attackArcAgainstTarget(attacker, target);
-  const arcModifier = attackArcModifier(attackArc);
-  const postureModifier = (attacker.posture === "prone" ? -2 : 0) + (target.posture === "prone" ? 2 : 0);
-  const modifier = attacker.meleeRating - target.meleeRating + techniquePenetration - target.armor - (attacker.woundState === "light" ? 1 : 0) + arcModifier + postureModifier + techniqueHitModifier + defenderModifier - (attackerSuppressed ? 1 : 0);
-  const total = die + modifier;
-  const woundState: WoundState = total <= 2 ? "healthy" : total <= 4 ? "light" : total === 5 ? "serious" : total === 6 ? "unconscious" : "dead";
-  return { roll: die, modifier, total, attackArc, arcModifier, postureModifier, techniqueHitModifier, techniquePenetration, defenderModifier, woundState };
+const meleeDifferentials = [-6, -4, -2, 0, 1, 3, 5, 7, 9] as const;
+const meleeTable: Record<(typeof meleeDifferentials)[number], AhlMeleeEffect[]> = {
+  [-6]: ["none", "none", "none", "none", "none", "stun"],
+  [-4]: ["none", "none", "none", "none", "stun", "stun"],
+  [-2]: ["none", "none", "none", "none", "stun", "light"],
+  0: ["none", "none", "none", "stun", "stun", "light"],
+  1: ["none", "none", "stun", "stun", "light", "light"],
+  3: ["none", "stun", "stun", "light", "light", "unconscious"],
+  5: ["stun", "stun", "light", "light", "unconscious", "unconscious"],
+  7: ["stun", "light", "light", "unconscious", "unconscious", "dead"],
+  9: ["light", "light", "light", "unconscious", "dead", "dead"],
+};
+
+export const resolveAhlMelee = (attacker: Pick<Combatant, "meleeRating">, target: Pick<Combatant, "meleeRating" | "armorName" | "vaccSuit">, die: number, sameSquare = false, attackerDived = false): AhlMeleeResult => {
+  const differential = attacker.meleeRating - target.meleeRating;
+  let baseIndex = -1;
+  meleeDifferentials.forEach((value, index) => { if (differential >= value) baseIndex = index; });
+  const armorColumnShift = target.armorName === "Combat Armor" ? 2 : target.vaccSuit ? 1 : 0;
+  const columnIndex = Math.max(0, baseIndex - armorColumnShift);
+  const tableDifferential = meleeDifferentials[columnIndex];
+  const modifiedRoll = Math.max(1, Math.min(6, die + (sameSquare ? attackerDived ? 2 : -1 : 0)));
+  return { roll: die, modifiedRoll, differential, tableDifferential, armorColumnShift, effect: baseIndex < 0 ? "none" : meleeTable[tableDifferential][modifiedRoll - 1] };
 };
 
 export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice: DicePair, woundDice: DicePair, cover = 0, fireMode: FireMode = "snap", targetEvading = false, attackerSuppressed = false, attackerBraced = false, visibilityModifier = 0, attackerReady = false, attackerAimed = false, situationalHitModifier = 0, situationalWoundModifier = 0): SnapShotResult | null => {

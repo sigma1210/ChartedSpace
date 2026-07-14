@@ -33,7 +33,7 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
 }) => {
   const dispatch = useAppDispatch();
   const { structuralTargeting, plannedStructuralTargetId, structuralDamageById } = useAppSelector((state) => state.plugins.characterCombat);
-  const { plannedAttackTargetId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, lastGrenadeImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, parryingCombatantIds, guardingCombatantIds } = useAppSelector((state) => state.plugins.characterCombat);
+  const { plannedAttackTargetId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, lastGrenadeImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, ahlMeleeDeclarations, lastResolvedAhlMeleeDeclarations } = useAppSelector((state) => state.plugins.characterCombat);
   const advanceReadyPath = selectedCombatantId ? advanceReadyCombatantIds?.includes(selectedCombatantId) ?? false : false;
   const aimedTargetId = selectedCombatantId ? aimedTargetByCombatantId?.[selectedCombatantId] : null;
   const selectedUnit = scenario.combatants.find((unit) => unit.id === selectedCombatantId);
@@ -136,6 +136,16 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
 
     {Object.entries(lastKnownEnemyPositions ?? {}).filter(([id]) => !(observedEnemyIds ?? []).includes(id)).map(([id, point]) => <g key={`last-known:${id}`} pointerEvents="none" opacity="0.55"><circle cx={(point.x + 0.5) * cell} cy={(point.y + 0.5) * cell} r="18" fill="none" stroke="#94a3b8" strokeWidth="3" strokeDasharray="5 5" /><text x={(point.x + 0.5) * cell} y={(point.y + 0.5) * cell + 4} textAnchor="middle" fill="#cbd5e1" fontSize="8" fontWeight="bold" fontFamily="monospace">LAST KNOWN</text></g>)}
     {(soundContacts ?? []).map((contact) => <g key={contact.id} pointerEvents="none"><circle cx={(contact.point.x + 0.5) * cell} cy={(contact.point.y + 0.5) * cell} r="25" fill="rgba(34,211,238,0.10)" stroke="#67e8f9" strokeWidth="3" strokeDasharray="4 4" /><text x={(contact.point.x + 0.5) * cell} y={(contact.point.y + 0.5) * cell + 4} textAnchor="middle" fill="#a5f3fc" fontSize="8" fontWeight="bold" fontFamily="monospace">SOUND</text></g>)}
+    {((ahlMeleeDeclarations?.length ? ahlMeleeDeclarations : lastResolvedAhlMeleeDeclarations) ?? []).map((declaration, index) => {
+      const attacker = scenario.combatants.find((unit) => unit.id === declaration.attackerId);
+      const target = scenario.combatants.find((unit) => unit.id === declaration.targetId);
+      if (!attacker || !target) return null;
+      const x1 = (attacker.position.x + 0.5) * cell;
+      const y1 = (attacker.position.y + 0.5) * cell;
+      const x2 = (target.position.x + 0.5) * cell;
+      const y2 = (target.position.y + 0.5) * cell;
+      return <g key={`melee-link:${declaration.attackerId}:${declaration.targetId}`} pointerEvents="none"><line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fbbf24" strokeWidth="5" strokeDasharray="9 5" opacity="0.9" /><circle cx={x1} cy={y1} r="29" fill="none" stroke="#fde68a" strokeWidth="3" /><circle cx={x2} cy={y2} r={31 + index * 3} fill="none" stroke="#f59e0b" strokeWidth="3" strokeDasharray="5 3" /><text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 7} textAnchor="middle" fill="#fef3c7" stroke="#000" strokeWidth="3" paintOrder="stroke" fontSize="9" fontWeight="bold" fontFamily="monospace">MELEE {index + 1}</text></g>;
+    })}
     {scenario.combatants.filter((unit) => (!unit.reinforcementTurn || unit.reinforcementTurn <= currentTurn) && (unit.side === "player" || (observedEnemyIds ?? []).includes(unit.id))).map((unit) => {
       const x = unit.position.x * cell + cell / 2;
       const y = unit.position.y * cell + cell / 2;
@@ -172,7 +182,6 @@ export const CombatBoard2D = ({ scenario, currentTurn, selectedCombatantId, lock
           {unit.posture === "prone" && <text x={x} y={y - 34} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontWeight="bold" fontFamily="monospace">PRONE</text>}
           {unit.id === aimedTargetId && <text x={x} y={y + 50} textAnchor="middle" fill="#67e8f9" fontSize="8" fontWeight="bold" fontFamily="monospace">AIM LOCK</text>}
           {(weaponDamagedCombatantIds?.includes(unit.id) || mobilityImpairedCombatantIds?.includes(unit.id)) && <text x={x} y={y + 59} textAnchor="middle" fill="#fda4af" fontSize="8" fontWeight="bold" fontFamily="monospace">{weaponDamagedCombatantIds?.includes(unit.id) ? "WEAPON −1" : "MOBILITY −2"}</text>}
-          {(parryingCombatantIds?.includes(unit.id) || guardingCombatantIds?.includes(unit.id)) && <text x={x} y={y + 68} textAnchor="middle" fill="#c4b5fd" fontSize="8" fontWeight="bold" fontFamily="monospace">{parryingCombatantIds?.includes(unit.id) ? "PARRY −2" : "GUARD −1"}</text>}
         </g>
       );
     })}
