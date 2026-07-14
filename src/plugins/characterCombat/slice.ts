@@ -1,11 +1,29 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ArmoryLoadoutId, CharacterCombatHudId, CharacterCombatHudLayout, CharacterCombatState, CharacterCombatViewMode, CombatScenario, FireMode, GridPoint, MeleeMode, MoraleState } from "./types";
-import { adjacentEnemies, adjacentObjectives, breachableDoorsAdjacentTo, climbUpOptions, closedDoorsAdjacentTo, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, dropDownOptions, elevationAttackModifier, fireLaneCells, grenadeBlastCells, grenadeCoverProtection, grenadeLandingPoint, hasLineOfSight, lightingLevelAt, movementPathCost, objectiveContesters, openDoorsAdjacentTo, pathWithinMovementAllowance, pointKey, proposedMoveFor, rangedEnemies, reachableMovement, remainingCriticalFireCells, routeAllowingClosedDoors, scenarioAvoidingFireForPathfinding, shortestPathToAny, treatableAllies, validCoveringFireTargets, validGrenadeTargets, vaultOptions, visibilityAssessment, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
-import { resolveMelee, resolveSnapShot, snapShotTarget, woundStateForTotal, type DicePair } from "./combatResolution";
-import { diveOptions, reachableCrawling } from "./geometry";
+import type { ArmoryLoadoutId, CharacterCombatHudId, CharacterCombatHudLayout, CharacterCombatState, CharacterCombatViewMode, CombatScenario, FireMode, GridPoint, MeleeMode, MoraleState, WeaponAmmunitionKind } from "./types";
+import { adjacentEnemies, adjacentObjectives, automaticFireSecondaryTargets, breachableDoorsAdjacentTo, climbUpOptions, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, dropDownOptions, elevationAttackModifier, fireLaneCells, grenadeBlastCells, grenadeLandingPoint, grenadeThrowCoverModifier, grenadeThrowRangeModifier, hasLineOfSight, inFieldOfFire, lightingLevelAt, movementPathCost, objectiveContesters, openDoorsAdjacentTo, pathWithinMovementAllowance, pointKey, rangedEnemies, reachableMovement, remainingCriticalFireCells, routeAllowingClosedDoors, scenarioAvoidingFireForPathfinding, shortestPathToAny, treatableAllies, validCoveringFireTargets, validGrenadeTargets, vaultOptions, visibilityAssessment, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
+import { accumulateWound, automaticFireModifierForRange, distanceInSquares, escalateWoundState, resolveMelee, resolveSnapShot, snapShotTarget, weaponPenetrationForRange, woundStateForTotal, type DicePair } from "./combatResolution";
+import { chargeMoves, diveOptions, reachableCrawling } from "./geometry";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "./enemyTactics";
 
 const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const highEnergyWeaponReady = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => !unit.weapon.highEnergy
+  || state.bracedCombatantIds.includes(unit.id);
+const canAttackStructures = (unit: CombatScenario["combatants"][number]) => Boolean(unit.weapon.highEnergy)
+  || unit.weapon.ammunitionKind === "he"
+  || unit.weapon.ammunitionKind === "heap"
+  || unit.weapon.ammunitionKind === "discard-sabot";
+export const collateralCheckPasses = (distance: number, rollTotal: number) => distance === 0
+  || (distance === 1 && rollTotal <= 10)
+  || (distance === 2 && rollTotal <= 8);
+const facings = ["north", "east", "south", "west"] as const;
+
+const facingTowardFieldOfFire = (unit: CombatScenario["combatants"][number], target: GridPoint) => facings
+  .map((facing) => {
+    const difference = Math.abs(facings.indexOf(facing) - facings.indexOf(unit.facing));
+    return { facing, turns: Math.min(difference, facings.length - difference) };
+  })
+  .filter(({ facing }) => inFieldOfFire({ position: unit.position, facing }, target))
+  .sort((a, b) => a.turns - b.turns || facings.indexOf(a.facing) - facings.indexOf(b.facing))[0] ?? null;
 
 const addSoundContact = (state: CharacterCombatState, enemy: CombatScenario["combatants"][number], kind: "movement" | "door" | "weapon" | "equipment") => {
   const scenario = state.scenario;
@@ -16,6 +34,10 @@ const addSoundContact = (state: CharacterCombatState, enemy: CombatScenario["com
 };
 
 const resetTransientIntel = (state: CharacterCombatState) => {
+  state.lastWeaponImpact = null;
+  state.structuralTargeting = false;
+  state.plannedStructuralTargetId = null;
+  state.structuralDamageById = {};
   state.diveTargeting = false;
   state.grenadeKind = null;
   state.flareClearsAtTurnByCell = {};
@@ -47,6 +69,31 @@ const clearWeaponReady = (state: CharacterCombatState, id: string) => { state.we
 const clearAim = (state: CharacterCombatState, id: string) => { if (state.aimedTargetByCombatantId) delete state.aimedTargetByCombatantId[id]; };
 const clearCalledShot = (state: CharacterCombatState, id: string) => { if (state.calledShotByCombatantId) delete state.calledShotByCombatantId[id]; };
 const highGroundNote = (scenario: CombatScenario, attacker: CombatScenario["combatants"][number], target: CombatScenario["combatants"][number]) => elevationAttackModifier(scenario, attacker, target) ? " · high ground +1" : "";
+const applyCombatWound = (state: CharacterCombatState, unit: CombatScenario["combatants"][number], incoming: CombatScenario["combatants"][number]["woundState"]) => {
+  const result = accumulateWound(unit.woundState, incoming, unit.seriousWounds);
+  unit.woundState = result.woundState;
+  unit.seriousWounds = result.seriousWounds;
+  unit.defeated = result.woundState === "serious" || result.woundState === "unconscious" || result.woundState === "dead";
+  if (unit.defeated) {
+    unit.health = 0;
+    if (state.adjacencyReactionReserveById) delete state.adjacencyReactionReserveById[unit.id];
+    if (state.pendingAdjacencyReaction?.reactorId === unit.id || state.pendingAdjacencyReaction?.moverId === unit.id) state.pendingAdjacencyReaction = null;
+    clearWeaponReady(state, unit.id);
+    clearAim(state, unit.id);
+    clearCalledShot(state, unit.id);
+    state.bracedCombatantIds = state.bracedCombatantIds.filter((id) => id !== unit.id);
+    state.coveringFireLanes = state.coveringFireLanes.filter((lane) => lane.attackerId !== unit.id);
+    state.overwatchLanes = state.overwatchLanes.filter((lane) => lane.attackerId !== unit.id);
+    delete state.maintainedTargetByCombatantId[unit.id];
+    Object.entries(state.maintainedTargetByCombatantId).forEach(([attackerId, targetId]) => { if (targetId === unit.id) delete state.maintainedTargetByCombatantId[attackerId]; });
+    if (state.selectedCombatantId === unit.id) {
+      state.plannedMove = null;
+      state.plannedAttackTargetId = null;
+      state.plannedAttackMode = null;
+    }
+  }
+  return result.woundState;
+};
 
 const doorFarCell = (door: CombatScenario["doors"][number], observer: GridPoint): GridPoint => {
   if (door.from.x === door.to.x) return { x: observer.x < door.from.x ? door.from.x : door.from.x - 1, y: Math.min(door.from.y, door.to.y) };
@@ -63,9 +110,7 @@ const triggerCoveredDoor = (state: CharacterCombatState, doorId: string, enemy: 
   if (!result) return false;
   state.ammunitionById[attacker.id] -= 1;
   clearWeaponReady(state, attacker.id);
-  enemy.woundState = result.woundState;
-  enemy.defeated = result.woundState === "serious" || result.woundState === "unconscious" || result.woundState === "dead";
-  if (enemy.defeated) enemy.health = 0;
+  if (result.hit) applyCombatWound(state, enemy, result.woundState);
   delete state.coveredDoorByCombatantId?.[attacker.id];
   state.overwatchLanes = state.overwatchLanes.filter((lane) => lane.attackerId !== attacker.id);
   state.events.unshift(`${attacker.name} door reaction fired as ${enemy.name} opened ${doorId}: ${result.hit ? `${result.woundState} wound` : "miss"}${highGroundNote(scenario, attacker, enemy)}`);
@@ -93,9 +138,7 @@ const enemyBreachCoveredDoor = (state: CharacterCombatState, door: CombatScenari
   const blastKeys = new Set(doorBlastCells(door).map(pointKey));
   if (dice) scenario.combatants.filter((unit) => !unit.defeated && blastKeys.has(pointKey(unit.position))).forEach((unit) => {
     const total = dice.woundDice.first + dice.woundDice.second + 4 - unit.armor;
-    unit.woundState = woundStateForTotal(total);
-    unit.defeated = unit.woundState === "serious" || unit.woundState === "unconscious" || unit.woundState === "dead";
-    if (unit.defeated) unit.health = 0;
+    applyCombatWound(state, unit, woundStateForTotal(total));
     state.events.unshift(`${unit.name} caught in forced-entry blast (${unit.woundState})`);
   });
   state.events.unshift(`${enemy.name} forcibly breached covered ${door.id}`);
@@ -116,8 +159,8 @@ export const scenarioAvoidingVisibleCoveredDoors = (scenario: CombatScenario, co
 };
 
 const applyFireDamage = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => {
-  const nextWound = unit.woundState === "healthy" ? "light" : unit.woundState === "light" ? "serious" : unit.woundState === "serious" ? "unconscious" : "dead";
-  unit.woundState = nextWound;
+  const incomingWound = unit.woundState === "healthy" ? "light" : "serious";
+  const nextWound = applyCombatWound(state, unit, incomingWound);
   if (nextWound === "serious" || nextWound === "unconscious" || nextWound === "dead") {
     unit.defeated = true;
     unit.health = 0;
@@ -167,6 +210,7 @@ export const defaultCharacterCombatHudLayouts: Record<CharacterCombatHudId, Char
   scenario: { visible: true, pinned: false, position: { x: 12, y: 12 } },
   action: { visible: true, pinned: false, position: { x: 12, y: 150 } },
   character: { visible: true, pinned: false, position: { x: 980, y: 12 } },
+  crewRoster: { visible: true, pinned: false, position: { x: 360, y: 720 } },
   events: { visible: true, pinned: false, position: { x: 980, y: 190 } },
   legend: { visible: false, pinned: false, position: { x: 980, y: 360 } },
   outcome: { visible: true, pinned: false, position: { x: 500, y: 12 } },
@@ -176,6 +220,7 @@ const freshHudLayouts = () => Object.fromEntries(Object.entries(defaultCharacter
 const freshActionPoints = (scenario: CombatScenario) => Object.fromEntries(scenario.combatants.filter((unit) => !unit.defeated).map((unit) => [unit.id, 6]));
 const magazineSize = (scenario: CombatScenario, combatantId: string) => scenario.combatants.find((unit) => unit.id === combatantId)?.weapon.magazineSize ?? 12;
 const freshAmmunition = (scenario: CombatScenario) => Object.fromEntries(scenario.combatants.map((unit) => [unit.id, unit.weapon.magazineSize ?? 12]));
+const freshProfileAmmunition = (scenario: CombatScenario) => Object.fromEntries(scenario.combatants.filter((unit) => unit.weapon.ammunitionProfiles).map((unit) => [unit.id, Object.fromEntries(unit.weapon.ammunitionProfiles!.map((profile) => [profile.kind, unit.weapon.magazineSize ?? 12]))]));
 const designatedLeaders = (scenario: CombatScenario) => Object.fromEntries((["player", "enemy"] as const).map((side) => {
   const leader = scenario.combatants.filter((unit) => unit.side === side).sort((a, b) => (b.leadershipRating ?? b.weaponSkill) - (a.leadershipRating ?? a.weaponSkill) || a.id.localeCompare(b.id))[0];
   return [side, leader?.id ?? null];
@@ -253,15 +298,16 @@ const resolveEnemyMorale = (state: CharacterCombatState, moraleRolls: MoraleRoll
     const inCommand = leader && distanceBetween(guard.position, leader.position) <= 4;
     const leadershipBonus = inCommand ? leader.leadershipRating ?? 1 : 0;
     const target = 7 + (leaderLost ? 2 : 0);
-    const total = dice.first + dice.second + leadershipBonus;
+    const woundPenalty = guard.woundState === "light" ? 1 : 0;
+    const total = dice.first + dice.second + leadershipBonus - woundPenalty;
     if (total < target) {
       const current = state.moraleStateByCombatantId?.[guard.id] ?? "steady";
       const next: MoraleState = current === "steady" ? "shaken" : current === "shaken" ? "panicked" : "surrendered";
       state.moraleStateByCombatantId ??= {};
       state.moraleStateByCombatantId[guard.id] = next;
       if (next === "surrendered") { guard.surrendered = true; guard.defeated = true; }
-      state.events.unshift(`${guard.name} failed ${reason} morale ${total}/${target}${leadershipBonus ? ` with +${leadershipBonus} leadership` : ""}: ${current} → ${next}`);
-    } else state.events.unshift(`${guard.name} passed ${reason} morale ${total}/${target}${leadershipBonus ? ` with +${leadershipBonus} leadership` : ""}`);
+      state.events.unshift(`${guard.name} failed ${reason} morale ${total}/${target}${leadershipBonus ? ` with +${leadershipBonus} leadership` : ""}${woundPenalty ? " with −1 light wound" : ""}: ${current} → ${next}`);
+    } else state.events.unshift(`${guard.name} passed ${reason} morale ${total}/${target}${leadershipBonus ? ` with +${leadershipBonus} leadership` : ""}${woundPenalty ? " with −1 light wound" : ""}`);
   }
   if (resolveCaptureOutcome(state)) return;
   if (enemies.length > 0 && enemies.every((unit) => unit.defeated) && scenario.id !== "hull-breach" && scenario.id !== "damage-control" && scenario.victoryCondition !== "secure-objective" && scenario.victoryCondition !== "rescue-extract" && scenario.victoryCondition !== "hold-zone" && scenario.victoryCondition !== "staged-objectives" && scenario.victoryCondition !== "capture-target") {
@@ -293,6 +339,7 @@ const activateReinforcements = (state: CharacterCombatState) => {
     unit.surrendered = false;
     unit.health = 1;
     unit.woundState = "healthy";
+    unit.seriousWounds = 0;
     state.events.unshift(`${unit.name} arrived as reinforcement at ${spawn.x},${spawn.y}`);
   }
 };
@@ -310,11 +357,12 @@ const resolveHoldZoneCapture = (state: CharacterCombatState) => {
   return true;
 };
 
-export const initialCharacterCombatState: CharacterCombatState = { scenario: null, selectedBoardingTeamIds: [], armoryLoadoutIds: ["scout", "breacher"], combatantStarts: {}, outcome: null, viewMode: "3d", camera: { quarterTurn: 0, azimuth: Math.PI / 4, elevation: Math.PI / 4.75, zoom: 42, focus: null, pan: { x: 0, y: 0 } }, status: "active", turn: 1, selectedCombatantId: null, plannedMove: null, plannedAttackTargetId: null, plannedAttackMode: null, grenadeTargeting: false, plannedGrenadeTarget: null, lastGrenadeImpact: null, plannedOpenDoorId: null, plannedBreachDoorId: null, plannedExtinguishFire: null, smokeClearsAtTurnByCell: {}, placedBreachingChargeByDoorId: {}, vacuumExposureByCombatantId: {}, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], overwatchTargeting: false, plannedOverwatchTarget: null, overwatchLanes: [], disengagedCombatantIds: [], reactionMeleeUsedCombatantIds: [], plannedTreatmentTargetId: null, recoveringCombatantIds: [], evadingCombatantIds: [], trottingCombatantIds: [], bracedCombatantIds: [], suppressedCombatantIds: [], draggingCombatantByCarrierId: {}, maintainedTargetByCombatantId: {}, plannedObjectiveId: null, hoveredDestination: null, actionPointsById: {}, ammunitionById: {}, actedCombatantIds: [], events: [], hudLayouts: freshHudLayouts() };
+export const initialCharacterCombatState: CharacterCombatState = { scenario: null, selectedBoardingTeamIds: [], armoryLoadoutIds: ["scout", "breacher"], combatantStarts: {}, outcome: null, viewMode: "3d", camera: { quarterTurn: 0, azimuth: Math.PI / 4, elevation: Math.PI / 4.75, zoom: 42, focus: null, pan: { x: 0, y: 0 } }, status: "active", turn: 1, selectedCombatantId: null, plannedMove: null, plannedAttackTargetId: null, plannedAttackMode: null, grenadeTargeting: false, plannedGrenadeTarget: null, lastGrenadeImpact: null, plannedOpenDoorId: null, plannedBreachDoorId: null, plannedExtinguishFire: null, smokeClearsAtTurnByCell: {}, placedBreachingChargeByDoorId: {}, structuralDamageById: {}, vacuumExposureByCombatantId: {}, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], overwatchTargeting: false, plannedOverwatchTarget: null, overwatchLanes: [], disengagedCombatantIds: [], reactionMeleeUsedCombatantIds: [], adjacencyReactionReserveById: {}, adjacencyReactionUsedCombatantIds: [], movedCombatantIds: [], pendingAdjacencyReaction: null, plannedTreatmentTargetId: null, recoveringCombatantIds: [], evadingCombatantIds: [], trottingCombatantIds: [], bracedCombatantIds: [], suppressedCombatantIds: [], draggingCombatantByCarrierId: {}, maintainedTargetByCombatantId: {}, plannedObjectiveId: null, hoveredDestination: null, actionPointsById: {}, ammunitionById: {}, ammunitionByCombatantAndKind: {}, actedCombatantIds: [], events: [], hudLayouts: freshHudLayouts() };
 const slice = createSlice({ name: "characterCombat", initialState: initialCharacterCombatState, reducers: {
-  loadCombatScenario: (state, action: PayloadAction<CombatScenario>) => { resetTransientIntel(state); state.scenario = action.payload; state.leaderIdBySide = designatedLeaders(action.payload); state.moraleStateByCombatantId = freshMorale(action.payload); state.combatantStarts = startingCombatants(action.payload); state.outcome = null; state.camera.focus = null; state.camera.pan = { x: 0, y: 0 }; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.lastGrenadeImpact = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = freshActionPoints(action.payload); state.ammunitionById = freshAmmunition(action.payload); state.actedCombatantIds = []; state.events = []; },
-  clearCombatScenario: (state) => { resetTransientIntel(state); state.scenario = null; state.combatantStarts = {}; state.outcome = null; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = {}; state.ammunitionById = {}; state.actedCombatantIds = []; state.events = []; },
+  loadCombatScenario: (state, action: PayloadAction<CombatScenario>) => { resetTransientIntel(state); state.adjacencyReactionReserveById = {}; state.adjacencyReactionUsedCombatantIds = []; state.movedCombatantIds = []; state.pendingAdjacencyReaction = null; state.scenario = action.payload; state.scenario.combatants.forEach((unit) => { unit.seriousWounds = unit.seriousWounds ?? (unit.woundState === "serious" || unit.woundState === "unconscious" ? 1 : unit.woundState === "dead" ? 2 : 0); }); state.leaderIdBySide = designatedLeaders(action.payload); state.moraleStateByCombatantId = freshMorale(action.payload); state.combatantStarts = startingCombatants(action.payload); state.outcome = null; state.camera.focus = null; state.camera.pan = { x: 0, y: 0 }; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.lastGrenadeImpact = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = freshActionPoints(action.payload); state.ammunitionById = freshAmmunition(action.payload); state.ammunitionByCombatantAndKind = freshProfileAmmunition(action.payload); state.actedCombatantIds = []; state.events = []; },
+  clearCombatScenario: (state) => { resetTransientIntel(state); state.adjacencyReactionReserveById = {}; state.adjacencyReactionUsedCombatantIds = []; state.movedCombatantIds = []; state.pendingAdjacencyReaction = null; state.scenario = null; state.combatantStarts = {}; state.outcome = null; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = {}; state.ammunitionById = {}; state.ammunitionByCombatantAndKind = {}; state.actedCombatantIds = []; state.events = []; },
   selectPlayerCombatant: (state, action: PayloadAction<string | null>) => {
+    state.lastWeaponImpact = null;
     if (state.status !== "active") return;
     state.diveTargeting = false;
     state.lastGrenadeImpact = null;
@@ -353,7 +401,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   startTrot: (state) => {
     const id = state.selectedCombatantId;
     const unit = state.scenario?.combatants.find((combatant) => combatant.id === id && combatant.side === "player" && !combatant.defeated);
-    if (!id || !unit || unit.posture === "prone" || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.suppressedCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) !== 6) return;
+    if (!id || !unit || unit.posture === "prone" || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.suppressedCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) !== 6 || (state.scenario && adjacentEnemies(state.scenario, id).length > 0)) return;
     state.trottingCombatantIds.push(id);
     state.plannedAttackTargetId = null;
     state.plannedAttackMode = null;
@@ -372,7 +420,8 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const id = state.selectedCombatantId;
     const searcher = scenario?.combatants.find((unit) => unit.id === id && unit.side === "player" && !unit.defeated);
     if (!scenario || !id || !searcher || state.status !== "active" || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 3) return;
-    const range = searcher.visionMode === "enhanced" ? 7 : 5;
+    const enhancedVision = searcher.visionMode === "enhanced" || searcher.weapon.enhancedVision;
+    const range = enhancedVision ? 7 : 5;
     const found = scenario.combatants.filter((unit) => unit.side === "enemy" && !unit.defeated && unit.concealed && distanceBetween(searcher.position, unit.position) <= range && hasLineOfSight(scenario, searcher.position, unit.position));
     const investigatedContacts = (state.soundContacts ?? []).filter((contact) => distanceBetween(searcher.position, contact.point) <= range);
     investigatedContacts.forEach((contact) => {
@@ -383,7 +432,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.soundContacts = (state.soundContacts ?? []).filter((contact) => !investigatedContacts.some((investigated) => investigated.id === contact.id));
     state.actionPointsById[id] -= 3;
     if (state.actionPointsById[id] === 0) state.actedCombatantIds.push(id);
-    state.events.unshift(`${searcher.name} searched (${searcher.visionMode === "enhanced" ? "enhanced " : ""}${range} squares): ${found.length ? `detected ${found.map((enemy) => enemy.name).join(", ")}` : "no contacts"} (3 AP)`);
+    state.events.unshift(`${searcher.name} searched (${enhancedVision ? "enhanced " : ""}${range} squares): ${found.length ? `detected ${found.map((enemy) => enemy.name).join(", ")}` : "no contacts"} (3 AP)`);
   },
   beginDragging: (state, action: PayloadAction<string>) => {
     const carrierId = state.selectedCombatantId;
@@ -418,7 +467,20 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (state.plannedMove) state.diveTargeting = false;
   },
   cancelDive: (state) => { state.diveTargeting = false; if (state.plannedMove?.kind === "dive") state.plannedMove = null; },
+  previewCharge: (state, action: PayloadAction<string>) => {
+    const scenario = state.scenario;
+    const id = state.selectedCombatantId;
+    if (!scenario || !id || state.status !== "active" || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 6) return;
+    const move = chargeMoves(scenario, id).get(action.payload);
+    if (!move) return;
+    state.plannedMove = move;
+    state.plannedAttackTargetId = action.payload;
+    state.plannedAttackMode = "melee";
+    state.plannedMeleeMode = "blade";
+    state.plannedObjectiveId = null;
+  },
   previewMove: (state, action: PayloadAction<GridPoint>) => {
+    state.lastWeaponImpact = null;
     if (state.status !== "active" || !state.scenario || !state.selectedCombatantId || state.actedCombatantIds.includes(state.selectedCombatantId)) return;
     const selected = state.scenario.combatants.find((unit) => unit.id === state.selectedCombatantId);
     const withdrawalMode = state.withdrawalModeByCombatantId?.[state.selectedCombatantId];
@@ -427,12 +489,14 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const impaired = state.mobilityImpairedCombatantIds?.includes(state.selectedCombatantId) ?? false;
     const movementLimit = Math.max(1, (withdrawalMode === "defensive" ? 2 : advancingReady ? 2 : selected?.posture === "prone" ? 1 : state.draggingCombatantByCarrierId[state.selectedCombatantId] || state.suppressedCombatantIds.includes(state.selectedCombatantId) ? 2 : state.trottingCombatantIds.includes(state.selectedCombatantId) ? 6 : 4) - (impaired ? 2 : 0));
     const cautious = state.cautiousMovementCombatantIds?.includes(state.selectedCombatantId) ?? false;
+    const normalAllowance = withdrawalMode || advancingReady || state.draggingCombatantByCarrierId[state.selectedCombatantId] || state.suppressedCombatantIds.includes(state.selectedCombatantId) ? 6 : Math.floor((state.actionPointsById[state.selectedCombatantId] ?? 0) / (cautious ? 2 : 1));
+    const normalMaxSteps = Math.max(1, movementLimit);
     state.plannedMove = selected?.posture === "prone"
       ? reachableCrawling(state.scenario, state.selectedCombatantId, state.actionPointsById[state.selectedCombatantId] ?? 0).get(pointKey(action.payload)) ?? null
-      : state.scenario.gravityMode === "zero-g" ? ((state.actionPointsById[state.selectedCombatantId] ?? 0) >= 3 ? zeroGravityPushes(state.scenario, state.selectedCombatantId).get(pointKey(action.payload)) ?? null : null) : proposedMoveFor(state.scenario, state.selectedCombatantId, action.payload, Math.min(movementLimit, Math.floor((state.actionPointsById[state.selectedCombatantId] ?? 0) / (cautious ? 2 : 1))));
-    if (state.plannedMove && cautious && state.plannedMove.kind !== "crawl") state.plannedMove.cost *= 2;
-    if (state.plannedMove && advancingReady) state.plannedMove.cost = 4;
-    if (state.plannedMove && withdrawalMode) state.plannedMove.cost = 0;
+      : state.scenario.gravityMode === "zero-g" ? ((state.actionPointsById[state.selectedCombatantId] ?? 0) >= 3 ? zeroGravityPushes(state.scenario, state.selectedCombatantId).get(pointKey(action.payload)) ?? null : null) : reachableMovement(state.scenario, state.selectedCombatantId, normalAllowance, state.trottingCombatantIds.includes(state.selectedCombatantId), normalMaxSteps).get(pointKey(action.payload)) ?? null;
+    if (state.plannedMove && cautious && state.plannedMove.kind !== "crawl") { state.plannedMove.cost *= 2; state.plannedMove.costBreakdown = [...(state.plannedMove.costBreakdown ?? []), "cautious ×2"]; }
+    if (state.plannedMove && advancingReady) { state.plannedMove.cost = 4; state.plannedMove.costBreakdown = ["advance ready 4"]; }
+    if (state.plannedMove && withdrawalMode) { state.plannedMove.cost = 0; state.plannedMove.costBreakdown = [withdrawalMode === "defensive" ? "defensive withdrawal prepaid" : "withdrawal prepaid"]; }
     state.plannedAttackTargetId = null;
     state.plannedObjectiveId = null;
   },
@@ -457,7 +521,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.plannedObjectiveId = null;
   },
   confirmMove: {
-    reducer: (state, action: PayloadAction<{ hitDice: DicePair; woundDice: DicePair; reactionMeleeRollsByCombatantId?: Record<string, number> } | undefined>) => {
+    reducer: (state, action: PayloadAction<{ hitDice: DicePair; woundDice: DicePair; reactionMeleeRollsByCombatantId?: Record<string, number>; adjacencyReactionRollsByCombatantId?: Record<string, { hitDice: DicePair; woundDice: DicePair }>; meleeMode?: MeleeMode; moraleRolls?: MoraleRolls } | undefined>) => {
     const scenario = state.scenario;
     const move = state.plannedMove;
     if (state.status !== "active" || !scenario || !move || state.actedCombatantIds.includes(move.combatantId)) return;
@@ -465,6 +529,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (!unit || move.path.length === 0) return;
     const moveOrigin = { ...unit.position };
     const diving = move.kind === "dive";
+    const charging = move.kind === "charge";
+    const chargeTargetId = charging ? state.plannedAttackTargetId : null;
+    if (charging && (!chargeTargetId || !action.payload?.meleeMode)) return;
     const before = move.path.length > 1 ? move.path[move.path.length - 2] : unit.position;
     const final = move.destination;
     const dx = final.x - before.x;
@@ -483,9 +550,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       const reaction = resolveMelee(reactor, unit, roll, false, 0, reactor.meleeWeapon.penetration, (parrying ? -2 : state.guardingCombatantIds?.includes(unit.id) ? -1 : 0) + (diving ? -2 : 0));
       if (parrying) state.parryingCombatantIds = (state.parryingCombatantIds ?? []).filter((id) => id !== unit.id);
       state.reactionMeleeUsedCombatantIds.push(reactor.id);
-      unit.woundState = reaction.woundState;
-      unit.defeated = reaction.woundState === "serious" || reaction.woundState === "unconscious" || reaction.woundState === "dead";
-      if (unit.defeated) unit.health = 0;
+      applyCombatWound(state, unit, reaction.woundState);
       state.events.unshift(`${reactor.name} reaction melee as ${unit.name} withdrew: ${reaction.roll} ${reaction.modifier >= 0 ? "+" : ""}${reaction.modifier} = ${reaction.total} (${reaction.woundState})`);
       if (unit.defeated) {
         state.actionPointsById[unit.id] = 0;
@@ -502,6 +567,37 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         }
         return;
       }
+    }
+    const adjacencyCrossing = scenario.combatants
+      .filter((reactor) => reactor.side !== unit.side && !reactor.defeated && !reactor.weapon.highEnergy && !state.movedCombatantIds?.includes(reactor.id) && !state.adjacencyReactionUsedCombatantIds?.includes(`${reactor.id}:${unit.id}`) && !state.suppressedCombatantIds.includes(reactor.id) && (state.actionPointsById[reactor.id] ?? 0) >= 3 && (state.ammunitionById[reactor.id] ?? 0) >= 1)
+      .map((reactor) => ({ reactor, stepIndex: move.path.findIndex((step) => Math.abs(reactor.position.x - step.x) + Math.abs(reactor.position.y - step.y) === 1) }))
+      .filter(({ stepIndex }) => stepIndex >= 0)
+      .sort((a, b) => a.stepIndex - b.stepIndex || scenario.combatants.indexOf(a.reactor) - scenario.combatants.indexOf(b.reactor))[0];
+    if (adjacencyCrossing && action.payload?.adjacencyReactionRollsByCombatantId?.[adjacencyCrossing.reactor.id]) {
+      const reactor = adjacencyCrossing.reactor;
+      const trigger = move.path[adjacencyCrossing.stepIndex];
+      const prior = adjacencyCrossing.stepIndex > 0 ? move.path[adjacencyCrossing.stepIndex - 1] : unit.position;
+      const originalPosition = { ...unit.position };
+      unit.position = { ...trigger };
+      unit.facing = trigger.x > prior.x ? "east" : trigger.x < prior.x ? "west" : trigger.y > prior.y ? "south" : "north";
+      const dice = action.payload.adjacencyReactionRollsByCombatantId[reactor.id];
+      const reaction = resolveSnapShot(reactor, unit, dice.hitDice, dice.woundDice, coverProtection(scenario, reactor.id, unit.id), "snap", state.evadingCombatantIds.includes(unit.id) || diving, false, false, visibilityAssessment(scenario, reactor, unit).modifier, false, false, elevationAttackModifier(scenario, reactor, unit));
+      state.actionPointsById[reactor.id] -= 3;
+      state.ammunitionById[reactor.id] -= 1;
+      state.adjacencyReactionUsedCombatantIds ??= [];
+      state.adjacencyReactionUsedCombatantIds.push(`${reactor.id}:${unit.id}`);
+      if (reaction?.hit) applyCombatWound(state, unit, reaction.woundState);
+      if (reaction) state.events.unshift(`${reactor.name} adjacency snap shot as ${unit.name} entered ${trigger.x},${trigger.y}: hit ${reaction.hitTotal}/${reaction.targetNumber}, ${reaction.hit ? `wound ${reaction.woundTotal} (${reaction.woundState})` : "miss"}`);
+      if (unit.defeated) {
+        state.actionPointsById[unit.id] = 0;
+        if (!state.actedCombatantIds.includes(unit.id)) state.actedCombatantIds.push(unit.id);
+        state.plannedMove = null;
+        state.hoveredDestination = null;
+        state.events.unshift(`${unit.name} movement stopped by adjacency reaction fire`);
+        if (resolveRescueFailure(state)) return;
+        return;
+      }
+      unit.position = originalPosition;
     }
     const enemyOverwatchCrossing = state.overwatchLanes
       .map((lane) => ({ lane, attacker: scenario.combatants.find((combatant) => combatant.id === lane.attackerId), stepIndex: move.path.findIndex((step) => lane.cells.some((cell) => pointKey(cell) === pointKey(step))) }))
@@ -521,9 +617,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         const reaction = resolveSnapShot(overwatcher, unit, action.payload.hitDice, action.payload.woundDice, coverProtection(scenario, overwatcher.id, unit.id), "snap", state.evadingCombatantIds.includes(unit.id) || diving, state.suppressedCombatantIds.includes(overwatcher.id), false, visibilityAssessment(scenario, overwatcher, unit).modifier, false, false, elevationAttackModifier(scenario, overwatcher, unit));
         if (reaction) {
           if (!reaction.hit && reaction.targetNumber - reaction.hitTotal <= 2 && !state.suppressedCombatantIds.includes(unit.id)) { state.suppressedCombatantIds.push(unit.id); clearAim(state, unit.id); }
-          unit.woundState = reaction.woundState;
-          unit.defeated = reaction.woundState === "serious" || reaction.woundState === "unconscious" || reaction.woundState === "dead";
-          if (unit.defeated) unit.health = 0;
+          if (reaction.hit) applyCombatWound(state, unit, reaction.woundState);
           state.events.unshift(`${overwatcher.name} overwatch triggered as ${unit.name} entered ${trigger.x},${trigger.y}: hit ${reaction.hitTotal}/${reaction.targetNumber}, ${reaction.hit ? `wound ${reaction.woundTotal} (${reaction.woundState})` : "miss"}${highGroundNote(scenario, overwatcher, unit)}`);
           applyZeroGravityRecoil(state, overwatcher.id);
           if (unit.defeated) {
@@ -548,6 +642,8 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     }
     const advancingReady = state.advanceReadyCombatantIds?.includes(unit.id) ?? false;
     unit.position = final;
+    state.movedCombatantIds ??= [];
+    if (!state.movedCombatantIds.includes(unit.id)) state.movedCombatantIds.push(unit.id);
     if (diving) unit.posture = "prone";
     clearDoorCoverage(state, unit.id, "character moved");
     if (!advancingReady) clearWeaponReady(state, unit.id);
@@ -555,7 +651,8 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     clearCalledShot(state, unit.id);
     state.bracedCombatantIds = state.bracedCombatantIds.filter((combatantId) => combatantId !== unit.id);
     if (dragged) dragged.position = { ...before };
-    unit.facing = dx > 0 ? "east" : dx < 0 ? "west" : dy > 0 ? "south" : "north";
+    if (move.finalFacing) unit.facing = move.finalFacing;
+    else if (diving || charging || move.kind === "drop" || move.kind === "climb") unit.facing = dx > 0 ? "east" : dx < 0 ? "west" : dy > 0 ? "south" : "north";
     state.actionPointsById[unit.id] = Math.max(0, (state.actionPointsById[unit.id] ?? 0) - move.cost);
     const cautious = state.cautiousMovementCombatantIds?.includes(unit.id) ?? false;
     if (scenario.defaultLighting && !cautious) {
@@ -573,7 +670,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.disengagedCombatantIds = state.disengagedCombatantIds.filter((id) => id !== unit.id);
     if (state.withdrawalModeByCombatantId) delete state.withdrawalModeByCombatantId[unit.id];
     if (state.actionPointsById[unit.id] === 0 && !state.actedCombatantIds.includes(unit.id)) state.actedCombatantIds.push(unit.id);
-    state.events.unshift(diving ? `${unit.name} dove to ${final.x},${final.y} and went prone (3 AP)` : move.kind === "crawl" ? `${unit.name} crawled to ${final.x},${final.y} (${move.cost} AP)` : move.kind === "drop" ? `${unit.name} dropped down to ${final.x},${final.y} (3 AP)` : move.kind === "climb" ? `${unit.name} climbed up toward ${final.x},${final.y} (6 AP)` : `${unit.name} moved to ${final.x},${final.y}`);
+    state.events.unshift(charging ? `${unit.name} charged to ${final.x},${final.y} (6 AP)` : diving ? `${unit.name} dove to ${final.x},${final.y} and went prone (3 AP)` : move.kind === "crawl" ? `${unit.name} crawled to ${final.x},${final.y} (${move.cost} AP)` : move.kind === "drop" ? `${unit.name} dropped down to ${final.x},${final.y} (3 AP)` : move.kind === "climb" ? `${unit.name} climbed up toward ${final.x},${final.y} (6 AP)` : `${unit.name} moved to ${final.x},${final.y} (${move.cost} AP${move.costBreakdown?.length ? `: ${move.costBreakdown.join(" + ")}` : ""})`);
     if ((move.kind === "drop" || move.kind === "climb" || entersHazardousTerrain(scenario, move.path)) && action.payload) {
       const footingTotal = action.payload.hitDice.first + action.payload.hitDice.second;
       if (footingTotal < 7) {
@@ -586,6 +683,33 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     }
     if (scenario.fireCells?.some((cell) => pointKey(cell) === pointKey(final))) applyFireDamage(state, unit);
     state.plannedMove = null;
+    if (charging && chargeTargetId && action.payload?.meleeMode && !unit.defeated) {
+      const target = adjacentEnemies(scenario, unit.id).find((candidate) => candidate.id === chargeTargetId);
+      if (target) {
+        const meleeMode = action.payload.meleeMode;
+        const subdueAssistBonus = meleeMode === "subdue" ? Math.min(2, adjacentEnemies(scenario, target.id).filter((ally) => ally.side === unit.side && ally.id !== unit.id).length) : 0;
+        const subdueSuppressionBonus = meleeMode === "subdue" && state.suppressedCombatantIds.includes(target.id) ? 1 : 0;
+        const subduePanicBonus = meleeMode === "subdue" && state.moraleStateByCombatantId?.[target.id] === "panicked" ? 1 : 0;
+        const subdueBonus = subdueAssistBonus + subdueSuppressionBonus + subduePanicBonus;
+        const hitModifier = meleeMode === "unarmed" ? 1 : meleeMode === "rifle-strike" ? -1 : meleeMode === "subdue" ? subdueBonus : 0;
+        const penetration = meleeMode === "unarmed" || meleeMode === "subdue" ? 0 : meleeMode === "rifle-strike" ? unit.meleeWeapon.penetration + 2 : unit.meleeWeapon.penetration;
+        const defenseModifier = state.parryingCombatantIds?.includes(target.id) ? -2 : state.guardingCombatantIds?.includes(target.id) ? -1 : 0;
+        const result = resolveMelee(unit, target, action.payload.hitDice.first, state.suppressedCombatantIds.includes(unit.id), hitModifier, penetration, defenseModifier);
+        if (state.parryingCombatantIds?.includes(target.id)) state.parryingCombatantIds = (state.parryingCombatantIds ?? []).filter((id) => id !== target.id);
+        if (meleeMode === "subdue") {
+          if (result.total >= 6) { target.surrendered = true; target.defeated = true; target.health = 0; delete target.stunnedUntilTurn; state.events.unshift(`${unit.name} charged, subdued, and restrained ${target.name} (${result.total})`); }
+          else if (result.total >= 4) { target.stunnedUntilTurn = state.turn + 1; state.events.unshift(`${unit.name} charged and subdued ${target.name}: stunned (${result.total})`); }
+          else state.events.unshift(`${unit.name} charged but failed to subdue ${target.name} (${result.total})`);
+        } else {
+          applyCombatWound(state, target, result.woundState);
+          state.events.unshift(`${unit.name} charged and used ${meleeMode} against ${target.name}: ${result.roll} ${result.modifier >= 0 ? "+" : ""}${result.modifier} = ${result.total} (${result.woundState})`);
+        }
+        if (target.side === "enemy" && target.defeated) { if (resolveCaptureOutcome(state)) return; resolveEnemyMorale(state, action.payload.moraleRolls, target.id, meleeMode === "subdue" ? "restraint" : "casualty"); }
+      }
+      state.plannedAttackTargetId = null;
+      state.plannedAttackMode = null;
+      state.plannedMeleeMode = null;
+    }
     const extraction = scenario.objects.find((object) => object.kind === "extraction" && !object.completed);
     if (unit.id === scenario.captiveId && extraction && pointKey(unit.position) === pointKey(extraction.position)) {
       extraction.completed = true;
@@ -599,7 +723,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.plannedAttackTargetId = !state.trottingCombatantIds.includes(unit.id) && maintained && rangedEnemies(scenario, unit.id).some((target) => target.id === maintained) ? maintained : null;
     state.hoveredDestination = null;
     },
-    prepare: (payload?: { hitDice: DicePair; woundDice: DicePair; reactionMeleeRollsByCombatantId?: Record<string, number> }) => ({ payload }),
+    prepare: (payload?: { hitDice: DicePair; woundDice: DicePair; reactionMeleeRollsByCombatantId?: Record<string, number>; adjacencyReactionRollsByCombatantId?: Record<string, { hitDice: DicePair; woundDice: DicePair }>; meleeMode?: MeleeMode; moraleRolls?: MoraleRolls }) => ({ payload }),
   },
   turnCombatant: (state, action: PayloadAction<"left" | "right">) => {
     const scenario = state.scenario;
@@ -641,13 +765,14 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   toggleAdvanceReady: (state) => {
     const id = state.selectedCombatantId;
     const unit = state.scenario?.combatants.find((candidate) => candidate.id === id && candidate.side === "player" && !candidate.defeated);
-    if (!id || !unit || unit.posture === "prone" || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || state.suppressedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 4) return;
+    if (!id || !unit || unit.weapon.highEnergy || unit.posture === "prone" || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || state.suppressedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 4) return;
     state.advanceReadyCombatantIds ??= [];
     state.advanceReadyCombatantIds = state.advanceReadyCombatantIds.includes(id) ? state.advanceReadyCombatantIds.filter((combatantId) => combatantId !== id) : [...state.advanceReadyCombatantIds, id];
     state.cautiousMovementCombatantIds = (state.cautiousMovementCombatantIds ?? []).filter((combatantId) => combatantId !== id);
     state.plannedMove = null;
   },
   previewOpenDoor: (state, action: PayloadAction<string>) => {
+    state.lastWeaponImpact = null;
     const id = state.selectedCombatantId;
     if (!id || !state.scenario || state.status !== "active" || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 6 || !closedDoorsAdjacentTo(state.scenario, id).some((door) => door.id === action.payload) || state.placedBreachingChargeByDoorId[action.payload]) return;
     state.plannedOpenDoorId = action.payload;
@@ -718,6 +843,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   },
   cancelExtinguishFire: (state) => { state.plannedExtinguishFire = null; },
   previewAttack: (state, action: PayloadAction<string>) => {
+    state.lastWeaponImpact = null;
     const scenario = state.scenario;
     const attackerId = state.selectedCombatantId;
     if (state.status !== "active" || !scenario || !attackerId || state.actedCombatantIds.includes(attackerId) || state.trottingCombatantIds.includes(attackerId) || state.draggingCombatantByCarrierId[attackerId]) return;
@@ -776,12 +902,21 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (action.payload) state.calledShotByCombatantId[attackerId] = action.payload;
     else delete state.calledShotByCombatantId[attackerId];
   },
-  selectAttackMode: (state, action: PayloadAction<FireMode>) => { if (state.plannedAttackTargetId) { state.plannedAttackMode = action.payload; state.plannedMeleeMode = action.payload === "melee" ? "blade" : null; if (action.payload === "melee" && state.selectedCombatantId) state.bracedCombatantIds = state.bracedCombatantIds.filter((id) => id !== state.selectedCombatantId); } },
+  selectAttackMode: (state, action: PayloadAction<FireMode>) => {
+    const attacker = state.scenario?.combatants.find((unit) => unit.id === state.selectedCombatantId);
+    const target = state.scenario?.combatants.find((unit) => unit.id === state.plannedAttackTargetId);
+    const rangeBand = attacker && target ? snapShotTarget(attacker, target)?.rangeBand : null;
+    if (!state.plannedAttackTargetId || !attacker || (attacker.weapon.highEnergy && action.payload !== "aimed" && action.payload !== "melee") || (action.payload === "automatic" && rangeBand && automaticFireModifierForRange(rangeBand, attacker.weapon.automaticFireBonusByRange) === null)) return;
+    state.plannedAttackMode = action.payload;
+    state.plannedMeleeMode = action.payload === "melee" ? "blade" : null;
+    if (action.payload === "melee" && state.selectedCombatantId) state.bracedCombatantIds = state.bracedCombatantIds.filter((id) => id !== state.selectedCombatantId);
+  },
   selectMeleeMode: (state, action: PayloadAction<MeleeMode>) => {
     if (state.plannedAttackMode !== "melee" || !state.selectedCombatantId || !state.plannedAttackTargetId) return;
     state.plannedMeleeMode = action.payload;
   },
-  confirmAttack: (state, action: PayloadAction<{ hitDice: DicePair; woundDice: DicePair; moraleRolls?: MoraleRolls; attackMode?: FireMode; meleeMode?: MeleeMode | null }>) => {
+  confirmAttack: (state, action: PayloadAction<{ hitDice: DicePair; woundDice: DicePair; collateralRolls?: Record<string, { checkDice: DicePair; woundDice: DicePair }>; moraleRolls?: MoraleRolls; attackMode?: FireMode; meleeMode?: MeleeMode | null }>) => {
+    state.lastWeaponImpact = null;
     const scenario = state.scenario;
     const attackerId = state.selectedCombatantId;
     const targetId = state.plannedAttackTargetId;
@@ -792,7 +927,8 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (state.status !== "active" || !scenario || !attackerId || !targetId || !fireMode || (fireMode === "melee" && !meleeMode) || state.actedCombatantIds.includes(attackerId) || state.trottingCombatantIds.includes(attackerId) || state.draggingCombatantByCarrierId[attackerId] || (state.actionPointsById[attackerId] ?? 0) < apCost) return;
     const attacker = scenario.combatants.find((unit) => unit.id === attackerId);
     const target = (fireMode === "melee" ? adjacentEnemies(scenario, attackerId) : rangedEnemies(scenario, attackerId)).find((unit) => unit.id === targetId);
-    if (!attacker || !target || ((fireMode === "automatic" || fireMode === "suppressive") && !attacker.weapon.automatic) || (fireMode === "suppressive" && state.suppressedCombatantIds.includes(target.id)) || (state.ammunitionById[attackerId] ?? 0) < ammunitionCost) return;
+    const rangedProfile = fireMode !== "melee" && attacker && target ? snapShotTarget(attacker, target) : null;
+    if (!attacker || !target || (attacker.weapon.highEnergy && (fireMode !== "aimed" || !highEnergyWeaponReady(state, attacker))) || ((fireMode === "automatic" || fireMode === "suppressive") && !attacker.weapon.automatic) || (fireMode === "automatic" && rangedProfile && automaticFireModifierForRange(rangedProfile.rangeBand, attacker.weapon.automaticFireBonusByRange) === null) || (fireMode === "suppressive" && state.suppressedCombatantIds.includes(target.id)) || (state.ammunitionById[attackerId] ?? 0) < ammunitionCost) return;
     const attackerSuppressed = state.suppressedCombatantIds.includes(attacker.id);
     const subdueAssistBonus = meleeMode === "subdue" ? Math.min(2, adjacentEnemies(scenario, target.id).filter((unit) => unit.side === attacker.side && unit.id !== attacker.id).length) : 0;
     const subdueSuppressionBonus = meleeMode === "subdue" && state.suppressedCombatantIds.includes(target.id) ? 1 : 0;
@@ -825,6 +961,50 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       applyZeroGravityRecoil(state, attacker.id);
       return;
     }
+    const dangerSecondaries = fireMode !== "melee" ? automaticFireSecondaryTargets(scenario, attacker.id, target.id) : [];
+    const resolvesDangerSpace = fireMode === "automatic" || ((fireMode === "snap" || fireMode === "aimed") && dangerSecondaries.length > 0 && !attacker.weapon.highEnergy && !attacker.weapon.collateralBlast);
+    if (resolvesDangerSpace && fireResult) {
+      const dangerTargets = [target, ...dangerSecondaries]
+        .sort((a, b) => distanceInSquares(attacker, a) - distanceInSquares(attacker, b) || scenario.combatants.indexOf(a) - scenario.combatants.indexOf(b));
+      const defeatedTargetIds: string[] = [];
+      const hitLimit = fireMode === "automatic" ? 2 : 1;
+      let hits = 0;
+      for (const [dangerIndex, dangerTarget] of dangerTargets.entries()) {
+        const suppliedRolls = dangerTarget.id === target.id
+          ? { checkDice: action.payload.hitDice, woundDice: action.payload.woundDice }
+          : action.payload.collateralRolls?.[dangerTarget.id] ?? { checkDice: action.payload.hitDice, woundDice: action.payload.woundDice };
+        const result = dangerTarget.id === target.id ? fireResult : resolveSnapShot(attacker, dangerTarget, suppliedRolls.checkDice, suppliedRolls.woundDice, coverProtection(scenario, attacker.id, dangerTarget.id), fireMode, state.evadingCombatantIds.includes(dangerTarget.id), attackerSuppressed, state.bracedCombatantIds.includes(attacker.id), visibilityAssessment(scenario, attacker, dangerTarget).modifier, false, false, (state.weaponDamagedCombatantIds?.includes(attacker.id) ? -1 : 0) + elevationAttackModifier(scenario, attacker, dangerTarget));
+        if (!result) continue;
+        if (result.hit) {
+          hits += 1;
+          applyCombatWound(state, dangerTarget, result.woundState);
+          if (dangerTarget.id === target.id && calledShot === "weapon") { state.weaponDamagedCombatantIds ??= []; if (!state.weaponDamagedCombatantIds.includes(target.id)) state.weaponDamagedCombatantIds.push(target.id); }
+          if (dangerTarget.id === target.id && calledShot === "mobility") { state.mobilityImpairedCombatantIds ??= []; if (!state.mobilityImpairedCombatantIds.includes(target.id)) state.mobilityImpairedCombatantIds.push(target.id); }
+          if (dangerTarget.defeated) defeatedTargetIds.push(dangerTarget.id);
+        }
+        state.events.unshift(fireMode === "automatic"
+          ? `${attacker.name} automatic fired through danger space; danger-space attack against ${dangerTarget.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`
+          : `${attacker.name} ${fireMode} fired through danger space at ${dangerTarget.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
+        const nextTarget = dangerTargets[dangerIndex + 1];
+        const attacksEveryoneInSquare = fireMode === "automatic" || attacker.weapon.inherentAutomaticFireBonus || attacker.weapon.ammunitionKind === "flechette";
+        if (hits >= hitLimit && (!attacksEveryoneInSquare || !nextTarget || pointKey(nextTarget.position) !== pointKey(dangerTarget.position))) break;
+      }
+      state.maintainedTargetByCombatantId[attacker.id] = target.id;
+      state.ammunitionById[attacker.id] -= ammunitionCost;
+      state.actionPointsById[attacker.id] -= apCost;
+      if (state.actionPointsById[attacker.id] === 0) state.actedCombatantIds.push(attacker.id);
+      applyZeroGravityRecoil(state, attacker.id);
+      state.plannedAttackTargetId = null;
+      state.plannedAttackMode = null;
+      state.plannedMeleeMode = null;
+      defeatedTargetIds.forEach((id) => {
+        Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, maintainedTargetId]) => { if (maintainedTargetId === id) delete state.maintainedTargetByCombatantId[combatantId]; });
+        const unit = scenario.combatants.find((candidate) => candidate.id === id);
+        if (unit?.side === "enemy") resolveEnemyMorale(state, action.payload.moraleRolls, id);
+      });
+      if (defeatedTargetIds.length > 0) resolveCaptureOutcome(state);
+      return;
+    }
     if (fireMode === "melee" && meleeMode === "subdue" && meleeResult) {
       state.actionPointsById[attacker.id] -= apCost;
       if (state.actionPointsById[attacker.id] === 0) state.actedCombatantIds.push(attacker.id);
@@ -849,28 +1029,150 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (!woundState) return;
     const newlySuppressed = Boolean(fireResult && !fireResult.hit && fireResult.targetNumber - fireResult.hitTotal <= 2 && !state.suppressedCombatantIds.includes(target.id));
     if (newlySuppressed) { state.suppressedCombatantIds.push(target.id); clearAim(state, target.id); }
-    target.woundState = woundState;
+    if (meleeResult || fireResult?.hit) applyCombatWound(state, target, woundState);
+    const ammunitionProfile = attacker.weapon.ammunitionProfiles?.find((profile) => profile.kind === attacker.weapon.ammunitionKind);
+    const ammunitionLabel = ammunitionProfile?.label ?? attacker.weapon.ammunitionKind?.toUpperCase();
+    if (fireResult?.hit && (attacker.weapon.collateralBlast || (attacker.weapon.ammunitionKind && ammunitionLabel && (attacker.weapon.ammunitionKind === "he" || attacker.weapon.ammunitionKind === "heap")))) {
+      state.lastWeaponImpact = {
+        weaponName: attacker.weapon.name,
+        ammunitionKind: attacker.weapon.ammunitionKind,
+        ammunitionLabel: ammunitionLabel ?? attacker.weapon.name,
+        point: { ...target.position },
+        blastCells: attacker.weapon.collateralBlast ? collateralBlastCells(scenario, target.position) : [{ ...target.position }],
+        hit: true,
+      };
+      state.events.unshift(`${attacker.weapon.name}${ammunitionLabel ? ` ${ammunitionLabel}` : ""} impact at ${target.position.x},${target.position.y} · ${attacker.weapon.collateralBlast ? `blast area ${state.lastWeaponImpact.blastCells.length} squares` : "direct penetration; no blast area"}`);
+    }
     if (fireResult?.hit && calledShot === "weapon") { state.weaponDamagedCombatantIds ??= []; if (!state.weaponDamagedCombatantIds.includes(target.id)) state.weaponDamagedCombatantIds.push(target.id); }
     if (fireResult?.hit && calledShot === "mobility") { state.mobilityImpairedCombatantIds ??= []; if (!state.mobilityImpairedCombatantIds.includes(target.id)) state.mobilityImpairedCombatantIds.push(target.id); }
-    target.defeated = woundState === "serious" || woundState === "unconscious" || woundState === "dead";
-    if (target.defeated) target.health = 0;
     if (fireMode !== "melee") state.maintainedTargetByCombatantId[attacker.id] = target.id;
     if (fireMode !== "melee") state.ammunitionById[attacker.id] -= ammunitionCost;
     if (fireMode !== "melee") applyZeroGravityRecoil(state, attacker.id);
     if (target.defeated) Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, targetId]) => { if (targetId === target.id) delete state.maintainedTargetByCombatantId[combatantId]; });
     state.actionPointsById[attacker.id] -= apCost;
     if (state.actionPointsById[attacker.id] === 0) state.actedCombatantIds.push(attacker.id);
-    state.events.unshift(meleeResult ? `${attacker.name} used ${meleeMode} against ${target.name} through ${meleeResult.attackArc} arc (+${meleeResult.arcModifier}): ${meleeResult.roll} ${meleeResult.modifier >= 0 ? "+" : ""}${meleeResult.modifier} = ${meleeResult.total} (${meleeResult.woundState})` : `${attacker.name} ${fireMode} fired at ${target.name} through ${fireResult!.attackArc} arc (+${fireResult!.arcModifier}): hit ${fireResult!.hitTotal}/${fireResult!.targetNumber} (weapon accuracy ${fireResult!.weaponAccuracy >= 0 ? "+" : ""}${fireResult!.weaponAccuracy}), ${fireResult!.hit ? `wound ${fireResult!.woundTotal} (${fireResult!.woundState}, penetration +${fireResult!.weaponPenetration}, cover -${fireResult!.cover})` : `miss (cover -${fireResult!.cover})`}${highGroundNote(scenario, attacker, target)}`);
+    state.events.unshift(meleeResult ? `${attacker.name} used ${meleeMode} against ${target.name} through ${meleeResult.attackArc} arc (+${meleeResult.arcModifier}): ${meleeResult.roll} ${meleeResult.modifier >= 0 ? "+" : ""}${meleeResult.modifier} = ${meleeResult.total} (${meleeResult.woundState})` : `${attacker.name} ${fireMode} fired at ${target.name} through ${fireResult!.attackArc} arc (+${fireResult!.arcModifier}): hit ${fireResult!.hitTotal}/${fireResult!.targetNumber} (weapon accuracy ${fireResult!.weaponAccuracy >= 0 ? "+" : ""}${fireResult!.weaponAccuracy}), ${fireResult!.hit ? `wound ${fireResult!.woundTotal} (${fireResult!.woundState}, penetration +${fireResult!.weaponPenetration}${fireResult!.cover ? `, AHL cover wound +${fireResult!.cover}` : ""})` : fireResult!.cover ? "miss (target under cover; no numerical hit modifier)" : "miss"}${highGroundNote(scenario, attacker, target)}`);
+    const collateralDefeated: string[] = [];
+    if (fireResult?.hit && attacker.weapon.collateralBlast) {
+      scenario.combatants.filter((unit) => unit.id !== target.id && !unit.defeated).forEach((unit) => {
+        const distance = Math.max(Math.abs(unit.position.x - target.position.x), Math.abs(unit.position.y - target.position.y));
+        if (distance > 2) return;
+        const rolls = action.payload.collateralRolls?.[unit.id] ?? { checkDice: action.payload.woundDice, woundDice: action.payload.woundDice };
+        const checkTotal = rolls.checkDice.first + rolls.checkDice.second;
+        const affected = collateralCheckPasses(distance, checkTotal);
+        if (!affected) {
+          state.events.unshift(`${unit.name} avoided ${attacker.weapon.name} collateral at ${distance} square${distance === 1 ? "" : "s"} (${checkTotal})`);
+          return;
+        }
+        const collateralPenetration = Math.floor(fireResult.weaponPenetration / (2 ** (distance + 1)));
+        if (collateralPenetration <= 0) return;
+        const collateralTotal = rolls.woundDice.first + rolls.woundDice.second + collateralPenetration - unit.armor;
+        applyCombatWound(state, unit, woundStateForTotal(collateralTotal));
+        if (unit.defeated) collateralDefeated.push(unit.id);
+        state.events.unshift(`${unit.name} suffered ${attacker.weapon.name} collateral at ${distance} square${distance === 1 ? "" : "s"}: wound ${collateralTotal} (${unit.woundState}, penetration +${collateralPenetration})`);
+      });
+    }
     state.plannedAttackTargetId = null;
     state.plannedAttackMode = null;
     state.plannedMeleeMode = null;
     if (target.side === "enemy" && newlySuppressed) resolveEnemyMorale(state, action.payload.moraleRolls, target.id, "suppression");
     if (target.side === "enemy" && target.defeated) { if (resolveCaptureOutcome(state)) return; resolveEnemyMorale(state, action.payload.moraleRolls, target.id); }
+    collateralDefeated.forEach((id) => {
+      const unit = scenario.combatants.find((candidate) => candidate.id === id);
+      if (unit?.side === "enemy") resolveEnemyMorale(state, action.payload.moraleRolls, id);
+    });
+    if (collateralDefeated.length > 0) resolveCaptureOutcome(state);
   },
+  fireHighEnergyAtStructure: (state, action: PayloadAction<{ structureId: string; hitDice: DicePair; collateralRolls?: Record<string, { checkDice: DicePair; woundDice: DicePair }> }>) => {
+    const scenario = state.scenario;
+    const attackerId = state.selectedCombatantId;
+    const attacker = scenario?.combatants.find((unit) => unit.id === attackerId);
+    const door = scenario?.doors.find((candidate) => candidate.id === action.payload.structureId && !candidate.open);
+    const wall = scenario?.walls.find((candidate) => candidate.id === action.payload.structureId);
+    const cover = scenario?.objects.find((candidate) => candidate.id === action.payload.structureId && candidate.kind === "cover");
+    const structure = door ?? wall ?? cover;
+    if (!scenario || !attackerId || !attacker || !structure || !canAttackStructures(attacker) || !highEnergyWeaponReady(state, attacker) || state.status !== "active" || state.actedCombatantIds.includes(attackerId) || (state.actionPointsById[attackerId] ?? 0) < 6 || (state.ammunitionById[attackerId] ?? 0) < 1) return;
+    const impact = "position" in structure ? { ...structure.position } : { x: Math.floor((structure.from.x + structure.to.x) / 2), y: Math.floor((structure.from.y + structure.to.y) / 2) };
+    const range = Math.ceil(Math.hypot(impact.x - attacker.position.x, impact.y - attacker.position.y));
+    const rangeBand = range <= attacker.weapon.effectiveRange ? "effective" : range <= attacker.weapon.longRange ? "long" : range <= attacker.weapon.extremeRange ? "extreme" : null;
+    if (!rangeBand) return;
+    const targetNumber = rangeBand === "effective" ? 8 : rangeBand === "long" ? 10 : 12;
+    const hitTotal = action.payload.hitDice.first + action.payload.hitDice.second + attacker.weaponSkill + 1;
+    const hit = hitTotal >= targetNumber;
+    const ammunitionLabel = attacker.weapon.ammunitionProfiles?.find((profile) => profile.kind === attacker.weapon.ammunitionKind)?.label;
+    state.actionPointsById[attackerId] = 0;
+    state.ammunitionById[attackerId] -= 1;
+    state.structuralTargeting = false;
+    state.plannedStructuralTargetId = null;
+    if (!state.actedCombatantIds.includes(attackerId)) state.actedCombatantIds.push(attackerId);
+    state.lastWeaponImpact = attacker.weapon.collateralBlast || (attacker.weapon.ammunitionKind && ammunitionLabel) ? {
+      weaponName: attacker.weapon.name,
+      ammunitionKind: attacker.weapon.ammunitionKind,
+      ammunitionLabel: ammunitionLabel ?? attacker.weapon.name,
+      point: impact,
+      blastCells: hit && attacker.weapon.collateralBlast ? collateralBlastCells(scenario, impact) : [impact],
+      hit,
+    } : null;
+    if (!hit) {
+      state.events.unshift(`${attacker.name} fired ${attacker.weapon.name}${ammunitionLabel ? ` ${ammunitionLabel}` : ""} at ${structure.id}: MISS ${hitTotal}/${targetNumber} · 6 AP · 1 ammunition spent`);
+      return;
+    }
+    const penetration = weaponPenetrationForRange(attacker.weapon, rangeBand);
+    const damage = attacker.weapon.ammunitionKind === "he" ? 1 : Math.max(0, penetration - 4);
+    state.structuralDamageById ??= {};
+    state.structuralDamageById[structure.id] = (state.structuralDamageById[structure.id] ?? 0) + damage;
+    const threshold = door ? 5 : cover ? 4 : 25;
+    const destroyed = state.structuralDamageById[structure.id] >= threshold;
+    if (door && destroyed) door.open = true;
+    if (wall && destroyed) scenario.walls = scenario.walls.filter((candidate) => candidate.id !== wall.id);
+    if (cover && destroyed) scenario.objects = scenario.objects.filter((candidate) => candidate.id !== cover.id);
+    state.events.unshift(`${attacker.name} struck ${structure.id} with ${attacker.weapon.name}${ammunitionLabel ? ` ${ammunitionLabel}` : ""}: hit ${hitTotal}/${targetNumber} · ${damage} structural damage (${state.structuralDamageById[structure.id]}/${threshold}) · 6 AP · 1 ammunition spent${attacker.weapon.collateralBlast ? " · blast" : " · concentrated penetration"}${destroyed ? " · breached" : ""}`);
+    if (attacker.weapon.collateralBlast) scenario.combatants.filter((unit) => !unit.defeated).forEach((unit) => {
+      const distance = Math.max(Math.abs(unit.position.x - impact.x), Math.abs(unit.position.y - impact.y));
+      if (distance > 2) return;
+      const rolls = action.payload.collateralRolls?.[unit.id] ?? { checkDice: action.payload.hitDice, woundDice: action.payload.hitDice };
+      const checkTotal = rolls.checkDice.first + rolls.checkDice.second;
+      if (!collateralCheckPasses(distance, checkTotal)) return;
+      const collateralPenetration = Math.floor(penetration / (2 ** (distance + 1)));
+      if (collateralPenetration <= 0) return;
+      const total = rolls.woundDice.first + rolls.woundDice.second + collateralPenetration - unit.armor;
+      applyCombatWound(state, unit, woundStateForTotal(total));
+      state.events.unshift(`${unit.name} suffered ${attacker.weapon.name} structural-impact collateral: wound ${total} (${unit.woundState}, penetration +${collateralPenetration})`);
+    });
+    resolveCaptureOutcome(state);
+  },
+  beginStructuralTargeting: (state) => {
+    const attacker = state.scenario?.combatants.find((unit) => unit.id === state.selectedCombatantId);
+    if (!attacker || !canAttackStructures(attacker) || !highEnergyWeaponReady(state, attacker) || state.status !== "active" || state.actedCombatantIds.includes(attacker.id) || (state.actionPointsById[attacker.id] ?? 0) < 6 || (state.ammunitionById[attacker.id] ?? 0) < 1) return;
+    state.lastWeaponImpact = null;
+    state.structuralTargeting = true;
+    state.plannedStructuralTargetId = null;
+  },
+  previewStructuralTarget: (state, action: PayloadAction<string>) => {
+    if (!state.structuralTargeting || !state.scenario) return;
+    const exists = state.scenario.doors.some((item) => item.id === action.payload && !item.open)
+      || state.scenario.walls.some((item) => item.id === action.payload)
+      || state.scenario.objects.some((item) => item.id === action.payload && item.kind === "cover");
+    if (exists) state.plannedStructuralTargetId = action.payload;
+  },
+  cancelStructuralTargeting: (state) => { state.structuralTargeting = false; state.plannedStructuralTargetId = null; },
   cancelAttackPreview: (state) => { state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.plannedMeleeMode = null; },
+  clearTarget: (state) => {
+    const id = state.selectedCombatantId;
+    if (id) {
+      delete state.maintainedTargetByCombatantId[id];
+      clearAim(state, id);
+      clearCalledShot(state, id);
+    }
+    state.plannedAttackTargetId = null;
+    state.plannedAttackMode = null;
+    state.plannedMeleeMode = null;
+  },
   beginCoveringFire: (state) => {
     const id = state.selectedCombatantId;
-    if (!id || !state.scenario || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 3) return;
+    const attacker = state.scenario?.combatants.find((unit) => unit.id === id);
+    const apCost = attacker?.weapon.highEnergy ? 6 : 3;
+    if (!id || !state.scenario || !attacker || !highEnergyWeaponReady(state, attacker) || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < apCost || (state.ammunitionById[id] ?? 0) < 3) return;
     state.coveringFireTargeting = true;
     state.plannedCoveringFireTarget = null;
     state.plannedAttackTargetId = null;
@@ -886,7 +1188,8 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const id = state.selectedCombatantId;
     const target = state.plannedCoveringFireTarget;
     const attacker = state.scenario?.combatants.find((unit) => unit.id === id);
-    if (!id || !target || !attacker || !state.scenario || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 3) return;
+    const apCost = attacker?.weapon.highEnergy ? 6 : 3;
+    if (!id || !target || !attacker || !state.scenario || !highEnergyWeaponReady(state, attacker) || (state.actionPointsById[id] ?? 0) < apCost || (state.ammunitionById[id] ?? 0) < 3) return;
     const cells = fireLaneCells(state.scenario, attacker.position, target);
     if (cells.length === 0) return;
     state.coveringFireLanes = [...state.coveringFireLanes.filter((lane) => lane.attackerId !== id), { attackerId: id, target, cells }];
@@ -894,12 +1197,13 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (!state.actedCombatantIds.includes(id)) state.actedCombatantIds.push(id);
     state.coveringFireTargeting = false;
     state.plannedCoveringFireTarget = null;
-    state.events.unshift(`${attacker.name} covers lane to ${target.x},${target.y} (3 AP, 3 ammo reserved)`);
+    state.events.unshift(`${attacker.name} covers lane to ${target.x},${target.y} (${apCost} AP, 3 ammo reserved)`);
   },
   cancelCoveringFire: (state) => { state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; },
   beginOverwatch: (state) => {
     const id = state.selectedCombatantId;
-    if (!id || !state.scenario || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 1 || (state.ammunitionById[id] ?? 0) < 1) return;
+    const attacker = state.scenario?.combatants.find((unit) => unit.id === id);
+    if (!id || !state.scenario || !attacker || attacker.weapon.highEnergy || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 1 || (state.ammunitionById[id] ?? 0) < 1) return;
     state.overwatchTargeting = true;
     state.plannedOverwatchTarget = null;
     state.coveringFireTargeting = false;
@@ -913,7 +1217,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const id = state.selectedCombatantId;
     const attacker = scenario?.combatants.find((unit) => unit.id === id && unit.side === "player" && !unit.defeated);
     const door = scenario?.doors.find((candidate) => candidate.id === action.payload && !candidate.open);
-    if (!scenario || !id || !attacker || !door || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 1) return;
+    if (!scenario || !id || !attacker || attacker.weapon.highEnergy || !door || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 1) return;
     const farCell = doorFarCell(door, attacker.position);
     if (farCell.x < 0 || farCell.y < 0 || farCell.x >= scenario.width || farCell.y >= scenario.height || distanceBetween(attacker.position, farCell) > 6) return;
     state.coveredDoorByCombatantId ??= {};
@@ -926,7 +1230,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   beginDoorCoverage: (state) => {
     const id = state.selectedCombatantId;
     const attacker = state.scenario?.combatants.find((unit) => unit.id === id && unit.side === "player" && !unit.defeated);
-    if (!id || !attacker || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 1) return;
+    if (!id || !attacker || attacker.weapon.highEnergy || state.status !== "active" || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 1) return;
     state.doorCoverTargeting = true;
     state.plannedCoveredDoorId = null;
     state.plannedMove = null;
@@ -946,7 +1250,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const id = state.selectedCombatantId;
     const attacker = scenario?.combatants.find((unit) => unit.id === id && unit.side === "player" && !unit.defeated);
     const door = scenario?.doors.find((candidate) => candidate.id === state.plannedCoveredDoorId && !candidate.open);
-    if (!scenario || !id || !attacker || !door || !state.doorCoverTargeting || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 1) return;
+    if (!scenario || !id || !attacker || attacker.weapon.highEnergy || !door || !state.doorCoverTargeting || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) < 1) return;
     const farCell = doorFarCell(door, attacker.position);
     if (distanceBetween(attacker.position, farCell) > 6) return;
     state.coveredDoorByCombatantId ??= {};
@@ -973,7 +1277,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const id = state.selectedCombatantId;
     const target = state.plannedOverwatchTarget;
     const attacker = state.scenario?.combatants.find((unit) => unit.id === id);
-    if (!id || !target || !attacker || !state.scenario || (state.actionPointsById[id] ?? 0) < 1 || (state.ammunitionById[id] ?? 0) < 1) return;
+    if (!id || !target || !attacker || attacker.weapon.highEnergy || !state.scenario || (state.actionPointsById[id] ?? 0) < 1 || (state.ammunitionById[id] ?? 0) < 1) return;
     const cells = fireLaneCells(state.scenario, attacker.position, target);
     if (cells.length === 0) return;
     state.overwatchLanes = [...state.overwatchLanes.filter((lane) => lane.attackerId !== id), { attackerId: id, target, cells }];
@@ -985,6 +1289,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   },
   cancelOverwatch: (state) => { state.overwatchTargeting = false; state.plannedOverwatchTarget = null; },
   beginGrenadeTargeting: (state) => {
+    state.lastWeaponImpact = null;
     const id = state.selectedCombatantId;
     const unit = state.scenario?.combatants.find((combatant) => combatant.id === id);
     if (state.status !== "active" || !id || !unit || unit.defeated || unit.grenades < 1 || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 6) return;
@@ -998,6 +1303,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.plannedObjectiveId = null;
   },
   beginSmokeGrenadeTargeting: (state) => {
+    state.lastWeaponImpact = null;
     const id = state.selectedCombatantId;
     const unit = state.scenario?.combatants.find((combatant) => combatant.id === id);
     if (state.status !== "active" || !id || !unit || unit.defeated || (unit.smokeGrenades ?? 0) < 1 || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 6) return;
@@ -1011,6 +1317,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.plannedObjectiveId = null;
   },
   beginStunGrenadeTargeting: (state) => {
+    state.lastWeaponImpact = null;
     const id = state.selectedCombatantId;
     const unit = state.scenario?.combatants.find((combatant) => combatant.id === id);
     if (state.status !== "active" || !id || !unit || unit.defeated || (unit.stunGrenades ?? 0) < 1 || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 6) return;
@@ -1024,6 +1331,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.plannedObjectiveId = null;
   },
   beginFlareGrenadeTargeting: (state) => {
+    state.lastWeaponImpact = null;
     const id = state.selectedCombatantId;
     const unit = state.scenario?.combatants.find((combatant) => combatant.id === id);
     if (state.status !== "active" || !id || !unit || unit.defeated || (unit.flareGrenades ?? 0) < 1 || state.actedCombatantIds.includes(id) || state.trottingCombatantIds.includes(id) || state.draggingCombatantByCarrierId[id] || (state.actionPointsById[id] ?? 0) < 6) return;
@@ -1042,7 +1350,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (validGrenadeTargets(state.scenario, id).some((point) => pointKey(point) === pointKey(action.payload))) state.plannedGrenadeTarget = action.payload;
   },
   cancelGrenadeTargeting: (state) => { state.grenadeTargeting = false; state.grenadeKind = null; state.plannedGrenadeTarget = null; },
-  confirmGrenade: (state, action: PayloadAction<{ rollsByCombatantId: Record<string, DicePair>; throwDice?: DicePair; scatterDirection?: 1 | 2 | 3 | 4; scatterDistance?: 1 | 2; moraleRolls?: MoraleRolls }>) => {
+  confirmGrenade: (state, action: PayloadAction<{ rollsByCombatantId: Record<string, DicePair>; throwDice?: DicePair; scatterDice?: DicePair; occupiedSquareRolls?: Record<string, number>; collateralRolls?: Record<string, { checkDice: DicePair; woundDice: DicePair }>; moraleRolls?: MoraleRolls }>) => {
     const scenario = state.scenario;
     const attackerId = state.selectedCombatantId;
     const center = state.plannedGrenadeTarget;
@@ -1050,11 +1358,12 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const grenadeKind = state.grenadeKind ?? "fragmentation";
     if (state.status !== "active" || !scenario || !attackerId || !attacker || !center || !state.grenadeTargeting || (grenadeKind === "smoke" ? (attacker.smokeGrenades ?? 0) < 1 : grenadeKind === "stun" ? (attacker.stunGrenades ?? 0) < 1 : grenadeKind === "flare" ? (attacker.flareGrenades ?? 0) < 1 : attacker.grenades < 1) || state.actedCombatantIds.includes(attackerId) || (state.actionPointsById[attackerId] ?? 0) < 6) return;
     if (!validGrenadeTargets(scenario, attackerId).some((point) => pointKey(point) === pointKey(center))) return;
-    const throwResult = action.payload.throwDice && action.payload.scatterDirection && action.payload.scatterDistance
-      ? grenadeLandingPoint(scenario, center, action.payload.throwDice, attacker.weaponSkill, action.payload.scatterDirection, action.payload.scatterDistance)
+    const throwModifier = grenadeThrowRangeModifier(attacker.position, center) + grenadeThrowCoverModifier(scenario, attacker.id, center);
+    const throwResult = action.payload.throwDice && action.payload.scatterDice
+      ? grenadeLandingPoint(scenario, attacker.position, center, action.payload.throwDice, action.payload.scatterDice, throwModifier, action.payload.occupiedSquareRolls)
       : { landing: center, hit: true };
     const landing = throwResult.landing;
-    const blastCells = grenadeBlastCells(scenario, landing);
+    const blastCells = grenadeKind === "fragmentation" ? collateralBlastCells(scenario, landing) : grenadeBlastCells(scenario, landing);
     const blastKeys = new Set(blastCells.map(pointKey));
     state.lastGrenadeImpact = { kind: grenadeKind, intended: center, landing, scattered: !throwResult.hit, blastCells };
     const affected = scenario.combatants.filter((unit) => !unit.defeated && blastKeys.has(pointKey(unit.position)));
@@ -1074,17 +1383,24 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       if (resistance < 8) target.stunnedUntilTurn = state.turn + 1;
       state.events.unshift(`${target.name} resisted stun ${resistance}/8: ${resistance < 8 ? "stunned" : "unaffected"}`);
     }); else affected.forEach((target) => {
-      const dice = action.payload.rollsByCombatantId[target.id];
-      if (!dice) return;
-      const cover = grenadeCoverProtection(scenario, landing, target.position);
-      const total = dice.first + dice.second + 4 - target.armor - cover;
-      target.woundState = woundStateForTotal(total);
-      target.defeated = target.woundState === "serious" || target.woundState === "unconscious" || target.woundState === "dead";
+      const distance = Math.max(Math.abs(target.position.x - landing.x), Math.abs(target.position.y - landing.y));
+      const rolls = action.payload.collateralRolls?.[target.id] ?? (action.payload.rollsByCombatantId[target.id] ? { checkDice: action.payload.rollsByCombatantId[target.id], woundDice: action.payload.rollsByCombatantId[target.id] } : null);
+      if (!rolls) return;
+      const checkTotal = rolls.checkDice.first + rolls.checkDice.second;
+      if (!collateralCheckPasses(distance, checkTotal)) {
+        state.events.unshift(`${target.name} avoided fragmentation collateral at ${distance} square${distance === 1 ? "" : "s"} (${checkTotal})`);
+        return;
+      }
+      const penetration = Math.floor(3 / (2 ** distance));
+      if (penetration <= 0) return;
+      const woundRoll = rolls.woundDice.first + rolls.woundDice.second;
+      const total = woundRoll + penetration - target.armor;
+      applyCombatWound(state, target, escalateWoundState(woundStateForTotal(total)));
       if (target.defeated) {
         target.health = 0;
         Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, targetId]) => { if (targetId === target.id) delete state.maintainedTargetByCombatantId[combatantId]; });
       }
-      state.events.unshift(`${target.name} caught in grenade blast: ${dice.first + dice.second} +4 -${target.armor} armor -${cover} cover = ${total} (${target.woundState})`);
+      state.events.unshift(`${target.name} caught in grenade blast at ${distance} square${distance === 1 ? "" : "s"}: ${woundRoll} +${penetration} penetration -${target.armor} armor = ${total}; HE escalation (${target.woundState})`);
     });
     if (grenadeKind === "smoke") attacker.smokeGrenades = (attacker.smokeGrenades ?? 0) - 1;
     else if (grenadeKind === "stun") attacker.stunGrenades = (attacker.stunGrenades ?? 0) - 1;
@@ -1093,7 +1409,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.actionPointsById[attackerId] = 0;
     if (!state.actedCombatantIds.includes(attackerId)) state.actedCombatantIds.push(attackerId);
     state.events.unshift(throwResult.hit
-      ? `${attacker.name} landed a ${grenadeKind} grenade at ${landing.x},${landing.y} (6 AP)`
+      ? `${attacker.name} landed a ${grenadeKind} grenade at ${landing.x},${landing.y} (${action.payload.throwDice ? `${action.payload.throwDice.first + action.payload.throwDice.second}${throwModifier ? ` ${throwModifier > 0 ? "+" : ""}${throwModifier}` : ""} vs 8, ` : ""}6 AP)`
       : `${attacker.name} threw ${grenadeKind} at ${center.x},${center.y}; grenade scattered to ${landing.x},${landing.y} (6 AP)`);
     state.grenadeTargeting = false;
     state.grenadeKind = null;
@@ -1126,15 +1442,18 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const patient = scenario && medicId && patientId ? treatableAllies(scenario, medicId).find((unit) => unit.id === patientId) : null;
     if (state.status !== "active" || !scenario || !medicId || !medic || !patient || medic.medkits < 1 || state.actedCombatantIds.includes(medicId) || (state.actionPointsById[medicId] ?? 0) < 6) return;
     const wasIncapacitated = patient.defeated;
-    patient.woundState = patient.woundState === "unconscious" ? "serious" : patient.woundState === "serious" ? "light" : "healthy";
-    if (wasIncapacitated && !state.recoveringCombatantIds.includes(patient.id)) state.recoveringCombatantIds.push(patient.id);
+    if (patient.woundState === "light") {
+      patient.woundState = "healthy";
+      patient.seriousWounds = 0;
+    } else patient.seriousWounds = Math.max(1, patient.seriousWounds ?? 1);
     medic.medkits -= 1;
     state.actionPointsById[medicId] = 0;
     if (!state.actedCombatantIds.includes(medicId)) state.actedCombatantIds.push(medicId);
-    state.events.unshift(`${medic.name} treated ${patient.name}: ${patient.woundState}${wasIncapacitated ? " (recovers next turn)" : ""}`);
+    state.events.unshift(`${medic.name} treated ${patient.name}: ${wasIncapacitated ? `${patient.woundState} stabilized; remains incapacitated` : patient.woundState}`);
     state.plannedTreatmentTargetId = null;
   },
   previewSecureObjective: (state, action: PayloadAction<string>) => {
+    state.lastWeaponImpact = null;
     const scenario = state.scenario;
     const combatantId = state.selectedCombatantId;
     if (state.status !== "active" || !scenario || !combatantId || state.actedCombatantIds.includes(combatantId)) return;
@@ -1163,6 +1482,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       captive.defeated = false;
       captive.health = 1;
       captive.woundState = "healthy";
+      captive.seriousWounds = 0;
       state.actionPointsById[captive.id] = 0;
       if (!state.actedCombatantIds.includes(captive.id)) state.actedCombatantIds.push(captive.id);
       state.events.unshift(`${unit.name} released ${captive.name}; escort them to extraction`);
@@ -1234,9 +1554,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       const dice = action.payload.rollsByCombatantId[target.id];
       if (!dice) return;
       const total = dice.first + dice.second + 4 - target.armor;
-      target.woundState = woundStateForTotal(total);
-      target.defeated = target.woundState === "serious" || target.woundState === "unconscious" || target.woundState === "dead";
-      if (target.defeated) target.health = 0;
+      applyCombatWound(state, target, woundStateForTotal(total));
       state.events.unshift(`${target.name} caught in breaching blast: ${total} (${target.woundState})`);
     });
     if (resolveCaptureOutcome(state)) return;
@@ -1254,11 +1572,42 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const id = state.selectedCombatantId;
     if (!scenario || !id || state.status !== "active" || state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) < 3 || (state.ammunitionById[id] ?? 0) >= magazineSize(scenario, id)) return;
     state.ammunitionById[id] = magazineSize(scenario, id);
+    const unit = scenario.combatants.find((candidate) => candidate.id === id);
+    if (unit?.weapon.ammunitionKind) {
+      state.ammunitionByCombatantAndKind ??= {};
+      state.ammunitionByCombatantAndKind[id] ??= {};
+      state.ammunitionByCombatantAndKind[id][unit.weapon.ammunitionKind] = state.ammunitionById[id];
+    }
     state.actionPointsById[id] -= 3;
     if (state.actionPointsById[id] === 0) state.actedCombatantIds.push(id);
     state.plannedAttackTargetId = null;
     state.plannedAttackMode = null;
     state.events.unshift(`${scenario.combatants.find((unit) => unit.id === id)?.name ?? id} reloaded (3 AP)`);
+  },
+  selectWeaponAmmunition: (state, action: PayloadAction<WeaponAmmunitionKind>) => {
+    const unit = state.scenario?.combatants.find((candidate) => candidate.id === state.selectedCombatantId);
+    const profile = unit?.weapon.ammunitionProfiles?.find((candidate) => candidate.kind === action.payload);
+    if (!unit || !profile || state.actedCombatantIds.includes(unit.id)) return;
+    state.ammunitionByCombatantAndKind ??= {};
+    state.ammunitionByCombatantAndKind[unit.id] ??= {};
+    const counts = state.ammunitionByCombatantAndKind[unit.id];
+    if (unit.weapon.ammunitionKind) counts[unit.weapon.ammunitionKind] = state.ammunitionById[unit.id] ?? 0;
+    const selectedCount = counts[profile.kind] ?? unit.weapon.magazineSize ?? 12;
+    if (selectedCount <= 0 && unit.weapon.ammunitionKind !== profile.kind) return;
+    unit.weapon.ammunitionKind = profile.kind;
+    unit.weapon.effectiveRange = profile.effectiveRange;
+    unit.weapon.longRange = profile.longRange;
+    unit.weapon.extremeRange = profile.extremeRange;
+    unit.weapon.penetration = profile.penetration;
+    unit.weapon.automatic = profile.automatic ?? false;
+    unit.weapon.automaticFireBonusByRange = profile.automaticFireBonusByRange;
+    unit.weapon.penetrationByRange = profile.penetrationByRange;
+    unit.weapon.accuracyByRange = profile.accuracyByRange;
+    unit.weapon.woundEscalation = profile.woundEscalation;
+    unit.weapon.collateralBlast = profile.collateralBlast;
+    state.ammunitionById[unit.id] = selectedCount;
+    state.plannedAttackMode = null;
+    state.events.unshift(`${unit.name} selected ${profile.label} ammunition`);
   },
   evade: (state) => {
     const scenario = state.scenario;
@@ -1332,11 +1681,39 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const hitModifier = action.payload.mode === "unarmed" ? 1 : action.payload.mode === "rifle-strike" ? -1 : 0;
     const penetration = action.payload.mode === "unarmed" ? 0 : action.payload.mode === "rifle-strike" ? defender.meleeWeapon.penetration + 2 : defender.meleeWeapon.penetration;
     const result = resolveMelee(defender, attacker, action.payload.roll, false, hitModifier, penetration);
-    attacker.woundState = result.woundState;
-    attacker.defeated = result.woundState === "serious" || result.woundState === "unconscious" || result.woundState === "dead";
-    if (attacker.defeated) attacker.health = 0;
+    applyCombatWound(state, attacker, result.woundState);
     state.events.unshift(`${defender.name} counterattacked ${attacker.name} with ${action.payload.mode}: ${result.roll} ${result.modifier >= 0 ? "+" : ""}${result.modifier} = ${result.total} (${result.woundState})`);
     if (attacker.defeated) { if (resolveCaptureOutcome(state)) return; resolveEnemyMorale(state, {}, attacker.id); }
+  },
+  resolveAdjacencyReaction: (state, action: PayloadAction<{ accept: boolean; hitDice?: DicePair; woundDice?: DicePair }>) => {
+    const pending = state.pendingAdjacencyReaction;
+    const scenario = state.scenario;
+    if (!pending || !scenario) return;
+    const reactor = scenario.combatants.find((unit) => unit.id === pending.reactorId && !unit.defeated);
+    const mover = scenario.combatants.find((unit) => unit.id === pending.moverId && !unit.defeated);
+    state.pendingAdjacencyReaction = null;
+    state.adjacencyReactionUsedCombatantIds ??= [];
+    const opportunityKey = `${pending.reactorId}:${pending.moverId}`;
+    if (!state.adjacencyReactionUsedCombatantIds.includes(opportunityKey)) state.adjacencyReactionUsedCombatantIds.push(opportunityKey);
+    if (!action.payload.accept || !reactor || !mover || !action.payload.hitDice || !action.payload.woundDice || (state.adjacencyReactionReserveById?.[reactor.id] ?? 0) < 3 || (state.ammunitionById[reactor.id] ?? 0) < 1) {
+      state.processedEnemyPhaseCombatantIds = (state.processedEnemyPhaseCombatantIds ?? []).filter((id) => id !== pending.moverId);
+      state.events.unshift(`${reactor?.name ?? "Character"} declined adjacency reaction fire`);
+      return;
+    }
+    const originalPosition = { ...mover.position };
+    mover.position = { ...pending.trigger };
+    const reaction = resolveSnapShot(reactor, mover, action.payload.hitDice, action.payload.woundDice, coverProtection(scenario, reactor.id, mover.id), "snap", false, false, false, visibilityAssessment(scenario, reactor, mover).modifier, false, false, elevationAttackModifier(scenario, reactor, mover));
+    state.adjacencyReactionReserveById![reactor.id] -= 3;
+    state.ammunitionById[reactor.id] -= 1;
+    if (reaction?.hit) applyCombatWound(state, mover, reaction.woundState);
+    if (reaction) state.events.unshift(`${reactor.name} adjacency snap shot as ${mover.name} approached: hit ${reaction.hitTotal}/${reaction.targetNumber}, ${reaction.hit ? `wound ${reaction.woundTotal} (${reaction.woundState})` : "miss"}`);
+    if (mover.defeated) {
+      state.events.unshift(`${mover.name} movement stopped by adjacency reaction fire`);
+      resolveEnemyMorale(state, {}, mover.id);
+      return;
+    }
+    mover.position = originalPosition;
+    state.processedEnemyPhaseCombatantIds = (state.processedEnemyPhaseCombatantIds ?? []).filter((id) => id !== pending.moverId);
   },
   goProne: (state) => {
     const id = state.selectedCombatantId;
@@ -1389,7 +1766,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const current = state.moraleStateByCombatantId?.[target.id] ?? "steady";
     if (current !== "shaken" && current !== "panicked") return;
     const leadership = leader.leadershipRating ?? 1;
-    const total = action.payload.dice.first + action.payload.dice.second + leadership;
+    const total = action.payload.dice.first + action.payload.dice.second + leadership - (leader.woundState === "light" ? 1 : 0);
     state.actionPointsById[leaderId] -= 3;
     if (state.actionPointsById[leaderId] === 0) state.actedCombatantIds.push(leaderId);
     if (total >= 7) {
@@ -1438,11 +1815,31 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.bracedCombatantIds = state.bracedCombatantIds.filter((id) => id !== actor.id);
     state.events.unshift(`${actor.name} vaulted ${option.barrier.label} to ${option.landing.x},${option.landing.y} (3 AP)`);
   },
-  finishActivation: (state) => { const id = state.selectedCombatantId; if (!id || state.actedCombatantIds.includes(id)) return; state.actionPointsById[id] = 0; state.actedCombatantIds.push(id); clearAim(state, id); clearCalledShot(state, id); state.disengagedCombatantIds = state.disengagedCombatantIds.filter((combatantId) => combatantId !== id); if (state.withdrawalModeByCombatantId) delete state.withdrawalModeByCombatantId[id]; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedTreatmentTargetId = null; state.plannedObjectiveId = null; },
-  endPlayerTurn: (state, action: PayloadAction<{ enemyRolls: Record<string, { hitDice: DicePair; woundDice: DicePair }>; moraleRolls?: MoraleRolls }>) => {
+  finishActivation: (state) => {
+    const id = state.selectedCombatantId;
+    if (!id || state.actedCombatantIds.includes(id)) return;
+    const remainingAp = state.actionPointsById[id] ?? 0;
+    state.adjacencyReactionReserveById ??= {};
+    if (remainingAp >= 3 && !state.movedCombatantIds?.includes(id)) state.adjacencyReactionReserveById[id] = remainingAp;
+    state.actionPointsById[id] = 0;
+    state.actedCombatantIds.push(id);
+    clearAim(state, id);
+    clearCalledShot(state, id);
+    state.disengagedCombatantIds = state.disengagedCombatantIds.filter((combatantId) => combatantId !== id);
+    if (state.withdrawalModeByCombatantId) delete state.withdrawalModeByCombatantId[id];
+    state.plannedMove = null;
+    state.plannedAttackTargetId = null;
+    state.plannedAttackMode = null;
+    state.grenadeTargeting = false;
+    state.plannedGrenadeTarget = null;
+    state.plannedTreatmentTargetId = null;
+    state.plannedObjectiveId = null;
+  },
+  endPlayerTurn: (state, action: PayloadAction<{ enemyRolls: Record<string, { hitDice: DicePair; woundDice: DicePair }>; dangerSpaceRolls?: Record<string, Record<string, { hitDice: DicePair; woundDice: DicePair }>>; moraleRolls?: MoraleRolls }>) => {
+    state.lastWeaponImpact = null;
     const scenario = state.scenario;
     const playerIds = scenario?.combatants.filter((unit) => unit.side === "player" && !unit.defeated).map((unit) => unit.id) ?? [];
-    if (state.status !== "active" || state.pendingCounterattack || playerIds.length === 0 || !playerIds.every((id) => state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) === 0)) return;
+    if (state.status !== "active" || state.pendingCounterattack || state.pendingAdjacencyReaction || playerIds.length === 0 || !playerIds.every((id) => state.actedCombatantIds.includes(id) || (state.actionPointsById[id] ?? 0) === 0)) return;
     state.lastGrenadeImpact = null;
     state.overwatchLanes.filter((lane) => scenario?.combatants.find((unit) => unit.id === lane.attackerId)?.side === "enemy").forEach((lane) => {
       const unit = scenario?.combatants.find((combatant) => combatant.id === lane.attackerId);
@@ -1500,9 +1897,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       const playerFiringSolutions = activePlayers.filter((player) => rangedEnemies(scenario!, player.id).some((target) => target.id === enemy.id)).length;
       const enemyInSmoke = scenario!.smokeCells?.some((cell) => pointKey(cell) === pointKey(enemy.position)) ?? false;
       if ((enemy.smokeGrenades ?? 0) > 0 && !enemyInSmoke && (state.suppressedCombatantIds.includes(enemy.id) || playerFiringSolutions >= 2) && enemySmokeDice) {
-        const direction = ((enemySmokeDice.first + enemySmokeDice.second) % 4 + 1) as 1 | 2 | 3 | 4;
-        const distance = (enemySmokeDice.first % 2 + 1) as 1 | 2;
-        const throwResult = grenadeLandingPoint(scenario!, enemy.position, enemySmokeDice, enemy.weaponSkill, direction, distance);
+        const throwResult = grenadeLandingPoint(scenario!, enemy.position, enemy.position, enemySmokeDice, action.payload.enemyRolls[enemy.id]?.woundDice ?? enemySmokeDice);
         const smokeCells = grenadeBlastCells(scenario!, throwResult.landing);
         scenario!.smokeCells ??= [];
         smokeCells.forEach((cell) => {
@@ -1537,7 +1932,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         const leaderInCommand = livingLeader && distanceBetween(target.position, livingLeader.position) <= 4;
         const leadership = leaderInCommand ? livingLeader.leadershipRating ?? 1 : 0;
         if (dice) {
-          const total = dice.first + dice.second + leadership;
+          const total = dice.first + dice.second + leadership - (enemy.woundState === "light" ? 1 : 0);
           if (total >= 7) {
             state.suppressedCombatantIds = state.suppressedCombatantIds.filter((id) => id !== target.id);
             state.events.unshift(`${enemy.name} rallied ${target.id === enemy.id ? "themself" : target.name} ${total}/7${leadership ? ` with +${leadership} leadership` : ""}`);
@@ -1566,9 +1961,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           if (reaction) clearWeaponReady(state, coveringAttacker.id);
           if (reaction) {
             if (!state.suppressedCombatantIds.includes(enemy.id)) state.suppressedCombatantIds.push(enemy.id);
-            enemy.woundState = reaction.woundState;
-            enemy.defeated = reaction.woundState === "serious" || reaction.woundState === "unconscious" || reaction.woundState === "dead";
-            if (enemy.defeated) enemy.health = 0;
+            if (reaction.hit) applyCombatWound(state, enemy, reaction.woundState);
             state.events.unshift(`${coveringAttacker.name} covering fired at ${enemy.name} through ${reaction.attackArc} arc (+${reaction.arcModifier}): hit ${reaction.hitTotal}/${reaction.targetNumber}, ${reaction.hit ? `wound ${reaction.woundTotal} (${reaction.woundState})` : "miss"}${highGroundNote(scenario!, coveringAttacker, enemy)}`);
             applyZeroGravityRecoil(state, coveringAttacker.id);
             if (enemy.defeated) {
@@ -1588,9 +1981,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         const parrying = state.parryingCombatantIds?.includes(meleeTarget.id) ?? false;
         const result = resolveMelee(enemy, meleeTarget, dice.hitDice.first, state.suppressedCombatantIds.includes(enemy.id) || enemyShaken, 0, enemy.meleeWeapon.penetration, parrying ? -2 : state.guardingCombatantIds?.includes(meleeTarget.id) ? -1 : 0);
         if (parrying) state.parryingCombatantIds = (state.parryingCombatantIds ?? []).filter((id) => id !== meleeTarget.id);
-        meleeTarget.woundState = result.woundState;
-        meleeTarget.defeated = result.woundState === "serious" || result.woundState === "unconscious" || result.woundState === "dead";
-        if (meleeTarget.defeated) meleeTarget.health = 0;
+        applyCombatWound(state, meleeTarget, result.woundState);
         if (meleeTarget.defeated) Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, targetId]) => { if (targetId === meleeTarget.id) delete state.maintainedTargetByCombatantId[combatantId]; });
         state.actionPointsById[enemy.id] = 3;
         state.events.unshift(`${enemy.name} melee attacked ${meleeTarget.name} through ${result.attackArc} arc (+${result.arcModifier}): ${result.roll} ${result.modifier >= 0 ? "+" : ""}${result.modifier} = ${result.total} (${result.woundState})`);
@@ -1602,6 +1993,12 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         }
         continue;
       }
+      const visiblePlayerIds = new Set(rangedEnemies(scenario!, enemy.id).filter((candidate) => candidate.side === "player").map((candidate) => candidate.id));
+      const enemyCharge = enemy.meleeRating > enemy.weaponSkill + 1 && !defensiveDive && !enemyShaken && !state.suppressedCombatantIds.includes(enemy.id) && !defendedObjective
+        ? [...chargeMoves(fireSafeScenario, enemy.id).entries()]
+          .filter(([targetId]) => visiblePlayerIds.has(targetId))
+          .sort(([, a], [, b]) => a.path.length - b.path.length || pointKey(a.destination).localeCompare(pointKey(b.destination)))[0] ?? null
+        : null;
       const enemyClimb = defensiveDive || stationThreatened || rangedEnemies(scenario!, enemy.id).some((candidate) => candidate.side === "player") ? null : climbUpOptions(scenario!, enemy.id)
         .filter(withinDefensiveArea)
         .filter((destination) => distanceBetween(destination, target.position) < distanceBetween(enemy.position, target.position))
@@ -1653,7 +2050,20 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         state.events.unshift(`${enemy.name} vaulted ${enemyVault.barrier.label} to ${enemyVault.landing.x},${enemyVault.landing.y} (3 AP)`);
         continue;
       }
-      const attackTarget = rangedEnemies(scenario!, enemy.id).filter((candidate) => candidate.side === "player").sort((a, b) => compareEnemyRangedTargets(scenario!, enemy, a, b, state.evadingCombatantIds))[0];
+      let attackTarget: CombatScenario["combatants"][number] | undefined = rangedEnemies(scenario!, enemy.id).filter((candidate) => candidate.side === "player").sort((a, b) => compareEnemyRangedTargets(scenario!, enemy, a, b, state.evadingCombatantIds))[0];
+      if (!attackTarget) {
+        const visibleTarget = scenario!.combatants
+          .filter((candidate) => candidate.side === "player" && !candidate.defeated && snapShotTarget(enemy, candidate) && visibilityAssessment(scenario!, enemy, candidate).visible)
+          .sort((a, b) => compareEnemyRangedTargets(scenario!, enemy, a, b, state.evadingCombatantIds))[0];
+        const turn = visibleTarget ? facingTowardFieldOfFire(enemy, visibleTarget.position) : null;
+        if (visibleTarget && turn && turn.turns > 0 && (state.actionPointsById[enemy.id] ?? 0) >= turn.turns + 3) {
+          const priorFacing = enemy.facing;
+          enemy.facing = turn.facing;
+          state.actionPointsById[enemy.id] -= turn.turns;
+          state.events.unshift(`${enemy.name} turned from ${priorFacing} to ${turn.facing} (${turn.turns} AP)`);
+          attackTarget = rangedEnemies(scenario!, enemy.id).find((candidate) => candidate.id === visibleTarget.id);
+        }
+      }
       if (attackTarget) delete state.investigationTargetByEnemyId?.[enemy.id];
       const investigationTarget = !attackTarget ? state.investigationTargetByEnemyId?.[enemy.id] : null;
       if (investigationTarget && defendedObjective) {
@@ -1667,13 +2077,13 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         const route = shortestPathToAny(fireSafeScenario, enemy.id, investigationGoals) ?? shortestPathToAny(scenario!, enemy.id, investigationGoals);
         if (route?.length) {
           const origin = { ...enemy.position };
-          const steps = pathWithinMovementAllowance(scenario!, origin, route, state.mobilityImpairedCombatantIds?.includes(enemy.id) ? 1 : 3);
+          const steps = pathWithinMovementAllowance(scenario!, origin, route, state.mobilityImpairedCombatantIds?.includes(enemy.id) ? 1 : 3, enemy.facing);
           if (steps.length === 0) continue;
           const destination = steps.at(-1)!;
           const prior = steps.length > 1 ? steps[steps.length - 2] : enemy.position;
           enemy.position = destination;
           enemy.facing = destination.x > prior.x ? "east" : destination.x < prior.x ? "west" : destination.y > prior.y ? "south" : "north";
-          state.actionPointsById[enemy.id] = 6 - movementPathCost(scenario!, origin, steps);
+          state.actionPointsById[enemy.id] = 6 - movementPathCost(scenario!, origin, steps, enemy.facing);
           state.events.unshift(`${enemy.name} investigated sound sector ${investigationTarget.x},${investigationTarget.y}`);
           if (distanceBetween(destination, investigationTarget) <= 1) {
             delete state.investigationTargetByEnemyId?.[enemy.id];
@@ -1715,11 +2125,11 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       const doorApproach = !defendedObjective && !openApproach && attackTarget && scenario!.victoryCondition !== "hold-zone" && attackProfile && shouldImproveEnemyRange(enemy, attackProfile.rangeBand)
         ? routeAllowingClosedDoors(fireSafeScenario, enemy.id, approachGoals) ?? routeAllowingClosedDoors(scenario!, enemy.id, approachGoals) : null;
       const improvingRange = Boolean(openApproach?.length || doorApproach?.door);
-      if (attackTarget && !improvingRange && !defensiveDive) {
+      if (attackTarget && !improvingRange && !defensiveDive && !enemyCharge) {
         const ammunition = state.ammunitionById[enemy.id] ?? 0;
         if (ammunition === 0) {
           state.ammunitionById[enemy.id] = magazineSize(scenario!, enemy.id);
-          state.actionPointsById[enemy.id] = 3;
+          state.actionPointsById[enemy.id] -= 3;
           state.events.unshift(`${enemy.name} reloaded (3 AP)`);
           continue;
         }
@@ -1753,19 +2163,43 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           applyZeroGravityRecoil(state, enemy.id);
           continue;
         }
-        const enemyFireMode: FireMode = enemy.weapon.automatic && ammunition >= 3 ? "automatic" : "aimed";
+        const enemyAutomaticModifier = attackProfile ? automaticFireModifierForRange(attackProfile.rangeBand, enemy.weapon.automaticFireBonusByRange) : null;
+        const enemyFireMode: FireMode = enemy.weapon.automatic && ammunition >= 3 && enemyAutomaticModifier !== null ? "automatic" : "aimed";
         const result = resolveSnapShot(enemy, attackTarget, dice.hitDice, dice.woundDice, coverProtection(scenario!, enemy.id, attackTarget.id), enemyFireMode, state.evadingCombatantIds.includes(attackTarget.id), state.suppressedCombatantIds.includes(enemy.id) || enemyShaken, false, visibilityAssessment(scenario!, enemy, attackTarget).modifier, false, false, (state.weaponDamagedCombatantIds?.includes(enemy.id) ? -1 : 0) + elevationAttackModifier(scenario!, enemy, attackTarget));
         if (!result) continue;
+        if (enemyFireMode === "automatic") {
+          const dangerTargets = [attackTarget, ...automaticFireSecondaryTargets(scenario!, enemy.id, attackTarget.id)]
+            .sort((a, b) => distanceInSquares(enemy, a) - distanceInSquares(enemy, b) || scenario!.combatants.indexOf(a) - scenario!.combatants.indexOf(b));
+          let hits = 0;
+          for (const [dangerIndex, dangerTarget] of dangerTargets.entries()) {
+            const targetDice = dangerTarget.id === attackTarget.id ? dice : action.payload.dangerSpaceRolls?.[enemy.id]?.[dangerTarget.id] ?? dice;
+            const dangerResult = dangerTarget.id === attackTarget.id ? result : resolveSnapShot(enemy, dangerTarget, targetDice.hitDice, targetDice.woundDice, coverProtection(scenario!, enemy.id, dangerTarget.id), "automatic", state.evadingCombatantIds.includes(dangerTarget.id), state.suppressedCombatantIds.includes(enemy.id) || enemyShaken, false, visibilityAssessment(scenario!, enemy, dangerTarget).modifier, false, false, (state.weaponDamagedCombatantIds?.includes(enemy.id) ? -1 : 0) + elevationAttackModifier(scenario!, enemy, dangerTarget));
+            if (!dangerResult) continue;
+            if (dangerResult.hit) {
+              hits += 1;
+              applyCombatWound(state, dangerTarget, dangerResult.woundState);
+              if (dangerTarget.defeated) Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, maintainedTargetId]) => { if (maintainedTargetId === dangerTarget.id) delete state.maintainedTargetByCombatantId[combatantId]; });
+            } else if (dangerResult.targetNumber - dangerResult.hitTotal <= 2 && !state.suppressedCombatantIds.includes(dangerTarget.id)) state.suppressedCombatantIds.push(dangerTarget.id);
+            state.events.unshift(`${enemy.name} automatic danger-space attack against ${dangerTarget.name}: hit ${dangerResult.hitTotal}/${dangerResult.targetNumber} · ${dangerResult.hit ? `wound ${dangerResult.woundTotal} (${dangerResult.woundState})` : "miss"}`);
+            const nextTarget = dangerTargets[dangerIndex + 1];
+            if (hits >= 2 && (!nextTarget || pointKey(nextTarget.position) !== pointKey(dangerTarget.position))) break;
+          }
+          state.ammunitionById[enemy.id] -= 3;
+          state.actionPointsById[enemy.id] = 0;
+          addSoundContact(state, enemy, "weapon");
+          enemy.concealed = false;
+          applyZeroGravityRecoil(state, enemy.id);
+          if (resolveRescueFailure(state)) return;
+          continue;
+        }
         if (!result.hit && result.targetNumber - result.hitTotal <= 2 && !state.suppressedCombatantIds.includes(attackTarget.id)) state.suppressedCombatantIds.push(attackTarget.id);
-        attackTarget.woundState = result.woundState;
-        attackTarget.defeated = result.woundState === "serious" || result.woundState === "unconscious" || result.woundState === "dead";
-        if (attackTarget.defeated) attackTarget.health = 0;
+        if (result.hit) applyCombatWound(state, attackTarget, result.woundState);
         if (attackTarget.defeated) Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, targetId]) => { if (targetId === attackTarget.id) delete state.maintainedTargetByCombatantId[combatantId]; });
-        state.ammunitionById[enemy.id] -= enemyFireMode === "automatic" ? 3 : 1;
+        state.ammunitionById[enemy.id] -= 1;
         state.actionPointsById[enemy.id] = 0;
         addSoundContact(state, enemy, "weapon");
         enemy.concealed = false;
-        state.events.unshift(`${enemy.name} ${enemyFireMode} fired at ${attackTarget.name} through ${result.attackArc} arc (+${result.arcModifier}): hit ${result.hitTotal}/${result.targetNumber} (weapon accuracy ${result.weaponAccuracy >= 0 ? "+" : ""}${result.weaponAccuracy}), ${result.hit ? `wound ${result.woundTotal} (${result.woundState}, penetration +${result.weaponPenetration}, cover -${result.cover})` : `miss (cover -${result.cover})`}${highGroundNote(scenario!, enemy, attackTarget)}`);
+        state.events.unshift(`${enemy.name} ${enemyFireMode} fired at ${attackTarget.name} through ${result.attackArc} arc (+${result.arcModifier}): hit ${result.hitTotal}/${result.targetNumber} (weapon accuracy ${result.weaponAccuracy >= 0 ? "+" : ""}${result.weaponAccuracy}), ${result.hit ? `wound ${result.woundTotal} (${result.woundState}, penetration +${result.weaponPenetration}${result.cover ? `, AHL cover wound +${result.cover}` : ""})` : result.cover ? "miss (target under cover; no numerical hit modifier)" : "miss"}${highGroundNote(scenario!, enemy, attackTarget)}`);
         applyZeroGravityRecoil(state, enemy.id);
         if (resolveRescueFailure(state)) return;
         continue;
@@ -1776,11 +2210,25 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         state.events.unshift(`${enemy.name} held defensive assignment at ${defendedObjective.label}`);
         continue;
       }
+      const enemyTrotting = !attackTarget
+        && scenario!.gravityMode !== "zero-g"
+        && enemy.posture !== "prone"
+        && !enemyShaken
+        && !state.suppressedCombatantIds.includes(enemy.id)
+        && !state.mobilityImpairedCombatantIds?.includes(enemy.id)
+        && !defendedObjective
+        && scenario!.victoryCondition !== "hold-zone"
+        && !scenario!.flankBiasByCombatantId?.[enemy.id]
+        && !defensiveDive
+        && !enemyCharge
+        && distanceBetween(enemy.position, target.position) > 4;
       let path: GridPoint[];
       const enemyDiving = Boolean(defensiveDive);
+      const enemyCharging = Boolean(enemyCharge);
       let enemyCrawling = false;
       let enemyCrawlCost = 0;
-      if (defensiveDive) path = defensiveDive.path;
+      if (enemyCharge) path = enemyCharge[1].path;
+      else if (defensiveDive) path = defensiveDive.path;
       else if (enemy.posture === "prone" && scenario!.gravityMode !== "zero-g") {
         const crawlGoal = defendedObjective && stationThreatened ? defendedObjective.position : target.position;
         const crawl = [...reachableCrawling(fireSafeScenario, enemy.id, 6).values()]
@@ -1866,7 +2314,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           route = doorRoute.path.slice(0, doorRoute.doorStepIndex);
         }
         if (route.length === 0) continue;
-        path = pathWithinMovementAllowance(scenario!, enemy.position, route, state.mobilityImpairedCombatantIds?.includes(enemy.id) ? 1 : state.suppressedCombatantIds.includes(enemy.id) ? 2 : 3);
+        path = pathWithinMovementAllowance(scenario!, enemy.position, route, enemyTrotting ? 6 : state.mobilityImpairedCombatantIds?.includes(enemy.id) ? 1 : state.suppressedCombatantIds.includes(enemy.id) ? 2 : 3, enemy.facing, enemyTrotting);
         if (path.length === 0) continue;
       }
       const firstStep = path[0];
@@ -1880,9 +2328,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         if (!roll) continue;
         const reaction = resolveMelee(reactor, enemy, roll, false, 0, reactor.meleeWeapon.penetration, enemyDiving ? -2 : 0);
         state.reactionMeleeUsedCombatantIds.push(reactor.id);
-        enemy.woundState = reaction.woundState;
-        enemy.defeated = reaction.woundState === "serious" || reaction.woundState === "unconscious" || reaction.woundState === "dead";
-        if (enemy.defeated) enemy.health = 0;
+        applyCombatWound(state, enemy, reaction.woundState);
         state.events.unshift(`${reactor.name} reaction melee as ${enemy.name} withdrew: ${reaction.roll} ${reaction.modifier >= 0 ? "+" : ""}${reaction.modifier} = ${reaction.total} (${reaction.woundState})`);
         if (enemy.defeated) break;
       }
@@ -1891,6 +2337,16 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         resolveEnemyMorale(state, action.payload.moraleRolls, enemy.id);
         if (scenario!.combatants.filter((unit) => unit.side === "enemy").every((unit) => unit.defeated)) return;
         continue;
+      }
+      const adjacencyOpportunity = scenario!.combatants
+        .filter((reactor) => reactor.side === "player" && !reactor.defeated && !reactor.weapon.highEnergy && !state.movedCombatantIds?.includes(reactor.id) && !state.adjacencyReactionUsedCombatantIds?.includes(`${reactor.id}:${enemy.id}`) && !state.suppressedCombatantIds.includes(reactor.id) && (state.adjacencyReactionReserveById?.[reactor.id] ?? 0) >= 3 && (state.ammunitionById[reactor.id] ?? 0) >= 1)
+        .map((reactor) => ({ reactor, stepIndex: path.findIndex((step) => Math.abs(reactor.position.x - step.x) + Math.abs(reactor.position.y - step.y) === 1) }))
+        .filter(({ stepIndex }) => stepIndex >= 0)
+        .sort((a, b) => a.stepIndex - b.stepIndex || scenario!.combatants.indexOf(a.reactor) - scenario!.combatants.indexOf(b.reactor))[0];
+      if (adjacencyOpportunity) {
+        state.pendingAdjacencyReaction = { reactorId: adjacencyOpportunity.reactor.id, moverId: enemy.id, trigger: { ...path[adjacencyOpportunity.stepIndex] } };
+        state.events.unshift(`${adjacencyOpportunity.reactor.name} may take an adjacency snap shot as ${enemy.name} approaches`);
+        return;
       }
       const crossedLane = state.coveringFireLanes.find((lane) => path.some((step) => lane.cells.some((cell) => pointKey(cell) === pointKey(step))));
       if (crossedLane) {
@@ -1903,9 +2359,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           if (reaction) clearWeaponReady(state, coveringAttacker.id);
           if (reaction) {
             if (!state.suppressedCombatantIds.includes(enemy.id)) state.suppressedCombatantIds.push(enemy.id);
-            enemy.woundState = reaction.woundState;
-            enemy.defeated = reaction.woundState === "serious" || reaction.woundState === "unconscious" || reaction.woundState === "dead";
-            if (enemy.defeated) enemy.health = 0;
+            if (reaction.hit) applyCombatWound(state, enemy, reaction.woundState);
             state.events.unshift(`${coveringAttacker.name} covering fired as ${enemy.name} crossed the lane: hit ${reaction.hitTotal}/${reaction.targetNumber}, ${reaction.hit ? `wound ${reaction.woundTotal} (${reaction.woundState})` : "miss"}${highGroundNote(scenario!, coveringAttacker, enemy)}`);
             applyZeroGravityRecoil(state, coveringAttacker.id);
             if (enemy.defeated) {
@@ -1939,9 +2393,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
             if (reaction) clearWeaponReady(state, overwatcher.id);
             if (reaction) {
               if (!reaction.hit && reaction.targetNumber - reaction.hitTotal <= 2 && !state.suppressedCombatantIds.includes(enemy.id)) state.suppressedCombatantIds.push(enemy.id);
-              enemy.woundState = reaction.woundState;
-              enemy.defeated = reaction.woundState === "serious" || reaction.woundState === "unconscious" || reaction.woundState === "dead";
-              if (enemy.defeated) enemy.health = 0;
+              if (reaction.hit) applyCombatWound(state, enemy, reaction.woundState);
               state.events.unshift(`${overwatcher.name} overwatch triggered as ${enemy.name} entered ${trigger.x},${trigger.y}: hit ${reaction.hitTotal}/${reaction.targetNumber}, ${reaction.hit ? `wound ${reaction.woundTotal} (${reaction.woundState})` : "miss"}${highGroundNote(scenario!, overwatcher, enemy)}`);
               applyZeroGravityRecoil(state, overwatcher.id);
               if (enemy.defeated) {
@@ -1954,20 +2406,26 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           }
         } else enemy.position = originalPosition;
       }
-      const move = { destination: path[path.length - 1], path, cost: enemyCrawling ? enemyCrawlCost : enemyDiving || scenario!.gravityMode === "zero-g" ? 3 : movementPathCost(scenario!, enemy.position, path) };
+      const move = { destination: path[path.length - 1], path, cost: enemyCharging ? 6 : enemyCrawling ? enemyCrawlCost : enemyDiving || scenario!.gravityMode === "zero-g" ? 3 : movementPathCost(scenario!, enemy.position, path, enemy.facing, enemyTrotting) };
       const before = move.path.length > 1 ? move.path[move.path.length - 2] : enemy.position;
       const dx = move.destination.x - before.x;
       const dy = move.destination.y - before.y;
       enemy.position = move.destination;
+      state.movedCombatantIds ??= [];
+      if (!state.movedCombatantIds.includes(enemy.id)) state.movedCombatantIds.push(enemy.id);
       enemy.facing = dx > 0 ? "east" : dx < 0 ? "west" : dy > 0 ? "south" : "north";
       if (enemyDiving) enemy.posture = "prone";
-      state.actionPointsById[enemy.id] = 6 - move.cost;
+      state.actionPointsById[enemy.id] = enemyTrotting ? 0 : 6 - move.cost;
       addSoundContact(state, enemy, "movement");
       const flankBias = scenario!.flankBiasByCombatantId?.[enemy.id];
       state.events.unshift(enemyDiving
         ? `${enemy.name} dove to cover at ${move.destination.x},${move.destination.y} and went prone (3 AP)`
+        : enemyCharging
+        ? `${enemy.name} charged to ${move.destination.x},${move.destination.y} (6 AP)`
         : enemyCrawling
         ? `${enemy.name} crawled to ${move.destination.x},${move.destination.y} (${move.cost} AP)`
+        : enemyTrotting
+        ? `${enemy.name} trotted to ${move.destination.x},${move.destination.y} and ended activation (${move.cost} movement points)`
         : defendedObjective && stationThreatened
         ? `${enemy.name} moved to contest ${defendedObjective.label} at ${move.destination.x},${move.destination.y} (${move.cost} AP)`
         : flankBias
@@ -1986,6 +2444,20 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         applyFireDamage(state, enemy);
         if (enemy.defeated) { resolveEnemyMorale(state, action.payload.moraleRolls, enemy.id); continue; }
       }
+      if (enemyCharge && state.actionPointsById[enemy.id] === 0 && enemy.posture !== "prone") {
+        const chargeTarget = scenario!.combatants.find((unit) => unit.id === enemyCharge[0] && !unit.defeated);
+        const chargeDice = action.payload.enemyRolls[enemy.id];
+        if (chargeTarget && chargeDice && adjacentEnemies(scenario!, enemy.id).some((unit) => unit.id === chargeTarget.id)) {
+          const parrying = state.parryingCombatantIds?.includes(chargeTarget.id) ?? false;
+          const result = resolveMelee(enemy, chargeTarget, chargeDice.hitDice.first, false, 0, enemy.meleeWeapon.penetration, parrying ? -2 : state.guardingCombatantIds?.includes(chargeTarget.id) ? -1 : 0);
+          if (parrying) state.parryingCombatantIds = (state.parryingCombatantIds ?? []).filter((id) => id !== chargeTarget.id);
+          applyCombatWound(state, chargeTarget, result.woundState);
+          if (chargeTarget.defeated) Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, targetId]) => { if (targetId === chargeTarget.id) delete state.maintainedTargetByCombatantId[combatantId]; });
+          state.events.unshift(`${enemy.name} charged and melee attacked ${chargeTarget.name} through ${result.attackArc} arc (+${result.arcModifier}): ${result.roll} ${result.modifier >= 0 ? "+" : ""}${result.modifier} = ${result.total} (${result.woundState})`);
+          if (resolveRescueFailure(state)) return;
+        }
+        continue;
+      }
       if (resolveHoldZoneCapture(state)) return;
       const snapTarget = rangedEnemies(scenario!, enemy.id).filter((candidate) => candidate.side === "player").sort((a, b) => compareEnemyRangedTargets(scenario!, enemy, a, b, state.evadingCombatantIds))[0];
       const dice = action.payload.enemyRolls[enemy.id];
@@ -2000,13 +2472,11 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       const result = resolveSnapShot(enemy, snapTarget, dice.hitDice, dice.woundDice, coverProtection(scenario!, enemy.id, snapTarget.id), "snap", state.evadingCombatantIds.includes(snapTarget.id), state.suppressedCombatantIds.includes(enemy.id) || enemyShaken, false, visibilityAssessment(scenario!, enemy, snapTarget).modifier, false, false, (state.weaponDamagedCombatantIds?.includes(enemy.id) ? -1 : 0) + elevationAttackModifier(scenario!, enemy, snapTarget));
       if (!result) continue;
       if (!result.hit && result.targetNumber - result.hitTotal <= 2 && !state.suppressedCombatantIds.includes(snapTarget.id)) state.suppressedCombatantIds.push(snapTarget.id);
-      snapTarget.woundState = result.woundState;
-      snapTarget.defeated = result.woundState === "serious" || result.woundState === "unconscious" || result.woundState === "dead";
-      if (snapTarget.defeated) snapTarget.health = 0;
+      if (result.hit) applyCombatWound(state, snapTarget, result.woundState);
       if (snapTarget.defeated) Object.entries(state.maintainedTargetByCombatantId).forEach(([combatantId, targetId]) => { if (targetId === snapTarget.id) delete state.maintainedTargetByCombatantId[combatantId]; });
       state.ammunitionById[enemy.id] -= 1;
       state.actionPointsById[enemy.id] -= 3;
-      state.events.unshift(`${enemy.name} snap fired at ${snapTarget.name} through ${result.attackArc} arc (+${result.arcModifier}): hit ${result.hitTotal}/${result.targetNumber} (weapon accuracy ${result.weaponAccuracy >= 0 ? "+" : ""}${result.weaponAccuracy}), ${result.hit ? `wound ${result.woundTotal} (${result.woundState}, penetration +${result.weaponPenetration}, cover -${result.cover})` : `miss (cover -${result.cover})`}${highGroundNote(scenario!, enemy, snapTarget)}`);
+      state.events.unshift(`${enemy.name} snap fired at ${snapTarget.name} through ${result.attackArc} arc (+${result.arcModifier}): hit ${result.hitTotal}/${result.targetNumber} (weapon accuracy ${result.weaponAccuracy >= 0 ? "+" : ""}${result.weaponAccuracy}), ${result.hit ? `wound ${result.woundTotal} (${result.woundState}, penetration +${result.weaponPenetration}${result.cover ? `, AHL cover wound +${result.cover}` : ""})` : result.cover ? "miss (target under cover; no numerical hit modifier)" : "miss"}${highGroundNote(scenario!, enemy, snapTarget)}`);
       applyZeroGravityRecoil(state, enemy.id);
       if (resolveRescueFailure(state)) return;
     }
@@ -2015,9 +2485,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       if (unit.vaccSuit || !vacuum.has(pointKey(unit.position))) { delete state.vacuumExposureByCombatantId[unit.id]; return; }
       const exposure = (state.vacuumExposureByCombatantId[unit.id] ?? 0) + 1;
       state.vacuumExposureByCombatantId[unit.id] = exposure;
-      unit.woundState = exposure === 1 ? "light" : exposure === 2 ? "serious" : "dead";
-      unit.defeated = exposure >= 2;
-      if (unit.defeated) unit.health = 0;
+      applyCombatWound(state, unit, exposure === 1 ? "light" : exposure === 2 ? "serious" : "dead");
       state.events.unshift(`${unit.name} vacuum exposure ${exposure}: ${unit.woundState}`);
     });
     const fireCells = new Set((scenario!.fireCells ?? []).map(pointKey));
@@ -2055,7 +2523,6 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.pendingCounterattack = null;
     state.processedEnemyPhaseCombatantIds = [];
     state.trottingCombatantIds = [];
-    state.bracedCombatantIds = [];
     const nextTurn = state.turn + 1;
     state.playerNoiseContacts = (state.playerNoiseContacts ?? []).filter((contact) => contact.expiresAtTurn >= nextTurn);
     state.soundContacts = (state.soundContacts ?? []).filter((contact) => contact.expiresAtTurn > nextTurn);
@@ -2098,6 +2565,10 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     });
     state.overwatchLanes = state.overwatchLanes.filter((lane) => scenario!.combatants.find((unit) => unit.id === lane.attackerId)?.side === "enemy");
     state.reactionMeleeUsedCombatantIds = [];
+    state.adjacencyReactionReserveById = {};
+    state.adjacencyReactionUsedCombatantIds = [];
+    state.movedCombatantIds = [];
+    state.pendingAdjacencyReaction = null;
     state.disengagedCombatantIds = [];
     state.actionPointsById = freshActionPoints(scenario!);
     state.actedCombatantIds = [];
@@ -2109,7 +2580,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.hoveredDestination = null;
     state.events.unshift(`Turn ${state.turn} begins`);
   },
-  cancelMovePreview: (state) => { state.plannedMove = null; state.diveTargeting = false; state.hoveredDestination = null; },
+  cancelMovePreview: (state) => { if (state.plannedMove?.kind === "charge") { state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.plannedMeleeMode = null; } state.plannedMove = null; state.diveTargeting = false; state.hoveredDestination = null; },
   setHoveredDestination: (state, action: PayloadAction<GridPoint | null>) => { state.hoveredDestination = action.payload; },
   updateHudLayout: (state, action: PayloadAction<{ id: CharacterCombatHudId; layout: CharacterCombatHudLayout }>) => { state.hudLayouts[action.payload.id] = action.payload.layout; },
   restoreHud: (state, action: PayloadAction<CharacterCombatHudId>) => { state.hudLayouts[action.payload].visible = true; },
@@ -2142,14 +2613,17 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   setArmoryLoadout: (state, action: PayloadAction<{ index: number; loadoutId: ArmoryLoadoutId }>) => {
     if (action.payload.index < 0 || action.payload.index > 4) return;
     const selections = state.extendedArmoryLoadoutIds ?? [...state.armoryLoadoutIds, "assault", "scout", "breacher"];
-    if (action.payload.loadoutId === "heavy" && selections.some((loadout, index) => index !== action.payload.index && loadout === "heavy")) return;
+    if (["heavy", "plasma", "fusion", "action-ram", "lag"].includes(action.payload.loadoutId) && selections.some((loadout, index) => index !== action.payload.index && loadout === action.payload.loadoutId)) return;
     selections[action.payload.index] = action.payload.loadoutId;
     state.extendedArmoryLoadoutIds = selections;
     state.armoryLoadoutIds = [selections[0], selections[1]];
   },
 } });
-export const { loadCombatScenario, clearCombatScenario, selectPlayerCombatant, startTrot, beginDragging, releaseDraggedCombatant, previewMove, previewDropDown, confirmMove, turnCombatant, previewOpenDoor, confirmOpenDoor, cancelOpenDoor, openDoor, closeDoor, previewExtinguishFire, confirmExtinguishFire, cancelExtinguishFire, previewAttack, selectAttackMode, confirmAttack, cancelAttackPreview, beginCoveringFire, previewCoveringFire, confirmCoveringFire, cancelCoveringFire, beginOverwatch, previewOverwatch, confirmOverwatch, cancelOverwatch, beginGrenadeTargeting, beginSmokeGrenadeTargeting, beginStunGrenadeTargeting, previewGrenadeTarget, cancelGrenadeTargeting, confirmGrenade, previewTreatment, cancelTreatmentPreview, confirmTreatment, previewSecureObjective, confirmSecureObjective, cancelObjectivePreview, previewBreachDoor, confirmBreachDoor, previewBreachDetonation, detonateBreachCharge, cancelBreachDoor, reloadWeapon, evade, disengage, goProne, braceWeapon, standUp, rally, rallyAlly, restrainEnemy, finishActivation, endPlayerTurn, cancelMovePreview, setHoveredDestination, updateHudLayout, restoreHud, resetHudLayouts, setViewMode, rotateCamera, rotateCameraBy, adjustCameraZoom, panCameraBy, resetCamera, focusCameraOnSelected, setBoardingTeamIds, setArmoryLoadout } = slice.actions;
+export const { loadCombatScenario, clearCombatScenario, selectPlayerCombatant, startTrot, beginDragging, releaseDraggedCombatant, previewMove, previewDropDown, confirmMove, turnCombatant, previewOpenDoor, confirmOpenDoor, cancelOpenDoor, openDoor, closeDoor, previewExtinguishFire, confirmExtinguishFire, cancelExtinguishFire, previewAttack, selectAttackMode, confirmAttack, cancelAttackPreview, fireHighEnergyAtStructure, beginCoveringFire, previewCoveringFire, confirmCoveringFire, cancelCoveringFire, beginOverwatch, previewOverwatch, confirmOverwatch, cancelOverwatch, beginGrenadeTargeting, beginSmokeGrenadeTargeting, beginStunGrenadeTargeting, previewGrenadeTarget, cancelGrenadeTargeting, confirmGrenade, previewTreatment, cancelTreatmentPreview, confirmTreatment, previewSecureObjective, confirmSecureObjective, cancelObjectivePreview, previewBreachDoor, confirmBreachDoor, previewBreachDetonation, detonateBreachCharge, cancelBreachDoor, reloadWeapon, selectWeaponAmmunition, evade, disengage, goProne, braceWeapon, standUp, rally, rallyAlly, restrainEnemy, finishActivation, endPlayerTurn, cancelMovePreview, setHoveredDestination, updateHudLayout, restoreHud, resetHudLayouts, setViewMode, rotateCamera, rotateCameraBy, adjustCameraZoom, panCameraBy, resetCamera, focusCameraOnSelected, setBoardingTeamIds, setArmoryLoadout } = slice.actions;
 export const toggleLamp = slice.actions.toggleLamp;
+export const beginStructuralTargeting = slice.actions.beginStructuralTargeting;
+export const previewStructuralTarget = slice.actions.previewStructuralTarget;
+export const cancelStructuralTargeting = slice.actions.cancelStructuralTargeting;
 export const beginFlareGrenadeTargeting = slice.actions.beginFlareGrenadeTargeting;
 export const refreshEnemyObservations = slice.actions.refreshEnemyObservations;
 export const searchForEnemies = slice.actions.searchForEnemies;
@@ -2162,8 +2636,10 @@ export const beginWithdrawal = slice.actions.beginWithdrawal;
 export const parry = slice.actions.parry;
 export const guard = slice.actions.guard;
 export const resolveCounterattack = slice.actions.resolveCounterattack;
+export const resolveAdjacencyReaction = slice.actions.resolveAdjacencyReaction;
 export const previewMeleeAttack = slice.actions.previewMeleeAttack;
 export const previewSubdue = slice.actions.previewSubdue;
+export const previewCharge = slice.actions.previewCharge;
 export const coverDoor = slice.actions.coverDoor;
 export const cancelDoorCoverage = slice.actions.cancelDoorCoverage;
 export const beginDoorCoverage = slice.actions.beginDoorCoverage;
@@ -2176,5 +2652,6 @@ export const previewClimbUp = slice.actions.previewClimbUp;
 export const beginDive = slice.actions.beginDive;
 export const previewDive = slice.actions.previewDive;
 export const cancelDive = slice.actions.cancelDive;
+export const clearTarget = slice.actions.clearTarget;
 
 export default slice.reducer;

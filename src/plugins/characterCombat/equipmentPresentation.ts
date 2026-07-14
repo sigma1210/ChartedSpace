@@ -1,4 +1,6 @@
-import type { Combatant, WeaponVisualCategory } from "./types";
+import type { Combatant, WeaponVisualCategory, WoundState } from "./types";
+
+export const woundBadgeFor = (woundState: WoundState) => woundState === "healthy" ? null : woundState === "light" ? "light" : woundState === "dead" ? "dead" : "serious";
 
 const fallbackCategory = (name: string): WeaponVisualCategory => {
   const normalized = name.toLowerCase();
@@ -13,6 +15,12 @@ const fallbackCategory = (name: string): WeaponVisualCategory => {
 export const equipmentVisualFor = (combatant: Combatant) => {
   const weaponCategory = combatant.weapon.visualCategory ?? fallbackCategory(combatant.weapon.name);
   const weaponLabel: Record<WeaponVisualCategory, string> = { pistol: "PST", shotgun: "SG", smg: "SMG", rifle: "RFL", "laser-rifle": "LSR", "gauss-rifle": "GSS" };
-  const armorClass = combatant.armor >= 4 ? "battle-dress" : combatant.armor >= 2 ? "combat" : combatant.armor >= 1 ? "flak" : "light";
+  const armorClass = combatant.armorName === "Battle Dress" ? "battle-dress"
+    : combatant.armorName === "Combat Armor" ? "combat"
+      : combatant.armorName === "Flak Vest" ? "flak"
+        : combatant.armor >= 4 ? "battle-dress"
+          : combatant.armor >= 2 ? "combat"
+            : combatant.armor >= 1 ? "flak"
+              : "light";
   return { weaponCategory, weaponLabel: weaponLabel[weaponCategory], armorClass, armorLabel: combatant.armorName ?? `Armor ${combatant.armor}` } as const;
 };

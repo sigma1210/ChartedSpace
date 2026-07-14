@@ -4,12 +4,13 @@ import { Canvas } from "@react-three/fiber";
 import { Html, Line, OrthographicCamera } from "@react-three/drei";
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { adjacentEnemies, adjacentObjectives, closedDoorsAdjacentTo, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, lightingLevelAt, objectiveContesters, pathContains, pointKey, proneRotationForFacing, rangedEnemies, reachableMovement, stagedObjectiveStatus, structuralVerticalSpan, terrainHeightAt, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
+import { adjacentEnemies, adjacentObjectives, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, lightingLevelAt, objectiveContesters, pathContains, pointKey, proneRotationForFacing, rangedEnemies, reachableMovement, stagedObjectiveStatus, structuralVerticalSpan, terrainHeightAt, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
 import { adjustCameraZoom, panCameraBy, previewAttack, previewCoveringFire, previewDoorCoverage, previewGrenadeTarget, previewMove, previewOpenDoor, previewOverwatch, previewSecureObjective, rotateCameraBy, selectPlayerCombatant, setHoveredDestination } from "./slice";
 import type { CombatScenario, DoorSegment, WallSegment } from "./types";
 import { equipmentVisualFor } from "./equipmentPresentation";
 import { diveOptions, reachableCrawling } from "./geometry";
 import { previewDive } from "./slice";
+import { previewStructuralTarget } from "./slice";
 
 const WeaponMesh = ({ category, facing }: { category: ReturnType<typeof equipmentVisualFor>["weaponCategory"]; facing: "north" | "east" | "south" | "west" }) => {
   const rotationY = facing === "east" ? -Math.PI / 2 : facing === "south" ? Math.PI : facing === "west" ? Math.PI / 2 : 0;
@@ -31,26 +32,26 @@ const segmentTerrainHeight = (scenario: CombatScenario, segment: WallSegment) =>
   return Math.max(0, ...points.filter((point) => point.x >= 0 && point.y >= 0 && point.x < scenario.width && point.y < scenario.height).map((point) => terrainHeightAt(scenario, point)));
 };
 
-const SegmentMesh = ({ segment, width, height, color, wallHeight = 0.9, cutaway = false, baseHeight = 0 }: { segment: WallSegment; width: number; height: number; color: string; wallHeight?: number; cutaway?: boolean; baseHeight?: number }) => {
+const SegmentMesh = ({ segment, width, height, color, wallHeight = 0.9, cutaway = false, baseHeight = 0, selectable = false, selected = false, onSelect }: { segment: WallSegment; width: number; height: number; color: string; wallHeight?: number; cutaway?: boolean; baseHeight?: number; selectable?: boolean; selected?: boolean; onSelect?: () => void }) => {
   const horizontal = segment.from.y === segment.to.y;
   const length = horizontal ? Math.abs(segment.to.x - segment.from.x) : Math.abs(segment.to.y - segment.from.y);
   const x = (segment.from.x + segment.to.x) / 2 - width / 2;
   const z = (segment.from.y + segment.to.y) / 2 - height / 2;
   const visibleHeight = cutaway ? 0.34 : wallHeight;
   const vertical = structuralVerticalSpan(baseHeight, visibleHeight);
-  return <mesh position={[x, vertical.centerY, z]} castShadow={!cutaway} receiveShadow><boxGeometry args={horizontal ? [length, vertical.height, 0.12] : [0.12, vertical.height, length]} /><meshStandardMaterial color={color} roughness={0.72} transparent={cutaway} opacity={cutaway ? 0.42 : 1} /></mesh>;
+  return <mesh position={[x, vertical.centerY, z]} castShadow={!cutaway} receiveShadow onClick={(event) => { if (selectable) { event.stopPropagation(); onSelect?.(); } }}><boxGeometry args={horizontal ? [length, vertical.height, selectable ? 0.2 : 0.12] : [selectable ? 0.2 : 0.12, vertical.height, length]} /><meshStandardMaterial color={selected ? "#ffffff" : selectable ? "#e879f9" : color} emissive={selectable ? "#86198f" : "#000000"} roughness={0.72} transparent={cutaway} opacity={cutaway ? 0.42 : 1} /></mesh>;
 };
 
-const DoorMesh = ({ door, width, height, actionable, coverSelectable, coverSelected, charged, covered, onOpen, baseHeight = 0 }: { door: DoorSegment; width: number; height: number; actionable: boolean; coverSelectable: boolean; coverSelected: boolean; charged: boolean; covered: boolean; onOpen: () => void; baseHeight?: number }) => {
+const DoorMesh = ({ door, width, height, actionable, coverSelectable, coverSelected, charged, covered, damaged = false, structuralSelectable = false, structuralSelected = false, onOpen, onStructuralSelect, baseHeight = 0 }: { door: DoorSegment; width: number; height: number; actionable: boolean; coverSelectable: boolean; coverSelected: boolean; charged: boolean; covered: boolean; damaged?: boolean; structuralSelectable?: boolean; structuralSelected?: boolean; onOpen: () => void; onStructuralSelect?: () => void; baseHeight?: number }) => {
   const horizontal = door.from.y === door.to.y;
   const length = horizontal ? Math.abs(door.to.x - door.from.x) : Math.abs(door.to.y - door.from.y);
   const wallHeight = door.open ? 0.08 : 0.72;
   const x = (door.from.x + door.to.x) / 2 - width / 2;
   const z = (door.from.y + door.to.y) / 2 - height / 2;
   const vertical = door.open ? { height: wallHeight, centerY: baseHeight + wallHeight / 2 } : structuralVerticalSpan(baseHeight, wallHeight);
-  return <mesh position={[x, vertical.centerY, z]} castShadow receiveShadow onClick={(event) => { if (actionable || coverSelectable) { event.stopPropagation(); onOpen(); } }}>
+  return <mesh position={[x, vertical.centerY, z]} castShadow receiveShadow onClick={(event) => { if (structuralSelectable && !door.open) { event.stopPropagation(); onStructuralSelect?.(); } else if (actionable || coverSelectable) { event.stopPropagation(); onOpen(); } }}>
     <boxGeometry args={horizontal ? [length, vertical.height, actionable ? 0.2 : 0.12] : [actionable ? 0.2 : 0.12, vertical.height, length]} />
-    <meshStandardMaterial color={door.open ? "#34d399" : coverSelected ? "#ffffff" : coverSelectable || covered ? "#fde047" : charged ? "#fb7185" : actionable ? "#fbbf24" : "#f59e0b"} emissive={coverSelectable || covered ? "#854d0e" : charged ? "#881337" : actionable ? "#78350f" : "#000000"} roughness={0.72} />
+    <meshStandardMaterial color={door.open ? "#34d399" : structuralSelected ? "#ffffff" : structuralSelectable ? "#e879f9" : damaged ? "#fb923c" : coverSelected ? "#ffffff" : coverSelectable || covered ? "#fde047" : charged ? "#fb7185" : actionable ? "#fbbf24" : "#f59e0b"} emissive={structuralSelectable ? "#86198f" : coverSelectable || covered ? "#854d0e" : charged ? "#881337" : actionable ? "#78350f" : "#000000"} roughness={0.72} />
     {actionable && <Html center position={[0, 0.68, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-amber-300 bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-100">OPEN DOOR</div></Html>}
     {charged && <Html center position={[0, 0.92, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-rose-300 bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-100">CHARGE PLACED</div></Html>}
     {covered && <Html center position={[0, 1.12, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-yellow-200 bg-black/90 px-1.5 py-0.5 font-mono text-[9px] font-bold text-yellow-100">DOOR COVERED</div></Html>}
@@ -58,9 +59,12 @@ const DoorMesh = ({ door, width, height, actionable, coverSelectable, coverSelec
   </mesh>;
 };
 
+interface FloorTile3D { point: { x: number; y: number }; worldX: number; worldZ: number; color: string; centerY: number; height: number; canMove: boolean; canTargetGrenade: boolean; coveringTarget: boolean; overwatchTarget: boolean; inAttackField: boolean; hovered: boolean }
+
 const CombatScene3D = () => {
   const dispatch = useAppDispatch();
-  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, lastGrenadeImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, suppressedCombatantIds, draggingCombatantByCarrierId, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, parryingCombatantIds, guardingCombatantIds, diveTargeting } = useAppSelector((state) => state.plugins.characterCombat);
+  const { structuralTargeting, plannedStructuralTargetId, structuralDamageById } = useAppSelector((state) => state.plugins.characterCombat);
+  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, grenadeKind, lastGrenadeImpact, lastWeaponImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, parryingCombatantIds, guardingCombatantIds, diveTargeting } = useAppSelector((state) => state.plugins.characterCombat);
   const advanceReadyPath = selectedCombatantId ? advanceReadyCombatantIds?.includes(selectedCombatantId) ?? false : false;
   if (!scenario) return null;
   const span = Math.max(scenario.width, scenario.height);
@@ -78,9 +82,7 @@ const CombatScene3D = () => {
   const doorCoverTargetIds = new Set(doorCoverTargeting && selectedUnit ? scenario.doors.filter((door) => !door.open && Math.abs((door.from.x + door.to.x) / 2 - (selectedUnit.position.x + 0.5)) + Math.abs((door.from.y + door.to.y) / 2 - (selectedUnit.position.y + 0.5)) <= 7).map((door) => door.id) : []);
   const selectedIsTrotting = selectedCombatantId ? trottingCombatantIds.includes(selectedCombatantId) : false;
   const selectedIsProne = selectedUnit?.posture === "prone";
-  const selectedIsSuppressed = selectedCombatantId ? suppressedCombatantIds.includes(selectedCombatantId) : false;
-  const selectedIsDragging = selectedCombatantId ? Boolean(draggingCombatantByCarrierId[selectedCombatantId]) : false;
-  const reachable = diveTargeting && selectedCombatantId ? diveOptions(scenario, selectedCombatantId) : status === "active" && selectedCombatantId && selectedIsProne && !selectedHasActed && !grenadeTargeting ? reachableCrawling(scenario, selectedCombatantId, selectedActionPoints) : status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? scenario.gravityMode === "zero-g" ? selectedActionPoints >= 3 ? zeroGravityPushes(scenario, selectedCombatantId) : new Map() : reachableMovement(scenario, selectedCombatantId, Math.min(selectedIsDragging || selectedIsSuppressed ? 2 : selectedIsTrotting ? 6 : 4, selectedActionPoints)) : new Map();
+  const reachable = diveTargeting && selectedCombatantId ? diveOptions(scenario, selectedCombatantId) : status === "active" && selectedCombatantId && selectedIsProne && !selectedHasActed && !grenadeTargeting ? reachableCrawling(scenario, selectedCombatantId, selectedActionPoints) : status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? scenario.gravityMode === "zero-g" ? selectedActionPoints >= 3 ? zeroGravityPushes(scenario, selectedCombatantId) : new Map() : reachableMovement(scenario, selectedCombatantId, selectedActionPoints, selectedIsTrotting) : new Map();
   const validTargetIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting && !selectedIsTrotting ? [...rangedEnemies(scenario, selectedCombatantId), ...adjacentEnemies(scenario, selectedCombatantId)].map((unit) => unit.id) : []);
   const maintainedTargetId = selectedCombatantId ? maintainedTargetByCombatantId[selectedCombatantId] : null;
   const aimedTargetId = selectedCombatantId ? aimedTargetByCombatantId?.[selectedCombatantId] : null;
@@ -89,9 +91,10 @@ const CombatScene3D = () => {
   const actionableDoorIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && selectedActionPoints >= 6 && !grenadeTargeting ? closedDoorsAdjacentTo(scenario, selectedCombatantId).map((door) => door.id) : []);
   const actionableObjectiveIds = new Set(status === "active" && selectedCombatantId && !selectedHasActed && !grenadeTargeting ? adjacentObjectives(scenario, selectedCombatantId).filter((objective) => objectiveContesters(scenario, objective.id, moraleStateByCombatantId, turn).length === 0).map((objective) => objective.id) : []);
   const grenadeTargetKeys = new Set(grenadeTargeting && selectedCombatantId ? validGrenadeTargets(scenario, selectedCombatantId).map(pointKey) : []);
-  const grenadeBlastKeys = new Set(plannedGrenadeTarget ? grenadeBlastCells(scenario, plannedGrenadeTarget).map(pointKey) : []);
+  const grenadeBlastKeys = new Set(plannedGrenadeTarget ? (grenadeKind === "fragmentation" ? collateralBlastCells(scenario, plannedGrenadeTarget) : grenadeBlastCells(scenario, plannedGrenadeTarget)).map(pointKey) : []);
   const coveringTargetKeys = new Set(coveringFireTargeting && selectedCombatantId ? validCoveringFireTargets(scenario, selectedCombatantId).map(pointKey) : []);
   const overwatchTargetKeys = new Set(overwatchTargeting && selectedCombatantId ? validCoveringFireTargets(scenario, selectedCombatantId).map(pointKey) : []);
+  const attackFieldKeys = new Set(plannedAttackTargetId && selectedCombatantId && !coveringFireTargeting && !overwatchTargeting ? validCoveringFireTargets(scenario, selectedCombatantId).map(pointKey) : []);
   const laneKeys = new Set([...coveringFireLanes, ...overwatchLanes].flatMap((lane) => lane.cells.map(pointKey)));
   const plannedTarget = plannedCoveringFireTarget ?? plannedOverwatchTarget;
   const plannedLaneKeys = new Set(plannedTarget && selectedUnit ? fireLaneCells(scenario, selectedUnit.position, plannedTarget).map(pointKey) : []);
@@ -101,7 +104,30 @@ const CombatScene3D = () => {
   const fireKeys = new Set((scenario.fireCells ?? []).map(pointKey));
   const smokeKeys = new Set((scenario.smokeCells ?? []).map(pointKey));
   const criticalFireKeys = new Set((scenario.criticalFireCells ?? []).map(pointKey));
-  const impactBlastKeys = new Set((lastGrenadeImpact?.blastCells ?? []).map(pointKey));
+  const impactBlastKeys = new Set([...(lastGrenadeImpact?.blastCells ?? []), ...(lastWeaponImpact?.blastCells ?? [])].map(pointKey));
+  const floorTiles: FloorTile3D[] = Array.from({ length: scenario.width }, (_, x) => Array.from({ length: scenario.height }, (_, y) => {
+    const point = { x, y };
+    const key = pointKey(point);
+    const canMove = reachable.has(key);
+    const canTargetGrenade = grenadeTargetKeys.has(key);
+    const inGrenadeBlast = grenadeBlastKeys.has(key);
+    const coveringTarget = coveringTargetKeys.has(key);
+    const overwatchTarget = overwatchTargetKeys.has(key);
+    const inAttackField = attackFieldKeys.has(key);
+    const inFireLane = laneKeys.has(key) || plannedLaneKeys.has(key);
+    const inBreachBlast = breachKeys.has(key);
+    const inVacuum = vacuumKeys.has(key);
+    const inEnvironmentalFire = fireKeys.has(key);
+    const inSmoke = smokeKeys.has(key);
+    const inImpactBlast = impactBlastKeys.has(key);
+    const inPath = plannedMove ? pathContains(plannedMove.path, point) : false;
+    const hovered = hoveredDestination?.x === x && hoveredDestination?.y === y;
+    const lighting = lightingLevelAt(scenario, point);
+    const terrain = scenario.terrainByCell?.[key];
+    const terrainHeight = terrainHeightAt(scenario, point);
+    const color = inBreachBlast ? "#c2410c" : inImpactBlast ? "#b91c1c" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "#a16207" : overwatchTarget ? "#701a75" : coveringTarget ? "#713f12" : inAttackField ? "#155e75" : inGrenadeBlast ? "#ea580c" : canTargetGrenade ? "#9d174d" : inPath ? advanceReadyPath ? "#0284c7" : "#d97706" : hovered && canMove ? "#0891b2" : canMove ? "#14532d" : inVacuum ? "#172554" : terrain === "difficult" ? "#4b4538" : terrain === "elevated" ? "#164e63" : terrain === "hazardous" ? "#6b2d3c" : lighting === "dark" ? "#030507" : lighting === "emergency" ? "#3b2117" : (x + y) % 2 === 0 ? "#172631" : "#13222c";
+    return { point, worldX: x + 0.5 - scenario.width / 2, worldZ: y + 0.5 - scenario.height / 2, color, centerY: terrainHeight ? terrainHeight - 0.05 : -0.05, height: terrainHeight ? 0.1 : inGrenadeBlast || inPath || hovered ? 0.14 : 0.1, canMove, canTargetGrenade, coveringTarget, overwatchTarget, inAttackField, hovered };
+  })).flat();
 
   return <>
     <color attach="background" args={["#03070a"]} />
@@ -140,34 +166,13 @@ const CombatScene3D = () => {
       </group>;
     })}
 
-    {Array.from({ length: scenario.width }, (_, x) => Array.from({ length: scenario.height }, (_, y) => {
-      const point = { x, y };
-      const key = pointKey(point);
-      const canMove = reachable.has(key);
-      const canTargetGrenade = grenadeTargetKeys.has(key);
-      const inGrenadeBlast = grenadeBlastKeys.has(key);
-      const coveringTarget = coveringTargetKeys.has(key);
-      const overwatchTarget = overwatchTargetKeys.has(key);
-      const inFireLane = laneKeys.has(key) || plannedLaneKeys.has(key);
-      const inBreachBlast = breachKeys.has(key);
-      const inVacuum = vacuumKeys.has(key);
-      const inEnvironmentalFire = fireKeys.has(key);
-      const inSmoke = smokeKeys.has(key);
-      const inImpactBlast = impactBlastKeys.has(key);
-      const inPath = plannedMove ? pathContains(plannedMove.path, point) : false;
-      const hovered = hoveredDestination?.x === x && hoveredDestination?.y === y;
-      const lighting = lightingLevelAt(scenario, point);
-      const terrain = scenario.terrainByCell?.[key];
-      const terrainHeight = terrainHeightAt(scenario, point);
-      const color = inBreachBlast ? "#c2410c" : inImpactBlast ? "#b91c1c" : inEnvironmentalFire ? "#7f1d1d" : inSmoke ? "#475569" : inFireLane ? "#a16207" : overwatchTarget ? "#701a75" : coveringTarget ? "#713f12" : inGrenadeBlast ? "#ea580c" : canTargetGrenade ? "#9d174d" : inPath ? advanceReadyPath ? "#0284c7" : "#d97706" : hovered && canMove ? "#0891b2" : canMove ? "#14532d" : inVacuum ? "#172554" : terrain === "difficult" ? "#4b4538" : terrain === "elevated" ? "#164e63" : terrain === "hazardous" ? "#6b2d3c" : lighting === "dark" ? "#030507" : lighting === "emergency" ? "#3b2117" : (x + y) % 2 === 0 ? "#172631" : "#13222c";
-      return <mesh key={`floor:${key}`} position={[x + 0.5 - scenario.width / 2, terrainHeight ? terrainHeight - 0.05 : -0.05, y + 0.5 - scenario.height / 2]} receiveShadow
-        onPointerOver={(event) => { if (canMove) { event.stopPropagation(); dispatch(setHoveredDestination(point)); } }}
-        onPointerOut={() => { if (hovered) dispatch(setHoveredDestination(null)); }}
-        onClick={(event) => { event.stopPropagation(); if (coveringTarget) dispatch(previewCoveringFire(point)); else if (overwatchTarget) dispatch(previewOverwatch(point)); else if (canTargetGrenade) dispatch(previewGrenadeTarget(point)); else if (canMove && !coveringFireTargeting && !overwatchTargeting) dispatch(diveTargeting ? previewDive(point) : previewMove(point)); else if (!grenadeTargeting && !coveringFireTargeting && !overwatchTargeting && !diveTargeting) dispatch(selectPlayerCombatant(null)); }}>
-        <boxGeometry args={[0.94, terrainHeight ? 0.1 : inGrenadeBlast || inPath || hovered ? 0.14 : 0.1, 0.94]} />
-        <meshStandardMaterial color={color} emissive={inGrenadeBlast ? "#9a3412" : canTargetGrenade ? "#500724" : inPath ? advanceReadyPath ? "#075985" : "#78350f" : canMove ? "#052e16" : "#000000"} roughness={0.9} />
-      </mesh>;
-    }))}
+    {floorTiles.map((tile) => <mesh key={`floor:${pointKey(tile.point)}`} position={[tile.worldX, tile.centerY, tile.worldZ]} receiveShadow
+      onPointerOver={(event) => { if (tile.canMove) { event.stopPropagation(); dispatch(setHoveredDestination(tile.point)); } }}
+      onPointerOut={() => { if (tile.hovered) dispatch(setHoveredDestination(null)); }}
+      onClick={(event) => { event.stopPropagation(); if (tile.coveringTarget) dispatch(previewCoveringFire(tile.point)); else if (tile.overwatchTarget) dispatch(previewOverwatch(tile.point)); else if (tile.canTargetGrenade) dispatch(previewGrenadeTarget(tile.point)); else if (tile.canMove && !coveringFireTargeting && !overwatchTargeting) dispatch(diveTargeting ? previewDive(tile.point) : previewMove(tile.point)); else if (!grenadeTargeting && !coveringFireTargeting && !overwatchTargeting && !diveTargeting) dispatch(selectPlayerCombatant(null)); }}>
+      <boxGeometry args={[0.94, tile.height, 0.94]} />
+      <meshStandardMaterial color={tile.color} emissive={tile.hovered ? "#0891b2" : tile.inAttackField ? "#0891b2" : "#000000"} emissiveIntensity={tile.hovered ? 0.45 : tile.inAttackField ? 0.18 : 0} roughness={0.9} />
+    </mesh>)}
     {lastGrenadeImpact && <group>
       {lastGrenadeImpact.scattered && <Line points={[
         [lastGrenadeImpact.intended.x + 0.5 - scenario.width / 2, 0.18, lastGrenadeImpact.intended.y + 0.5 - scenario.height / 2],
@@ -176,14 +181,18 @@ const CombatScene3D = () => {
       <mesh position={[lastGrenadeImpact.intended.x + 0.5 - scenario.width / 2, 0.12, lastGrenadeImpact.intended.y + 0.5 - scenario.height / 2]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.36, 0.035, 8, 32]} /><meshBasicMaterial color="#f9a8d4" /></mesh>
       <group position={[lastGrenadeImpact.landing.x + 0.5 - scenario.width / 2, 0.22, lastGrenadeImpact.landing.y + 0.5 - scenario.height / 2]}><mesh><sphereGeometry args={[0.24, 16, 12]} /><meshStandardMaterial color={lastGrenadeImpact.kind === "smoke" ? "#64748b" : "#dc2626"} emissive={lastGrenadeImpact.kind === "smoke" ? "#94a3b8" : "#ef4444"} emissiveIntensity={1.5} /></mesh><Html center position={[0, 0.65, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border-2 border-yellow-200 bg-black/95 px-1.5 py-0.5 font-mono text-[9px] font-bold text-white">{lastGrenadeImpact.kind === "smoke" ? "SMOKE DEPLOYED" : "GRENADE IMPACT"}</div></Html></group>
     </group>}
+    {lastWeaponImpact && <group position={[lastWeaponImpact.point.x + 0.5 - scenario.width / 2, terrainHeightAt(scenario, lastWeaponImpact.point) + 0.22, lastWeaponImpact.point.y + 0.5 - scenario.height / 2]}>
+      <mesh><sphereGeometry args={[0.24, 16, 12]} /><meshStandardMaterial color={!lastWeaponImpact.hit ? "#475569" : lastWeaponImpact.ammunitionKind === "he" ? "#dc2626" : "#7c3aed"} emissive={!lastWeaponImpact.hit ? "#64748b" : lastWeaponImpact.ammunitionKind === "he" ? "#ef4444" : "#a855f7"} emissiveIntensity={1.5} /></mesh>
+      <Html center position={[0, 0.65, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border-2 border-yellow-200 bg-black/95 px-1.5 py-0.5 font-mono text-[9px] font-bold text-white">{lastWeaponImpact.weaponName} · {lastWeaponImpact.hit ? lastWeaponImpact.ammunitionLabel : "MISS"}</div></Html>
+    </group>}
 
     {(scenario.fireCells ?? []).map((point) => { const critical = criticalFireKeys.has(pointKey(point)); return <group key={`fire:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.2, point.y + 0.5 - scenario.height / 2]}>{critical && <><mesh position={[0, -0.08, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.46, 0.07, 8, 32]} /><meshBasicMaterial color="#fde047" /></mesh><Html center position={[0, 1.15, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border-2 border-yellow-300 bg-red-950/95 px-1.5 py-0.5 font-mono text-[9px] font-bold text-yellow-100">CRITICAL FIRE</div></Html></>}<mesh><coneGeometry args={[critical ? 0.34 : 0.28, critical ? 0.9 : 0.75, 10]} /><meshStandardMaterial color={critical ? "#dc2626" : "#fb923c"} emissive="#dc2626" emissiveIntensity={1.5} /></mesh><pointLight color={critical ? "#fde047" : "#f97316"} intensity={critical ? 2.2 : 1.5} distance={2.5} /></group>; })}
     {(scenario.smokeCells ?? []).map((point) => <group key={`smoke:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.48, point.y + 0.5 - scenario.height / 2]}><mesh position={[-0.18, 0, 0]}><sphereGeometry args={[0.34, 12, 8]} /><meshStandardMaterial color="#94a3b8" transparent opacity={0.5} /></mesh><mesh position={[0.2, 0.12, 0.05]}><sphereGeometry args={[0.4, 12, 8]} /><meshStandardMaterial color="#64748b" transparent opacity={0.55} /></mesh></group>)}
 
     {(scenario.handholds ?? []).map((point) => <mesh key={`handhold:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0.08, point.y + 0.5 - scenario.height / 2]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.25, 0.05, 8, 24]} /><meshBasicMaterial color="#60a5fa" /></mesh>)}
 
-    {scenario.walls.map((wall) => <SegmentMesh key={wall.id} segment={wall} width={scenario.width} height={scenario.height} color="#b8c8d0" cutaway={cameraFacingOuterWall(wall)} baseHeight={segmentTerrainHeight(scenario, wall)} />)}
-    {scenario.doors.map((door) => <DoorMesh key={door.id} door={door} width={scenario.width} height={scenario.height} actionable={actionableDoorIds.has(door.id)} coverSelectable={doorCoverTargetIds.has(door.id)} coverSelected={plannedCoveredDoorId === door.id} charged={Boolean(placedBreachingChargeByDoorId[door.id])} covered={Object.values(coveredDoorByCombatantId ?? {}).includes(door.id)} baseHeight={segmentTerrainHeight(scenario, door)} onOpen={() => dispatch(doorCoverTargetIds.has(door.id) ? previewDoorCoverage(door.id) : previewOpenDoor(door.id))} />)}
+    {scenario.walls.map((wall) => <SegmentMesh key={wall.id} segment={wall} width={scenario.width} height={scenario.height} color={structuralDamageById?.[wall.id] ? "#fb923c" : "#b8c8d0"} cutaway={cameraFacingOuterWall(wall)} baseHeight={segmentTerrainHeight(scenario, wall)} selectable={structuralTargeting} selected={plannedStructuralTargetId === wall.id} onSelect={() => dispatch(previewStructuralTarget(wall.id))} />)}
+    {scenario.doors.map((door) => <DoorMesh key={door.id} door={door} width={scenario.width} height={scenario.height} actionable={actionableDoorIds.has(door.id)} coverSelectable={doorCoverTargetIds.has(door.id)} coverSelected={plannedCoveredDoorId === door.id} charged={Boolean(placedBreachingChargeByDoorId[door.id])} covered={Object.values(coveredDoorByCombatantId ?? {}).includes(door.id)} structuralSelectable={Boolean(structuralTargeting && !door.open)} structuralSelected={plannedStructuralTargetId === door.id} baseHeight={segmentTerrainHeight(scenario, door)} onStructuralSelect={() => dispatch(previewStructuralTarget(door.id))} onOpen={() => dispatch(doorCoverTargetIds.has(door.id) ? previewDoorCoverage(door.id) : previewOpenDoor(door.id))} />)}
 
     {scenario.objects.map((object) => {
       const objective = object.kind !== "cover";
@@ -199,7 +208,7 @@ const CombatScene3D = () => {
         {(actionable || planned) && <mesh position={[0, -0.3, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[planned ? 0.52 : 0.45, planned ? 0.07 : 0.04, 8, 32]} /><meshBasicMaterial color={planned ? "#ecfeff" : objectiveColor} /></mesh>}
         <mesh castShadow><boxGeometry args={[0.62, 0.7, 0.5]} /><meshStandardMaterial color={objectiveColor} emissive={objectiveColor} emissiveIntensity={0.25} /></mesh>
         <mesh position={[0, 0.18, -0.27]} rotation={[-0.25, 0, 0]}><boxGeometry args={[0.42, 0.25, 0.04]} /><meshStandardMaterial color="#e2e8f0" emissive={objectiveColor} emissiveIntensity={0.8} /></mesh>
-      </group> : <mesh key={object.id} position={position} castShadow receiveShadow><boxGeometry args={[0.76, 0.64, 0.76]} /><meshStandardMaterial color="#725338" roughness={0.85} /></mesh>;
+      </group> : <mesh key={object.id} position={position} castShadow receiveShadow onClick={(event) => { if (structuralTargeting) { event.stopPropagation(); dispatch(previewStructuralTarget(object.id)); } }}><boxGeometry args={[0.76, 0.64, 0.76]} /><meshStandardMaterial color={plannedStructuralTargetId === object.id ? "#ffffff" : structuralTargeting ? "#e879f9" : structuralDamageById?.[object.id] ? "#fb923c" : "#725338"} emissive={structuralTargeting ? "#86198f" : "#000000"} roughness={0.85} /></mesh>;
     })}
 
     {Object.entries(lastKnownEnemyPositions ?? {}).filter(([id]) => !(observedEnemyIds ?? []).includes(id)).map(([id, point]) => <group key={`last-known:${id}`} position={[point.x + 0.5 - scenario.width / 2, 0.08, point.y + 0.5 - scenario.height / 2]}><mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.34, 0.035, 8, 28]} /><meshBasicMaterial color="#94a3b8" transparent opacity={0.55} /></mesh><Html center position={[0, 0.38, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-slate-400 bg-black/75 px-1 font-mono text-[8px] text-slate-300">LAST KNOWN</div></Html></group>)}
