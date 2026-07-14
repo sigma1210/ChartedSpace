@@ -185,6 +185,13 @@ const applyFireDamage = (state: CharacterCombatState, unit: CombatScenario["comb
   state.events.unshift(`${unit.name} entered fire and suffered a ${nextWound} wound`);
 };
 
+const queueMovementAnimation = (state: CharacterCombatState, combatantId: string, origin: GridPoint, path: GridPoint[], mode: "walk" | "run") => {
+  if (path.length === 0) return;
+  state.movementAnimationByCombatantId ??= {};
+  const sequence = (state.movementAnimationByCombatantId[combatantId]?.sequence ?? 0) + 1;
+  state.movementAnimationByCombatantId[combatantId] = { sequence, path: [{ ...origin }, ...path.map((point) => ({ ...point }))], mode };
+};
+
 const updateDamageControlObjective = (scenario: CombatScenario, turn: number) => {
   if (scenario.id !== "damage-control") return;
   const total = scenario.criticalFireCells?.length ?? 0;
@@ -672,6 +679,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       unit.position = originalPosition;
     }
     const advancingReady = state.advanceReadyCombatantIds?.includes(unit.id) ?? false;
+    if (move.kind !== "dive" && move.kind !== "drop" && move.kind !== "climb" && move.kind !== "crawl") {
+      queueMovementAnimation(state, unit.id, moveOrigin, move.path, state.trottingCombatantIds.includes(unit.id) ? "run" : "walk");
+    }
     unit.position = final;
     state.movedCombatantIds ??= [];
     if (!state.movedCombatantIds.includes(unit.id)) state.movedCombatantIds.push(unit.id);
@@ -2338,6 +2348,8 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       const before = move.path.length > 1 ? move.path[move.path.length - 2] : enemy.position;
       const dx = move.destination.x - before.x;
       const dy = move.destination.y - before.y;
+      const enemyMoveOrigin = { ...enemy.position };
+      if (!enemyDiving && !enemyCrawling && scenario!.gravityMode !== "zero-g") queueMovementAnimation(state, enemy.id, enemyMoveOrigin, move.path, enemyTrotting ? "run" : "walk");
       enemy.position = move.destination;
       state.movedCombatantIds ??= [];
       if (!state.movedCombatantIds.includes(enemy.id)) state.movedCombatantIds.push(enemy.id);

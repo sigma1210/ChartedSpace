@@ -2,28 +2,17 @@
 
 import { Canvas } from "@react-three/fiber";
 import { Html, Line, OrthographicCamera } from "@react-three/drei";
-import { useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { Suspense, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { adjacentEnemies, adjacentObjectives, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, lightingLevelAt, objectiveContesters, pathContains, pointKey, proneRotationForFacing, rangedEnemies, reachableMovement, stagedObjectiveStatus, structuralVerticalSpan, terrainHeightAt, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
+import { adjacentEnemies, adjacentObjectives, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, depressurizedCells, doorBlastCells, fireLaneCells, grenadeBlastCells, lightingLevelAt, objectiveContesters, pathContains, pointKey, rangedEnemies, reachableMovement, stagedObjectiveStatus, structuralVerticalSpan, terrainHeightAt, validCoveringFireTargets, validGrenadeTargets, zeroGravityPushes } from "./geometry";
 import { adjustCameraZoom, panCameraBy, previewAttack, previewCoveringFire, previewDoorCoverage, previewGrenadeTarget, previewMove, previewOpenDoor, previewOverwatch, previewSecureObjective, rotateCameraBy, selectPlayerCombatant, setHoveredDestination } from "./slice";
 import type { CombatScenario, DoorSegment, WallSegment } from "./types";
-import { equipmentVisualFor } from "./equipmentPresentation";
 import { diveOptions, reachableCrawling } from "./geometry";
 import { ahlMeleeDiveMoves } from "./geometry";
 import { previewAhlMeleeDive, previewDive } from "./slice";
 import { previewStructuralTarget } from "./slice";
-
-const WeaponMesh = ({ category, facing }: { category: ReturnType<typeof equipmentVisualFor>["weaponCategory"]; facing: "north" | "east" | "south" | "west" }) => {
-  const rotationY = facing === "east" ? -Math.PI / 2 : facing === "south" ? Math.PI : facing === "west" ? Math.PI / 2 : 0;
-  const dimensions: [number, number, number] = category === "pistol" ? [0.12, 0.12, 0.32] : category === "smg" ? [0.2, 0.17, 0.45] : category === "shotgun" ? [0.15, 0.15, 0.72] : category === "gauss-rifle" ? [0.18, 0.16, 0.88] : [0.12, 0.13, 0.82];
-  const z = -dimensions[2] / 2 + 0.02;
-  const color = category === "laser-rifle" ? "#22d3ee" : category === "gauss-rifle" ? "#94a3b8" : category === "shotgun" ? "#a16207" : "#334155";
-  return <group rotation={[0, rotationY, 0]}>
-    <mesh position={[0.25, 0.56, z]} castShadow><boxGeometry args={dimensions} /><meshStandardMaterial color={color} emissive={category === "laser-rifle" ? "#0891b2" : "#000000"} emissiveIntensity={category === "laser-rifle" ? 0.8 : 0} /></mesh>
-    {category === "gauss-rifle" && <mesh position={[0.25, 0.42, -0.28]}><boxGeometry args={[0.16, 0.22, 0.18]} /><meshStandardMaterial color="#475569" /></mesh>}
-    {category === "smg" && <mesh position={[0.25, 0.43, -0.1]}><boxGeometry args={[0.13, 0.2, 0.12]} /><meshStandardMaterial color="#1e293b" /></mesh>}
-  </group>;
-};
+import { AnimatedCombatantFallback, AnimatedCombatantModel } from "./AnimatedCombatantModel";
+import { AnimatedCombatantPlacement } from "./AnimatedCombatantPlacement";
 
 const segmentTerrainHeight = (scenario: CombatScenario, segment: WallSegment) => {
   const horizontal = segment.from.y === segment.to.y;
@@ -65,7 +54,7 @@ interface FloorTile3D { point: { x: number; y: number }; worldX: number; worldZ:
 const CombatScene3D = () => {
   const dispatch = useAppDispatch();
   const { structuralTargeting, plannedStructuralTargetId, structuralDamageById } = useAppSelector((state) => state.plugins.characterCombat);
-  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, grenadeKind, lastGrenadeImpact, lastWeaponImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, diveTargeting, ahlMeleeDeclarations, lastResolvedAhlMeleeDeclarations } = useAppSelector((state) => state.plugins.characterCombat);
+  const { scenario, camera, status, turn, selectedCombatantId, plannedMove, plannedAttackTargetId, plannedGrenadeTarget, grenadeKind, lastGrenadeImpact, lastWeaponImpact, plannedBreachDoorId, placedBreachingChargeByDoorId, coveringFireTargeting, plannedCoveringFireTarget, coveringFireLanes, overwatchTargeting, plannedOverwatchTarget, overwatchLanes, plannedObjectiveId, hoveredDestination, actionPointsById, actedCombatantIds, grenadeTargeting, trottingCombatantIds, maintainedTargetByCombatantId, leaderIdBySide, moraleStateByCombatantId, observedEnemyIds, lastKnownEnemyPositions, soundContacts, coveredDoorByCombatantId, doorCoverTargeting, plannedCoveredDoorId, weaponReadyCombatantIds, advanceReadyCombatantIds, aimedTargetByCombatantId, weaponDamagedCombatantIds, mobilityImpairedCombatantIds, diveTargeting, ahlMeleeDeclarations, lastResolvedAhlMeleeDeclarations, movementAnimationByCombatantId } = useAppSelector((state) => state.plugins.characterCombat);
   const advanceReadyPath = selectedCombatantId ? advanceReadyCombatantIds?.includes(selectedCombatantId) ?? false : false;
   if (!scenario) return null;
   const span = Math.max(scenario.width, scenario.height);
@@ -237,14 +226,18 @@ const CombatScene3D = () => {
       const overwatched = overwatchCombatantIds.has(unit.id);
       const weaponReady = weaponReadyCombatantIds?.includes(unit.id) ?? false;
       const grenadeRisk = grenadeBlastKeys.has(pointKey(unit.position));
-      const equipment = equipmentVisualFor(unit);
       const facing = unit.facing === "east" ? { position: [0.34, 0.12, 0] as [number, number, number], rotation: [0, 0, -Math.PI / 2] as [number, number, number] }
         : unit.facing === "west" ? { position: [-0.34, 0.12, 0] as [number, number, number], rotation: [0, 0, Math.PI / 2] as [number, number, number] }
           : unit.facing === "south" ? { position: [0, 0.12, 0.34] as [number, number, number], rotation: [Math.PI / 2, 0, 0] as [number, number, number] }
             : { position: [0, 0.12, -0.34] as [number, number, number], rotation: [-Math.PI / 2, 0, 0] as [number, number, number] };
       const showLabel = selected || validTarget || plannedTarget;
-      return <group key={unit.id} position={[unit.position.x + 0.5 - scenario.width / 2, (unit.posture === "prone" ? 0.28 : 0.12) + terrainHeightAt(scenario, unit.position), unit.position.y + 0.5 - scenario.height / 2]} rotation={inactive && !unit.surrendered ? [0, 0, Math.PI / 2] : unit.posture === "prone" ? proneRotationForFacing(unit.facing) : [0, 0, 0]}
+      const movement = movementAnimationByCombatantId?.[unit.id];
+      const visualMovement = movement ? { ...movement, path: movement.path.map((point) => [point.x + 0.5 - scenario.width / 2, 0.12 + terrainHeightAt(scenario, point), point.y + 0.5 - scenario.height / 2] as [number, number, number]) } : undefined;
+      const bodyDown = inactive && !unit.surrendered;
+      const bodyRotation = bodyDown ? [0, 0, Math.PI / 2] as [number, number, number] : [0, 0, 0] as [number, number, number];
+      return <AnimatedCombatantPlacement key={unit.id} position={[unit.position.x + 0.5 - scenario.width / 2, 0.12 + terrainHeightAt(scenario, unit.position), unit.position.y + 0.5 - scenario.height / 2]} rotation={[0, 0, 0]} finalFacing={unit.facing} movement={visualMovement}
         onClick={(event) => { if (selectable || validTarget) event.stopPropagation(); if (selectable) dispatch(selectPlayerCombatant(unit.id)); else if (validTarget) dispatch(meleeDiveMoves.has(unit.id) ? previewAhlMeleeDive(unit.id) : previewAttack(unit.id)); }}>
+        {(visuallyMoving, visualFacing) => <>
         {showLabel && <Html center position={[0, 1.18, 0]} style={{ pointerEvents: "none" }}><div className={`whitespace-nowrap border bg-black/85 px-1.5 py-0.5 font-mono text-[9px] font-bold ${unit.side === "player" ? "border-emerald-300 text-emerald-100" : "border-red-300 text-red-100"}`}>{unit.name.toUpperCase()}{scenario.captureTargetId === unit.id ? " · CAPTURE ALIVE" : ""}{leaderIdBySide?.[unit.side] === unit.id ? " · LEADER" : ""}{unit.stunnedUntilTurn ? " · STUNNED" : ""}{(moraleStateByCombatantId?.[unit.id] ?? "steady") !== "steady" ? ` · ${(moraleStateByCombatantId?.[unit.id] ?? "steady").toUpperCase()}` : ""}{unit.posture === "prone" ? " · PRONE" : ""}{unit.woundState !== "healthy" ? ` · ${unit.woundState.toUpperCase()}` : ""}</div></Html>}
         {selected && <mesh position={[0, 0.02, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.43, 0.05, 8, 32]} /><meshBasicMaterial color="#f8fafc" /></mesh>}
         {validTarget && <mesh position={[0, 0.04, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[plannedTarget ? 0.52 : 0.46, plannedTarget ? 0.075 : 0.045, 8, 32]} /><meshBasicMaterial color={plannedTarget ? "#fef2f2" : "#ef4444"} /></mesh>}
@@ -256,16 +249,24 @@ const CombatScene3D = () => {
         {overwatched && <mesh position={[0.34, 0.18, 0]}><boxGeometry args={[0.12, 0.12, 0.12]} /><meshBasicMaterial color="#e879f9" /></mesh>}
         {weaponReady && <><mesh position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.62, 0.035, 8, 32]} /><meshBasicMaterial color="#38bdf8" /></mesh><Html center position={[0, 1.42, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-sky-300 bg-black/85 px-1 font-mono text-[8px] font-bold text-sky-100">READY +1</div></Html></>}
         {validTarget && covered && <mesh position={[0, 0.16, 0.36]}><boxGeometry args={[0.32, 0.08, 0.08]} /><meshBasicMaterial color="#f59e0b" /></mesh>}
-        <mesh position={[0, 0.38, 0]} castShadow>{equipment.armorClass === "light" && unit.side === "player" ? <cylinderGeometry args={[0.18, 0.25, 0.58, 12]} /> : <boxGeometry args={equipment.armorClass === "battle-dress" ? [0.56, 0.66, 0.46] : equipment.armorClass === "combat" ? [0.48, 0.62, 0.4] : [0.42, 0.58, 0.32]} />}<meshStandardMaterial color={color} roughness={0.65} /></mesh>
-        {(equipment.armorClass === "combat" || equipment.armorClass === "battle-dress") && <><mesh position={[-0.34, 0.58, 0]} castShadow><boxGeometry args={[equipment.armorClass === "battle-dress" ? 0.22 : 0.16, 0.18, 0.38]} /><meshStandardMaterial color={color} /></mesh><mesh position={[0.34, 0.58, 0]} castShadow><boxGeometry args={[equipment.armorClass === "battle-dress" ? 0.22 : 0.16, 0.18, 0.38]} /><meshStandardMaterial color={color} /></mesh></>}
-        {equipment.armorClass === "flak" && <mesh position={[0, 0.42, 0]}><boxGeometry args={[0.43, 0.38, 0.35]} /><meshStandardMaterial color="#475569" transparent opacity={0.82} /></mesh>}
-        {equipment.armorClass === "battle-dress" && <mesh position={[0, 0.45, 0.3]} castShadow><boxGeometry args={[0.4, 0.5, 0.22]} /><meshStandardMaterial color="#334155" /></mesh>}
-        <mesh position={[0, 0.78, 0]} castShadow><sphereGeometry args={[0.2, 16, 12]} /><meshStandardMaterial color={color} roughness={0.65} /></mesh>
-        {!inactive && <WeaponMesh category={equipment.weaponCategory} facing={unit.facing} />}
+        <mesh position={[0, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+          <circleGeometry args={[0.34, 24]} />
+          <meshBasicMaterial color={color} transparent opacity={0.72} />
+        </mesh>
+        <group position={[0, bodyDown ? 0.11 : 0, 0]} rotation={bodyRotation}>
+          <Suspense fallback={<AnimatedCombatantFallback color={color} />}>
+            <AnimatedCombatantModel
+              animation={visuallyMoving ? visualMovement?.mode ?? "walk" : "idle"}
+              facing={visualFacing}
+              pose={unit.surrendered ? "surrender" : unit.stunnedUntilTurn && unit.stunnedUntilTurn >= turn ? "stunned" : !inactive && (weaponReady || Boolean(aimedTargetByCombatantId?.[unit.id])) ? "aim" : null}
+              frozen={inactive}
+            />
+          </Suspense>
+        </group>
         {!inactive && <mesh position={facing.position} rotation={facing.rotation}><coneGeometry args={[0.11, 0.28, 3]} /><meshBasicMaterial color="#f8fafc" /></mesh>}
-        {unit.surrendered ? <><mesh position={[-0.27, 0.72, 0]} rotation={[0, 0, 0.62]}><boxGeometry args={[0.09, 0.48, 0.09]} /><meshStandardMaterial color={color} /></mesh><mesh position={[0.27, 0.72, 0]} rotation={[0, 0, -0.62]}><boxGeometry args={[0.09, 0.48, 0.09]} /><meshStandardMaterial color={color} /></mesh></> : <><mesh position={[-0.27, 0.46, 0]} rotation={[0, 0, -0.22]}><boxGeometry args={[0.09, 0.42, 0.09]} /><meshStandardMaterial color={color} /></mesh><mesh position={[0.27, 0.46, 0]} rotation={[0, 0, 0.22]}><boxGeometry args={[0.09, 0.42, 0.09]} /><meshStandardMaterial color={color} /></mesh></>}
         {unit.woundState === "light" && <mesh position={[0.24, 0.55, 0]}><sphereGeometry args={[0.07, 8, 6]} /><meshBasicMaterial color="#fbbf24" /></mesh>}
-      </group>;
+        </>}
+      </AnimatedCombatantPlacement>;
     })}
   </>;
 };
