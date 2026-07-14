@@ -4,7 +4,10 @@ import { adjacencyEntryStepIndex, adjacentEnemies, adjacentObjectives, automatic
 import { accumulateWound, automaticFireModifierForRange, distanceInSquares, escalateWoundState, resolveAhlMelee, resolveSnapShot, snapShotTarget, weaponPenetrationForRange, woundStateForTotal, type AhlMeleeEffect, type DicePair } from "./combatResolution";
 import { diveOptions, reachableCrawling } from "./geometry";
 import { ahlMeleeDiveMoves } from "./geometry";
+import { reachableOpenMapMovement } from "./geometry";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "./enemyTactics";
+import { FIRST_TACTICAL_CONTROL_ROOM, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, type TacticalDoor, type TacticalTerminal } from "./tacticalTerrain";
+import { armoryLoadouts } from "./equipment";
 
 const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const highEnergyWeaponReady = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => !unit.weapon.highEnergy
@@ -13,6 +16,8 @@ const canAttackStructures = (unit: CombatScenario["combatants"][number]) => Bool
   || unit.weapon.ammunitionKind === "he"
   || unit.weapon.ammunitionKind === "heap"
   || unit.weapon.ammunitionKind === "discard-sabot";
+const firstTacticalMapBlockedCells = tacticalTerrainBlockedCells(FIRST_TACTICAL_CONTROL_ROOM.objects);
+const firstTacticalTerrainById = new Map(FIRST_TACTICAL_CONTROL_ROOM.objects.map((object) => [object.id, object]));
 export const collateralCheckPasses = (distance: number, rollTotal: number) => distance === 0
   || (distance === 1 && rollTotal <= 10)
   || (distance === 2 && rollTotal <= 8);
@@ -432,6 +437,258 @@ const resolveHoldZoneCapture = (state: CharacterCombatState) => {
 
 export const initialCharacterCombatState: CharacterCombatState = { scenario: null, selectedBoardingTeamIds: [], armoryLoadoutIds: ["scout", "breacher"], combatantStarts: {}, outcome: null, viewMode: "3d", camera: { quarterTurn: 0, azimuth: Math.PI / 4, elevation: Math.PI / 4.75, zoom: 42, focus: null, pan: { x: 0, y: 0 } }, status: "active", turn: 1, selectedCombatantId: null, plannedMove: null, plannedAttackTargetId: null, plannedAttackMode: null, grenadeTargeting: false, plannedGrenadeTarget: null, lastGrenadeImpact: null, plannedOpenDoorId: null, plannedBreachDoorId: null, plannedExtinguishFire: null, smokeClearsAtTurnByCell: {}, placedBreachingChargeByDoorId: {}, structuralDamageById: {}, vacuumExposureByCombatantId: {}, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], overwatchTargeting: false, plannedOverwatchTarget: null, overwatchLanes: [], adjacencyReactionReserveById: {}, adjacencyReactionUsedCombatantIds: [], movedCombatantIds: [], pendingAdjacencyReaction: null, plannedTreatmentTargetId: null, recoveringCombatantIds: [], evadingCombatantIds: [], trottingCombatantIds: [], bracedCombatantIds: [], suppressedCombatantIds: [], draggingCombatantByCarrierId: {}, maintainedTargetByCombatantId: {}, plannedObjectiveId: null, hoveredDestination: null, actionPointsById: {}, ammunitionById: {}, ammunitionByCombatantAndKind: {}, actedCombatantIds: [], events: [], hudLayouts: freshHudLayouts() };
 const slice = createSlice({ name: "characterCombat", initialState: initialCharacterCombatState, reducers: {
+  initializeTacticalMap: (state, action: PayloadAction<Array<string | { id: string; weaponSkill: number }>>) => {
+    if (!state.tacticalMap) {
+      state.tacticalMap = { width: 100, height: 100, gridSize: 1, characterPositions: {}, facingByCharacterId: {}, postureByCharacterId: {}, movementAnimationByCharacterId: {}, characterHudLayout: { visible: true, pinned: false, position: { x: 16, y: 86 } }, actionHudLayout: { visible: true, pinned: false, position: { x: 16, y: 190 } }, movementMode: "walk", plannedDestination: null, selectedTerrainObjectId: null, doorOpenById: {}, terminalActiveById: {}, terrainDamageById: {}, destroyedTerrainObjectIds: [], weaponSkillByCharacterId: {}, ammunitionByCharacterId: {}, turn: 1, actionPointsByCharacterId: {}, actedCharacterIds: [], activeCharacterId: null };
+    } else if (state.tacticalMap.width !== 100 || state.tacticalMap.height !== 100) {
+      const offsetX = Math.floor((100 - state.tacticalMap.width) / 2);
+      const offsetY = Math.floor((100 - state.tacticalMap.height) / 2);
+      Object.values(state.tacticalMap.characterPositions).forEach((position) => {
+        position.x += offsetX;
+        position.y += offsetY;
+      });
+      state.tacticalMap.width = 100;
+      state.tacticalMap.height = 100;
+      state.tacticalMap.gridSize = 1;
+    }
+    state.tacticalMap.characterHudLayout ??= { visible: true, pinned: false, position: { x: 16, y: 86 } };
+    state.tacticalMap.actionHudLayout ??= { visible: true, pinned: false, position: { x: 16, y: 190 } };
+    state.tacticalMap.movementMode ??= "walk";
+    state.tacticalMap.plannedDestination ??= null;
+    state.tacticalMap.selectedTerrainObjectId ??= null;
+    state.tacticalMap.doorOpenById ??= {};
+    state.tacticalMap.terminalActiveById ??= {};
+    state.tacticalMap.terrainDamageById ??= {};
+    state.tacticalMap.destroyedTerrainObjectIds ??= [];
+    state.tacticalMap.weaponSkillByCharacterId ??= {};
+    state.tacticalMap.ammunitionByCharacterId ??= {};
+    state.tacticalMap.turn ??= 1;
+    state.tacticalMap.actionPointsByCharacterId ??= {};
+    state.tacticalMap.actedCharacterIds ??= [];
+    state.tacticalMap.facingByCharacterId ??= {};
+    state.tacticalMap.postureByCharacterId ??= {};
+    state.tacticalMap.movementAnimationByCharacterId ??= {};
+    const startingPositions = [{ x: 48, y: 50 }, { x: 51, y: 50 }];
+    const tacticalCharacters = action.payload.slice(0, 2).map((entry) => typeof entry === "string" ? { id: entry, weaponSkill: 0 } : entry);
+    const tacticalCharacterIds = tacticalCharacters.map((entry) => entry.id);
+    Object.keys(state.tacticalMap.characterPositions).forEach((id) => {
+      if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.characterPositions[id];
+    });
+    tacticalCharacters.forEach(({ id, weaponSkill }, index) => {
+      state.tacticalMap!.characterPositions[id] ??= startingPositions[index];
+      state.tacticalMap!.actionPointsByCharacterId[id] ??= 6;
+      state.tacticalMap!.facingByCharacterId[id] ??= "south";
+      state.tacticalMap!.postureByCharacterId[id] ??= "standing";
+      state.tacticalMap!.weaponSkillByCharacterId[id] = weaponSkill;
+      const loadoutId = (state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds)[index] ?? state.armoryLoadoutIds[index];
+      state.tacticalMap!.ammunitionByCharacterId[id] ??= armoryLoadouts[loadoutId].weapon.magazineSize ?? 12;
+    });
+    Object.keys(state.tacticalMap.actionPointsByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.actionPointsByCharacterId[id]; });
+    Object.keys(state.tacticalMap.facingByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.facingByCharacterId[id]; });
+    Object.keys(state.tacticalMap.postureByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.postureByCharacterId[id]; });
+    Object.keys(state.tacticalMap.movementAnimationByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.movementAnimationByCharacterId[id]; });
+    state.tacticalMap.actedCharacterIds = state.tacticalMap.actedCharacterIds.filter((id) => tacticalCharacterIds.includes(id));
+    if (!state.tacticalMap.activeCharacterId || !tacticalCharacterIds.includes(state.tacticalMap.activeCharacterId) || (state.tacticalMap.actionPointsByCharacterId[state.tacticalMap.activeCharacterId] ?? 0) === 0) state.tacticalMap.activeCharacterId = tacticalCharacterIds.find((id) => (state.tacticalMap!.actionPointsByCharacterId[id] ?? 0) > 0) ?? null;
+  },
+  updateTacticalCharacterHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.characterHudLayout = action.payload;
+  },
+  updateTacticalActionHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.actionHudLayout = action.payload;
+  },
+  setTacticalMovementMode: (state, action: PayloadAction<"walk" | "trot" | null>) => {
+    if (state.tacticalMap) { state.tacticalMap.movementMode = action.payload; state.tacticalMap.plannedDestination = null; }
+  },
+  selectTacticalTerrainObject: (state, action: PayloadAction<string | null>) => {
+    if (state.tacticalMap) { state.tacticalMap.selectedTerrainObjectId = action.payload; state.tacticalMap.plannedDestination = null; }
+  },
+  interactWithTacticalTerrain: (state) => {
+    const map = state.tacticalMap;
+    const characterId = map?.activeCharacterId;
+    const object = map?.selectedTerrainObjectId ? firstTacticalTerrainById.get(map.selectedTerrainObjectId) : null;
+    const characterPosition = characterId ? map?.characterPositions[characterId] : null;
+    if (!map || !characterId || !object || !characterPosition) return;
+    if (object.kind === "door") {
+      const door = object as TacticalDoor;
+      const adjacent = [door.separates.first, door.separates.second].some((point) => point.x === characterPosition.x && point.y === characterPosition.y);
+      const open = map.doorOpenById[door.id] ?? door.open;
+      const cost = open ? 3 : 6;
+      if (!adjacent || (map.actionPointsByCharacterId[characterId] ?? 0) < cost) return;
+      map.doorOpenById[door.id] = !open;
+      map.actionPointsByCharacterId[characterId] = open ? map.actionPointsByCharacterId[characterId] - 3 : 0;
+    } else if (object.kind === "terminal") {
+      const terminal = object as TacticalTerminal;
+      const adjacent = Math.abs(terminal.position.x - characterPosition.x) + Math.abs(terminal.position.y - characterPosition.y) === 1;
+      if (!adjacent || map.terminalActiveById[terminal.id] || (map.actionPointsByCharacterId[characterId] ?? 0) < 6) return;
+      map.terminalActiveById[terminal.id] = true;
+      map.actionPointsByCharacterId[characterId] = 0;
+    } else return;
+    map.selectedTerrainObjectId = null;
+    map.movementMode = "walk";
+    if (map.actionPointsByCharacterId[characterId] > 0) return;
+    if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
+    const characterIds = Object.keys(map.characterPositions);
+    const remaining = characterIds.filter((id) => !map.actedCharacterIds.includes(id));
+    if (remaining.length > 0) map.activeCharacterId = remaining[0];
+    else {
+      map.turn += 1;
+      map.actedCharacterIds = [];
+      characterIds.forEach((id) => { map.actionPointsByCharacterId[id] = 6; });
+      map.activeCharacterId = characterIds[0] ?? null;
+    }
+  },
+  fireAtTacticalTerrain: (state, action: PayloadAction<{ hitDice: DicePair }>) => {
+    const map = state.tacticalMap;
+    const characterId = map?.activeCharacterId;
+    const object = map?.selectedTerrainObjectId ? firstTacticalTerrainById.get(map.selectedTerrainObjectId) : null;
+    if (!map || !characterId || !object || (object.kind !== "wall" && object.kind !== "door") || map.destroyedTerrainObjectIds.includes(object.id)) return;
+    const characterIds = Object.keys(map.characterPositions);
+    const loadoutIndex = characterIds.indexOf(characterId);
+    const loadoutId = (state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds)[loadoutIndex] ?? state.armoryLoadoutIds[loadoutIndex];
+    const weapon = armoryLoadouts[loadoutId]?.weapon;
+    const position = map.characterPositions[characterId];
+    if (!weapon || !position || (!weapon.highEnergy && weapon.ammunitionKind !== "he" && weapon.ammunitionKind !== "heap" && weapon.ammunitionKind !== "discard-sabot") || (map.actionPointsByCharacterId[characterId] ?? 0) < 6 || (map.ammunitionByCharacterId[characterId] ?? 0) < 1) return;
+    const impact = { x: (object.edge.from.x + object.edge.to.x) / 2, y: (object.edge.from.y + object.edge.to.y) / 2 };
+    const range = Math.ceil(Math.hypot(impact.x - position.x - 0.5, impact.y - position.y - 0.5));
+    const rangeBand = range <= weapon.effectiveRange ? "effective" : range <= weapon.longRange ? "long" : range <= weapon.extremeRange ? "extreme" : null;
+    if (!rangeBand) return;
+    map.actionPointsByCharacterId[characterId] = 0;
+    map.ammunitionByCharacterId[characterId] -= 1;
+    const hitTotal = action.payload.hitDice.first + action.payload.hitDice.second + (map.weaponSkillByCharacterId[characterId] ?? 0) + 1;
+    const targetNumber = rangeBand === "effective" ? 8 : rangeBand === "long" ? 10 : 12;
+    if (hitTotal >= targetNumber) {
+      const penetration = weaponPenetrationForRange(weapon, rangeBand);
+      const damage = weapon.ammunitionKind === "he" ? 1 : Math.max(0, penetration - 4);
+      map.terrainDamageById[object.id] = (map.terrainDamageById[object.id] ?? 0) + damage;
+      const threshold = object.kind === "door" ? 5 : 25;
+      if (map.terrainDamageById[object.id] >= threshold) {
+        if (!map.destroyedTerrainObjectIds.includes(object.id)) map.destroyedTerrainObjectIds.push(object.id);
+        if (object.kind === "door") map.doorOpenById[object.id] = true;
+      }
+    }
+    map.selectedTerrainObjectId = null;
+    if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
+    const remaining = characterIds.filter((id) => !map.actedCharacterIds.includes(id));
+    map.activeCharacterId = remaining[0] ?? characterIds[0] ?? null;
+    if (remaining.length === 0) {
+      map.turn += 1;
+      map.actedCharacterIds = [];
+      characterIds.forEach((id) => { map.actionPointsByCharacterId[id] = 6; });
+    }
+  },
+  previewTacticalMove: (state, action: PayloadAction<GridPoint | null>) => {
+    if (state.tacticalMap) state.tacticalMap.plannedDestination = action.payload;
+  },
+  activateTacticalCharacter: (state, action: PayloadAction<string>) => {
+    if (!state.tacticalMap || (state.tacticalMap.actionPointsByCharacterId[action.payload] ?? 0) < 1) return;
+    if (state.tacticalMap.activeCharacterId !== action.payload) state.tacticalMap.selectedTerrainObjectId = null;
+    state.tacticalMap.activeCharacterId = action.payload;
+    state.tacticalMap.movementMode = "walk";
+    state.tacticalMap.plannedDestination = null;
+  },
+  finishTacticalActivation: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    if (!map || !id) return;
+    map.actionPointsByCharacterId[id] = 0;
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    map.movementMode = "walk";
+    map.plannedDestination = null;
+    map.selectedTerrainObjectId = null;
+    const characterIds = Object.keys(map.characterPositions);
+    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
+    if (remaining.length > 0) map.activeCharacterId = remaining[0];
+    else {
+      map.turn += 1;
+      map.actedCharacterIds = [];
+      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
+      map.activeCharacterId = characterIds[0] ?? null;
+    }
+  },
+  confirmTacticalMove: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const destination = map?.plannedDestination;
+    const mode = map?.movementMode;
+    if (!map || !id || !destination || !mode) return;
+    const origin = map.characterPositions[id];
+    const available = map.actionPointsByCharacterId[id] ?? 0;
+    if (!origin || available < 1 || (mode === "trot" && available === 6 ? false : mode === "trot" && !map.movementAnimationByCharacterId[id])) return;
+    const prone = map.postureByCharacterId[id] === "prone";
+    if (prone) return;
+    const terrain = FIRST_TACTICAL_CONTROL_ROOM.objects.map((object) => object.kind === "door" ? { ...object, open: map.doorOpenById[object.id] ?? object.open } : object);
+    const moves = reachableOpenMapMovement({ width: map.width, height: map.height, origin, facing: map.facingByCharacterId[id] ?? "south", allowance: Math.min(6, available), trotting: mode === "trot", blockedCells: firstTacticalMapBlockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain) });
+    const move = moves.get(pointKey(destination));
+    if (!move || move.cost > available) return;
+    const sequence = (map.movementAnimationByCharacterId[id]?.sequence ?? 0) + 1;
+    map.movementAnimationByCharacterId[id] = { sequence, path: [{ ...origin }, ...move.path.map((point) => ({ ...point }))], mode: !prone && mode === "trot" ? "run" : "walk" };
+    map.characterPositions[id] = { ...move.destination };
+    map.facingByCharacterId[id] = move.finalFacing ?? map.facingByCharacterId[id] ?? "south";
+    map.actionPointsByCharacterId[id] = Math.max(0, available - move.cost);
+    map.plannedDestination = null;
+    if (map.actionPointsByCharacterId[id] > 0) return;
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    map.movementMode = "walk";
+    map.selectedTerrainObjectId = null;
+    const characterIds = Object.keys(map.characterPositions);
+    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
+    if (remaining.length > 0) map.activeCharacterId = remaining[0];
+    else {
+      map.turn += 1;
+      map.actedCharacterIds = [];
+      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
+      map.activeCharacterId = characterIds[0] ?? null;
+    }
+  },
+  turnTacticalCharacter: (state, action: PayloadAction<"left" | "right">) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const turnCost = map?.movementMode === "trot" ? 2 : 1;
+    if (!map || !id || map.postureByCharacterId[id] === "prone" || (map.actionPointsByCharacterId[id] ?? 0) < turnCost) return;
+    const directions = ["north", "east", "south", "west"] as const;
+    const currentIndex = directions.indexOf(map.facingByCharacterId[id] ?? "south");
+    const offset = action.payload === "right" ? 1 : directions.length - 1;
+    map.facingByCharacterId[id] = directions[(currentIndex + offset) % directions.length];
+    map.actionPointsByCharacterId[id] -= turnCost;
+    map.plannedDestination = null;
+    if (map.actionPointsByCharacterId[id] > 0) return;
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    map.movementMode = "walk";
+    map.selectedTerrainObjectId = null;
+    const characterIds = Object.keys(map.characterPositions);
+    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
+    if (remaining.length > 0) map.activeCharacterId = remaining[0];
+    else {
+      map.turn += 1;
+      map.actedCharacterIds = [];
+      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
+      map.activeCharacterId = characterIds[0] ?? null;
+    }
+  },
+  toggleTacticalPosture: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    if (!map || !id) return;
+    const prone = map.postureByCharacterId[id] === "prone";
+    const cost = prone ? 2 : 1;
+    if ((map.actionPointsByCharacterId[id] ?? 0) < cost) return;
+    map.postureByCharacterId[id] = prone ? "standing" : "prone";
+    map.actionPointsByCharacterId[id] -= cost;
+    map.movementMode = "walk";
+    map.plannedDestination = null;
+    if (map.actionPointsByCharacterId[id] > 0) return;
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    map.selectedTerrainObjectId = null;
+    const characterIds = Object.keys(map.characterPositions);
+    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
+    if (remaining.length > 0) map.activeCharacterId = remaining[0];
+    else {
+      map.turn += 1;
+      map.actedCharacterIds = [];
+      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
+      map.activeCharacterId = characterIds[0] ?? null;
+    }
+  },
   loadCombatScenario: (state, action: PayloadAction<CombatScenario>) => { resetTransientIntel(state); state.adjacencyReactionReserveById = {}; state.adjacencyReactionUsedCombatantIds = []; state.movedCombatantIds = []; state.pendingAdjacencyReaction = null; state.scenario = action.payload; state.scenario.combatants.forEach((unit) => { unit.seriousWounds = unit.seriousWounds ?? (unit.woundState === "serious" || unit.woundState === "unconscious" ? 1 : unit.woundState === "dead" ? 2 : 0); }); state.leaderIdBySide = designatedLeaders(action.payload); state.moraleStateByCombatantId = freshMorale(action.payload); state.combatantStarts = startingCombatants(action.payload); state.outcome = null; state.camera.focus = null; state.camera.pan = { x: 0, y: 0 }; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.lastGrenadeImpact = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = freshActionPoints(action.payload); state.ammunitionById = freshAmmunition(action.payload); state.ammunitionByCombatantAndKind = freshProfileAmmunition(action.payload); state.actedCombatantIds = []; state.events = []; },
   clearCombatScenario: (state) => { resetTransientIntel(state); state.adjacencyReactionReserveById = {}; state.adjacencyReactionUsedCombatantIds = []; state.movedCombatantIds = []; state.pendingAdjacencyReaction = null; state.scenario = null; state.combatantStarts = {}; state.outcome = null; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = {}; state.ammunitionById = {}; state.ammunitionByCombatantAndKind = {}; state.actedCombatantIds = []; state.events = []; },
   selectPlayerCombatant: (state, action: PayloadAction<string | null>) => {
@@ -2549,8 +2806,18 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     state.armoryLoadoutIds = [selections[0], selections[1]];
   },
 } });
-export const { loadCombatScenario, clearCombatScenario, selectPlayerCombatant, startTrot, beginDragging, releaseDraggedCombatant, previewMove, previewDropDown, confirmMove, turnCombatant, previewOpenDoor, confirmOpenDoor, cancelOpenDoor, openDoor, closeDoor, previewExtinguishFire, confirmExtinguishFire, cancelExtinguishFire, previewAttack, selectAttackMode, confirmAttack, cancelAttackPreview, fireHighEnergyAtStructure, beginCoveringFire, previewCoveringFire, confirmCoveringFire, cancelCoveringFire, beginOverwatch, previewOverwatch, confirmOverwatch, cancelOverwatch, beginGrenadeTargeting, beginSmokeGrenadeTargeting, beginStunGrenadeTargeting, previewGrenadeTarget, cancelGrenadeTargeting, confirmGrenade, previewTreatment, cancelTreatmentPreview, confirmTreatment, previewSecureObjective, confirmSecureObjective, cancelObjectivePreview, previewBreachDoor, confirmBreachDoor, previewBreachDetonation, detonateBreachCharge, cancelBreachDoor, reloadWeapon, selectWeaponAmmunition, evade, goProne, braceWeapon, standUp, rally, rallyAlly, restrainEnemy, finishActivation, endPlayerTurn, acknowledgeAhlMeleeResolution, cancelMovePreview, setHoveredDestination, updateHudLayout, restoreHud, resetHudLayouts, setViewMode, rotateCamera, rotateCameraBy, adjustCameraZoom, panCameraBy, resetCamera, focusCameraOnSelected, setBoardingTeamIds, setArmoryLoadout } = slice.actions;
+export const { initializeTacticalMap, updateTacticalCharacterHud, updateTacticalActionHud, loadCombatScenario, clearCombatScenario, selectPlayerCombatant, startTrot, beginDragging, releaseDraggedCombatant, previewMove, previewDropDown, confirmMove, turnCombatant, previewOpenDoor, confirmOpenDoor, cancelOpenDoor, openDoor, closeDoor, previewExtinguishFire, confirmExtinguishFire, cancelExtinguishFire, previewAttack, selectAttackMode, confirmAttack, cancelAttackPreview, fireHighEnergyAtStructure, beginCoveringFire, previewCoveringFire, confirmCoveringFire, cancelCoveringFire, beginOverwatch, previewOverwatch, confirmOverwatch, cancelOverwatch, beginGrenadeTargeting, beginSmokeGrenadeTargeting, beginStunGrenadeTargeting, previewGrenadeTarget, cancelGrenadeTargeting, confirmGrenade, previewTreatment, cancelTreatmentPreview, confirmTreatment, previewSecureObjective, confirmSecureObjective, cancelObjectivePreview, previewBreachDoor, confirmBreachDoor, previewBreachDetonation, detonateBreachCharge, cancelBreachDoor, reloadWeapon, selectWeaponAmmunition, evade, goProne, braceWeapon, standUp, rally, rallyAlly, restrainEnemy, finishActivation, endPlayerTurn, acknowledgeAhlMeleeResolution, cancelMovePreview, setHoveredDestination, updateHudLayout, restoreHud, resetHudLayouts, setViewMode, rotateCamera, rotateCameraBy, adjustCameraZoom, panCameraBy, resetCamera, focusCameraOnSelected, setBoardingTeamIds, setArmoryLoadout } = slice.actions;
 export const toggleLamp = slice.actions.toggleLamp;
+export const setTacticalMovementMode = slice.actions.setTacticalMovementMode;
+export const previewTacticalMove = slice.actions.previewTacticalMove;
+export const activateTacticalCharacter = slice.actions.activateTacticalCharacter;
+export const finishTacticalActivation = slice.actions.finishTacticalActivation;
+export const confirmTacticalMove = slice.actions.confirmTacticalMove;
+export const turnTacticalCharacter = slice.actions.turnTacticalCharacter;
+export const toggleTacticalPosture = slice.actions.toggleTacticalPosture;
+export const selectTacticalTerrainObject = slice.actions.selectTacticalTerrainObject;
+export const interactWithTacticalTerrain = slice.actions.interactWithTacticalTerrain;
+export const fireAtTacticalTerrain = slice.actions.fireAtTacticalTerrain;
 export const beginStructuralTargeting = slice.actions.beginStructuralTargeting;
 export const previewStructuralTarget = slice.actions.previewStructuralTarget;
 export const cancelStructuralTargeting = slice.actions.cancelStructuralTargeting;

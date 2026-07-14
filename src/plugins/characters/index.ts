@@ -30,6 +30,7 @@ export {
   initialCharactersState,
   invalidateCharacters,
   refreshCharacters,
+  setSelectedProfileCharacter,
   updateCharacterInList,
   type CharacterState,
   type CharacterSummary,

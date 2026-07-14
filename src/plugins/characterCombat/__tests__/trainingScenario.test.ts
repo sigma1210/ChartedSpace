@@ -1405,16 +1405,17 @@ describe("character combat 2D checkpoint", () => {
     expect(state.actionPointsById["player-1"]).toBe(6);
   });
 
-  it("pays to turn while trotting around an obstacle", () => {
+  it("pays 2 AP per 90-degree turn while trotting around an obstacle", () => {
     const scenario = buildTrainingScenario();
     const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
     scenario.walls = [];
     scenario.doors = [];
     scenario.objects = [{ id: "trot-blocker", kind: "cover", position: { x: 3, y: 4 }, label: "Trot Blocker" }];
     scenario.combatants.filter((unit) => unit.id !== player.id).forEach((unit) => { unit.defeated = true; });
-    const move = reachableMovement(scenario, player.id, 6, true).get(pointKey({ x: 4, y: 3 }));
-    expect(move).toMatchObject({ destination: { x: 4, y: 3 }, cost: 5, finalFacing: "east" });
-    expect(move?.costBreakdown).toContain("turn 1");
+    expect(reachableMovement(scenario, player.id, 6, true).get(pointKey({ x: 4, y: 3 }))).toBeUndefined();
+    const move = reachableMovement(scenario, player.id, 7, true).get(pointKey({ x: 4, y: 3 }));
+    expect(move).toMatchObject({ destination: { x: 4, y: 3 }, cost: 7, finalFacing: "east" });
+    expect(move?.costBreakdown).toContain("turn 2");
   });
 
   it("turns a selected character in 90-degree steps for 1 AP", () => {

@@ -1,5 +1,6 @@
 import type { CombatScenario, Combatant, DoorSegment, GridPoint, MoraleState, PlannedMove, WallSegment } from "./types";
 import { distanceInSquares, snapShotTarget } from "./combatResolution";
+import { tacticalMovementEdgeKey } from "./tacticalTerrain";
 
 export const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 export const inFieldOfFire = (attacker: Pick<Combatant, "position" | "facing">, target: GridPoint) => {
@@ -225,6 +226,7 @@ const turnDistance = (from: Combatant["facing"], to: Combatant["facing"]) => {
   const difference = Math.abs(facings.indexOf(from) - facings.indexOf(to));
   return Math.min(difference, facings.length - difference);
 };
+const movementTurnCost = (from: Combatant["facing"], to: Combatant["facing"], trotting: boolean) => turnDistance(from, to) * (trotting ? 2 : 1);
 const forwardStep = (facing: Combatant["facing"], origin: GridPoint, destination: GridPoint) => {
   const vector = facingVectors[facing];
   const dx = destination.x - origin.x;
@@ -240,7 +242,7 @@ export const movementStepCost = (scenario: Pick<CombatScenario, "terrainByCell">
   const terrain = scenario.terrainByCell?.[pointKey(destination)] === "difficult" ? 1 : 0;
   if (!facing) return (diagonal ? 2 : 1) + terrain;
   if (!forwardStep(facing, origin, destination)) return trotting ? Number.POSITIVE_INFINITY : 6 + terrain;
-  return (trotting ? diagonal ? 2 : 1 : diagonal ? 3 : 2) + terrain;
+  return (trotting ? diagonal ? 1.5 : 1 : diagonal ? 3 : 2) + terrain;
 };
 
 export const movementPathCost = (scenario: Pick<CombatScenario, "terrainByCell">, origin: GridPoint, path: GridPoint[], initialFacing?: Combatant["facing"], trotting = false) => {
@@ -248,7 +250,7 @@ export const movementPathCost = (scenario: Pick<CombatScenario, "terrainByCell">
   return path.reduce((total, destination, index) => {
     const from = index === 0 ? origin : path[index - 1];
     if (!facing) return total + movementStepCost(scenario, from, destination);
-    const choices = movementFacingChoices(facing, from, destination, trotting).map((candidate) => ({ facing: candidate, cost: turnDistance(facing!, candidate) + movementStepCost(scenario, from, destination, candidate, trotting) }));
+    const choices = movementFacingChoices(facing, from, destination, trotting).map((candidate) => ({ facing: candidate, cost: movementTurnCost(facing!, candidate, trotting) + movementStepCost(scenario, from, destination, candidate, trotting) }));
     const choice = choices.sort((a, b) => a.cost - b.cost || facings.indexOf(a.facing) - facings.indexOf(b.facing))[0];
     if (!choice) return Number.POSITIVE_INFINITY;
     facing = choice.facing;
@@ -291,7 +293,7 @@ export const pathWithinMovementAllowance = (scenario: Pick<CombatScenario, "terr
     const from = index === 0 ? origin : path[index - 1];
     if (!facing) cost += movementStepCost(scenario, from, destination);
     else {
-      const choice = movementFacingChoices(facing, from, destination, trotting).map((candidate) => ({ facing: candidate, cost: turnDistance(facing!, candidate) + movementStepCost(scenario, from, destination, candidate, trotting) })).sort((a, b) => a.cost - b.cost)[0];
+      const choice = movementFacingChoices(facing, from, destination, trotting).map((candidate) => ({ facing: candidate, cost: movementTurnCost(facing!, candidate, trotting) + movementStepCost(scenario, from, destination, candidate, trotting) })).sort((a, b) => a.cost - b.cost)[0];
       if (!choice) break;
       facing = choice.facing;
       cost += choice.cost;
@@ -658,15 +660,51 @@ export const reachableMovement = (scenario: CombatScenario, combatantId: string,
       for (const nextFacing of movementFacingChoices(current.facing, current.point, destination, trotting)) {
         const turns = turnDistance(current.facing, nextFacing);
         const stepCost = movementStepCost(scenario, current.point, destination, nextFacing, trotting);
-        const cost = current.cost + turns + stepCost;
+        const turnCost = turns * (trotting ? 2 : 1);
+        const cost = current.cost + turnCost + stepCost;
         const key = stateKey(destination, nextFacing);
         if (cost > allowance || cost >= (bestCost.get(key) ?? Number.POSITIVE_INFINITY)) continue;
         bestCost.set(key, cost);
         const path = [...current.path, destination];
-        const breakdown = [...current.breakdown, ...(turns ? [`turn ${turns}`] : []), `${current.point.x !== destination.x && current.point.y !== destination.y ? "forward diagonal" : "forward"} ${stepCost}`];
+        const breakdown = [...current.breakdown, ...(turns ? [`turn ${turnCost}`] : []), `${current.point.x !== destination.x && current.point.y !== destination.y ? "forward diagonal" : "forward"} ${stepCost}`];
         const existing = results.get(pointKey(destination));
         if (!existing || cost < existing.cost) results.set(pointKey(destination), { combatantId, destination, path, cost, kind: enemyEntry ? "enemy-entry" : undefined, finalFacing: nextFacing, costBreakdown: breakdown });
         if (!enemyEntry) queue.push({ point: destination, path, cost, facing: nextFacing, breakdown });
+      }
+    }
+  }
+  return results;
+};
+
+export const reachableOpenMapMovement = ({ width, height, origin, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>() }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string> }) => {
+  const results = new Map<string, PlannedMove>();
+  const queue: { point: GridPoint; path: GridPoint[]; cost: number; facing: Combatant["facing"] }[] = [{ point: origin, path: [], cost: 0, facing }];
+  const stateKey = (point: GridPoint, direction: Combatant["facing"]) => `${pointKey(point)}:${direction}`;
+  const bestCost = new Map([[stateKey(origin, facing), 0]]);
+  while (queue.length > 0) {
+    queue.sort((a, b) => a.cost - b.cost);
+    const current = queue.shift()!;
+    if (current.cost !== bestCost.get(stateKey(current.point, current.facing)) || current.cost >= allowance) continue;
+    for (const destination of movementNeighbors(current.point)) {
+      if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
+      if (blockedCells.has(pointKey(destination))) continue;
+      const diagonal = current.point.x !== destination.x && current.point.y !== destination.y;
+      const crossingEdges = diagonal ? [
+        tacticalMovementEdgeKey(current.point, { x: destination.x, y: current.point.y }),
+        tacticalMovementEdgeKey(current.point, { x: current.point.x, y: destination.y }),
+        tacticalMovementEdgeKey({ x: destination.x, y: current.point.y }, destination),
+        tacticalMovementEdgeKey({ x: current.point.x, y: destination.y }, destination),
+      ] : [tacticalMovementEdgeKey(current.point, destination)];
+      if (crossingEdges.some((edge) => blockedEdges.has(edge))) continue;
+      for (const nextFacing of movementFacingChoices(current.facing, current.point, destination, trotting)) {
+        const cost = current.cost + movementTurnCost(current.facing, nextFacing, trotting) + movementStepCost({}, current.point, destination, nextFacing, trotting);
+        const key = stateKey(destination, nextFacing);
+        if (cost > allowance || cost >= (bestCost.get(key) ?? Number.POSITIVE_INFINITY)) continue;
+        bestCost.set(key, cost);
+        const path = [...current.path, destination];
+        const existing = results.get(pointKey(destination));
+        if (!existing || cost < existing.cost) results.set(pointKey(destination), { combatantId: "tactical-map", destination, path, cost, finalFacing: nextFacing });
+        queue.push({ point: destination, path, cost, facing: nextFacing });
       }
     }
   }

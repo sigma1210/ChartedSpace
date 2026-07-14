@@ -2,6 +2,7 @@
 
 import "@/lib/turns/index";
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import StarSystemView from "@/components/world/StarSystemView";
 import { WarpSceneLifecycle } from "@/components/world/WarpSceneLifecycle";
 import { SystemLocationLifecycle } from "@/components/world/SystemLocationLifecycle";
@@ -52,6 +53,9 @@ const SystemPageClient = () => {
       <SystemLocationLifecycle />
       <CharacterStartLifecycle />
       <StarSystemView />
+      <Link href="/system/tactical" className="absolute right-4 top-4 z-40 border border-cyan-400/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 shadow-lg shadow-cyan-950/40 hover:bg-cyan-950">
+        Tactical map
+      </Link>
     </div>
   );
 };
