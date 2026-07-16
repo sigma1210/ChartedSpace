@@ -9,7 +9,7 @@ import { FloatingPluginHud } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import { AnimatedCombatantFallback, AnimatedCombatantModel } from "@/plugins/characterCombat/AnimatedCombatantModel";
 import { AnimatedCombatantPlacement } from "@/plugins/characterCombat/AnimatedCombatantPlacement";
-import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalTreatment, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalMovementMode, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
+import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalMovementMode, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
 import { updateTacticalEnemyHud, updateTacticalScenarioHud } from "@/plugins/characterCombat/slice";
 import { activeOccupantCounts, automaticFireSecondaryTargets, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, grenadeBlastCells, meleeEnemies, pointKey, rangedEnemies, reachableOpenMapMovement, sidestepAndBackstepMoves, treatableAllies, validCoveringFireTargets, visibilityAssessment } from "@/plugins/characterCombat/geometry";
 import { automaticFireModifierForRange, snapShotTarget, weaponAccuracyForRange, weaponPenetrationForRange } from "@/plugins/characterCombat/combatResolution";
@@ -27,7 +27,7 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectActiveShip, selectShipStatus } from "@/plugins/ship";
 
-const DEFAULT_MAP: TacticalMapState = { scenario: buildDefaultTacticalScenario(), gridSize: 1, movementAnimationByCharacterId: {}, characterHudLayout: { visible: true, pinned: false, position: { x: 16, y: 86 } }, enemyHudLayout: { visible: true, pinned: false, position: { x: 840, y: 86 } }, actionHudLayout: { visible: true, pinned: false, position: { x: 16, y: 190 } }, characterInformationHudLayout: { visible: true, pinned: false, position: { x: 320, y: 86 } }, eventsHudLayout: { visible: true, pinned: false, position: { x: 580, y: 86 } }, movementMode: "walk", plannedDestination: null, plannedEnemyEntryTargetId: null, enemySquareEnteredCombatantIds: [], plannedAttackTargetId: null, plannedAttackMode: null, plannedMeleeTargetId: null, aimedTargetId: null, grenadeTargeting: false, grenadeKind: null, plannedGrenadeTarget: null, smokeClearsAtTurnByCell: {}, lastGrenadeImpact: null, lastWeaponImpact: null, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], coveringFireCommittedCombatantIds: [], pendingCoveringFireSnapIds: [], plannedTreatmentTargetId: null, draggingCombatantByCarrierId: {}, ahlMeleeStunUntilTurnById: {}, selectedTerrainObjectId: null, doorOpenById: {}, actionPhaseStartPositionByCombatantId: {}, pendingDoorCommandsById: {}, terminalActiveById: {}, terrainDamageById: {}, destroyedTerrainObjectIds: [], ammunitionByCharacterId: {}, ammunitionByCombatantAndKind: {}, evadingCombatantIds: [], bracedCombatantIds: [], suppressedCombatantIds: [], movedCombatantIds: [], processedEnemyPhaseCombatantIds: [], pendingAdjacencyReaction: null, events: [], turn: 1, actionPointsByCharacterId: {}, actedCharacterIds: [], activeCharacterId: null };
+const DEFAULT_MAP: TacticalMapState = { scenario: buildDefaultTacticalScenario(), gridSize: 1, movementAnimationByCharacterId: {}, characterHudLayout: { visible: true, pinned: false, position: { x: 16, y: 86 } }, enemyHudLayout: { visible: true, pinned: false, position: { x: 840, y: 86 } }, actionHudLayout: { visible: true, pinned: false, position: { x: 16, y: 190 } }, characterInformationHudLayout: { visible: true, pinned: false, position: { x: 320, y: 86 } }, eventsHudLayout: { visible: true, pinned: false, position: { x: 580, y: 86 } }, movementMode: "walk", plannedDestination: null, plannedEnemyEntryTargetId: null, enemySquareEnteredCombatantIds: [], plannedAttackTargetId: null, plannedAttackMode: null, plannedMeleeTargetId: null, aimedTargetId: null, grenadeTargeting: false, grenadeKind: null, plannedGrenadeTarget: null, smokeClearsAtTurnByCell: {}, lastGrenadeImpact: null, lastWeaponImpact: null, satchelCharges: [], satchelPlacementPending: false, lastSatchelImpact: null, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], coveringFireCommittedCombatantIds: [], pendingCoveringFireSnapIds: [], plannedTreatmentTargetId: null, draggingCombatantByCarrierId: {}, ahlMeleeStunUntilTurnById: {}, selectedTerrainObjectId: null, doorOpenById: {}, actionPhaseStartPositionByCombatantId: {}, pendingDoorCommandsById: {}, terminalActiveById: {}, terrainDamageById: {}, destroyedTerrainObjectIds: [], ammunitionByCharacterId: {}, ammunitionByCombatantAndKind: {}, evadingCombatantIds: [], bracedCombatantIds: [], suppressedCombatantIds: [], movedCombatantIds: [], processedEnemyPhaseCombatantIds: [], movingAdjacentMoraleResultByLeaderId: {}, pendingAdjacencyReaction: null, events: [], turn: 1, actionPointsByCharacterId: {}, actedCharacterIds: [], activeCharacterId: null };
 const TACTICAL_TERRAIN = FIRST_TACTICAL_CONTROL_ROOM.objects;
 const TACTICAL_BLOCKED_CELLS = tacticalTerrainBlockedCells(TACTICAL_TERRAIN);
 const TACTICAL_WALL_CORNERS = tacticalWallCornerPoints(TACTICAL_TERRAIN);
@@ -121,6 +121,20 @@ const BlastAreaPreview = ({ center, cells, width, height, resolved, label, color
   </>;
 };
 
+const SatchelChargeMarkers = ({ charges, width, height }: { charges: TacticalMapState["satchelCharges"]; width: number; height: number }) => <>
+  {charges.map((charge) => <group key={charge.id} position={[charge.position.x + 0.5 - width / 2, 0.16, charge.position.y + 0.5 - height / 2]}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.2, 0.31, 20]} />
+      <meshBasicMaterial color="#fb923c" />
+    </mesh>
+    <mesh position={[0, 0.05, 0]}>
+      <boxGeometry args={[0.28, 0.12, 0.2]} />
+      <meshStandardMaterial color="#7c2d12" emissive="#ea580c" emissiveIntensity={0.8} />
+    </mesh>
+    <Html center position={[0, 0.62, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-orange-300 bg-black/95 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase text-orange-100">Satchel armed</div></Html>
+  </group>)}
+</>;
+
 const SmokeArea = ({ cells, width, height }: { cells: { x: number; y: number }[]; width: number; height: number }) => <>
   {cells.map((point) => <group key={`smoke:${pointKey(point)}`} position={[point.x + 0.5 - width / 2, 0.48, point.y + 0.5 - height / 2]}>
     <mesh position={[-0.18, 0, 0]}>
@@ -132,6 +146,22 @@ const SmokeArea = ({ cells, width, height }: { cells: { x: number; y: number }[]
       <meshStandardMaterial color="#64748b" transparent opacity={0.55} depthWrite={false} />
     </mesh>
   </group>)}
+</>;
+
+const FireArea = ({ cells, selected, width, height }: { cells: { x: number; y: number }[]; selected: { x: number; y: number } | null; width: number; height: number }) => <>
+  {cells.map((point) => {
+    const highlighted = Boolean(selected && pointKey(selected) === pointKey(point));
+    return <group key={`fire:${pointKey(point)}`} position={[point.x + 0.5 - width / 2, 0.24, point.y + 0.5 - height / 2]}>
+      <mesh>
+        <coneGeometry args={[highlighted ? 0.36 : 0.3, highlighted ? 0.72 : 0.58, 12]} />
+        <meshStandardMaterial color="#fb923c" emissive="#ef4444" emissiveIntensity={highlighted ? 2.4 : 1.6} />
+      </mesh>
+      <mesh position={[0, -0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.34, 0.42, 24]} />
+        <meshBasicMaterial color={highlighted ? "#fef08a" : "#f97316"} />
+      </mesh>
+    </group>;
+  })}
 </>;
 
 const TacticalTerrainPiece = ({ object, mapWidth, mapHeight, selected, terminalActive, damage, onSelect }: { object: TacticalTerrainObject; mapWidth: number; mapHeight: number; selected: boolean; terminalActive: boolean; damage: number; onSelect: (point: { x: number; y: number }) => void }) => {
@@ -265,6 +295,9 @@ const TacticalScene = () => {
     {tacticalMap.plannedGrenadeTarget && <BlastAreaPreview center={tacticalMap.plannedGrenadeTarget} cells={plannedGrenadeBlastCells} width={mapWidth} height={mapHeight} resolved={false} label={`${tacticalMap.grenadeKind === "smoke" ? "Smoke" : "Grenade"} target`} color={tacticalMap.grenadeKind === "smoke" ? "#94a3b8" : undefined} />}
     {tacticalMap.lastGrenadeImpact && <BlastAreaPreview center={tacticalMap.lastGrenadeImpact.landing} cells={tacticalMap.lastGrenadeImpact.blastCells} width={mapWidth} height={mapHeight} resolved label={`${tacticalMap.lastGrenadeImpact.kind === "smoke" ? "Smoke" : "Grenade"} impact`} color={tacticalMap.lastGrenadeImpact.kind === "smoke" ? "#64748b" : undefined} />}
     {tacticalMap.lastWeaponImpact && <BlastAreaPreview center={tacticalMap.lastWeaponImpact.point} cells={tacticalMap.lastWeaponImpact.blastCells} width={mapWidth} height={mapHeight} resolved label={`${tacticalMap.lastWeaponImpact.weaponName} ${tacticalMap.lastWeaponImpact.ammunitionLabel} impact`} />}
+    {tacticalMap.lastSatchelImpact && <BlastAreaPreview center={tacticalMap.lastSatchelImpact.point} cells={tacticalMap.lastSatchelImpact.blastCells} width={mapWidth} height={mapHeight} resolved label="Satchel impact · penetration 30" color="#f97316" />}
+    <SatchelChargeMarkers charges={tacticalMap.satchelCharges} width={mapWidth} height={mapHeight} />
+    <FireArea cells={tacticalMap.scenario.fireCells ?? []} selected={tacticalMap.plannedExtinguishFire ?? null} width={mapWidth} height={mapHeight} />
     <SmokeArea cells={tacticalMap.scenario.smokeCells ?? []} width={mapWidth} height={mapHeight} />
     {wallRuns.map((run) => <TacticalWallRun key={run.segmentIds.join(":")} run={run} mapWidth={mapWidth} mapHeight={mapHeight} />)}
     {TACTICAL_WALL_CORNERS.map((corner) => <mesh key={`${corner.x}:${corner.y}`} position={[corner.x - mapWidth / 2, TACTICAL_WALL_CENTER_Y, corner.y - mapHeight / 2]} castShadow receiveShadow>
@@ -373,6 +406,10 @@ const TacticalMapPageClient = () => {
   const coveringFireWeaponReady = Boolean(selectedWeapon && (!selectedWeapon.highEnergy || selectedBraced));
   const plannedCoveringFireCells = selectedPosition && selectedWeapon && tacticalMap.plannedCoveringFireTarget ? coveringFireDangerSpaceCells(tacticalMap.scenario, selectedPosition, tacticalMap.plannedCoveringFireTarget, selectedWeapon.extremeRange) : [];
   const plannedGrenadeBlastCells = tacticalMap.plannedGrenadeTarget ? tacticalMap.grenadeKind === "smoke" ? grenadeBlastCells(tacticalMap.scenario, tacticalMap.plannedGrenadeTarget) : collateralBlastCells(tacticalMap.scenario, tacticalMap.plannedGrenadeTarget) : [];
+  const adjacentFireCells = activeCombatant ? (tacticalMap.scenario.fireCells ?? []).filter((fire) => Math.abs(fire.x - activeCombatant.position.x) + Math.abs(fire.y - activeCombatant.position.y) === 1) : [];
+  const plannedExtinguishFire = tacticalMap.plannedExtinguishFire && adjacentFireCells.some((fire) => pointKey(fire) === pointKey(tacticalMap.plannedExtinguishFire!)) ? tacticalMap.plannedExtinguishFire : null;
+  const satchelsInActiveSquare = activeCombatant ? tacticalMap.satchelCharges.filter((charge) => pointKey(charge.position) === pointKey(activeCombatant.position)) : [];
+  const satchelsPlacedByActiveCharacter = activeCombatant ? tacticalMap.satchelCharges.filter((charge) => charge.placerId === activeCombatant.id) : [];
   const treatmentTargets = activeCombatant ? treatableAllies(tacticalMap.scenario, activeCombatant.id) : [];
   const plannedTreatmentTarget = treatmentTargets.find((unit) => unit.id === tacticalMap.plannedTreatmentTargetId) ?? null;
   const rangedTargets = activeCombatant && !draggedCombatant ? rangedEnemies(tacticalMap.scenario, activeCombatant.id) : [];
@@ -407,7 +444,7 @@ const TacticalMapPageClient = () => {
   const previewedMove = tacticalMap.plannedDestination ? previewedMoves?.get(pointKey(tacticalMap.plannedDestination)) ?? null : null;
   const selectedEnteredEnemySquare = Boolean(activeCombatant && tacticalMap.enemySquareEnteredCombatantIds.includes(activeCombatant.id));
   const enemyEntryOptions = activeCombatant && tacticalMap.movementMode === "walk" && !selectedProne && !draggedCombatant && !selectedEnteredEnemySquare
-    ? enemies.flatMap((enemy) => {
+    ? enemies.filter((enemy) => !enemy.defeated).flatMap((enemy) => {
       const move = previewedMoves?.get(pointKey(enemy.position));
       if (!move || (selectedSuppressed && move.path.length > 2)) return [];
       return [{ enemy, move }];
@@ -536,6 +573,7 @@ const TacticalMapPageClient = () => {
           <span className="text-(--hud-text-dim)">Pen / Auto</span><span>+{activeCombatant.weapon.penetration} / {activeCombatant.weapon.automatic ? "yes" : "no"}</span>
           <span className="text-(--hud-text-dim)">Grenades</span><span>{activeCombatant.grenades}</span>
           <span className="text-(--hud-text-dim)">Smoke grenades</span><span>{activeCombatant.smokeGrenades ?? 0}</span>
+          <span className="text-(--hud-text-dim)">Satchel charges</span><span>{activeCombatant.breachingCharges ?? 0}</span>
           <span className="text-(--hud-text-dim)">Medkits</span><span>{activeCombatant.medkits}</span>
           <span className="text-(--hud-text-dim)">Armor</span><span>{activeCombatant.armorName ?? "Armor"} · {activeCombatant.armor}</span>
           <span className="text-(--hud-text-dim)">Wound</span><span>{activeCombatant.woundState}{(activeCombatant.seriousWounds ?? 0) > 0 ? ` · serious ${activeCombatant.seriousWounds}/2` : ""}</span>
@@ -606,6 +644,29 @@ const TacticalMapPageClient = () => {
               <button type="button" disabled={Boolean(draggedCombatant) || tacticalMap.coveringFireTargeting || selectedActionPoints < 6 || (activeCombatant?.grenades ?? 0) < 1} onClick={() => dispatch(beginTacticalGrenadeTargeting())} className="h-7 w-full border border-pink-300 px-2 text-[8px] font-bold uppercase tracking-wider text-pink-100 disabled:cursor-not-allowed disabled:opacity-40">Throw Fragmentation Grenade · {activeCombatant?.grenades ?? 0} · 6 AP</button>
               <button type="button" disabled={Boolean(draggedCombatant) || tacticalMap.coveringFireTargeting || selectedActionPoints < 6 || (activeCombatant?.smokeGrenades ?? 0) < 1} onClick={() => dispatch(beginTacticalSmokeGrenadeTargeting())} className="h-7 w-full border border-slate-300 px-2 text-[8px] font-bold uppercase tracking-wider text-slate-100 disabled:cursor-not-allowed disabled:opacity-40">Throw Smoke Grenade · {activeCombatant?.smokeGrenades ?? 0} · 6 AP</button>
             </div>}
+            {tacticalMap.satchelPlacementPending ? <div className="flex flex-col gap-2 border border-orange-300/60 p-2">
+              <div className="font-bold uppercase tracking-wider text-orange-100">Emplace Satchel Charge</div>
+              <div className="text-(--hud-text-dim)">The charge remains in {activeCombatant?.position.x}, {activeCombatant?.position.y}. Placement spends the entire activation. Only {activeCombatant?.name} may detonate it later.</div>
+              <div className="grid grid-cols-2 gap-1">
+                <button type="button" onClick={() => dispatch(confirmTacticalSatchelPlacement())} className="h-7 border border-orange-300 text-orange-100">Confirm Placement</button>
+                <button type="button" onClick={() => dispatch(cancelTacticalSatchelPlacement())} className="h-7 border border-(--hud-border) text-(--hud-text-dim)">Cancel</button>
+              </div>
+            </div> : <div className="flex flex-col gap-1">
+              {activeCombatant && (activeCombatant.breachingCharges ?? 0) > 0 && selectedActionPoints === 6 && !tacticalMap.grenadeTargeting && !tacticalMap.coveringFireTargeting && !draggedCombatant && <button type="button" onClick={() => dispatch(beginTacticalSatchelPlacement())} className="h-7 w-full border border-orange-300 px-2 text-[8px] font-bold uppercase tracking-wider text-orange-100">Emplace Satchel Charge · {activeCombatant.breachingCharges} · entire activation</button>}
+              {satchelsPlacedByActiveCharacter.map((charge) => <button key={`detonate:${charge.id}`} type="button" disabled={selectedActionPoints < 1} onClick={() => dispatch(detonateTacticalSatchelCharge({ chargeId: charge.id, rollsByCombatantId: Object.fromEntries(tacticalMap.scenario.combatants.filter((unit) => !unit.defeated).map((unit) => [unit.id, { checkDice: rollDicePair(), woundDice: rollDicePair() }])) }))} className="h-7 w-full border border-red-300 px-2 text-[8px] font-bold uppercase tracking-wider text-red-100 disabled:opacity-40">Detonate Satchel at {charge.position.x}, {charge.position.y} · 1 AP</button>)}
+              {satchelsInActiveSquare.map((charge) => <button key={`defuse:${charge.id}`} type="button" disabled={selectedActionPoints !== 6 || Boolean(draggedCombatant)} onClick={() => dispatch(defuseTacticalSatchelCharge(charge.id))} className="h-7 w-full border border-amber-300 px-2 text-[8px] font-bold uppercase tracking-wider text-amber-100 disabled:opacity-40">Defuse Satchel · entire activation</button>)}
+            </div>}
+            {plannedExtinguishFire ? <div className="flex flex-col gap-2 border border-orange-300/60 p-2">
+              <div className="font-bold uppercase tracking-wider text-orange-100">Extinguish Fire</div>
+              <div className="text-(--hud-text-dim)">Fire at {plannedExtinguishFire.x}, {plannedExtinguishFire.y} will be replaced by smoke until the next turn.</div>
+              <div className="grid grid-cols-2 gap-1">
+                <button type="button" onClick={() => dispatch(confirmTacticalExtinguishFire())} className="h-7 w-full border border-orange-300 px-2 text-[8px] font-bold uppercase tracking-wider text-orange-100">Confirm · 3 AP</button>
+                <button type="button" onClick={() => dispatch(cancelTacticalExtinguishFire())} className="h-7 w-full border border-(--hud-border) px-2 text-[8px] font-bold uppercase tracking-wider text-(--hud-text-dim)">Cancel</button>
+              </div>
+            </div> : adjacentFireCells.length > 0 && !tacticalMap.grenadeTargeting && !tacticalMap.coveringFireTargeting ? <div className="flex flex-col gap-1">
+              <div className="border-b border-orange-300/40 pb-0.5 font-bold uppercase tracking-wider text-orange-200">Fire</div>
+              {adjacentFireCells.map((fire) => <button key={`extinguish:${pointKey(fire)}`} type="button" disabled={selectedActionPoints < 3} onClick={() => dispatch(previewTacticalExtinguishFire(fire))} className="h-7 w-full border border-orange-300 px-2 text-[8px] font-bold uppercase tracking-wider text-orange-100 disabled:cursor-not-allowed disabled:opacity-40">Extinguish Fire {fire.x}, {fire.y} · 3 AP</button>)}
+            </div> : null}
             {plannedTreatmentTarget ? <div className="flex flex-col gap-2 border border-emerald-300/60 p-2">
               <div className="font-bold uppercase tracking-wider text-emerald-100">Treat {plannedTreatmentTarget.name}</div>
               <div className="text-(--hud-text-dim)">{plannedTreatmentTarget.woundState} · {plannedTreatmentTarget.defeated ? "will be stabilized and remain incapacitated" : "light wound will be treated"}</div>

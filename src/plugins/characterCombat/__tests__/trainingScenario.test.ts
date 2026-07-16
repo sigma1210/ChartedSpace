@@ -5344,6 +5344,7 @@ describe("character combat 2D checkpoint", () => {
     const door = scenario.doors.find((candidate) => candidate.locked)!;
     const blastCells = doorBlastCells(door);
     const breacher = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    breacher.breachingCharges = 1;
     breacher.position = blastCells[0];
     breacher.facing = "west";
     let state = reducer(undefined, loadCombatScenario(scenario));
@@ -5369,6 +5370,7 @@ describe("character combat 2D checkpoint", () => {
     const scenario = buildTrainingScenario();
     const door = scenario.doors[0];
     const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.breachingCharges = 1;
     player.position = doorBlastCells(door)[0];
     expect(closedDoorsAdjacentTo(scenario, player.id).map((candidate) => candidate.id)).toContain(door.id);
     expect(breachableDoorsAdjacentTo(scenario, player.id).map((candidate) => candidate.id)).toContain(door.id);
@@ -5383,6 +5385,7 @@ describe("character combat 2D checkpoint", () => {
     const door = scenario.doors[0];
     const blastCells = doorBlastCells(door);
     const player = scenario.combatants.find((unit) => unit.id === "player-1")!;
+    player.breachingCharges = 1;
     const enemy = scenario.combatants.find((unit) => unit.id === "enemy-1")!;
     player.position = blastCells[0];
     enemy.position = blastCells[1];

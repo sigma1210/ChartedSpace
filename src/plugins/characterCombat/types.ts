@@ -4,6 +4,7 @@ export interface WallSegment { id: string; from: GridPoint; to: GridPoint }
 export interface DoorSegment extends WallSegment { open: boolean; locked?: boolean }
 export interface MapObject { id: string; kind: "console" | "cover" | "prisoner" | "extraction" | "control"; position: GridPoint; label: string; completed?: boolean; coverType?: "low-cover" | "console" | "close-machinery" }
 export interface FireSpreadEvent { turn: number; source: GridPoint; fire: GridPoint; smoke: GridPoint }
+export interface SatchelCharge { id: string; placerId: string; position: GridPoint; placedTurn: number }
 export type WoundState = "healthy" | "light" | "serious" | "unconscious" | "dead";
 export type MoraleState = "steady" | "shaken" | "panicked" | "surrendered";
 export type LightingLevel = "illuminated" | "emergency" | "dark";
@@ -59,7 +60,10 @@ export interface TacticalMapState { coweringCombatantIds?: string[] }
 export interface TacticalMapState { panickedCombatantIds?: string[]; pendingCasualtyMoraleChecks?: { witnessId: string; casualtyId: string; occurrence: number }[]; casualtyMoraleOccurrence?: number }
 export interface TacticalMapState { visibleHostileIdsAtPhaseStartByCombatantId?: Record<string, string[]>; pendingUnexpectedFireMoraleChecks?: { combatantId: string; attackerId: string; occurrence: number }[]; unexpectedFireMoraleOccurrence?: number }
 export interface TacticalMapState { movedCombatantIds: string[]; processedEnemyPhaseCombatantIds: string[]; pendingAdjacencyReaction: { moverId: string; defenderIds: string[] } | null }
+export interface TacticalMapState { movingAdjacentMoraleResultByLeaderId: Record<string, boolean> }
 export interface TacticalMapState { actionPhaseStartPositionByCombatantId: Record<string, GridPoint>; pendingDoorCommandsById: Record<string, { open: boolean; resolvesAtTurn: number; characterId: string }> }
 export interface TacticalMapState { coveringFireCommittedCombatantIds: string[]; pendingCoveringFireSnapIds: string[] }
 export interface TacticalMapState { grenadeKind: "fragmentation" | "smoke" | null; smokeClearsAtTurnByCell: Record<string, number> }
+export interface TacticalMapState { plannedExtinguishFire?: GridPoint | null }
+export interface TacticalMapState { satchelCharges: SatchelCharge[]; satchelPlacementPending: boolean; lastSatchelImpact: { point: GridPoint; blastCells: GridPoint[] } | null }
 export interface CharacterCombatState { tacticalMap?: TacticalMapState }
