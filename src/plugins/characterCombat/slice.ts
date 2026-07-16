@@ -1,26 +1,409 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ArmoryLoadoutId, CharacterCombatHudId, CharacterCombatHudLayout, CharacterCombatState, CharacterCombatViewMode, CombatScenario, FireMode, GridPoint, MoraleState, WeaponAmmunitionKind } from "./types";
-import { adjacencyEntryStepIndex, adjacentEnemies, adjacentObjectives, automaticFireSecondaryTargets, breachableDoorsAdjacentTo, climbUpOptions, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, decompressionMovesForDoor, depressurizedCells, doorBlastCells, dropDownOptions, elevationAttackModifier, fireLaneCells, grenadeBlastCells, grenadeLandingPoint, grenadeThrowCoverModifier, grenadeThrowRangeModifier, hasLineOfSight, inFieldOfFire, lightingLevelAt, meleeEnemies, movementPathCost, objectiveContesters, openDoorsAdjacentTo, pathWithinMovementAllowance, pointKey, rangedEnemies, reachableMovement, remainingCriticalFireCells, routeAllowingClosedDoors, scenarioAvoidingFireForPathfinding, shortestPathToAny, treatableAllies, validCoveringFireTargets, validGrenadeTargets, vaultOptions, visibilityAssessment, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
-import { accumulateWound, automaticFireModifierForRange, distanceInSquares, escalateWoundState, resolveAhlMelee, resolveSnapShot, snapShotTarget, weaponPenetrationForRange, woundStateForTotal, type AhlMeleeEffect, type DicePair } from "./combatResolution";
+import type { ArmoryLoadoutId, CharacterCombatHudId, CharacterCombatHudLayout, CharacterCombatState, CharacterCombatViewMode, CombatScenario, CoveringFireLane, FireMode, GridPoint, MoraleState, TacticalMapState, WeaponAmmunitionKind, WeaponProfile } from "./types";
+import { activeOccupantCounts, adjacencyEntryStepIndex, adjacentEnemies, adjacentObjectives, automaticFireSecondaryTargets, breachableDoorsAdjacentTo, climbUpOptions, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, decompressionMovesForDoor, depressurizedCells, doorBlastCells, dropDownOptions, elevationAttackModifier, fireLaneCells, grenadeBlastCells, grenadeLandingPoint, grenadeThrowCoverModifier, grenadeThrowRangeModifier, hasLineOfSight, inFieldOfFire, lightingLevelAt, meleeEnemies, movementPathCost, objectiveContesters, openDoorsAdjacentTo, pathWithinMovementAllowance, pointKey, rangedEnemies, reachableMovement, remainingCriticalFireCells, routeAllowingClosedDoors, scenarioAvoidingFireForPathfinding, shortestPathToAny, treatableAllies, validCoveringFireTargets, validGrenadeTargets, vaultOptions, visibilityAssessment, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
+import { accumulateWound, automaticFireModifierForRange, distanceInSquares, escalateWoundState, resolveAhlMelee, resolveAhlMoraleCheck, resolveSnapShot, snapShotTarget, weaponPenetrationForRange, woundStateForTotal, type AhlMeleeEffect, type DicePair } from "./combatResolution";
 import { diveOptions, reachableCrawling } from "./geometry";
 import { ahlMeleeDiveMoves } from "./geometry";
-import { reachableOpenMapMovement } from "./geometry";
+import { reachableOpenMapMovement, sidestepAndBackstepMoves } from "./geometry";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "./enemyTactics";
 import { FIRST_TACTICAL_CONTROL_ROOM, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, type TacticalDoor, type TacticalTerminal } from "./tacticalTerrain";
 import { armoryLoadouts } from "./equipment";
+import { buildDefaultTacticalScenario } from "./defaultTacticalScenario";
 
 const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const highEnergyWeaponReady = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => !unit.weapon.highEnergy
   || state.bracedCombatantIds.includes(unit.id);
-const canAttackStructures = (unit: CombatScenario["combatants"][number]) => Boolean(unit.weapon.highEnergy)
-  || unit.weapon.ammunitionKind === "he"
-  || unit.weapon.ammunitionKind === "heap"
-  || unit.weapon.ammunitionKind === "discard-sabot";
+const canAttackStructures = (unit: CombatScenario["combatants"][number]) => Boolean(unit.weapon.highEnergy || unit.weapon.structuralDamage);
 const firstTacticalMapBlockedCells = tacticalTerrainBlockedCells(FIRST_TACTICAL_CONTROL_ROOM.objects);
 const firstTacticalTerrainById = new Map(FIRST_TACTICAL_CONTROL_ROOM.objects.map((object) => [object.id, object]));
+type TacticalCrewInput = string | { id: string; name?: string; weaponSkill: number; meleeRating?: number };
+const tacticalCrew = (entries: readonly TacticalCrewInput[]) => entries.slice(0, 2).map((entry) => typeof entry === "string" ? { id: entry, name: entry, weaponSkill: 0, meleeRating: 0 } : { ...entry, name: entry.name ?? entry.id, meleeRating: entry.meleeRating ?? 0 });
+const buildHydratedDefaultTacticalScenario = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[]) => {
+  const scenario = buildDefaultTacticalScenario();
+  const crew = tacticalCrew(entries);
+  const players = scenario.combatants.filter((unit) => unit.side === "player");
+  const tacticalLoadoutIds: readonly ArmoryLoadoutId[] = loadoutIds[0] === "scout" && loadoutIds[1] === "breacher" ? ["lag", "assault"] : loadoutIds;
+  players.slice(0, crew.length).forEach((unit, index) => {
+    const member = crew[index];
+    const loadout = armoryLoadouts[tacticalLoadoutIds[index] ?? (index === 0 ? "lag" : "assault")];
+    unit.id = member.id;
+    unit.sourceCharacterId = member.id;
+    unit.name = member.name;
+    unit.weaponSkill = member.weaponSkill;
+    unit.meleeRating = member.meleeRating;
+    unit.weapon = { ...loadout.weapon };
+    unit.armor = loadout.armor.value;
+    unit.armorName = loadout.armor.name;
+  });
+  scenario.combatants = [...players.slice(0, crew.length), ...scenario.combatants.filter((unit) => unit.side === "enemy")];
+  return scenario;
+};
+const tacticalPlayerIds = (map: TacticalMapState) => map.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id);
+const tacticalCombatant = (map: TacticalMapState, id: string | null | undefined) => id ? map.scenario.combatants.find((unit) => unit.id === id) ?? null : null;
+type AmmunitionProfile = NonNullable<WeaponProfile["ammunitionProfiles"]>[number];
+const applyAmmunitionProfile = (weapon: WeaponProfile, profile: AmmunitionProfile) => {
+  weapon.ammunitionKind = profile.kind;
+  weapon.effectiveRange = profile.effectiveRange;
+  weapon.longRange = profile.longRange;
+  weapon.extremeRange = profile.extremeRange;
+  weapon.penetration = profile.penetration;
+  weapon.automatic = profile.automatic ?? false;
+  weapon.burstSize = profile.burstSize;
+  weapon.automaticFireBonusByRange = profile.automaticFireBonusByRange;
+  weapon.inherentAutomaticFireBonus = profile.inherentAutomaticFireBonus;
+  weapon.attacksEveryoneInSquare = profile.attacksEveryoneInSquare;
+  weapon.accuracy = profile.accuracy;
+  weapon.accuracyByRange = profile.accuracyByRange;
+  weapon.penetrationByRange = profile.penetrationByRange;
+  weapon.woundEscalation = profile.woundEscalation;
+  weapon.collateralBlast = profile.collateralBlast;
+  weapon.impactMarker = profile.impactMarker;
+  weapon.structuralDamage = profile.structuralDamage;
+};
+const prepareTacticalAmmunition = (scenario: CombatScenario) => {
+  const ammunitionByCombatantAndKind: Record<string, Record<string, number>> = {};
+  scenario.combatants.forEach((unit) => {
+    const profiles = unit.weapon.ammunitionProfiles;
+    if (!profiles?.length) return;
+    const selectedProfile = profiles.find((profile) => profile.kind === unit.weapon.ammunitionKind) ?? profiles[0];
+    applyAmmunitionProfile(unit.weapon, selectedProfile);
+    ammunitionByCombatantAndKind[unit.id] = Object.fromEntries(profiles.map((profile) => [profile.kind, unit.weapon.magazineSize ?? 12]));
+  });
+  return ammunitionByCombatantAndKind;
+};
+const setTacticalAmmunition = (map: TacticalMapState, unit: CombatScenario["combatants"][number], count: number) => {
+  map.ammunitionByCharacterId[unit.id] = count;
+  const kind = unit.weapon.ammunitionKind;
+  if (!kind) return;
+  map.ammunitionByCombatantAndKind[unit.id] ??= {};
+  map.ammunitionByCombatantAndKind[unit.id][kind] = count;
+};
+const spendTacticalAmmunition = (map: TacticalMapState, unit: CombatScenario["combatants"][number], amount: number) => {
+  const current = map.ammunitionByCharacterId[unit.id] ?? 0;
+  if (current < amount) return false;
+  setTacticalAmmunition(map, unit, current - amount);
+  return true;
+};
+const coveringFireAmmunitionCost = (weapon: WeaponProfile) => weapon.burstSize ?? (weapon.automatic ? 3 : 1);
+const reloadTacticalAmmunition = (map: TacticalMapState, unit: CombatScenario["combatants"][number]) => setTacticalAmmunition(map, unit, unit.weapon.magazineSize ?? 12);
+const tacticalVisibilitySnapshot = (scenario: CombatScenario) => Object.fromEntries(scenario.combatants.map((observer) => [observer.id, scenario.combatants
+  .filter((target) => target.side !== observer.side && !target.defeated && visibilityAssessment(scenario, observer, target).visible)
+  .map((target) => target.id)]));
+const advanceTacticalPlayerActivation = (map: TacticalMapState) => {
+  if (map.scenarioStatus !== "active") { map.activeCharacterId = null; return; }
+  const remaining = tacticalPlayerIds(map).filter((id) => !map.actedCharacterIds.includes(id) && (map.actionPointsByCharacterId[id] ?? 0) > 0 && !tacticalCombatant(map, id)?.defeated);
+  map.activeCharacterId = remaining[0] ?? null;
+};
+const resolveTacticalPendingDoorCommands = (map: TacticalMapState) => {
+  Object.entries(map.pendingDoorCommandsById).forEach(([doorId, command]) => {
+    if (command.resolvesAtTurn > map.turn) return;
+    if (!map.destroyedTerrainObjectIds.includes(doorId)) {
+      map.doorOpenById[doorId] = command.open;
+      const scenarioDoor = map.scenario.doors.find((door) => door.id === doorId);
+      if (scenarioDoor) scenarioDoor.open = command.open;
+      map.events.unshift(`Control-room door ${command.open ? "opened" : "closed"} at the start of Turn ${map.turn}`);
+    }
+    delete map.pendingDoorCommandsById[doorId];
+  });
+};
+const concludeTacticalScenario = (map: TacticalMapState, status: "victory" | "defeat", event: string) => {
+  if (map.scenarioStatus !== "active") return;
+  map.scenarioStatus = status;
+  map.activeCharacterId = null;
+  map.movementMode = null;
+  map.pendingAdjacencyReaction = null;
+  map.plannedDestination = null;
+  map.plannedEnemyEntryTargetId = null;
+  map.plannedAttackTargetId = null;
+  map.plannedAttackMode = null;
+  map.plannedMeleeTargetId = null;
+  map.grenadeTargeting = false;
+  map.plannedGrenadeTarget = null;
+  map.coveringFireTargeting = false;
+  map.plannedCoveringFireTarget = null;
+  map.plannedTreatmentTargetId = null;
+  map.selectedTerrainObjectId = null;
+  Object.keys(map.actionPointsByCharacterId).forEach((id) => { map.actionPointsByCharacterId[id] = 0; });
+  map.events.unshift(event);
+};
+const resolveTacticalDefeat = (map: TacticalMapState) => {
+  const crew = map.scenario.combatants.filter((unit) => unit.side === "player");
+  if (crew.length > 0 && crew.every((unit) => unit.defeated)) concludeTacticalScenario(map, "defeat", "Defeat — all crew are incapacitated");
+};
+const queueTacticalCasualtyMoraleChecks = (map: TacticalMapState, casualty: CombatScenario["combatants"][number]) => {
+  map.pendingCasualtyMoraleChecks ??= [];
+  map.casualtyMoraleOccurrence = (map.casualtyMoraleOccurrence ?? 0) + 1;
+  const occurrence = map.casualtyMoraleOccurrence;
+  map.scenario.combatants
+    .filter((witness) => witness.id !== casualty.id && witness.side === casualty.side && !witness.defeated && !(map.panickedCombatantIds ?? []).includes(witness.id) && !(map.coweringCombatantIds ?? []).includes(witness.id) && hasLineOfSight(map.scenario, witness.position, casualty.position))
+    .forEach((witness) => { map.pendingCasualtyMoraleChecks!.push({ witnessId: witness.id, casualtyId: casualty.id, occurrence }); });
+};
+const queueTacticalUnexpectedFireMoraleCheck = (map: TacticalMapState, attacker: CombatScenario["combatants"][number], target: CombatScenario["combatants"][number]) => {
+  if (target.defeated || (map.panickedCombatantIds ?? []).includes(target.id) || (map.coweringCombatantIds ?? []).includes(target.id) || (map.visibleHostileIdsAtPhaseStartByCombatantId?.[target.id] ?? []).includes(attacker.id)) return;
+  map.pendingUnexpectedFireMoraleChecks ??= [];
+  map.unexpectedFireMoraleOccurrence = (map.unexpectedFireMoraleOccurrence ?? 0) + 1;
+  map.pendingUnexpectedFireMoraleChecks.push({ combatantId: target.id, attackerId: attacker.id, occurrence: map.unexpectedFireMoraleOccurrence });
+};
+const applyTacticalWound = (map: TacticalMapState, unit: CombatScenario["combatants"][number], woundState: CombatScenario["combatants"][number]["woundState"]) => {
+  const previousWoundState = unit.woundState;
+  const wound = accumulateWound(unit.woundState, woundState, unit.seriousWounds);
+  unit.woundState = wound.woundState;
+  unit.seriousWounds = wound.seriousWounds;
+  unit.defeated = wound.woundState === "serious" || wound.woundState === "unconscious" || wound.woundState === "dead";
+  if (unit.defeated) unit.health = 0;
+  if (unit.woundState !== previousWoundState && (unit.woundState === "serious" || unit.woundState === "unconscious" || unit.woundState === "dead")) queueTacticalCasualtyMoraleChecks(map, unit);
+  resolveTacticalDefeat(map);
+};
+const applyTacticalAhlMeleeEffect = (map: TacticalMapState, unit: CombatScenario["combatants"][number], effect: AhlMeleeEffect) => {
+  if (effect === "none") return;
+  if (effect === "stun") {
+    map.ahlMeleeStunUntilTurnById[unit.id] = map.turn + 1;
+    if (unit.woundState === "healthy") unit.woundState = "light";
+    return;
+  }
+  applyTacticalWound(map, unit, effect === "light" ? "light" : effect === "unconscious" ? "unconscious" : "dead");
+};
+const resolveTacticalCoveringFire = (map: TacticalMapState, primary: CombatScenario["combatants"][number], lane: CoveringFireLane, rolls: Record<string, { hitDice: DicePair; woundDice: DicePair }>, crossing: boolean) => {
+  map.coveringFireLanes = map.coveringFireLanes.filter((candidate) => candidate !== lane);
+  const attacker = tacticalCombatant(map, lane.attackerId);
+  const ammunitionCost = attacker ? coveringFireAmmunitionCost(attacker.weapon) : 1;
+  if (!attacker || attacker.defeated || (attacker.weapon.highEnergy && !map.bracedCombatantIds.includes(attacker.id)) || (map.ammunitionByCharacterId[attacker.id] ?? 0) < ammunitionCost) return new Set<string>();
+  const targetCells = crossing ? new Set([pointKey(primary.position)]) : new Set(lane.cells.map(pointKey));
+  const targets = map.scenario.combatants
+    .filter((unit) => unit.id !== attacker.id && !unit.defeated && targetCells.has(pointKey(unit.position)))
+    .sort((first, second) => lane.cells.findIndex((cell) => pointKey(cell) === pointKey(first.position)) - lane.cells.findIndex((cell) => pointKey(cell) === pointKey(second.position)) || map.scenario.combatants.indexOf(first) - map.scenario.combatants.indexOf(second));
+  if (targets.length === 0 || !spendTacticalAmmunition(map, attacker, ammunitionCost)) return new Set<string>();
+  const defeatedIds = new Set<string>();
+  const automaticDangerSpace = attacker.weapon.automatic || attacker.weapon.inherentAutomaticFireBonus || attacker.weapon.attacksEveryoneInSquare;
+  let hits = 0;
+  for (let index = 0; index < targets.length;) {
+    const squareKey = pointKey(targets[index].position);
+    const squareTargets = targets.filter((target) => pointKey(target.position) === squareKey);
+    for (const target of squareTargets) {
+      const dice = rolls[target.id] ?? rolls[primary.id];
+      if (!dice) continue;
+      const result = resolveSnapShot(attacker, target, dice.hitDice, dice.woundDice, coverProtection(map.scenario, attacker.id, target.id), "covering", false, map.suppressedCombatantIds.includes(attacker.id), map.bracedCombatantIds.includes(attacker.id), visibilityAssessment(map.scenario, attacker, target).modifier);
+      if (!result) continue;
+      queueTacticalUnexpectedFireMoraleCheck(map, attacker, target);
+      if (result.hit) { hits += 1; applyTacticalWound(map, target, result.woundState); }
+      if (target.defeated) defeatedIds.add(target.id);
+      map.events.unshift(`${attacker.name} covering fired ${crossing ? `as ${primary.name} crossed the lane` : `at ${target.name}`}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
+      if (!automaticDangerSpace && result.hit) return defeatedIds;
+    }
+    if (automaticDangerSpace && hits >= 2) break;
+    index += squareTargets.length;
+  }
+  return defeatedIds;
+};
+const resolveTacticalCoweringRecovery = (map: TacticalMapState, side: CombatScenario["combatants"][number]["side"], rolls: Record<string, DicePair>) => {
+  const coweringIds = map.coweringCombatantIds ?? [];
+  for (const id of coweringIds) {
+    const unit = tacticalCombatant(map, id);
+    const dice = rolls[id];
+    if (!unit || unit.side !== side || unit.defeated || unit.moraleFactor === undefined || !dice) continue;
+    const leadershipModifier = map.scenario.combatants
+      .filter((leader) => leader.id !== unit.id && leader.side === unit.side && !leader.defeated && !coweringIds.includes(leader.id) && pointKey(leader.position) === pointKey(unit.position))
+      .reduce((total, leader) => total + Math.max(0, leader.leadershipRating ?? 0), 0);
+    const result = resolveAhlMoraleCheck({ moraleFactor: unit.moraleFactor, woundState: unit.woundState }, dice, leadershipModifier);
+    if (result.passed) map.coweringCombatantIds = (map.coweringCombatantIds ?? []).filter((combatantId) => combatantId !== unit.id);
+    map.events.unshift(`${unit.name} cowering recovery ${result.roll}/${result.modifiedMorale}${result.lightWoundModifier ? " · light wound −1" : ""}${result.leadershipModifier ? ` · leadership +${result.leadershipModifier}` : ""}: ${result.passed ? "recovered" : "remains cowering"}`);
+  }
+};
+const resolveTacticalCasualtyMoraleChecks = (map: TacticalMapState, side: CombatScenario["combatants"][number]["side"], rolls: Record<string, Record<string, DicePair>>) => {
+  const pending = map.pendingCasualtyMoraleChecks ?? [];
+  const occurrences = [...new Set(pending.filter((check) => tacticalCombatant(map, check.witnessId)?.side === side).map((check) => check.occurrence))];
+  for (const occurrence of occurrences) {
+    const casualtyId = pending.find((check) => check.occurrence === occurrence)!.casualtyId;
+    const casualty = tacticalCombatant(map, casualtyId);
+    const leadershipResults: { leader: CombatScenario["combatants"][number]; passed: boolean }[] = [];
+    const witnesses = pending
+      .filter((check) => check.occurrence === occurrence)
+      .flatMap((check) => tacticalCombatant(map, check.witnessId) ?? [])
+      .filter((witness) => witness.side === side && !witness.defeated && witness.moraleFactor !== undefined)
+      .sort((a, b) => (b.leadershipRating ?? 0) - (a.leadershipRating ?? 0) || a.id.localeCompare(b.id));
+    for (const witness of witnesses) {
+      const dice = rolls[witness.id]?.[casualtyId];
+      if (!dice) continue;
+      const leadershipModifier = leadershipResults
+        .filter(({ leader }) => hasLineOfSight(map.scenario, leader.position, witness.position))
+        .reduce((total, result) => total + (result.passed ? 1 : -1) * Math.max(0, result.leader.leadershipRating ?? 0), 0);
+      const result = resolveAhlMoraleCheck({ moraleFactor: witness.moraleFactor!, woundState: witness.woundState }, dice, leadershipModifier);
+      if ((witness.leadershipRating ?? 0) > 0) leadershipResults.push({ leader: witness, passed: result.passed });
+      if (!result.passed && !(map.panickedCombatantIds ?? []).includes(witness.id)) {
+        map.panickedCombatantIds ??= [];
+        map.panickedCombatantIds.push(witness.id);
+      }
+      map.events.unshift(`${witness.name} friendly-casualty morale after ${casualty?.name ?? casualtyId}: ${result.roll}/${result.modifiedMorale}${result.lightWoundModifier ? " · light wound −1" : ""}${result.leadershipModifier ? ` · leadership ${result.leadershipModifier > 0 ? "+" : ""}${result.leadershipModifier}` : ""}: ${result.passed ? "passed" : "panicked"}`);
+    }
+  }
+  map.pendingCasualtyMoraleChecks = pending.filter((check) => tacticalCombatant(map, check.witnessId)?.side !== side);
+};
+const resolveTacticalUnexpectedFireMoraleChecks = (map: TacticalMapState, side: CombatScenario["combatants"][number]["side"], rolls: Record<string, Record<string, DicePair>>) => {
+  const pending = map.pendingUnexpectedFireMoraleChecks ?? [];
+  const leadershipResults = new Map<string, boolean>();
+  const checks = pending
+    .filter((check) => tacticalCombatant(map, check.combatantId)?.side === side)
+    .sort((a, b) => (tacticalCombatant(map, b.combatantId)?.leadershipRating ?? 0) - (tacticalCombatant(map, a.combatantId)?.leadershipRating ?? 0) || a.occurrence - b.occurrence);
+  for (const check of checks) {
+    const combatant = tacticalCombatant(map, check.combatantId);
+    const attacker = tacticalCombatant(map, check.attackerId);
+    const dice = rolls[check.combatantId]?.[check.attackerId];
+    if (!combatant || combatant.defeated || combatant.moraleFactor === undefined || !dice) continue;
+    const leadershipModifier = [...leadershipResults.entries()].reduce((total, [leaderId, passed]) => {
+      const leader = tacticalCombatant(map, leaderId);
+      return leader && leader.side === combatant.side && hasLineOfSight(map.scenario, leader.position, combatant.position) ? total + (passed ? 1 : -1) * Math.max(0, leader.leadershipRating ?? 0) : total;
+    }, 0);
+    const result = resolveAhlMoraleCheck({ moraleFactor: combatant.moraleFactor, woundState: combatant.woundState }, dice, leadershipModifier);
+    if ((combatant.leadershipRating ?? 0) > 0) leadershipResults.set(combatant.id, result.passed);
+    if (!result.passed && !(map.panickedCombatantIds ?? []).includes(combatant.id)) {
+      map.panickedCombatantIds ??= [];
+      map.panickedCombatantIds.push(combatant.id);
+    }
+    map.events.unshift(`${combatant.name} unexpected-fire morale from ${attacker?.name ?? check.attackerId}: ${result.roll}/${result.modifiedMorale}${result.lightWoundModifier ? " · light wound −1" : ""}${result.leadershipModifier ? ` · leadership ${result.leadershipModifier > 0 ? "+" : ""}${result.leadershipModifier}` : ""}: ${result.passed ? "passed" : "panicked"}`);
+  }
+  map.pendingUnexpectedFireMoraleChecks = pending.filter((check) => tacticalCombatant(map, check.combatantId)?.side !== side);
+};
+const resolveTacticalPanicFlight = (map: TacticalMapState, side: CombatScenario["combatants"][number]["side"]) => {
+  const panickedIds = [...(map.panickedCombatantIds ?? [])];
+  for (const id of panickedIds) {
+    const unit = tacticalCombatant(map, id);
+    if (!unit || unit.side !== side || unit.defeated) continue;
+    const hostiles = map.scenario.combatants.filter((candidate) => candidate.side !== unit.side && !candidate.defeated);
+    const inCompleteCover = (point: GridPoint) => hostiles.every((hostile) => !hasLineOfSight(map.scenario, hostile.position, point));
+    if (inCompleteCover(unit.position)) {
+      map.panickedCombatantIds = (map.panickedCombatantIds ?? []).filter((combatantId) => combatantId !== unit.id);
+      if (!(map.coweringCombatantIds ?? []).includes(unit.id)) map.coweringCombatantIds = [...(map.coweringCombatantIds ?? []), unit.id];
+      map.events.unshift(`${unit.name} reached complete cover and is cowering`);
+      continue;
+    }
+    const goals = Array.from({ length: map.scenario.width }, (_, x) => Array.from({ length: map.scenario.height }, (_, y) => ({ x, y }))).flat().filter(inCompleteCover);
+    const route = shortestPathToAny(map.scenario, unit.id, goals);
+    const path = route ? pathWithinMovementAllowance(map.scenario, unit.position, route, 6, unit.facing, true) : [];
+    if (path.length === 0) {
+      map.events.unshift(`${unit.name} panicked but could not reach complete cover`);
+      continue;
+    }
+    const origin = { ...unit.position };
+    unit.position = { ...path[path.length - 1] };
+    map.movementAnimationByCharacterId[unit.id] = { sequence: (map.movementAnimationByCharacterId[unit.id]?.sequence ?? 0) + 1, path: [origin, ...path.map((point) => ({ ...point }))], mode: "run" };
+    if (inCompleteCover(unit.position)) {
+      map.panickedCombatantIds = (map.panickedCombatantIds ?? []).filter((combatantId) => combatantId !== unit.id);
+      if (!(map.coweringCombatantIds ?? []).includes(unit.id)) map.coweringCombatantIds = [...(map.coweringCombatantIds ?? []), unit.id];
+      map.events.unshift(`${unit.name} fled to ${unit.position.x},${unit.position.y} and is cowering`);
+    } else map.events.unshift(`${unit.name} fled toward complete cover at ${unit.position.x},${unit.position.y}`);
+  }
+};
+const tacticalCoverAtPosition = (map: TacticalMapState, attackerId: string, target: CombatScenario["combatants"][number], position: GridPoint) => coverProtection({
+  ...map.scenario,
+  combatants: map.scenario.combatants.map((unit) => unit.id === target.id ? { ...unit, position } : unit),
+}, attackerId, target.id);
+const firstTacticalAdjacencyEntry = (map: TacticalMapState, mover: CombatScenario["combatants"][number], path: GridPoint[]) => {
+  return map.scenario.combatants
+    .filter((target) => target.side !== mover.side && !target.defeated)
+    .map((target) => ({ target, stepIndex: adjacencyEntryStepIndex(map.scenario, target.position, mover.position, path) }))
+    .filter(({ stepIndex }) => stepIndex >= 0)
+    .sort((a, b) => a.stepIndex - b.stepIndex || map.scenario.combatants.indexOf(a.target) - map.scenario.combatants.indexOf(b.target))[0] ?? null;
+};
+const resolveTacticalMovingAdjacentSnapShot = (map: TacticalMapState, shooter: CombatScenario["combatants"][number], target: CombatScenario["combatants"][number], dice: { hitDice: DicePair; woundDice: DicePair } | undefined) => {
+  if (!dice || (map.ammunitionByCharacterId[shooter.id] ?? 0) < 1 || !visibilityAssessment(map.scenario, shooter, target).visible) return false;
+  const result = resolveSnapShot(shooter, target, dice.hitDice, dice.woundDice, coverProtection(map.scenario, shooter.id, target.id), "snap", map.evadingCombatantIds.includes(target.id), map.suppressedCombatantIds.includes(shooter.id), map.bracedCombatantIds.includes(shooter.id), visibilityAssessment(map.scenario, shooter, target).modifier);
+  if (!result) return false;
+  spendTacticalAmmunition(map, shooter, 1);
+  queueTacticalUnexpectedFireMoraleCheck(map, shooter, target);
+  if (result.hit) applyTacticalWound(map, target, result.woundState);
+  map.events.unshift(`${shooter.name} moving-adjacent failure snap fired at ${target.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
+  return true;
+};
+const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], layouts?: Pick<TacticalMapState, "characterHudLayout" | "enemyHudLayout" | "actionHudLayout" | "characterInformationHudLayout" | "eventsHudLayout" | "scenarioHudLayout">): TacticalMapState => {
+  const scenario = buildHydratedDefaultTacticalScenario(entries, loadoutIds);
+  const ammunitionByCombatantAndKind = prepareTacticalAmmunition(scenario);
+  const playerIds = scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id);
+  return {
+    scenario,
+    scenarioStatus: "active",
+    gridSize: 1,
+    movementAnimationByCharacterId: {},
+    characterHudLayout: layouts?.characterHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 86 } },
+    enemyHudLayout: layouts?.enemyHudLayout ?? { visible: true, pinned: false, position: { x: 840, y: 86 } },
+    actionHudLayout: layouts?.actionHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 190 } },
+    characterInformationHudLayout: layouts?.characterInformationHudLayout ?? { visible: true, pinned: false, position: { x: 320, y: 86 } },
+    eventsHudLayout: layouts?.eventsHudLayout ?? { visible: true, pinned: false, position: { x: 580, y: 86 } },
+    scenarioHudLayout: layouts?.scenarioHudLayout ?? { visible: true, pinned: false, position: { x: 320, y: 190 } },
+    movementMode: "walk",
+    plannedDestination: null,
+    plannedEnemyEntryTargetId: null,
+    enemySquareEnteredCombatantIds: [],
+    plannedAttackTargetId: null,
+    plannedAttackMode: null,
+    plannedMeleeTargetId: null,
+    aimedTargetId: null,
+    grenadeTargeting: false,
+    grenadeKind: null,
+    plannedGrenadeTarget: null,
+    smokeClearsAtTurnByCell: {},
+    lastGrenadeImpact: null,
+    lastWeaponImpact: null,
+    coveringFireTargeting: false,
+    plannedCoveringFireTarget: null,
+    coveringFireLanes: [],
+    plannedTreatmentTargetId: null,
+    draggingCombatantByCarrierId: {},
+    ahlMeleeStunUntilTurnById: {},
+    selectedTerrainObjectId: null,
+    doorOpenById: {},
+    actionPhaseStartPositionByCombatantId: Object.fromEntries(scenario.combatants.map((unit) => [unit.id, { ...unit.position }])),
+    pendingDoorCommandsById: {},
+    coveringFireCommittedCombatantIds: [],
+    pendingCoveringFireSnapIds: [],
+    terminalActiveById: {},
+    terrainDamageById: {},
+    destroyedTerrainObjectIds: [],
+    ammunitionByCharacterId: Object.fromEntries(scenario.combatants.map((unit) => [unit.id, unit.weapon.magazineSize ?? 12])),
+    ammunitionByCombatantAndKind,
+    evadingCombatantIds: [],
+    bracedCombatantIds: [],
+    suppressedCombatantIds: [],
+    coweringCombatantIds: [],
+    panickedCombatantIds: [],
+    pendingCasualtyMoraleChecks: [],
+    casualtyMoraleOccurrence: 0,
+    visibleHostileIdsAtPhaseStartByCombatantId: tacticalVisibilitySnapshot(scenario),
+    pendingUnexpectedFireMoraleChecks: [],
+    unexpectedFireMoraleOccurrence: 0,
+    movedCombatantIds: [],
+    processedEnemyPhaseCombatantIds: [],
+    pendingAdjacencyReaction: null,
+    events: [],
+    turn: 1,
+    actionPointsByCharacterId: Object.fromEntries(scenario.combatants.map((unit) => [unit.id, unit.defeated ? 0 : 6])),
+    actedCharacterIds: [],
+    activeCharacterId: playerIds[0] ?? null,
+  };
+};
 export const collateralCheckPasses = (distance: number, rollTotal: number) => distance === 0
   || (distance === 1 && rollTotal <= 10)
   || (distance === 2 && rollTotal <= 8);
+type TacticalCollateralRolls = Record<string, { checkDice: DicePair; woundDice: DicePair }>;
+const applyTacticalWeaponCollateral = (map: TacticalMapState, attacker: CombatScenario["combatants"][number], impactTarget: CombatScenario["combatants"][number], penetration: number, fallbackDice: DicePair, rolls: TacticalCollateralRolls = {}) => {
+  if (!attacker.weapon.collateralBlast) return;
+  const ammunitionLabel = attacker.weapon.ammunitionProfiles?.find((profile) => profile.kind === attacker.weapon.ammunitionKind)?.label ?? attacker.weapon.ammunitionKind ?? "ammunition";
+  map.scenario.combatants.filter((unit) => unit.id !== impactTarget.id && !unit.defeated).forEach((unit) => {
+    const distance = Math.max(Math.abs(unit.position.x - impactTarget.position.x), Math.abs(unit.position.y - impactTarget.position.y));
+    if (distance > 2) return;
+    const collateralRolls = rolls[unit.id] ?? { checkDice: fallbackDice, woundDice: fallbackDice };
+    const checkTotal = collateralRolls.checkDice.first + collateralRolls.checkDice.second;
+    if (!collateralCheckPasses(distance, checkTotal)) {
+      map.events.unshift(`${unit.name} avoided ${attacker.weapon.name} ${ammunitionLabel} collateral at ${distance} square${distance === 1 ? "" : "s"}`);
+      return;
+    }
+    const collateralPenetration = Math.floor(penetration / (2 ** (distance + 1)));
+    if (collateralPenetration <= 0) return;
+    const woundTotal = collateralRolls.woundDice.first + collateralRolls.woundDice.second + collateralPenetration - unit.armor;
+    const woundState = attacker.weapon.woundEscalation ? escalateWoundState(woundStateForTotal(woundTotal)) : woundStateForTotal(woundTotal);
+    applyTacticalWound(map, unit, woundState);
+    map.events.unshift(`${unit.name} suffered ${attacker.weapon.name} ${ammunitionLabel} collateral at ${distance} square${distance === 1 ? "" : "s"}: wound ${woundTotal} (${unit.woundState})`);
+  });
+};
 const facings = ["north", "east", "south", "west"] as const;
 
 const facingTowardFieldOfFire = (unit: CombatScenario["combatants"][number], target: GridPoint) => facings
@@ -435,130 +818,156 @@ const resolveHoldZoneCapture = (state: CharacterCombatState) => {
   return true;
 };
 
+type TacticalEnemyPhaseRolls = {
+  enemyRolls: Record<string, { hitDice: DicePair; woundDice: DicePair }>;
+  coveringFireRolls?: Record<string, Record<string, { hitDice: DicePair; woundDice: DicePair }>>;
+  dangerSpaceRolls?: Record<string, Record<string, { hitDice: DicePair; woundDice: DicePair }>>;
+  coweringRecoveryRolls?: Record<string, DicePair>;
+  casualtyMoraleRolls?: Record<string, Record<string, DicePair>>;
+  unexpectedFireMoraleRolls?: Record<string, Record<string, DicePair>>;
+  coveringFireMoraleRolls?: Record<string, DicePair>;
+  movingAdjacentMoraleRolls?: Record<string, DicePair>;
+  movingAdjacentSnapRolls?: Record<string, { hitDice: DicePair; woundDice: DicePair }>;
+};
+
+const beginNextTacticalTurn = (map: TacticalMapState, rolls: TacticalEnemyPhaseRolls) => {
+  map.turn += 1;
+  const clearingSmoke = new Set(Object.entries(map.smokeClearsAtTurnByCell).filter(([, clearTurn]) => clearTurn <= map.turn).map(([key]) => key));
+  map.scenario.smokeCells = (map.scenario.smokeCells ?? []).filter((cell) => !clearingSmoke.has(pointKey(cell)));
+  clearingSmoke.forEach((key) => { delete map.smokeClearsAtTurnByCell[key]; });
+  resolveTacticalPendingDoorCommands(map);
+  map.lastWeaponImpact = null;
+  map.actedCharacterIds = [];
+  map.movedCombatantIds = [];
+  map.processedEnemyPhaseCombatantIds = [];
+  map.pendingAdjacencyReaction = null;
+  map.plannedDestination = null;
+  map.plannedEnemyEntryTargetId = null;
+  map.enemySquareEnteredCombatantIds = [];
+  map.plannedAttackTargetId = null;
+  map.plannedAttackMode = null;
+  map.plannedMeleeTargetId = null;
+  map.aimedTargetId = null;
+  map.grenadeTargeting = false;
+  map.grenadeKind = null;
+  map.plannedGrenadeTarget = null;
+  map.lastGrenadeImpact = null;
+  map.coveringFireTargeting = false;
+  map.plannedCoveringFireTarget = null;
+  map.coveringFireLanes = [];
+  map.coveringFireCommittedCombatantIds = [];
+  map.pendingCoveringFireSnapIds = [];
+  map.plannedTreatmentTargetId = null;
+  map.selectedTerrainObjectId = null;
+  map.evadingCombatantIds = [];
+  Object.entries(map.ahlMeleeStunUntilTurnById).forEach(([id, expires]) => {
+    if (expires > map.turn) return;
+    const unit = tacticalCombatant(map, id);
+    if (unit?.woundState === "light" && (unit.seriousWounds ?? 0) === 0) unit.woundState = "healthy";
+    delete map.ahlMeleeStunUntilTurnById[id];
+  });
+  resolveTacticalCoweringRecovery(map, "player", rolls.coweringRecoveryRolls ?? {});
+  resolveTacticalCasualtyMoraleChecks(map, "player", rolls.casualtyMoraleRolls ?? {});
+  resolveTacticalUnexpectedFireMoraleChecks(map, "player", rolls.unexpectedFireMoraleRolls ?? {});
+  resolveTacticalPanicFlight(map, "player");
+  const livingPlayerIds = tacticalPlayerIds(map).filter((id) => !tacticalCombatant(map, id)?.defeated && !(map.coweringCombatantIds ?? []).includes(id) && !(map.panickedCombatantIds ?? []).includes(id));
+  map.actionPointsByCharacterId = Object.fromEntries(map.scenario.combatants.map((unit) => [unit.id, unit.defeated || (map.coweringCombatantIds ?? []).includes(unit.id) || (map.panickedCombatantIds ?? []).includes(unit.id) ? 0 : 6]));
+  map.actionPhaseStartPositionByCombatantId = Object.fromEntries(map.scenario.combatants.map((unit) => [unit.id, { ...unit.position }]));
+  map.activeCharacterId = livingPlayerIds[0] ?? null;
+  map.visibleHostileIdsAtPhaseStartByCombatantId = tacticalVisibilitySnapshot(map.scenario);
+  map.events.unshift(`Turn ${map.turn} begins`);
+};
+
 export const initialCharacterCombatState: CharacterCombatState = { scenario: null, selectedBoardingTeamIds: [], armoryLoadoutIds: ["scout", "breacher"], combatantStarts: {}, outcome: null, viewMode: "3d", camera: { quarterTurn: 0, azimuth: Math.PI / 4, elevation: Math.PI / 4.75, zoom: 42, focus: null, pan: { x: 0, y: 0 } }, status: "active", turn: 1, selectedCombatantId: null, plannedMove: null, plannedAttackTargetId: null, plannedAttackMode: null, grenadeTargeting: false, plannedGrenadeTarget: null, lastGrenadeImpact: null, plannedOpenDoorId: null, plannedBreachDoorId: null, plannedExtinguishFire: null, smokeClearsAtTurnByCell: {}, placedBreachingChargeByDoorId: {}, structuralDamageById: {}, vacuumExposureByCombatantId: {}, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], overwatchTargeting: false, plannedOverwatchTarget: null, overwatchLanes: [], adjacencyReactionReserveById: {}, adjacencyReactionUsedCombatantIds: [], movedCombatantIds: [], pendingAdjacencyReaction: null, plannedTreatmentTargetId: null, recoveringCombatantIds: [], evadingCombatantIds: [], trottingCombatantIds: [], bracedCombatantIds: [], suppressedCombatantIds: [], draggingCombatantByCarrierId: {}, maintainedTargetByCombatantId: {}, plannedObjectiveId: null, hoveredDestination: null, actionPointsById: {}, ammunitionById: {}, ammunitionByCombatantAndKind: {}, actedCombatantIds: [], events: [], hudLayouts: freshHudLayouts() };
 const slice = createSlice({ name: "characterCombat", initialState: initialCharacterCombatState, reducers: {
-  initializeTacticalMap: (state, action: PayloadAction<Array<string | { id: string; weaponSkill: number }>>) => {
-    if (!state.tacticalMap) {
-      state.tacticalMap = { width: 100, height: 100, gridSize: 1, characterPositions: {}, facingByCharacterId: {}, postureByCharacterId: {}, movementAnimationByCharacterId: {}, characterHudLayout: { visible: true, pinned: false, position: { x: 16, y: 86 } }, actionHudLayout: { visible: true, pinned: false, position: { x: 16, y: 190 } }, movementMode: "walk", plannedDestination: null, selectedTerrainObjectId: null, doorOpenById: {}, terminalActiveById: {}, terrainDamageById: {}, destroyedTerrainObjectIds: [], weaponSkillByCharacterId: {}, ammunitionByCharacterId: {}, turn: 1, actionPointsByCharacterId: {}, actedCharacterIds: [], activeCharacterId: null };
-    } else if (state.tacticalMap.width !== 100 || state.tacticalMap.height !== 100) {
-      const offsetX = Math.floor((100 - state.tacticalMap.width) / 2);
-      const offsetY = Math.floor((100 - state.tacticalMap.height) / 2);
-      Object.values(state.tacticalMap.characterPositions).forEach((position) => {
-        position.x += offsetX;
-        position.y += offsetY;
-      });
-      state.tacticalMap.width = 100;
-      state.tacticalMap.height = 100;
-      state.tacticalMap.gridSize = 1;
-    }
-    state.tacticalMap.characterHudLayout ??= { visible: true, pinned: false, position: { x: 16, y: 86 } };
-    state.tacticalMap.actionHudLayout ??= { visible: true, pinned: false, position: { x: 16, y: 190 } };
-    state.tacticalMap.movementMode ??= "walk";
-    state.tacticalMap.plannedDestination ??= null;
-    state.tacticalMap.selectedTerrainObjectId ??= null;
-    state.tacticalMap.doorOpenById ??= {};
-    state.tacticalMap.terminalActiveById ??= {};
-    state.tacticalMap.terrainDamageById ??= {};
-    state.tacticalMap.destroyedTerrainObjectIds ??= [];
-    state.tacticalMap.weaponSkillByCharacterId ??= {};
-    state.tacticalMap.ammunitionByCharacterId ??= {};
-    state.tacticalMap.turn ??= 1;
-    state.tacticalMap.actionPointsByCharacterId ??= {};
-    state.tacticalMap.actedCharacterIds ??= [];
-    state.tacticalMap.facingByCharacterId ??= {};
-    state.tacticalMap.postureByCharacterId ??= {};
-    state.tacticalMap.movementAnimationByCharacterId ??= {};
-    const startingPositions = [{ x: 48, y: 50 }, { x: 51, y: 50 }];
-    const tacticalCharacters = action.payload.slice(0, 2).map((entry) => typeof entry === "string" ? { id: entry, weaponSkill: 0 } : entry);
-    const tacticalCharacterIds = tacticalCharacters.map((entry) => entry.id);
-    Object.keys(state.tacticalMap.characterPositions).forEach((id) => {
-      if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.characterPositions[id];
-    });
-    tacticalCharacters.forEach(({ id, weaponSkill }, index) => {
-      state.tacticalMap!.characterPositions[id] ??= startingPositions[index];
-      state.tacticalMap!.actionPointsByCharacterId[id] ??= 6;
-      state.tacticalMap!.facingByCharacterId[id] ??= "south";
-      state.tacticalMap!.postureByCharacterId[id] ??= "standing";
-      state.tacticalMap!.weaponSkillByCharacterId[id] = weaponSkill;
-      const loadoutId = (state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds)[index] ?? state.armoryLoadoutIds[index];
-      state.tacticalMap!.ammunitionByCharacterId[id] ??= armoryLoadouts[loadoutId].weapon.magazineSize ?? 12;
-    });
-    Object.keys(state.tacticalMap.actionPointsByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.actionPointsByCharacterId[id]; });
-    Object.keys(state.tacticalMap.facingByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.facingByCharacterId[id]; });
-    Object.keys(state.tacticalMap.postureByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.postureByCharacterId[id]; });
-    Object.keys(state.tacticalMap.movementAnimationByCharacterId).forEach((id) => { if (!tacticalCharacterIds.includes(id)) delete state.tacticalMap!.movementAnimationByCharacterId[id]; });
-    state.tacticalMap.actedCharacterIds = state.tacticalMap.actedCharacterIds.filter((id) => tacticalCharacterIds.includes(id));
-    if (!state.tacticalMap.activeCharacterId || !tacticalCharacterIds.includes(state.tacticalMap.activeCharacterId) || (state.tacticalMap.actionPointsByCharacterId[state.tacticalMap.activeCharacterId] ?? 0) === 0) state.tacticalMap.activeCharacterId = tacticalCharacterIds.find((id) => (state.tacticalMap!.actionPointsByCharacterId[id] ?? 0) > 0) ?? null;
+  initializeTacticalMap: (state, action: PayloadAction<TacticalCrewInput[]>) => {
+    const layouts = state.tacticalMap ? { characterHudLayout: state.tacticalMap.characterHudLayout, enemyHudLayout: state.tacticalMap.enemyHudLayout, actionHudLayout: state.tacticalMap.actionHudLayout, characterInformationHudLayout: state.tacticalMap.characterInformationHudLayout, eventsHudLayout: state.tacticalMap.eventsHudLayout, scenarioHudLayout: state.tacticalMap.scenarioHudLayout } : undefined;
+    state.tacticalMap = freshTacticalMap(action.payload, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, layouts);
   },
   updateTacticalCharacterHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
     if (state.tacticalMap) state.tacticalMap.characterHudLayout = action.payload;
   },
+  updateTacticalEnemyHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.enemyHudLayout = action.payload;
+  },
   updateTacticalActionHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
     if (state.tacticalMap) state.tacticalMap.actionHudLayout = action.payload;
   },
-  setTacticalMovementMode: (state, action: PayloadAction<"walk" | "trot" | null>) => {
-    if (state.tacticalMap) { state.tacticalMap.movementMode = action.payload; state.tacticalMap.plannedDestination = null; }
+  updateTacticalCharacterInformationHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.characterInformationHudLayout = action.payload;
+  },
+  updateTacticalEventsHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.eventsHudLayout = action.payload;
+  },
+  updateTacticalScenarioHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.scenarioHudLayout = action.payload;
+  },
+  setTacticalMovementMode: (state, action: PayloadAction<"walk" | "trot" | "evade" | "sidestep" | null>) => {
+    const map = state.tacticalMap;
+    const active = map ? tacticalCombatant(map, map.activeCharacterId) : null;
+    const dragging = Boolean(active && map?.draggingCombatantByCarrierId[active.id]);
+    if (!map || (active && map.enemySquareEnteredCombatantIds.includes(active.id) && action.payload !== null) || (dragging && action.payload !== "walk" && action.payload !== null) || (action.payload === "trot" && map.activeCharacterId && map.suppressedCombatantIds.includes(map.activeCharacterId)) || (action.payload === "evade" && (!active || active.posture === "prone" || (map.actionPointsByCharacterId[active.id] ?? 0) !== 6)) || (action.payload === "sidestep" && (!active || active.posture === "prone" || (map.actionPointsByCharacterId[active.id] ?? 0) < 4))) return;
+    map.movementMode = action.payload;
+    map.plannedDestination = null;
+    map.plannedEnemyEntryTargetId = null;
   },
   selectTacticalTerrainObject: (state, action: PayloadAction<string | null>) => {
-    if (state.tacticalMap) { state.tacticalMap.selectedTerrainObjectId = action.payload; state.tacticalMap.plannedDestination = null; }
+    if (state.tacticalMap) { state.tacticalMap.selectedTerrainObjectId = action.payload; state.tacticalMap.plannedDestination = null; state.tacticalMap.plannedAttackTargetId = null; state.tacticalMap.plannedAttackMode = null; }
   },
   interactWithTacticalTerrain: (state) => {
     const map = state.tacticalMap;
     const characterId = map?.activeCharacterId;
     const object = map?.selectedTerrainObjectId ? firstTacticalTerrainById.get(map.selectedTerrainObjectId) : null;
-    const characterPosition = characterId ? map?.characterPositions[characterId] : null;
-    if (!map || !characterId || !object || !characterPosition) return;
+    const character = map ? tacticalCombatant(map, characterId) : null;
+    if (!map || map.scenarioStatus !== "active" || !characterId || !object || !character) return;
+    let interactionEvent: string;
     if (object.kind === "door") {
       const door = object as TacticalDoor;
-      const adjacent = [door.separates.first, door.separates.second].some((point) => point.x === characterPosition.x && point.y === characterPosition.y);
+      const startPosition = map.actionPhaseStartPositionByCombatantId[characterId];
+      const adjacentAtPhaseStart = Boolean(startPosition && [door.separates.first, door.separates.second].some((point) => point.x === startPosition.x && point.y === startPosition.y));
       const open = map.doorOpenById[door.id] ?? door.open;
-      const cost = open ? 3 : 6;
-      if (!adjacent || (map.actionPointsByCharacterId[characterId] ?? 0) < cost) return;
-      map.doorOpenById[door.id] = !open;
-      map.actionPointsByCharacterId[characterId] = open ? map.actionPointsByCharacterId[characterId] - 3 : 0;
+      if (!adjacentAtPhaseStart || map.pendingDoorCommandsById[door.id] || (map.actionPointsByCharacterId[characterId] ?? 0) < 2) return;
+      map.pendingDoorCommandsById[door.id] = { open: !open, resolvesAtTurn: map.turn + 1, characterId };
+      map.actionPointsByCharacterId[characterId] -= 2;
+      interactionEvent = `${character.name} activated the control-room door to ${open ? "close" : "open"} at the start of Turn ${map.turn + 1} (2 AP)`;
     } else if (object.kind === "terminal") {
       const terminal = object as TacticalTerminal;
-      const adjacent = Math.abs(terminal.position.x - characterPosition.x) + Math.abs(terminal.position.y - characterPosition.y) === 1;
+      const adjacent = Math.abs(terminal.position.x - character.position.x) + Math.abs(terminal.position.y - character.position.y) === 1;
       if (!adjacent || map.terminalActiveById[terminal.id] || (map.actionPointsByCharacterId[characterId] ?? 0) < 6) return;
       map.terminalActiveById[terminal.id] = true;
       map.actionPointsByCharacterId[characterId] = 0;
+      interactionEvent = `${character.name} activated ${object.label}`;
     } else return;
+    map.events.unshift(interactionEvent);
+    if (object.kind === "terminal") {
+      concludeTacticalScenario(map, "victory", `Victory — ${character.name} secured ${object.label}`);
+      return;
+    }
     map.selectedTerrainObjectId = null;
     map.movementMode = "walk";
     if (map.actionPointsByCharacterId[characterId] > 0) return;
     if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
-    const characterIds = Object.keys(map.characterPositions);
-    const remaining = characterIds.filter((id) => !map.actedCharacterIds.includes(id));
-    if (remaining.length > 0) map.activeCharacterId = remaining[0];
-    else {
-      map.turn += 1;
-      map.actedCharacterIds = [];
-      characterIds.forEach((id) => { map.actionPointsByCharacterId[id] = 6; });
-      map.activeCharacterId = characterIds[0] ?? null;
-    }
+    advanceTacticalPlayerActivation(map);
   },
   fireAtTacticalTerrain: (state, action: PayloadAction<{ hitDice: DicePair }>) => {
     const map = state.tacticalMap;
     const characterId = map?.activeCharacterId;
     const object = map?.selectedTerrainObjectId ? firstTacticalTerrainById.get(map.selectedTerrainObjectId) : null;
-    if (!map || !characterId || !object || (object.kind !== "wall" && object.kind !== "door") || map.destroyedTerrainObjectIds.includes(object.id)) return;
-    const characterIds = Object.keys(map.characterPositions);
-    const loadoutIndex = characterIds.indexOf(characterId);
-    const loadoutId = (state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds)[loadoutIndex] ?? state.armoryLoadoutIds[loadoutIndex];
-    const weapon = armoryLoadouts[loadoutId]?.weapon;
-    const position = map.characterPositions[characterId];
-    if (!weapon || !position || (!weapon.highEnergy && weapon.ammunitionKind !== "he" && weapon.ammunitionKind !== "heap" && weapon.ammunitionKind !== "discard-sabot") || (map.actionPointsByCharacterId[characterId] ?? 0) < 6 || (map.ammunitionByCharacterId[characterId] ?? 0) < 1) return;
+    if (!map || !characterId || map.draggingCombatantByCarrierId[characterId] || !object || (object.kind !== "wall" && object.kind !== "door") || map.destroyedTerrainObjectIds.includes(object.id)) return;
+    const character = tacticalCombatant(map, characterId);
+    const weapon = character?.weapon;
+    if (!weapon || !character || (weapon.highEnergy ? !map.bracedCombatantIds.includes(characterId) : !weapon.structuralDamage) || (map.actionPointsByCharacterId[characterId] ?? 0) < 6 || (map.ammunitionByCharacterId[characterId] ?? 0) < 1) return;
     const impact = { x: (object.edge.from.x + object.edge.to.x) / 2, y: (object.edge.from.y + object.edge.to.y) / 2 };
-    const range = Math.ceil(Math.hypot(impact.x - position.x - 0.5, impact.y - position.y - 0.5));
+    const range = Math.ceil(Math.hypot(impact.x - character.position.x - 0.5, impact.y - character.position.y - 0.5));
     const rangeBand = range <= weapon.effectiveRange ? "effective" : range <= weapon.longRange ? "long" : range <= weapon.extremeRange ? "extreme" : null;
     if (!rangeBand) return;
     map.actionPointsByCharacterId[characterId] = 0;
-    map.ammunitionByCharacterId[characterId] -= 1;
-    const hitTotal = action.payload.hitDice.first + action.payload.hitDice.second + (map.weaponSkillByCharacterId[characterId] ?? 0) + 1;
+    spendTacticalAmmunition(map, character, 1);
+    const hitTotal = action.payload.hitDice.first + action.payload.hitDice.second + character.weaponSkill + 1;
     const targetNumber = rangeBand === "effective" ? 8 : rangeBand === "long" ? 10 : 12;
     if (hitTotal >= targetNumber) {
       const penetration = weaponPenetrationForRange(weapon, rangeBand);
-      const damage = weapon.ammunitionKind === "he" ? 1 : Math.max(0, penetration - 4);
+      const damage = weapon.structuralDamage ?? Math.max(0, penetration - 4);
       map.terrainDamageById[object.id] = (map.terrainDamageById[object.id] ?? 0) + damage;
       const threshold = object.kind === "door" ? 5 : 25;
       if (map.terrainDamageById[object.id] >= threshold) {
@@ -567,127 +976,1059 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       }
     }
     map.selectedTerrainObjectId = null;
+    map.events.unshift(`${character.name} fired at ${object.kind} ${object.id}${map.destroyedTerrainObjectIds.includes(object.id) ? " and destroyed it" : ""}`);
     if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
-    const remaining = characterIds.filter((id) => !map.actedCharacterIds.includes(id));
-    map.activeCharacterId = remaining[0] ?? characterIds[0] ?? null;
-    if (remaining.length === 0) {
-      map.turn += 1;
-      map.actedCharacterIds = [];
-      characterIds.forEach((id) => { map.actionPointsByCharacterId[id] = 6; });
-    }
+    advanceTacticalPlayerActivation(map);
   },
   previewTacticalMove: (state, action: PayloadAction<GridPoint | null>) => {
-    if (state.tacticalMap) state.tacticalMap.plannedDestination = action.payload;
+    if (state.tacticalMap) {
+      state.tacticalMap.plannedDestination = action.payload;
+      state.tacticalMap.plannedEnemyEntryTargetId = null;
+      state.tacticalMap.plannedMeleeTargetId = null;
+      if (action.payload) {
+        state.tacticalMap.plannedAttackTargetId = null;
+        state.tacticalMap.plannedAttackMode = null;
+        state.tacticalMap.plannedTreatmentTargetId = null;
+      }
+    }
+  },
+  previewTacticalEnemyEntry: (state, action: PayloadAction<string>) => {
+    const map = state.tacticalMap;
+    const moverId = map?.activeCharacterId;
+    const mover = map ? tacticalCombatant(map, moverId) : null;
+    const target = map ? tacticalCombatant(map, action.payload) : null;
+    if (!map || !moverId || !mover || !target || mover.defeated || target.defeated || mover.side === target.side || mover.posture === "prone" || map.movementMode !== "walk" || map.draggingCombatantByCarrierId[moverId] || map.enemySquareEnteredCombatantIds.includes(moverId)) return;
+    const terrain = FIRST_TACTICAL_CONTROL_ROOM.objects.map((object) => object.kind === "door" ? { ...object, open: map.doorOpenById[object.id] ?? object.open } : object);
+    const moves = reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin: mover.position, facing: mover.facing, allowance: Math.min(6, map.actionPointsByCharacterId[moverId] ?? 0), trotting: false, blockedCells: firstTacticalMapBlockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: activeOccupantCounts(map.scenario.combatants, moverId) });
+    const move = moves.get(pointKey(target.position));
+    if (!move || (map.suppressedCombatantIds.includes(moverId) && move.path.length > 2)) return;
+    const crossedEnemyBeforeDestination = move.path.slice(0, -1).some((point) => map.scenario.combatants.some((unit) => unit.side !== mover.side && !unit.defeated && pointKey(unit.position) === pointKey(point)));
+    const activeOccupants = map.scenario.combatants.filter((unit) => unit.id !== moverId && !unit.defeated && pointKey(unit.position) === pointKey(target.position));
+    if (crossedEnemyBeforeDestination || activeOccupants.length >= 4) return;
+    map.plannedEnemyEntryTargetId = target.id;
+    map.plannedDestination = { ...target.position };
+    map.plannedMeleeTargetId = null;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.grenadeTargeting = false;
+    map.plannedGrenadeTarget = null;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.plannedTreatmentTargetId = null;
+    map.selectedTerrainObjectId = null;
   },
   activateTacticalCharacter: (state, action: PayloadAction<string>) => {
-    if (!state.tacticalMap || (state.tacticalMap.actionPointsByCharacterId[action.payload] ?? 0) < 1) return;
+    if (!state.tacticalMap || state.tacticalMap.scenarioStatus !== "active" || state.tacticalMap.actedCharacterIds.includes(action.payload) || (state.tacticalMap.actionPointsByCharacterId[action.payload] ?? 0) < 1) return;
     if (state.tacticalMap.activeCharacterId !== action.payload) state.tacticalMap.selectedTerrainObjectId = null;
+    if (state.tacticalMap.activeCharacterId !== action.payload) state.tacticalMap.aimedTargetId = null;
     state.tacticalMap.activeCharacterId = action.payload;
-    state.tacticalMap.movementMode = "walk";
+    state.tacticalMap.movementMode = state.tacticalMap.enemySquareEnteredCombatantIds.includes(action.payload) ? null : "walk";
     state.tacticalMap.plannedDestination = null;
+    state.tacticalMap.plannedEnemyEntryTargetId = null;
+    state.tacticalMap.plannedAttackTargetId = null;
+    state.tacticalMap.plannedAttackMode = null;
+    state.tacticalMap.plannedMeleeTargetId = null;
+    state.tacticalMap.grenadeTargeting = false;
+    state.tacticalMap.plannedGrenadeTarget = null;
+    state.tacticalMap.lastGrenadeImpact = null;
+    state.tacticalMap.coveringFireTargeting = false;
+    state.tacticalMap.plannedCoveringFireTarget = null;
+    state.tacticalMap.plannedTreatmentTargetId = null;
+  },
+  selectTacticalAttackTarget: (state, action: PayloadAction<string>) => {
+    const map = state.tacticalMap;
+    const attackerId = map?.activeCharacterId;
+    if (!map || !attackerId || map.draggingCombatantByCarrierId[attackerId] || (map.actionPointsByCharacterId[attackerId] ?? 0) < 1) return;
+    const validTarget = rangedEnemies(map.scenario, attackerId).find((target) => target.id === action.payload);
+    if (!validTarget) return;
+    if (map.aimedTargetId && map.aimedTargetId !== validTarget.id) map.aimedTargetId = null;
+    map.plannedAttackTargetId = validTarget.id;
+    map.plannedAttackMode = null;
+    map.plannedDestination = null;
+    map.plannedEnemyEntryTargetId = null;
+    map.plannedTreatmentTargetId = null;
+    map.selectedTerrainObjectId = null;
+  },
+  selectTacticalAttackMode: (state, action: PayloadAction<"snap" | "aimed" | "automatic" | "suppressive">) => {
+    const map = state.tacticalMap;
+    const attacker = map ? tacticalCombatant(map, map.activeCharacterId) : null;
+    const target = map ? tacticalCombatant(map, map.plannedAttackTargetId) : null;
+    const profile = attacker && target ? snapShotTarget(attacker, target) : null;
+    const cost = action.payload === "snap" ? 3 : 6;
+    const ammunitionCost = action.payload === "automatic" || action.payload === "suppressive" ? 3 : 1;
+    const automaticModeUnavailable = (action.payload === "automatic" || action.payload === "suppressive") && !attacker?.weapon.automatic;
+    if (!map || !attacker || !target || target.side === attacker.side || target.defeated || (attacker.weapon.highEnergy && !map.bracedCombatantIds.includes(attacker.id)) || !profile || automaticModeUnavailable || (action.payload === "automatic" && automaticFireModifierForRange(profile.rangeBand, attacker.weapon.automaticFireBonusByRange) === null) || (action.payload === "suppressive" && map.suppressedCombatantIds.includes(target.id)) || (map.actionPointsByCharacterId[attacker.id] ?? 0) < cost || (map.ammunitionByCharacterId[attacker.id] ?? 0) < ammunitionCost) return;
+    map.plannedAttackMode = action.payload;
+  },
+  cancelTacticalAttack: (state) => {
+    if (!state.tacticalMap) return;
+    state.tacticalMap.plannedAttackTargetId = null;
+    state.tacticalMap.plannedAttackMode = null;
+  },
+  beginTacticalCoveringFire: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const attacker = map ? tacticalCombatant(map, id) : null;
+    const ammunitionCost = attacker ? coveringFireAmmunitionCost(attacker.weapon) : 1;
+    if (!map || !id || !attacker || attacker.defeated || (attacker.weapon.highEnergy && !map.bracedCombatantIds.includes(id)) || map.draggingCombatantByCarrierId[id] || (map.actionPointsByCharacterId[id] ?? 0) < 3 || (map.ammunitionByCharacterId[id] ?? 0) < ammunitionCost) return;
+    map.coveringFireTargeting = true;
+    map.plannedCoveringFireTarget = null;
+    map.plannedDestination = null;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.plannedTreatmentTargetId = null;
+    map.selectedTerrainObjectId = null;
+    map.movementMode = null;
+  },
+  previewTacticalCoveringFire: (state, action: PayloadAction<GridPoint | null>) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const target = action.payload;
+    if (!map || !id || !map.coveringFireTargeting) return;
+    if (target === null) {
+      map.plannedCoveringFireTarget = null;
+      return;
+    }
+    if (validCoveringFireTargets(map.scenario, id).some((point) => pointKey(point) === pointKey(target))) map.plannedCoveringFireTarget = target;
+  },
+  confirmTacticalCoveringFire: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const target = map?.plannedCoveringFireTarget;
+    const attacker = map ? tacticalCombatant(map, id) : null;
+    const ammunitionCost = attacker ? coveringFireAmmunitionCost(attacker.weapon) : 1;
+    if (!map || !id || !target || !attacker || attacker.defeated || (attacker.weapon.highEnergy && !map.bracedCombatantIds.includes(id)) || map.draggingCombatantByCarrierId[id] || !map.coveringFireTargeting || (map.actionPointsByCharacterId[id] ?? 0) < 3 || (map.ammunitionByCharacterId[id] ?? 0) < ammunitionCost) return;
+    const cells = coveringFireDangerSpaceCells(map.scenario, attacker.position, target, attacker.weapon.extremeRange);
+    if (cells.length === 0) return;
+    map.coveringFireLanes = [...map.coveringFireLanes.filter((lane) => lane.attackerId !== id), { attackerId: id, target, cells }];
+    map.actionPointsByCharacterId[id] -= 3;
+    if (!map.coveringFireCommittedCombatantIds.includes(id)) map.coveringFireCommittedCombatantIds.push(id);
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.movementMode = "walk";
+    map.events.unshift(`${attacker.name} covers lane through ${target.x},${target.y} (3 AP, ${ammunitionCost} ammo reserved)`);
+    advanceTacticalPlayerActivation(map);
+  },
+  cancelTacticalCoveringFire: (state) => {
+    const map = state.tacticalMap;
+    if (!map) return;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.movementMode = "walk";
+  },
+  beginTacticalGrenadeTargeting: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const attacker = map ? tacticalCombatant(map, id) : null;
+    if (!map || !id || !attacker || attacker.defeated || attacker.grenades < 1 || map.draggingCombatantByCarrierId[id] || (map.actionPointsByCharacterId[id] ?? 0) < 6) return;
+    map.grenadeTargeting = true;
+    map.grenadeKind = "fragmentation";
+    map.plannedGrenadeTarget = null;
+    map.lastGrenadeImpact = null;
+    map.plannedDestination = null;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.plannedTreatmentTargetId = null;
+    map.selectedTerrainObjectId = null;
+    map.movementMode = null;
+  },
+  beginTacticalSmokeGrenadeTargeting: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const attacker = map ? tacticalCombatant(map, id) : null;
+    if (!map || !id || !attacker || attacker.defeated || (attacker.smokeGrenades ?? 0) < 1 || map.draggingCombatantByCarrierId[id] || (map.actionPointsByCharacterId[id] ?? 0) < 6) return;
+    map.grenadeTargeting = true;
+    map.grenadeKind = "smoke";
+    map.plannedGrenadeTarget = null;
+    map.lastGrenadeImpact = null;
+    map.plannedDestination = null;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.plannedTreatmentTargetId = null;
+    map.selectedTerrainObjectId = null;
+    map.movementMode = null;
+  },
+  previewTacticalGrenadeTarget: (state, action: PayloadAction<GridPoint | null>) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const target = action.payload;
+    if (!map || !id || !map.grenadeTargeting) return;
+    if (target === null) {
+      map.plannedGrenadeTarget = null;
+      return;
+    }
+    if (validGrenadeTargets(map.scenario, id).some((point) => pointKey(point) === pointKey(target))) map.plannedGrenadeTarget = target;
+  },
+  cancelTacticalGrenadeTargeting: (state) => {
+    const map = state.tacticalMap;
+    if (!map) return;
+    map.grenadeTargeting = false;
+    map.grenadeKind = null;
+    map.plannedGrenadeTarget = null;
+    map.movementMode = "walk";
+  },
+  confirmTacticalGrenade: (state, action: PayloadAction<{ rollsByCombatantId: Record<string, DicePair>; throwDice: DicePair; scatterDice: DicePair; occupiedSquareRolls?: Record<string, number>; collateralRolls: Record<string, { checkDice: DicePair; woundDice: DicePair }> }>) => {
+    const map = state.tacticalMap;
+    const attackerId = map?.activeCharacterId;
+    const center = map?.plannedGrenadeTarget;
+    const attacker = map ? tacticalCombatant(map, attackerId) : null;
+    const grenadeKind = map?.grenadeKind ?? "fragmentation";
+    const hasGrenade = attacker ? grenadeKind === "smoke" ? (attacker.smokeGrenades ?? 0) > 0 : attacker.grenades > 0 : false;
+    if (!map || !attackerId || !attacker || !center || !map.grenadeTargeting || attacker.defeated || !hasGrenade || map.draggingCombatantByCarrierId[attackerId] || (map.actionPointsByCharacterId[attackerId] ?? 0) < 6) return;
+    if (!validGrenadeTargets(map.scenario, attackerId).some((point) => pointKey(point) === pointKey(center))) return;
+    const throwModifier = grenadeThrowRangeModifier(attacker.position, center) + grenadeThrowCoverModifier(map.scenario, attacker.id, center);
+    const throwResult = grenadeLandingPoint(map.scenario, attacker.position, center, action.payload.throwDice, action.payload.scatterDice, throwModifier, action.payload.occupiedSquareRolls);
+    const landing = throwResult.landing;
+    const blastCells = grenadeKind === "smoke" ? grenadeBlastCells(map.scenario, landing) : collateralBlastCells(map.scenario, landing);
+    const blastKeys = new Set(blastCells.map(pointKey));
+    map.lastGrenadeImpact = { kind: grenadeKind, intended: center, landing, scattered: !throwResult.hit, blastCells };
+    if (grenadeKind === "smoke") {
+      map.scenario.smokeCells ??= [];
+      blastCells.forEach((cell) => {
+        const key = pointKey(cell);
+        if (!map.scenario.smokeCells!.some((smoke) => pointKey(smoke) === key)) map.scenario.smokeCells!.push({ ...cell });
+        map.smokeClearsAtTurnByCell[key] = map.turn + 3;
+      });
+    } else map.scenario.combatants.filter((unit) => !unit.defeated && blastKeys.has(pointKey(unit.position))).forEach((target) => {
+      const distance = Math.max(Math.abs(target.position.x - landing.x), Math.abs(target.position.y - landing.y));
+      const rolls = action.payload.collateralRolls[target.id] ?? (action.payload.rollsByCombatantId[target.id] ? { checkDice: action.payload.rollsByCombatantId[target.id], woundDice: action.payload.rollsByCombatantId[target.id] } : null);
+      if (!rolls) return;
+      const checkTotal = rolls.checkDice.first + rolls.checkDice.second;
+      if (!collateralCheckPasses(distance, checkTotal)) {
+        map.events.unshift(`${target.name} avoided fragmentation collateral at ${distance} square${distance === 1 ? "" : "s"} (${checkTotal})`);
+        return;
+      }
+      const penetration = Math.floor(3 / (2 ** distance));
+      if (penetration <= 0) return;
+      const woundRoll = rolls.woundDice.first + rolls.woundDice.second;
+      const total = woundRoll + penetration - target.armor;
+      applyTacticalWound(map, target, escalateWoundState(woundStateForTotal(total)));
+      map.events.unshift(`${target.name} caught in grenade blast at ${distance} square${distance === 1 ? "" : "s"}: ${woundRoll} +${penetration} penetration -${target.armor} armor = ${total}; HE escalation (${target.woundState})`);
+    });
+    if (grenadeKind === "smoke") attacker.smokeGrenades = (attacker.smokeGrenades ?? 0) - 1;
+    else attacker.grenades -= 1;
+    map.actionPointsByCharacterId[attackerId] = 0;
+    if (!map.actedCharacterIds.includes(attackerId)) map.actedCharacterIds.push(attackerId);
+    map.events.unshift(throwResult.hit
+      ? `${attacker.name} landed a ${grenadeKind} grenade at ${landing.x},${landing.y} (${action.payload.throwDice.first + action.payload.throwDice.second}${throwModifier ? ` ${throwModifier > 0 ? "+" : ""}${throwModifier}` : ""} vs 8, 6 AP)`
+      : `${attacker.name} threw ${grenadeKind} at ${center.x},${center.y}; grenade scattered to ${landing.x},${landing.y} (6 AP)`);
+    map.grenadeTargeting = false;
+    map.grenadeKind = null;
+    map.plannedGrenadeTarget = null;
+    map.movementMode = "walk";
+    advanceTacticalPlayerActivation(map);
+  },
+  previewTacticalTreatment: (state, action: PayloadAction<string>) => {
+    const map = state.tacticalMap;
+    const medicId = map?.activeCharacterId;
+    const medic = map ? tacticalCombatant(map, medicId) : null;
+    if (!map || !medicId || !medic || medic.defeated || medic.medkits < 1 || (map.actionPointsByCharacterId[medicId] ?? 0) < 6) return;
+    if (!treatableAllies(map.scenario, medicId).some((patient) => patient.id === action.payload)) return;
+    map.plannedTreatmentTargetId = action.payload;
+    map.plannedDestination = null;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.grenadeTargeting = false;
+    map.plannedGrenadeTarget = null;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.selectedTerrainObjectId = null;
+    map.movementMode = null;
+  },
+  cancelTacticalTreatment: (state) => {
+    const map = state.tacticalMap;
+    if (!map) return;
+    map.plannedTreatmentTargetId = null;
+    map.movementMode = "walk";
+  },
+  confirmTacticalTreatment: (state) => {
+    const map = state.tacticalMap;
+    const medicId = map?.activeCharacterId;
+    const patientId = map?.plannedTreatmentTargetId;
+    const medic = map ? tacticalCombatant(map, medicId) : null;
+    const patient = map && medicId && patientId ? treatableAllies(map.scenario, medicId).find((unit) => unit.id === patientId) : null;
+    if (!map || !medicId || !medic || !patient || medic.defeated || medic.medkits < 1 || (map.actionPointsByCharacterId[medicId] ?? 0) < 6) return;
+    const wasIncapacitated = patient.defeated;
+    if (patient.woundState === "light") {
+      patient.woundState = "healthy";
+      patient.seriousWounds = 0;
+    } else patient.seriousWounds = Math.max(1, patient.seriousWounds ?? 1);
+    medic.medkits -= 1;
+    map.actionPointsByCharacterId[medicId] = 0;
+    if (!map.actedCharacterIds.includes(medicId)) map.actedCharacterIds.push(medicId);
+    map.events.unshift(`${medic.name} treated ${patient.name}: ${wasIncapacitated ? `${patient.woundState} stabilized; remains incapacitated` : patient.woundState}`);
+    map.plannedTreatmentTargetId = null;
+    map.movementMode = "walk";
+    advanceTacticalPlayerActivation(map);
+  },
+  beginTacticalDragging: (state, action: PayloadAction<string>) => {
+    const map = state.tacticalMap;
+    const carrierId = map?.activeCharacterId;
+    const carrier = map ? tacticalCombatant(map, carrierId) : null;
+    const patient = map ? tacticalCombatant(map, action.payload) : null;
+    if (!map || !carrierId || !carrier || !patient || carrier.defeated || patient.side !== carrier.side || !patient.defeated || patient.woundState === "dead" || Math.abs(carrier.position.x - patient.position.x) + Math.abs(carrier.position.y - patient.position.y) !== 1 || Object.values(map.draggingCombatantByCarrierId).includes(patient.id)) return;
+    map.draggingCombatantByCarrierId[carrierId] = patient.id;
+    map.movementMode = "walk";
+    map.plannedDestination = null;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.plannedTreatmentTargetId = null;
+    map.events.unshift(`${carrier.name} began dragging ${patient.name}`);
+  },
+  releaseTacticalDraggedCombatant: (state) => {
+    const map = state.tacticalMap;
+    const carrierId = map?.activeCharacterId;
+    const patientId = carrierId ? map?.draggingCombatantByCarrierId[carrierId] : null;
+    if (!map || !carrierId || !patientId) return;
+    const patient = tacticalCombatant(map, patientId);
+    delete map.draggingCombatantByCarrierId[carrierId];
+    map.plannedDestination = null;
+    map.events.unshift(`${patient?.name ?? "Incapacitated character"} released`);
+  },
+  previewTacticalMelee: (state, action: PayloadAction<string>) => {
+    const map = state.tacticalMap;
+    const attackerId = map?.activeCharacterId;
+    const attacker = map ? tacticalCombatant(map, attackerId) : null;
+    if (!map || !attackerId || !attacker || attacker.defeated || map.draggingCombatantByCarrierId[attackerId] || !meleeEnemies(map.scenario, attackerId).some((target) => target.id === action.payload)) return;
+    map.plannedMeleeTargetId = action.payload;
+    map.plannedDestination = null;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.grenadeTargeting = false;
+    map.plannedGrenadeTarget = null;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.plannedTreatmentTargetId = null;
+    map.selectedTerrainObjectId = null;
+    map.movementMode = null;
+  },
+  previewTacticalMeleeDive: (state, action: PayloadAction<string>) => {
+    const map = state.tacticalMap;
+    const attackerId = map?.activeCharacterId;
+    const attacker = map ? tacticalCombatant(map, attackerId) : null;
+    const target = map ? tacticalCombatant(map, action.payload) : null;
+    if (!map || !attackerId || !attacker || !target || target.side === attacker.side || target.defeated || attacker.defeated || attacker.posture === "prone" || map.movementMode !== "trot" || map.draggingCombatantByCarrierId[attackerId] || map.suppressedCombatantIds.includes(attackerId)) return;
+    const terrain = FIRST_TACTICAL_CONTROL_ROOM.objects.map((object) => object.kind === "door" ? { ...object, open: map.doorOpenById[object.id] ?? object.open } : object);
+    const moves = reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin: attacker.position, facing: attacker.facing, allowance: Math.min(6, map.actionPointsByCharacterId[attackerId] ?? 0), trotting: true, blockedCells: firstTacticalMapBlockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain) });
+    if (!moves.has(pointKey(target.position))) return;
+    map.plannedMeleeTargetId = target.id;
+    map.plannedDestination = { ...target.position };
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.grenadeTargeting = false;
+    map.plannedGrenadeTarget = null;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.plannedTreatmentTargetId = null;
+    map.selectedTerrainObjectId = null;
+  },
+  cancelTacticalMelee: (state) => {
+    const map = state.tacticalMap;
+    if (!map) return;
+    map.plannedMeleeTargetId = null;
+    map.movementMode = "walk";
+  },
+  confirmTacticalMelee: (state, action: PayloadAction<{ attackRoll: number; responseRoll: number }>) => {
+    const map = state.tacticalMap;
+    const attackerId = map?.activeCharacterId;
+    const targetId = map?.plannedMeleeTargetId;
+    const attacker = map ? tacticalCombatant(map, attackerId) : null;
+    const target = map && attackerId && targetId ? meleeEnemies(map.scenario, attackerId).find((unit) => unit.id === targetId) : null;
+    if (!map || !attackerId || !attacker || !target || attacker.defeated || map.draggingCombatantByCarrierId[attackerId]) return;
+    const sameSquare = pointKey(attacker.position) === pointKey(target.position);
+    const attackResult = resolveAhlMelee(attacker, target, action.payload.attackRoll, sameSquare, false);
+    const returnEligible = meleeEnemies(map.scenario, target.id).some((unit) => unit.id === attacker.id);
+    const returnResult = returnEligible ? resolveAhlMelee(target, attacker, action.payload.responseRoll, sameSquare, false) : null;
+    applyTacticalAhlMeleeEffect(map, target, attackResult.effect);
+    if (returnResult) applyTacticalAhlMeleeEffect(map, attacker, returnResult.effect);
+    map.events.unshift(`${attacker.name} → ${target.name}: MF ${attackResult.differential}, column ${attackResult.tableDifferential}, roll ${attackResult.roll}${attackResult.modifiedRoll !== attackResult.roll ? ` → ${attackResult.modifiedRoll}` : ""}: ${attackResult.effect}`);
+    if (returnResult) map.events.unshift(`${target.name} → ${attacker.name}: MF ${returnResult.differential}, column ${returnResult.tableDifferential}, roll ${returnResult.roll}${returnResult.modifiedRoll !== returnResult.roll ? ` → ${returnResult.modifiedRoll}` : ""}: ${returnResult.effect}`);
+    map.events.unshift(`AHL melee exchange resolved simultaneously: ${attacker.name} and ${target.name}`);
+    if (!map.actedCharacterIds.includes(attackerId)) map.actedCharacterIds.push(attackerId);
+    map.bracedCombatantIds = map.bracedCombatantIds.filter((id) => id !== attackerId);
+    map.plannedMeleeTargetId = null;
+    map.movementMode = "walk";
+    advanceTacticalPlayerActivation(map);
+  },
+  aimTacticalAttack: (state) => {
+    const map = state.tacticalMap;
+    const attacker = map ? tacticalCombatant(map, map.activeCharacterId) : null;
+    const target = map ? tacticalCombatant(map, map.plannedAttackTargetId) : null;
+    if (!map || !attacker || !target || target.side === attacker.side || target.defeated || map.draggingCombatantByCarrierId[attacker.id] || map.suppressedCombatantIds.includes(attacker.id) || map.aimedTargetId === target.id || (map.actionPointsByCharacterId[attacker.id] ?? 0) < 2 || !rangedEnemies(map.scenario, attacker.id).some((unit) => unit.id === target.id)) return;
+    map.aimedTargetId = target.id;
+    map.actionPointsByCharacterId[attacker.id] -= 2;
+    map.events.unshift(`${attacker.name} aimed at ${target.name} (2 AP)`);
+  },
+  selectTacticalWeaponAmmunition: (state, action: PayloadAction<WeaponAmmunitionKind>) => {
+    const map = state.tacticalMap;
+    const character = map ? tacticalCombatant(map, map.activeCharacterId) : null;
+    const profile = character?.weapon.ammunitionProfiles?.find((candidate) => candidate.kind === action.payload);
+    if (!map || !character || !profile || character.defeated || map.actedCharacterIds.includes(character.id)) return;
+    const currentKind = character.weapon.ammunitionKind;
+    if (currentKind) {
+      map.ammunitionByCombatantAndKind[character.id] ??= {};
+      map.ammunitionByCombatantAndKind[character.id][currentKind] = map.ammunitionByCharacterId[character.id] ?? 0;
+    }
+    const selectedCount = map.ammunitionByCombatantAndKind[character.id]?.[profile.kind] ?? character.weapon.magazineSize ?? 12;
+    if (selectedCount <= 0 && currentKind !== profile.kind) return;
+    applyAmmunitionProfile(character.weapon, profile);
+    setTacticalAmmunition(map, character, selectedCount);
+    map.plannedAttackMode = null;
+  },
+  reloadTacticalWeapon: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const character = map ? tacticalCombatant(map, id) : null;
+    if (!map || !id || !character) return;
+    const magazineSize = character.weapon.magazineSize ?? 12;
+    if ((map.actionPointsByCharacterId[id] ?? 0) < 3 || (map.ammunitionByCharacterId[id] ?? 0) >= magazineSize) return;
+    reloadTacticalAmmunition(map, character);
+    map.actionPointsByCharacterId[id] -= 3;
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.events.unshift(`${character.name} reloaded (3 AP)`);
+    if (map.actionPointsByCharacterId[id] > 0) return;
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    advanceTacticalPlayerActivation(map);
+  },
+  rallyTacticalCharacter: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const character = map ? tacticalCombatant(map, id) : null;
+    if (!map || !id || !character || character.defeated || !map.suppressedCombatantIds.includes(id) || (map.actionPointsByCharacterId[id] ?? 0) < 3) return;
+    map.suppressedCombatantIds = map.suppressedCombatantIds.filter((combatantId) => combatantId !== id);
+    map.actionPointsByCharacterId[id] -= 3;
+    map.plannedDestination = null;
+    map.events.unshift(`${character.name} rallied (3 AP)`);
+    if (map.actionPointsByCharacterId[id] > 0) return;
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    advanceTacticalPlayerActivation(map);
+  },
+  confirmTacticalAttack: (state, action: PayloadAction<{ hitDice: DicePair; woundDice: DicePair; secondaryRolls?: Record<string, { hitDice: DicePair; woundDice: DicePair }>; collateralRolls?: TacticalCollateralRolls }>) => {
+    const map = state.tacticalMap;
+    const attacker = map ? tacticalCombatant(map, map.activeCharacterId) : null;
+    const target = map ? tacticalCombatant(map, map.plannedAttackTargetId) : null;
+    const mode = map?.plannedAttackMode;
+    const cost = mode === "snap" ? 3 : 6;
+    const ammunitionCost = mode === "automatic" || mode === "suppressive" ? 3 : 1;
+    const profile = attacker && target ? snapShotTarget(attacker, target) : null;
+    if (!map || !attacker || !target || !mode || target.side === attacker.side || target.defeated || map.draggingCombatantByCarrierId[attacker.id] || (attacker.weapon.highEnergy && !map.bracedCombatantIds.includes(attacker.id)) || !profile || ((mode === "automatic" || mode === "suppressive") && !attacker.weapon.automatic) || (mode === "automatic" && automaticFireModifierForRange(profile.rangeBand, attacker.weapon.automaticFireBonusByRange) === null) || (mode === "suppressive" && map.suppressedCombatantIds.includes(target.id)) || !rangedEnemies(map.scenario, attacker.id).some((unit) => unit.id === target.id) || (map.actionPointsByCharacterId[attacker.id] ?? 0) < cost || (map.ammunitionByCharacterId[attacker.id] ?? 0) < ammunitionCost) return;
+    const attackerBraced = map.bracedCombatantIds.includes(attacker.id);
+    const result = resolveSnapShot(attacker, target, action.payload.hitDice, action.payload.woundDice, coverProtection(map.scenario, attacker.id, target.id), mode, false, map.suppressedCombatantIds.includes(attacker.id), attackerBraced, 0, false, map.aimedTargetId === target.id);
+    if (!result) return;
+    map.actionPointsByCharacterId[attacker.id] -= cost;
+    spendTacticalAmmunition(map, attacker, ammunitionCost);
+    if (mode === "suppressive") {
+      queueTacticalUnexpectedFireMoraleCheck(map, attacker, target);
+      const suppressionTarget = result.targetNumber + result.cover;
+      const suppressed = result.hitTotal >= suppressionTarget;
+      if (suppressed) {
+        map.suppressedCombatantIds.push(target.id);
+        if (map.aimedTargetId === target.id) map.aimedTargetId = null;
+      }
+      map.events.unshift(`${attacker.name} suppressive fired at ${target.name}: ${result.hitTotal}/${suppressionTarget}${result.cover ? ` including cover +${result.cover}` : ""} · ${suppressed ? "suppressed" : "held position"}`);
+      map.plannedAttackTargetId = null;
+      map.plannedAttackMode = null;
+      map.aimedTargetId = null;
+      if (map.actionPointsByCharacterId[attacker.id] === 0 && !map.actedCharacterIds.includes(attacker.id)) map.actedCharacterIds.push(attacker.id);
+      advanceTacticalPlayerActivation(map);
+      return;
+    }
+    const dangerTargets = mode === "automatic" ? [target, ...automaticFireSecondaryTargets(map.scenario, attacker.id, target.id)] : [target];
+    let hits = 0;
+    for (const [index, dangerTarget] of dangerTargets.entries()) {
+      const suppliedRolls = dangerTarget.id === target.id ? action.payload : action.payload.secondaryRolls?.[dangerTarget.id] ?? action.payload;
+      const dangerResult = dangerTarget.id === target.id ? result : resolveSnapShot(attacker, dangerTarget, suppliedRolls.hitDice, suppliedRolls.woundDice, coverProtection(map.scenario, attacker.id, dangerTarget.id), mode, false, map.suppressedCombatantIds.includes(attacker.id), attackerBraced, 0, false, false);
+      if (!dangerResult) continue;
+      queueTacticalUnexpectedFireMoraleCheck(map, attacker, dangerTarget);
+      if (dangerResult.hit) {
+        hits += 1;
+        applyTacticalWound(map, dangerTarget, dangerResult.woundState);
+        applyTacticalWeaponCollateral(map, attacker, dangerTarget, dangerResult.weaponPenetration, suppliedRolls.woundDice, action.payload.collateralRolls);
+        if (attacker.weapon.collateralBlast) {
+          const ammunitionLabel = attacker.weapon.ammunitionProfiles?.find((profile) => profile.kind === attacker.weapon.ammunitionKind)?.label ?? attacker.weapon.ammunitionKind ?? "Ammunition";
+          map.lastWeaponImpact = { weaponName: attacker.weapon.name, ammunitionKind: attacker.weapon.ammunitionKind, ammunitionLabel, point: { ...dangerTarget.position }, blastCells: collateralBlastCells(map.scenario, dangerTarget.position), hit: true };
+        }
+      }
+      map.events.unshift(`${attacker.name} ${mode} fired at ${dangerTarget.name}: hit ${dangerResult.hitTotal}/${dangerResult.targetNumber} · ${dangerResult.hit ? `wound ${dangerResult.woundTotal} (${dangerResult.woundState})` : "miss"}`);
+      const nextTarget = dangerTargets[index + 1];
+      if (mode === "automatic" && hits >= 2 && (!nextTarget || pointKey(nextTarget.position) !== pointKey(dangerTarget.position))) break;
+    }
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    map.plannedMeleeTargetId = null;
+    map.aimedTargetId = null;
+    if (map.actionPointsByCharacterId[attacker.id] > 0) return;
+    if (!map.actedCharacterIds.includes(attacker.id)) map.actedCharacterIds.push(attacker.id);
+    advanceTacticalPlayerActivation(map);
   },
   finishTacticalActivation: (state) => {
     const map = state.tacticalMap;
     const id = map?.activeCharacterId;
     if (!map || !id) return;
-    map.actionPointsByCharacterId[id] = 0;
+    const character = tacticalCombatant(map, id);
+    if (character) map.events.unshift(`${character.name} finished activation`);
     if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
     map.movementMode = "walk";
     map.plannedDestination = null;
+    map.grenadeTargeting = false;
+    map.plannedGrenadeTarget = null;
+    map.coveringFireTargeting = false;
+    map.plannedCoveringFireTarget = null;
+    map.plannedTreatmentTargetId = null;
+    map.plannedMeleeTargetId = null;
     map.selectedTerrainObjectId = null;
-    const characterIds = Object.keys(map.characterPositions);
-    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
-    if (remaining.length > 0) map.activeCharacterId = remaining[0];
-    else {
-      map.turn += 1;
-      map.actedCharacterIds = [];
-      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
-      map.activeCharacterId = characterIds[0] ?? null;
-    }
+    advanceTacticalPlayerActivation(map);
   },
-  confirmTacticalMove: (state) => {
+  resolveTacticalAdjacencyReaction: (state, action: PayloadAction<{ fire: boolean; hitDice: DicePair; woundDice: DicePair }>) => {
+    const map = state.tacticalMap;
+    const pending = map?.pendingAdjacencyReaction;
+    const defenderId = pending?.defenderIds[0];
+    const defender = map ? tacticalCombatant(map, defenderId) : null;
+    const mover = map ? tacticalCombatant(map, pending?.moverId) : null;
+    if (!map || !pending || !defenderId || !defender || !mover) return;
+    if (action.payload.fire
+      && !defender.defeated
+      && !mover.defeated
+      && !map.movedCombatantIds.includes(defender.id)
+      && (map.actionPointsByCharacterId[defender.id] ?? 0) >= 3
+      && (map.ammunitionByCharacterId[defender.id] ?? 0) >= 1) {
+      const visibility = visibilityAssessment(map.scenario, defender, mover);
+      const result = resolveSnapShot(defender, mover, action.payload.hitDice, action.payload.woundDice, coverProtection(map.scenario, defender.id, mover.id), "snap", map.evadingCombatantIds.includes(mover.id), map.suppressedCombatantIds.includes(defender.id), map.bracedCombatantIds.includes(defender.id), visibility.modifier);
+      if (result) {
+        map.actionPointsByCharacterId[defender.id] -= 3;
+        spendTacticalAmmunition(map, defender, 1);
+        queueTacticalUnexpectedFireMoraleCheck(map, defender, mover);
+        if (result.hit) applyTacticalWound(map, mover, result.woundState);
+        map.events.unshift(`${defender.name} defensive snap fired at ${mover.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
+      } else map.events.unshift(`${defender.name} could not take the defensive snap shot`);
+    } else map.events.unshift(`${defender.name} declined the defensive snap shot`);
+    const remainingDefenderIds = mover.defeated ? [] : pending.defenderIds.slice(1).filter((id) => {
+      const candidate = tacticalCombatant(map, id);
+      return candidate && !candidate.defeated && !map.movedCombatantIds.includes(id) && (map.actionPointsByCharacterId[id] ?? 0) >= 3 && (map.ammunitionByCharacterId[id] ?? 0) >= 1;
+    });
+    map.pendingAdjacencyReaction = remainingDefenderIds.length > 0 ? { ...pending, defenderIds: remainingDefenderIds } : null;
+  },
+  runTacticalEnemyPhase: (state, action: PayloadAction<TacticalEnemyPhaseRolls>) => {
+    const map = state.tacticalMap;
+    if (!map || map.scenarioStatus !== "active" || map.pendingAdjacencyReaction || map.scenario.id !== "default-tactical-control-room" || map.activeCharacterId !== null) return;
+    const playerIds = tacticalPlayerIds(map);
+    const playerPhaseComplete = playerIds.every((id) => map.actedCharacterIds.includes(id) || (map.actionPointsByCharacterId[id] ?? 0) === 0 || tacticalCombatant(map, id)?.defeated);
+    if (!playerPhaseComplete) return;
+
+    const scenario = map.scenario;
+    resolveTacticalCoweringRecovery(map, "enemy", action.payload.coweringRecoveryRolls ?? {});
+    resolveTacticalCasualtyMoraleChecks(map, "enemy", action.payload.casualtyMoraleRolls ?? {});
+    resolveTacticalUnexpectedFireMoraleChecks(map, "enemy", action.payload.unexpectedFireMoraleRolls ?? {});
+    resolveTacticalPanicFlight(map, "enemy");
+    map.visibleHostileIdsAtPhaseStartByCombatantId = tacticalVisibilitySnapshot(map.scenario);
+    for (const lane of [...map.coveringFireLanes]) {
+      const attacker = tacticalCombatant(map, lane.attackerId);
+      const occupants = scenario.combatants.filter((unit) => unit.id !== attacker?.id && !unit.defeated && lane.cells.some((cell) => pointKey(cell) === pointKey(unit.position)));
+      const primary = occupants[0];
+      if (!primary) continue;
+      const fallbackRolls = Object.fromEntries(occupants.flatMap((unit) => action.payload.enemyRolls[unit.id] ? [[unit.id, action.payload.enemyRolls[unit.id]]] : []));
+      resolveTacticalCoveringFire(map, primary, lane, action.payload.coveringFireRolls?.[lane.attackerId] ?? fallbackRolls, false);
+      if (map.scenarioStatus !== "active") return;
+    }
+    const enemies = scenario.combatants.filter((unit) => unit.side === "enemy" && !unit.defeated && !(map.coweringCombatantIds ?? []).includes(unit.id) && !(map.panickedCombatantIds ?? []).includes(unit.id));
+    const coveringFireLeadershipResults = new Map<string, boolean>();
+    const movingAdjacentLeadershipResults = new Map<string, boolean>();
+    for (const enemy of enemies) {
+      if (map.processedEnemyPhaseCombatantIds.includes(enemy.id)) continue;
+      map.processedEnemyPhaseCombatantIds.push(enemy.id);
+      const livingPlayers = scenario.combatants.filter((unit) => unit.side === "player" && !unit.defeated);
+      if (livingPlayers.length === 0) break;
+      const dice = action.payload.enemyRolls[enemy.id];
+      if (!dice) continue;
+      if (map.actionPointsByCharacterId[enemy.id] === undefined) map.actionPointsByCharacterId[enemy.id] = 6;
+      if (map.actionPointsByCharacterId[enemy.id] < 1) {
+        map.events.unshift(`${enemy.name} had no AP remaining`);
+        continue;
+      }
+
+      let attackTarget: CombatScenario["combatants"][number] | null = rangedEnemies(scenario, enemy.id)
+        .filter((unit) => unit.side === "player")
+        .sort((a, b) => compareEnemyRangedTargets(scenario, enemy, a, b, map.evadingCombatantIds))[0] ?? null;
+      const initialProfile = attackTarget ? snapShotTarget(enemy, attackTarget) : null;
+      const shouldMoveCloser = Boolean(initialProfile && shouldImproveEnemyRange(enemy, initialProfile.rangeBand));
+
+      if (!attackTarget) {
+        const visibleTarget = livingPlayers
+          .filter((unit) => snapShotTarget(enemy, unit) && visibilityAssessment(scenario, enemy, unit).visible)
+          .sort((a, b) => distanceBetween(enemy.position, a.position) - distanceBetween(enemy.position, b.position) || a.id.localeCompare(b.id))[0];
+        const turn = visibleTarget ? facingTowardFieldOfFire(enemy, visibleTarget.position) : null;
+        if (turn) {
+          if (turn.turns > map.actionPointsByCharacterId[enemy.id]) {
+            map.events.unshift(`${enemy.name} held position`);
+            continue;
+          }
+          enemy.facing = turn.facing;
+          map.actionPointsByCharacterId[enemy.id] -= turn.turns;
+          map.events.unshift(`${enemy.name} turned toward ${visibleTarget.name}`);
+          attackTarget = rangedEnemies(scenario, enemy.id).find((unit) => unit.id === visibleTarget.id) ?? null;
+        }
+      }
+
+      if (attackTarget && !shouldMoveCloser) {
+        const ammunition = map.ammunitionByCharacterId[enemy.id] ?? 0;
+        if (ammunition === 0) {
+          if (map.actionPointsByCharacterId[enemy.id] < 3) {
+            map.events.unshift(`${enemy.name} lacked AP to reload`);
+            continue;
+          }
+          reloadTacticalAmmunition(map, enemy);
+          map.actionPointsByCharacterId[enemy.id] -= 3;
+          map.events.unshift(`${enemy.name} reloaded`);
+          continue;
+        }
+        const suppressionTarget = map.actionPointsByCharacterId[enemy.id] >= 6 && enemy.weapon.automatic && ammunition >= 3 ? rangedEnemies(scenario, enemy.id)
+          .filter((candidate) => candidate.side === "player" && !map.suppressedCombatantIds.includes(candidate.id))
+          .map((candidate) => ({ candidate, cover: coverProtection(scenario, enemy.id, candidate.id) }))
+          .filter(({ candidate, cover }) => candidate.armor >= 3 || cover > 0)
+          .sort((a, b) => b.cover + b.candidate.armor - (a.cover + a.candidate.armor) || compareEnemyRangedTargets(scenario, enemy, a.candidate, b.candidate, map.evadingCombatantIds))[0] : null;
+        if (suppressionTarget) {
+          const result = resolveSnapShot(enemy, suppressionTarget.candidate, dice.hitDice, dice.woundDice, suppressionTarget.cover, "suppressive", false, map.suppressedCombatantIds.includes(enemy.id), false, visibilityAssessment(scenario, enemy, suppressionTarget.candidate).modifier, false, false, map.evadingCombatantIds.includes(suppressionTarget.candidate.id) ? -2 : 0);
+          if (!result) continue;
+          queueTacticalUnexpectedFireMoraleCheck(map, enemy, suppressionTarget.candidate);
+          const threshold = result.targetNumber + result.cover;
+          const suppressed = result.hitTotal >= threshold;
+          if (suppressed) map.suppressedCombatantIds.push(suppressionTarget.candidate.id);
+          spendTacticalAmmunition(map, enemy, 3);
+          map.actionPointsByCharacterId[enemy.id] -= 6;
+          map.events.unshift(`${enemy.name} suppressive fired at ${suppressionTarget.candidate.name}: ${result.hitTotal}/${threshold} · ${suppressed ? "suppressed" : "held position"}`);
+          continue;
+        }
+
+        const profile = snapShotTarget(enemy, attackTarget);
+        const automaticModifier = profile ? automaticFireModifierForRange(profile.rangeBand, enemy.weapon.automaticFireBonusByRange) : null;
+        const availableFireAp = map.actionPointsByCharacterId[enemy.id];
+        if (availableFireAp < 3) {
+          map.events.unshift(`${enemy.name} lacked AP to fire`);
+          continue;
+        }
+        const fireMode: "automatic" | "aimed" | "snap" = availableFireAp >= 6 && enemy.weapon.automatic && ammunition >= 3 && automaticModifier !== null ? "automatic" : availableFireAp >= 6 ? "aimed" : "snap";
+        const result = resolveSnapShot(enemy, attackTarget, dice.hitDice, dice.woundDice, coverProtection(scenario, enemy.id, attackTarget.id), fireMode, false, map.suppressedCombatantIds.includes(enemy.id), false, visibilityAssessment(scenario, enemy, attackTarget).modifier, false, false, map.evadingCombatantIds.includes(attackTarget.id) ? -2 : 0);
+        if (!result) continue;
+        if (fireMode === "automatic") {
+          const dangerTargets = [attackTarget, ...automaticFireSecondaryTargets(scenario, enemy.id, attackTarget.id)]
+            .sort((a, b) => distanceInSquares(enemy, a) - distanceInSquares(enemy, b) || scenario.combatants.indexOf(a) - scenario.combatants.indexOf(b));
+          let hits = 0;
+          for (const [index, dangerTarget] of dangerTargets.entries()) {
+            const targetDice = dangerTarget.id === attackTarget.id ? dice : action.payload.dangerSpaceRolls?.[enemy.id]?.[dangerTarget.id] ?? dice;
+            const dangerResult = dangerTarget.id === attackTarget.id ? result : resolveSnapShot(enemy, dangerTarget, targetDice.hitDice, targetDice.woundDice, coverProtection(scenario, enemy.id, dangerTarget.id), "automatic", false, map.suppressedCombatantIds.includes(enemy.id), false, visibilityAssessment(scenario, enemy, dangerTarget).modifier, false, false, map.evadingCombatantIds.includes(dangerTarget.id) ? -2 : 0);
+            if (!dangerResult) continue;
+            queueTacticalUnexpectedFireMoraleCheck(map, enemy, dangerTarget);
+            if (dangerResult.hit) {
+              hits += 1;
+              applyTacticalWound(map, dangerTarget, dangerResult.woundState);
+            } else if (dangerResult.targetNumber - dangerResult.hitTotal <= 2 && !map.suppressedCombatantIds.includes(dangerTarget.id)) map.suppressedCombatantIds.push(dangerTarget.id);
+            map.events.unshift(`${enemy.name} automatic fired at ${dangerTarget.name}: hit ${dangerResult.hitTotal}/${dangerResult.targetNumber} · ${dangerResult.hit ? `wound ${dangerResult.woundTotal} (${dangerResult.woundState})` : "miss"}`);
+            const nextTarget = dangerTargets[index + 1];
+            if (hits >= 2 && (!nextTarget || pointKey(nextTarget.position) !== pointKey(dangerTarget.position))) break;
+          }
+          spendTacticalAmmunition(map, enemy, 3);
+          map.actionPointsByCharacterId[enemy.id] -= 6;
+        } else {
+          queueTacticalUnexpectedFireMoraleCheck(map, enemy, attackTarget);
+          if (result.hit) applyTacticalWound(map, attackTarget, result.woundState);
+          else if (result.targetNumber - result.hitTotal <= 2 && !map.suppressedCombatantIds.includes(attackTarget.id)) map.suppressedCombatantIds.push(attackTarget.id);
+          spendTacticalAmmunition(map, enemy, 1);
+          map.actionPointsByCharacterId[enemy.id] -= fireMode === "aimed" ? 6 : 3;
+          map.events.unshift(`${enemy.name} ${fireMode} fired at ${attackTarget.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
+        }
+        continue;
+      }
+
+      const target = livingPlayers.sort((a, b) => distanceBetween(enemy.position, a.position) - distanceBetween(enemy.position, b.position) || a.id.localeCompare(b.id))[0];
+      const goals = [
+        { x: target.position.x + 1, y: target.position.y }, { x: target.position.x, y: target.position.y + 1 },
+        { x: target.position.x - 1, y: target.position.y }, { x: target.position.x, y: target.position.y - 1 },
+      ].filter((point) => point.x >= 0 && point.y >= 0 && point.x < scenario.width && point.y < scenario.height);
+      let route = shortestPathToAny(scenario, enemy.id, goals);
+      if (!route) {
+        const doorRoute = routeAllowingClosedDoors(scenario, enemy.id, goals);
+        if (doorRoute?.door && doorRoute.doorStepIndex === 0) {
+          if (map.actionPointsByCharacterId[enemy.id] < 6) {
+            map.events.unshift(`${enemy.name} lacked AP to open ${doorRoute.door.id}`);
+            continue;
+          }
+          doorRoute.door.open = true;
+          map.doorOpenById[doorRoute.door.id] = true;
+          map.actionPointsByCharacterId[enemy.id] -= 6;
+          map.events.unshift(`${enemy.name} opened ${doorRoute.door.id}`);
+          continue;
+        }
+        route = doorRoute?.door ? doorRoute.path.slice(0, doorRoute.doorStepIndex) : doorRoute?.path ?? null;
+      }
+      if (!route?.length) {
+        map.events.unshift(`${enemy.name} held position`);
+        continue;
+      }
+      const trotting = distanceBetween(enemy.position, target.position) > 4 && enemy.posture === "standing" && !map.suppressedCombatantIds.includes(enemy.id);
+      const path = pathWithinMovementAllowance(scenario, enemy.position, route, Math.min(map.actionPointsByCharacterId[enemy.id], trotting ? 6 : map.suppressedCombatantIds.includes(enemy.id) ? 2 : 3), enemy.facing, trotting);
+      if (!path.length) {
+        map.events.unshift(`${enemy.name} held position`);
+        continue;
+      }
+      const origin = { ...enemy.position };
+      const crossedLane = map.coveringFireLanes
+        .map((lane) => ({ lane, stepIndex: path.findIndex((step) => lane.cells.some((cell) => pointKey(cell) === pointKey(step))) }))
+        .filter(({ stepIndex }) => stepIndex >= 0)
+        .sort((a, b) => a.stepIndex - b.stepIndex)[0];
+      const adjacencyEntry = firstTacticalAdjacencyEntry(map, enemy, path);
+      const queueAdjacencyReaction = () => {
+        if (!adjacencyEntry) return false;
+        const triggerPath = path.slice(0, adjacencyEntry.stepIndex + 1);
+        const trigger = triggerPath[triggerPath.length - 1];
+        const defenderIds = scenario.combatants
+          .filter((defender) => defender.side === "player"
+            && !defender.defeated
+            && !defender.weapon.highEnergy
+            && adjacencyEntryStepIndex(scenario, defender.position, origin, path) === adjacencyEntry.stepIndex
+            && !map.movedCombatantIds.includes(defender.id)
+            && (map.actionPointsByCharacterId[defender.id] ?? 0) >= 3
+            && (map.ammunitionByCharacterId[defender.id] ?? 0) >= 1)
+          .map((defender) => defender.id);
+        if (defenderIds.length === 0) return false;
+        enemy.position = { ...trigger };
+        map.actionPointsByCharacterId[enemy.id] = Math.max(0, map.actionPointsByCharacterId[enemy.id] - movementPathCost(scenario, origin, triggerPath, enemy.facing, trotting));
+        map.movementAnimationByCharacterId[enemy.id] = { sequence: (map.movementAnimationByCharacterId[enemy.id]?.sequence ?? 0) + 1, path: [origin, ...triggerPath.map((point) => ({ ...point }))], mode: trotting ? "run" : "walk" };
+        map.pendingAdjacencyReaction = { moverId: enemy.id, defenderIds };
+        map.events.unshift(`${enemy.name} moved adjacent; ${defenderIds.map((id) => tacticalCombatant(map, id)?.name ?? id).join(", ")} may snap fire`);
+        return true;
+      };
+      const failedMovingAdjacentCheck = () => {
+        const moraleDice = action.payload.movingAdjacentMoraleRolls?.[enemy.id];
+        if (!adjacencyEntry || !moraleDice || enemy.moraleFactor === undefined) return false;
+        const leadershipModifier = [...movingAdjacentLeadershipResults.entries()].reduce((total, [leaderId, passed]) => {
+          const leader = tacticalCombatant(map, leaderId);
+          return leader && hasLineOfSight(scenario, leader.position, enemy.position) ? total + (passed ? 1 : -1) * Math.max(0, leader.leadershipRating ?? 0) : total;
+        }, 0);
+        const morale = resolveAhlMoraleCheck({ moraleFactor: enemy.moraleFactor, woundState: enemy.woundState }, moraleDice, leadershipModifier);
+        if ((enemy.leadershipRating ?? 0) > 0) movingAdjacentLeadershipResults.set(enemy.id, morale.passed);
+        map.events.unshift(`${enemy.name} moving-adjacent morale ${morale.roll}/${morale.modifiedMorale}${morale.lightWoundModifier ? " · light wound −1" : ""}${morale.leadershipModifier ? ` · leadership ${morale.leadershipModifier > 0 ? "+" : ""}${morale.leadershipModifier}` : ""}: ${morale.passed ? "passed" : `stopped before ${adjacencyEntry.target.name}`}`);
+        if (morale.passed) return false;
+        const safePath = pathWithinMovementAllowance(scenario, origin, path.slice(0, adjacencyEntry.stepIndex), Math.max(0, map.actionPointsByCharacterId[enemy.id] - 3), enemy.facing, trotting);
+        if (safePath.length > 0) {
+          enemy.position = { ...safePath[safePath.length - 1] };
+          map.actionPointsByCharacterId[enemy.id] = Math.max(0, map.actionPointsByCharacterId[enemy.id] - movementPathCost(scenario, origin, safePath, enemy.facing, trotting));
+          map.movementAnimationByCharacterId[enemy.id] = { sequence: (map.movementAnimationByCharacterId[enemy.id]?.sequence ?? 0) + 1, path: [origin, ...safePath.map((point) => ({ ...point }))], mode: trotting ? "run" : "walk" };
+        }
+        if (map.actionPointsByCharacterId[enemy.id] >= 3 && resolveTacticalMovingAdjacentSnapShot(map, enemy, adjacencyEntry.target, action.payload.movingAdjacentSnapRolls?.[enemy.id])) map.actionPointsByCharacterId[enemy.id] -= 3;
+        return true;
+      };
+      if (adjacencyEntry && (!crossedLane || adjacencyEntry.stepIndex <= crossedLane.stepIndex) && failedMovingAdjacentCheck()) continue;
+      if (adjacencyEntry && (!crossedLane || adjacencyEntry.stepIndex <= crossedLane.stepIndex) && queueAdjacencyReaction()) return;
+      if (crossedLane) {
+        const priorPosition = crossedLane.stepIndex === 0 ? origin : path[crossedLane.stepIndex - 1];
+        const moraleDice = action.payload.coveringFireMoraleRolls?.[enemy.id];
+        const attacker = tacticalCombatant(map, crossedLane.lane.attackerId);
+        if (attacker && !attacker.defeated && (map.ammunitionByCharacterId[attacker.id] ?? 0) >= coveringFireAmmunitionCost(attacker.weapon) && moraleDice && enemy.moraleFactor !== undefined && tacticalCoverAtPosition(map, attacker.id, enemy, priorPosition) > 0) {
+          const leadershipModifier = [...coveringFireLeadershipResults.entries()].reduce((total, [leaderId, passed]) => {
+            const leader = tacticalCombatant(map, leaderId);
+            return leader && hasLineOfSight(scenario, leader.position, enemy.position) ? total + (passed ? 1 : -1) * Math.max(0, leader.leadershipRating ?? 0) : total;
+          }, 0);
+          const morale = resolveAhlMoraleCheck({ moraleFactor: enemy.moraleFactor, woundState: enemy.woundState }, moraleDice, leadershipModifier);
+          if ((enemy.leadershipRating ?? 0) > 0) coveringFireLeadershipResults.set(enemy.id, morale.passed);
+          map.events.unshift(`${enemy.name} exposure-to-covering-fire morale ${morale.roll}/${morale.modifiedMorale}${morale.lightWoundModifier ? " · light wound −1" : ""}${morale.leadershipModifier ? ` · leadership ${morale.leadershipModifier > 0 ? "+" : ""}${morale.leadershipModifier}` : ""}: ${morale.passed ? "passed" : "stopped before danger space"}`);
+          if (!morale.passed) {
+            const safePath = path.slice(0, crossedLane.stepIndex);
+            if (safePath.length > 0) {
+              enemy.position = { ...safePath[safePath.length - 1] };
+              map.actionPointsByCharacterId[enemy.id] = Math.max(0, map.actionPointsByCharacterId[enemy.id] - movementPathCost(scenario, origin, safePath, enemy.facing, trotting));
+              map.movementAnimationByCharacterId[enemy.id] = { sequence: (map.movementAnimationByCharacterId[enemy.id]?.sequence ?? 0) + 1, path: [origin, ...safePath.map((point) => ({ ...point }))], mode: trotting ? "run" : "walk" };
+            }
+            continue;
+          }
+        }
+        const triggerPath = path.slice(0, crossedLane.stepIndex + 1);
+        enemy.position = { ...triggerPath[triggerPath.length - 1] };
+        const triggerCost = movementPathCost(scenario, origin, triggerPath, enemy.facing, trotting);
+        if (resolveTacticalCoveringFire(map, enemy, crossedLane.lane, action.payload.dangerSpaceRolls?.[enemy.id] ?? { [enemy.id]: dice }, true).has(enemy.id)) {
+          map.actionPointsByCharacterId[enemy.id] = Math.max(0, map.actionPointsByCharacterId[enemy.id] - triggerCost);
+          map.movementAnimationByCharacterId[enemy.id] = { sequence: (map.movementAnimationByCharacterId[enemy.id]?.sequence ?? 0) + 1, path: [origin, ...triggerPath.map((point) => ({ ...point }))], mode: trotting ? "run" : "walk" };
+          map.events.unshift(`${enemy.name} movement stopped by covering fire`);
+          continue;
+        }
+        enemy.position = origin;
+      }
+      if (adjacencyEntry && crossedLane && adjacencyEntry.stepIndex > crossedLane.stepIndex && failedMovingAdjacentCheck()) continue;
+      if (adjacencyEntry && crossedLane && adjacencyEntry.stepIndex > crossedLane.stepIndex && queueAdjacencyReaction()) return;
+      const destination = path[path.length - 1];
+      const facing = facingTowardFieldOfFire(enemy, destination);
+      map.actionPointsByCharacterId[enemy.id] = Math.max(0, map.actionPointsByCharacterId[enemy.id] - movementPathCost(scenario, origin, path, enemy.facing, trotting));
+      enemy.position = { ...destination };
+      if (facing) enemy.facing = facing.facing;
+      map.movementAnimationByCharacterId[enemy.id] = { sequence: (map.movementAnimationByCharacterId[enemy.id]?.sequence ?? 0) + 1, path: [origin, ...path.map((point) => ({ ...point }))], mode: trotting ? "run" : "walk" };
+      map.events.unshift(`${enemy.name} moved to ${destination.x},${destination.y}`);
+    }
+
+    resolveTacticalCasualtyMoraleChecks(map, "enemy", action.payload.casualtyMoraleRolls ?? {});
+    resolveTacticalUnexpectedFireMoraleChecks(map, "enemy", action.payload.unexpectedFireMoraleRolls ?? {});
+    if (map.scenarioStatus !== "active") return;
+    map.coveringFireLanes = [];
+    map.pendingCoveringFireSnapIds = map.coveringFireCommittedCombatantIds.filter((id) => {
+      const unit = tacticalCombatant(map, id);
+      return Boolean(unit && !unit.defeated && !unit.weapon.highEnergy && (map.actionPointsByCharacterId[id] ?? 0) >= 3 && (map.ammunitionByCharacterId[id] ?? 0) >= 1);
+    });
+    map.coveringFireCommittedCombatantIds = [];
+    if (map.pendingCoveringFireSnapIds.length > 0) {
+      map.activeCharacterId = map.pendingCoveringFireSnapIds[0];
+      const unit = tacticalCombatant(map, map.activeCharacterId);
+      map.events.unshift(`${unit?.name ?? "Character"} may take the retained snap shot or decline`);
+      return;
+    }
+    beginNextTacticalTurn(map, action.payload);
+  },
+  resolveTacticalCoveringFireSnap: (state, action: PayloadAction<{ fire: boolean; targetId?: string; hitDice: DicePair; woundDice: DicePair; phaseRolls: TacticalEnemyPhaseRolls }>) => {
+    const map = state.tacticalMap;
+    const shooterId = map?.pendingCoveringFireSnapIds[0];
+    const shooter = map ? tacticalCombatant(map, shooterId) : null;
+    if (!map || !shooterId || !shooter || map.activeCharacterId !== shooterId) return;
+    if (action.payload.fire) {
+      const target = rangedEnemies(map.scenario, shooter.id).find((unit) => unit.id === action.payload.targetId && unit.side !== shooter.side);
+      if (!target || shooter.defeated || shooter.weapon.highEnergy || (map.actionPointsByCharacterId[shooter.id] ?? 0) < 3 || (map.ammunitionByCharacterId[shooter.id] ?? 0) < 1) return;
+      const result = resolveSnapShot(shooter, target, action.payload.hitDice, action.payload.woundDice, coverProtection(map.scenario, shooter.id, target.id), "snap", map.evadingCombatantIds.includes(target.id), map.suppressedCombatantIds.includes(shooter.id), map.bracedCombatantIds.includes(shooter.id), visibilityAssessment(map.scenario, shooter, target).modifier);
+      if (!result) return;
+      map.actionPointsByCharacterId[shooter.id] -= 3;
+      spendTacticalAmmunition(map, shooter, 1);
+      queueTacticalUnexpectedFireMoraleCheck(map, shooter, target);
+      if (result.hit) applyTacticalWound(map, target, result.woundState);
+      map.events.unshift(`${shooter.name} retained snap fired at ${target.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
+    } else map.events.unshift(`${shooter.name} declined the retained snap shot`);
+    map.pendingCoveringFireSnapIds.shift();
+    map.plannedAttackTargetId = null;
+    map.plannedAttackMode = null;
+    const nextShooterId = map.pendingCoveringFireSnapIds.find((id) => {
+      const unit = tacticalCombatant(map, id);
+      return Boolean(unit && !unit.defeated && !unit.weapon.highEnergy && (map.actionPointsByCharacterId[id] ?? 0) >= 3 && (map.ammunitionByCharacterId[id] ?? 0) >= 1);
+    });
+    if (nextShooterId) {
+      map.pendingCoveringFireSnapIds = map.pendingCoveringFireSnapIds.slice(map.pendingCoveringFireSnapIds.indexOf(nextShooterId));
+      map.activeCharacterId = nextShooterId;
+      map.events.unshift(`${tacticalCombatant(map, nextShooterId)?.name ?? "Character"} may take the retained snap shot or decline`);
+      return;
+    }
+    map.activeCharacterId = null;
+    beginNextTacticalTurn(map, action.payload.phaseRolls);
+  },
+  resetTacticalScenario: (state) => {
+    const map = state.tacticalMap;
+    if (!map) return;
+    const crew = map.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => ({
+      id: unit.sourceCharacterId ?? unit.id,
+      name: unit.name,
+      weaponSkill: unit.weaponSkill,
+      meleeRating: unit.meleeRating,
+    }));
+    state.tacticalMap = freshTacticalMap(crew, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, {
+      characterHudLayout: map.characterHudLayout,
+      enemyHudLayout: map.enemyHudLayout,
+      actionHudLayout: map.actionHudLayout,
+      characterInformationHudLayout: map.characterInformationHudLayout,
+      eventsHudLayout: map.eventsHudLayout,
+      scenarioHudLayout: map.scenarioHudLayout,
+    });
+  },
+  confirmTacticalMove: (state, action: PayloadAction<{ moraleDice: DicePair; snapDice: { hitDice: DicePair; woundDice: DicePair }; enemyReactionRolls?: Record<string, { hitDice: DicePair; woundDice: DicePair }>; meleeDice?: { attackRoll: number; responseRoll: number } } | undefined>) => {
     const map = state.tacticalMap;
     const id = map?.activeCharacterId;
     const destination = map?.plannedDestination;
     const mode = map?.movementMode;
     if (!map || !id || !destination || !mode) return;
-    const origin = map.characterPositions[id];
+    const character = tacticalCombatant(map, id);
+    const origin = character?.position;
+    const dragged = map.draggingCombatantByCarrierId[id] ? tacticalCombatant(map, map.draggingCombatantByCarrierId[id]) : null;
+    const meleeDiveTarget = mode === "trot" && map.plannedMeleeTargetId ? tacticalCombatant(map, map.plannedMeleeTargetId) : null;
+    const enemyEntryTarget = mode === "walk" && map.plannedEnemyEntryTargetId ? tacticalCombatant(map, map.plannedEnemyEntryTargetId) : null;
     const available = map.actionPointsByCharacterId[id] ?? 0;
-    if (!origin || available < 1 || (mode === "trot" && available === 6 ? false : mode === "trot" && !map.movementAnimationByCharacterId[id])) return;
-    const prone = map.postureByCharacterId[id] === "prone";
+    if (!origin || available < 1 || (dragged && mode !== "walk") || (mode === "evade" && available !== 6) || (mode === "trot" && available === 6 ? false : mode === "trot" && !map.movementAnimationByCharacterId[id])) return;
+    const prone = character?.posture === "prone";
     if (prone) return;
     const terrain = FIRST_TACTICAL_CONTROL_ROOM.objects.map((object) => object.kind === "door" ? { ...object, open: map.doorOpenById[object.id] ?? object.open } : object);
-    const moves = reachableOpenMapMovement({ width: map.width, height: map.height, origin, facing: map.facingByCharacterId[id] ?? "south", allowance: Math.min(6, available), trotting: mode === "trot", blockedCells: firstTacticalMapBlockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain) });
+    const moves = mode === "sidestep"
+      ? sidestepAndBackstepMoves({ width: map.scenario.width, height: map.scenario.height, origin, facing: character?.facing ?? "south", allowance: available, blockedCells: firstTacticalMapBlockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: activeOccupantCounts(map.scenario.combatants, id) })
+      : reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin, facing: character?.facing ?? "south", allowance: Math.min(6, available), trotting: mode === "trot", blockedCells: firstTacticalMapBlockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: activeOccupantCounts(map.scenario.combatants, id) });
     const move = moves.get(pointKey(destination));
-    if (!move || move.cost > available) return;
+    if (!move || (mode !== "evade" && move.cost > available) || (mode === "evade" && (move.path.length !== 1 || (activeOccupantCounts(map.scenario.combatants, id).get(pointKey(destination)) ?? 0) > 0)) || ((dragged || map.suppressedCombatantIds.includes(id)) && move.path.length > 2)) return;
+    const hostileEntryStepIndex = move.path.findIndex((point) => map.scenario.combatants.some((unit) => unit.side !== character.side && !unit.defeated && pointKey(unit.position) === pointKey(point)));
+    const occupiedDestinationTarget = enemyEntryTarget ?? meleeDiveTarget;
+    if (hostileEntryStepIndex >= 0 && (!occupiedDestinationTarget || hostileEntryStepIndex !== move.path.length - 1 || pointKey(occupiedDestinationTarget.position) !== pointKey(destination))) return;
+    const adjacencyEntry = character ? firstTacticalAdjacencyEntry(map, character, move.path) : null;
+    if (character && adjacencyEntry && action.payload?.moraleDice && character.moraleFactor !== undefined) {
+      const morale = resolveAhlMoraleCheck({ moraleFactor: character.moraleFactor, woundState: character.woundState }, action.payload.moraleDice);
+      map.events.unshift(`${character.name} moving-adjacent morale ${morale.roll}/${morale.modifiedMorale}${morale.lightWoundModifier ? " · light wound −1" : ""}: ${morale.passed ? "passed" : `stopped before ${adjacencyEntry.target.name}`}`);
+      if (!morale.passed) {
+        const safePath = pathWithinMovementAllowance(map.scenario, origin, move.path.slice(0, adjacencyEntry.stepIndex), Math.max(0, available - 3), character.facing, mode === "trot");
+        const safeDestination = safePath[safePath.length - 1];
+        const safeCost = safeDestination ? moves.get(pointKey(safeDestination))?.cost ?? 0 : 0;
+        if (safeDestination) {
+          character.position = { ...safeDestination };
+          if (!map.movedCombatantIds.includes(id)) map.movedCombatantIds.push(id);
+          map.movementAnimationByCharacterId[id] = { sequence: (map.movementAnimationByCharacterId[id]?.sequence ?? 0) + 1, path: [{ ...origin }, ...safePath.map((point) => ({ ...point }))], mode: mode === "trot" ? "run" : "walk" };
+          map.bracedCombatantIds = map.bracedCombatantIds.filter((combatantId) => combatantId !== id);
+          if (dragged) {
+            const draggedOrigin = { ...dragged.position };
+            const draggedPath = [{ ...origin }, ...safePath.slice(0, -1).map((point) => ({ ...point }))];
+            dragged.position = { ...draggedPath[draggedPath.length - 1] };
+            map.movementAnimationByCharacterId[dragged.id] = { sequence: (map.movementAnimationByCharacterId[dragged.id]?.sequence ?? 0) + 1, path: [draggedOrigin, ...draggedPath], mode: "walk" };
+          }
+        }
+        map.actionPointsByCharacterId[id] = Math.max(0, available - safeCost);
+        if (map.actionPointsByCharacterId[id] >= 3 && resolveTacticalMovingAdjacentSnapShot(map, character, adjacencyEntry.target, action.payload.snapDice)) map.actionPointsByCharacterId[id] -= 3;
+        map.plannedDestination = null;
+        map.plannedEnemyEntryTargetId = null;
+        map.plannedMeleeTargetId = null;
+        map.movementMode = "walk";
+        if (map.actionPointsByCharacterId[id] === 0) {
+          if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+          advanceTacticalPlayerActivation(map);
+        }
+        return;
+      }
+    }
+    if (character && action.payload?.enemyReactionRolls) {
+      const reactions = map.scenario.combatants
+        .filter((enemy) => enemy.side === "enemy"
+          && !enemy.defeated
+          && !enemy.weapon.highEnergy
+          && !map.movedCombatantIds.includes(enemy.id)
+          && (map.actionPointsByCharacterId[enemy.id] ?? 0) >= 3
+          && (map.ammunitionByCharacterId[enemy.id] ?? 0) >= 1
+          && action.payload?.enemyReactionRolls?.[enemy.id])
+        .map((enemy) => ({ enemy, stepIndex: adjacencyEntryStepIndex(map.scenario, enemy.position, origin, move.path) }))
+        .filter(({ stepIndex }) => stepIndex >= 0)
+        .sort((a, b) => a.stepIndex - b.stepIndex || map.scenario.combatants.indexOf(a.enemy) - map.scenario.combatants.indexOf(b.enemy));
+      for (const { enemy, stepIndex } of reactions) {
+        const dice = action.payload.enemyReactionRolls[enemy.id];
+        const triggerPath = move.path.slice(0, stepIndex + 1);
+        const trigger = triggerPath[triggerPath.length - 1];
+        character.position = { ...trigger };
+        const visibility = visibilityAssessment(map.scenario, enemy, character);
+        const result = resolveSnapShot(enemy, character, dice.hitDice, dice.woundDice, coverProtection(map.scenario, enemy.id, character.id), "snap", mode === "evade", map.suppressedCombatantIds.includes(enemy.id), map.bracedCombatantIds.includes(enemy.id), visibility.modifier);
+        if (!result) continue;
+        map.actionPointsByCharacterId[enemy.id] -= 3;
+        spendTacticalAmmunition(map, enemy, 1);
+        queueTacticalUnexpectedFireMoraleCheck(map, enemy, character);
+        if (result.hit) applyTacticalWound(map, character, result.woundState);
+        map.events.unshift(`${enemy.name} defensive snap fired at ${character.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
+        if (character.defeated) {
+          const triggerCost = moves.get(pointKey(trigger))?.cost ?? available;
+          map.actionPointsByCharacterId[id] = 0;
+          map.movementAnimationByCharacterId[id] = { sequence: (map.movementAnimationByCharacterId[id]?.sequence ?? 0) + 1, path: [{ ...origin }, ...triggerPath.map((point) => ({ ...point }))], mode: mode === "trot" ? "run" : "walk" };
+          if (!map.movedCombatantIds.includes(id)) map.movedCombatantIds.push(id);
+          map.events.unshift(`${character.name} movement stopped at ${trigger.x},${trigger.y} after spending ${triggerCost} AP`);
+          map.plannedDestination = null;
+          map.plannedEnemyEntryTargetId = null;
+          map.plannedMeleeTargetId = null;
+          map.movementMode = "walk";
+          if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+          advanceTacticalPlayerActivation(map);
+          return;
+        }
+      }
+      character.position = { ...origin };
+    }
     const sequence = (map.movementAnimationByCharacterId[id]?.sequence ?? 0) + 1;
     map.movementAnimationByCharacterId[id] = { sequence, path: [{ ...origin }, ...move.path.map((point) => ({ ...point }))], mode: !prone && mode === "trot" ? "run" : "walk" };
-    map.characterPositions[id] = { ...move.destination };
-    map.facingByCharacterId[id] = move.finalFacing ?? map.facingByCharacterId[id] ?? "south";
-    map.actionPointsByCharacterId[id] = Math.max(0, available - move.cost);
+    character.position = { ...move.destination };
+    if (!map.movedCombatantIds.includes(id)) map.movedCombatantIds.push(id);
+    character.facing = move.finalFacing ?? character.facing ?? "south";
+    if (dragged) {
+      const draggedOrigin = { ...dragged.position };
+      const draggedPath = [{ ...origin }, ...move.path.slice(0, -1).map((point) => ({ ...point }))];
+      dragged.position = { ...draggedPath[draggedPath.length - 1] };
+      map.movementAnimationByCharacterId[dragged.id] = { sequence: (map.movementAnimationByCharacterId[dragged.id]?.sequence ?? 0) + 1, path: [draggedOrigin, ...draggedPath], mode: "walk" };
+    }
+    map.bracedCombatantIds = map.bracedCombatantIds.filter((combatantId) => combatantId !== id);
+    const enteredEnemySquare = Boolean(enemyEntryTarget && !enemyEntryTarget.defeated && pointKey(enemyEntryTarget.position) === pointKey(character.position));
+    map.events.unshift(mode === "evade" ? `${character.name} evaded to ${move.destination.x},${move.destination.y} (6 AP)` : mode === "sidestep" ? `${character.name} sidestepped/backstepped to ${move.destination.x},${move.destination.y} (4 AP)` : enteredEnemySquare ? `${character.name} entered ${enemyEntryTarget!.name}'s square at ${move.destination.x},${move.destination.y}; movement ended (${move.cost} AP)` : `${character.name} moved to ${move.destination.x},${move.destination.y} (${move.cost} AP)`);
+    map.actionPointsByCharacterId[id] = mode === "evade" ? 0 : Math.max(0, available - move.cost);
+    if (mode === "evade" && !map.evadingCombatantIds.includes(id)) map.evadingCombatantIds.push(id);
     map.plannedDestination = null;
+    map.plannedEnemyEntryTargetId = null;
+    if (enteredEnemySquare) {
+      if (!map.enemySquareEnteredCombatantIds.includes(id)) map.enemySquareEnteredCombatantIds.push(id);
+      map.movementMode = null;
+    }
+    if (meleeDiveTarget && !meleeDiveTarget.defeated && pointKey(meleeDiveTarget.position) === pointKey(character.position) && action.payload?.meleeDice) {
+      const attackResult = resolveAhlMelee(character, meleeDiveTarget, action.payload.meleeDice.attackRoll, true, true);
+      const returnResult = resolveAhlMelee(meleeDiveTarget, character, action.payload.meleeDice.responseRoll, true, false);
+      applyTacticalAhlMeleeEffect(map, meleeDiveTarget, attackResult.effect);
+      applyTacticalAhlMeleeEffect(map, character, returnResult.effect);
+      map.events.unshift(`${character.name} dive → ${meleeDiveTarget.name}: MF ${attackResult.differential}, column ${attackResult.tableDifferential}, roll ${attackResult.roll} → ${attackResult.modifiedRoll}: ${attackResult.effect}`);
+      map.events.unshift(`${meleeDiveTarget.name} → ${character.name}: MF ${returnResult.differential}, column ${returnResult.tableDifferential}, roll ${returnResult.roll}${returnResult.modifiedRoll !== returnResult.roll ? ` → ${returnResult.modifiedRoll}` : ""}: ${returnResult.effect}`);
+      map.events.unshift(`AHL melee dive resolved simultaneously: ${character.name} and ${meleeDiveTarget.name}`);
+      map.plannedMeleeTargetId = null;
+      map.movementMode = "walk";
+      if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+      advanceTacticalPlayerActivation(map);
+      return;
+    }
+    map.plannedMeleeTargetId = null;
     if (map.actionPointsByCharacterId[id] > 0) return;
     if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
     map.movementMode = "walk";
     map.selectedTerrainObjectId = null;
-    const characterIds = Object.keys(map.characterPositions);
-    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
-    if (remaining.length > 0) map.activeCharacterId = remaining[0];
-    else {
-      map.turn += 1;
-      map.actedCharacterIds = [];
-      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
-      map.activeCharacterId = characterIds[0] ?? null;
-    }
+    advanceTacticalPlayerActivation(map);
   },
   turnTacticalCharacter: (state, action: PayloadAction<"left" | "right">) => {
     const map = state.tacticalMap;
     const id = map?.activeCharacterId;
     const turnCost = map?.movementMode === "trot" ? 2 : 1;
-    if (!map || !id || map.postureByCharacterId[id] === "prone" || (map.actionPointsByCharacterId[id] ?? 0) < turnCost) return;
+    const character = map ? tacticalCombatant(map, id) : null;
+    if (!map || !id || !character || character.posture === "prone" || map.movementMode === "evade" || (map.actionPointsByCharacterId[id] ?? 0) < turnCost) return;
     const directions = ["north", "east", "south", "west"] as const;
-    const currentIndex = directions.indexOf(map.facingByCharacterId[id] ?? "south");
+    const currentIndex = directions.indexOf(character.facing ?? "south");
     const offset = action.payload === "right" ? 1 : directions.length - 1;
-    map.facingByCharacterId[id] = directions[(currentIndex + offset) % directions.length];
+    character.facing = directions[(currentIndex + offset) % directions.length];
+    map.events.unshift(`${character.name} turned ${action.payload} (${turnCost} AP)`);
     map.actionPointsByCharacterId[id] -= turnCost;
     map.plannedDestination = null;
     if (map.actionPointsByCharacterId[id] > 0) return;
     if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
     map.movementMode = "walk";
     map.selectedTerrainObjectId = null;
-    const characterIds = Object.keys(map.characterPositions);
-    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
-    if (remaining.length > 0) map.activeCharacterId = remaining[0];
-    else {
-      map.turn += 1;
-      map.actedCharacterIds = [];
-      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
-      map.activeCharacterId = characterIds[0] ?? null;
-    }
+    advanceTacticalPlayerActivation(map);
   },
   toggleTacticalPosture: (state) => {
     const map = state.tacticalMap;
     const id = map?.activeCharacterId;
-    if (!map || !id) return;
-    const prone = map.postureByCharacterId[id] === "prone";
-    const cost = prone ? 2 : 1;
+    if (!map || !id || map.draggingCombatantByCarrierId[id] || map.movementMode === "evade") return;
+    const character = tacticalCombatant(map, id);
+    if (!character) return;
+    const prone = character.posture === "prone";
+    const cost = prone ? 6 : 1;
     if ((map.actionPointsByCharacterId[id] ?? 0) < cost) return;
-    map.postureByCharacterId[id] = prone ? "standing" : "prone";
+    character.posture = prone ? "standing" : "prone";
+    if (prone) map.bracedCombatantIds = map.bracedCombatantIds.filter((combatantId) => combatantId !== id);
+    map.events.unshift(`${character.name} ${prone ? "stood up" : "went prone"} (${cost} AP)`);
     map.actionPointsByCharacterId[id] -= cost;
     map.movementMode = "walk";
     map.plannedDestination = null;
     if (map.actionPointsByCharacterId[id] > 0) return;
     if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
     map.selectedTerrainObjectId = null;
-    const characterIds = Object.keys(map.characterPositions);
-    const remaining = characterIds.filter((characterId) => !map.actedCharacterIds.includes(characterId));
-    if (remaining.length > 0) map.activeCharacterId = remaining[0];
-    else {
-      map.turn += 1;
-      map.actedCharacterIds = [];
-      characterIds.forEach((characterId) => { map.actionPointsByCharacterId[characterId] = 6; });
-      map.activeCharacterId = characterIds[0] ?? null;
-    }
+    advanceTacticalPlayerActivation(map);
+  },
+  braceTacticalWeapon: (state) => {
+    const map = state.tacticalMap;
+    const id = map?.activeCharacterId;
+    const character = map ? tacticalCombatant(map, id) : null;
+    if (!map || !id || !character || character.defeated || map.draggingCombatantByCarrierId[id] || character.posture !== "prone" || map.bracedCombatantIds.includes(id) || map.suppressedCombatantIds.includes(id) || (map.actionPointsByCharacterId[id] ?? 0) < 2) return;
+    map.bracedCombatantIds.push(id);
+    map.actionPointsByCharacterId[id] -= 2;
+    map.plannedDestination = null;
+    map.events.unshift(`${character.name} braced their weapon (2 AP)`);
+    if (map.actionPointsByCharacterId[id] > 0) return;
+    if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+    advanceTacticalPlayerActivation(map);
   },
   loadCombatScenario: (state, action: PayloadAction<CombatScenario>) => { resetTransientIntel(state); state.adjacencyReactionReserveById = {}; state.adjacencyReactionUsedCombatantIds = []; state.movedCombatantIds = []; state.pendingAdjacencyReaction = null; state.scenario = action.payload; state.scenario.combatants.forEach((unit) => { unit.seriousWounds = unit.seriousWounds ?? (unit.woundState === "serious" || unit.woundState === "unconscious" ? 1 : unit.woundState === "dead" ? 2 : 0); }); state.leaderIdBySide = designatedLeaders(action.payload); state.moraleStateByCombatantId = freshMorale(action.payload); state.combatantStarts = startingCombatants(action.payload); state.outcome = null; state.camera.focus = null; state.camera.pan = { x: 0, y: 0 }; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.lastGrenadeImpact = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = freshActionPoints(action.payload); state.ammunitionById = freshAmmunition(action.payload); state.ammunitionByCombatantAndKind = freshProfileAmmunition(action.payload); state.actedCombatantIds = []; state.events = []; },
   clearCombatScenario: (state) => { resetTransientIntel(state); state.adjacencyReactionReserveById = {}; state.adjacencyReactionUsedCombatantIds = []; state.movedCombatantIds = []; state.pendingAdjacencyReaction = null; state.scenario = null; state.combatantStarts = {}; state.outcome = null; state.status = "active"; state.turn = 1; state.selectedCombatantId = null; state.plannedMove = null; state.plannedAttackTargetId = null; state.plannedAttackMode = null; state.grenadeTargeting = false; state.plannedGrenadeTarget = null; state.plannedOpenDoorId = null; state.plannedBreachDoorId = null; state.plannedExtinguishFire = null; state.smokeClearsAtTurnByCell = {}; state.placedBreachingChargeByDoorId = {}; state.vacuumExposureByCombatantId = {}; state.coveringFireTargeting = false; state.plannedCoveringFireTarget = null; state.coveringFireLanes = []; state.overwatchTargeting = false; state.plannedOverwatchTarget = null; state.overwatchLanes = []; state.disengagedCombatantIds = []; state.reactionMeleeUsedCombatantIds = []; state.plannedTreatmentTargetId = null; state.recoveringCombatantIds = []; state.evadingCombatantIds = []; state.trottingCombatantIds = []; state.bracedCombatantIds = []; state.suppressedCombatantIds = []; state.draggingCombatantByCarrierId = {}; state.maintainedTargetByCombatantId = {}; state.plannedObjectiveId = null; state.hoveredDestination = null; state.actionPointsById = {}; state.ammunitionById = {}; state.ammunitionByCombatantAndKind = {}; state.actedCombatantIds = []; state.events = []; },
@@ -1262,7 +2603,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           ? `${attacker.name} automatic fired through danger space; danger-space attack against ${dangerTarget.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`
           : `${attacker.name} ${fireMode} fired through danger space at ${dangerTarget.name}: hit ${result.hitTotal}/${result.targetNumber} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
         const nextTarget = dangerTargets[dangerIndex + 1];
-        const attacksEveryoneInSquare = fireMode === "automatic" || attacker.weapon.inherentAutomaticFireBonus || attacker.weapon.ammunitionKind === "flechette";
+        const attacksEveryoneInSquare = fireMode === "automatic" || attacker.weapon.inherentAutomaticFireBonus || attacker.weapon.attacksEveryoneInSquare;
         if (hits >= hitLimit && (!attacksEveryoneInSquare || !nextTarget || pointKey(nextTarget.position) !== pointKey(dangerTarget.position))) break;
       }
       state.maintainedTargetByCombatantId[attacker.id] = target.id;
@@ -1321,7 +2662,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (fireResult?.hit) applyCombatWound(state, target, woundState);
     const ammunitionProfile = attacker.weapon.ammunitionProfiles?.find((profile) => profile.kind === attacker.weapon.ammunitionKind);
     const ammunitionLabel = ammunitionProfile?.label ?? attacker.weapon.ammunitionKind?.toUpperCase();
-    if (fireResult?.hit && (attacker.weapon.collateralBlast || (attacker.weapon.ammunitionKind && ammunitionLabel && (attacker.weapon.ammunitionKind === "he" || attacker.weapon.ammunitionKind === "heap")))) {
+    if (fireResult?.hit && attacker.weapon.impactMarker) {
       state.lastWeaponImpact = {
         weaponName: attacker.weapon.name,
         ammunitionKind: attacker.weapon.ammunitionKind,
@@ -1407,7 +2748,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       return;
     }
     const penetration = weaponPenetrationForRange(attacker.weapon, rangeBand);
-    const damage = attacker.weapon.ammunitionKind === "he" ? 1 : Math.max(0, penetration - 4);
+    const damage = attacker.weapon.structuralDamage ?? Math.max(0, penetration - 4);
     state.structuralDamageById ??= {};
     state.structuralDamageById[structure.id] = (state.structuralDamageById[structure.id] ?? 0) + damage;
     const threshold = door ? 5 : cover ? 4 : 25;
@@ -1883,17 +3224,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (unit.weapon.ammunitionKind) counts[unit.weapon.ammunitionKind] = state.ammunitionById[unit.id] ?? 0;
     const selectedCount = counts[profile.kind] ?? unit.weapon.magazineSize ?? 12;
     if (selectedCount <= 0 && unit.weapon.ammunitionKind !== profile.kind) return;
-    unit.weapon.ammunitionKind = profile.kind;
-    unit.weapon.effectiveRange = profile.effectiveRange;
-    unit.weapon.longRange = profile.longRange;
-    unit.weapon.extremeRange = profile.extremeRange;
-    unit.weapon.penetration = profile.penetration;
-    unit.weapon.automatic = profile.automatic ?? false;
-    unit.weapon.automaticFireBonusByRange = profile.automaticFireBonusByRange;
-    unit.weapon.penetrationByRange = profile.penetrationByRange;
-    unit.weapon.accuracyByRange = profile.accuracyByRange;
-    unit.weapon.woundEscalation = profile.woundEscalation;
-    unit.weapon.collateralBlast = profile.collateralBlast;
+    applyAmmunitionProfile(unit.weapon, profile);
     state.ammunitionById[unit.id] = selectedCount;
     state.plannedAttackMode = null;
     state.events.unshift(`${unit.name} selected ${profile.label} ammunition`);
@@ -2812,12 +4143,48 @@ export const setTacticalMovementMode = slice.actions.setTacticalMovementMode;
 export const previewTacticalMove = slice.actions.previewTacticalMove;
 export const activateTacticalCharacter = slice.actions.activateTacticalCharacter;
 export const finishTacticalActivation = slice.actions.finishTacticalActivation;
+export const resolveTacticalAdjacencyReaction = slice.actions.resolveTacticalAdjacencyReaction;
+export const runTacticalEnemyPhase = slice.actions.runTacticalEnemyPhase;
+export const resolveTacticalCoveringFireSnap = slice.actions.resolveTacticalCoveringFireSnap;
+export const resetTacticalScenario = slice.actions.resetTacticalScenario;
 export const confirmTacticalMove = slice.actions.confirmTacticalMove;
 export const turnTacticalCharacter = slice.actions.turnTacticalCharacter;
 export const toggleTacticalPosture = slice.actions.toggleTacticalPosture;
 export const selectTacticalTerrainObject = slice.actions.selectTacticalTerrainObject;
 export const interactWithTacticalTerrain = slice.actions.interactWithTacticalTerrain;
 export const fireAtTacticalTerrain = slice.actions.fireAtTacticalTerrain;
+export const updateTacticalCharacterInformationHud = slice.actions.updateTacticalCharacterInformationHud;
+export const updateTacticalEventsHud = slice.actions.updateTacticalEventsHud;
+export const updateTacticalScenarioHud = slice.actions.updateTacticalScenarioHud;
+export const updateTacticalEnemyHud = slice.actions.updateTacticalEnemyHud;
+export const selectTacticalAttackTarget = slice.actions.selectTacticalAttackTarget;
+export const selectTacticalAttackMode = slice.actions.selectTacticalAttackMode;
+export const confirmTacticalAttack = slice.actions.confirmTacticalAttack;
+export const cancelTacticalAttack = slice.actions.cancelTacticalAttack;
+export const aimTacticalAttack = slice.actions.aimTacticalAttack;
+export const reloadTacticalWeapon = slice.actions.reloadTacticalWeapon;
+export const selectTacticalWeaponAmmunition = slice.actions.selectTacticalWeaponAmmunition;
+export const rallyTacticalCharacter = slice.actions.rallyTacticalCharacter;
+export const braceTacticalWeapon = slice.actions.braceTacticalWeapon;
+export const beginTacticalCoveringFire = slice.actions.beginTacticalCoveringFire;
+export const previewTacticalCoveringFire = slice.actions.previewTacticalCoveringFire;
+export const confirmTacticalCoveringFire = slice.actions.confirmTacticalCoveringFire;
+export const cancelTacticalCoveringFire = slice.actions.cancelTacticalCoveringFire;
+export const beginTacticalGrenadeTargeting = slice.actions.beginTacticalGrenadeTargeting;
+export const beginTacticalSmokeGrenadeTargeting = slice.actions.beginTacticalSmokeGrenadeTargeting;
+export const previewTacticalGrenadeTarget = slice.actions.previewTacticalGrenadeTarget;
+export const confirmTacticalGrenade = slice.actions.confirmTacticalGrenade;
+export const cancelTacticalGrenadeTargeting = slice.actions.cancelTacticalGrenadeTargeting;
+export const previewTacticalTreatment = slice.actions.previewTacticalTreatment;
+export const confirmTacticalTreatment = slice.actions.confirmTacticalTreatment;
+export const cancelTacticalTreatment = slice.actions.cancelTacticalTreatment;
+export const beginTacticalDragging = slice.actions.beginTacticalDragging;
+export const releaseTacticalDraggedCombatant = slice.actions.releaseTacticalDraggedCombatant;
+export const previewTacticalMelee = slice.actions.previewTacticalMelee;
+export const previewTacticalMeleeDive = slice.actions.previewTacticalMeleeDive;
+export const previewTacticalEnemyEntry = slice.actions.previewTacticalEnemyEntry;
+export const confirmTacticalMelee = slice.actions.confirmTacticalMelee;
+export const cancelTacticalMelee = slice.actions.cancelTacticalMelee;
 export const beginStructuralTargeting = slice.actions.beginStructuralTargeting;
 export const previewStructuralTarget = slice.actions.previewStructuralTarget;
 export const cancelStructuralTargeting = slice.actions.cancelStructuralTargeting;

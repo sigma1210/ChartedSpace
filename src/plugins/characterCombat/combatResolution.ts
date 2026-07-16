@@ -5,8 +5,15 @@ export type AttackArc = "front" | "side" | "rear";
 export interface SnapShotResult { hit: boolean; hitRoll: number; hitModifier: number; hitTotal: number; targetNumber: number; range: number; rangeBand: WeaponRangeBand; weaponAccuracy: number; weaponPenetration: number; attackArc: AttackArc; arcModifier: number; evadeModifier: number; postureModifier: number; bracedModifier: number; visibilityModifier: number; readyModifier: number; aimModifier: number; situationalHitModifier: number; situationalWoundModifier: number; woundRoll: number | null; woundTotal: number | null; cover: number; woundState: WoundState }
 export type AhlMeleeEffect = "none" | "stun" | "light" | "unconscious" | "dead";
 export interface AhlMeleeResult { roll: number; modifiedRoll: number; differential: number; tableDifferential: -6 | -4 | -2 | 0 | 1 | 3 | 5 | 7 | 9; armorColumnShift: number; effect: AhlMeleeEffect }
+export interface AhlMoraleResult { roll: number; baseMorale: number; lightWoundModifier: 0 | -1; leadershipModifier: number; modifiedMorale: number; passed: boolean }
 
 export const rollDicePair = (): DicePair => ({ first: Math.floor(Math.random() * 6) + 1, second: Math.floor(Math.random() * 6) + 1 });
+export const resolveAhlMoraleCheck = (combatant: { moraleFactor: number; woundState: WoundState }, dice: DicePair, leadershipModifier = 0): AhlMoraleResult => {
+  const roll = dice.first + dice.second;
+  const lightWoundModifier = combatant.woundState === "light" ? -1 : 0;
+  const modifiedMorale = combatant.moraleFactor + lightWoundModifier + leadershipModifier;
+  return { roll, baseMorale: combatant.moraleFactor, lightWoundModifier, leadershipModifier, modifiedMorale, passed: roll <= modifiedMorale };
+};
 export const distanceInSquares = (attacker: Combatant, target: Combatant) => {
   const horizontal = Math.abs(target.position.x - attacker.position.x);
   const vertical = Math.abs(target.position.y - attacker.position.y);
@@ -79,7 +86,7 @@ export const resolveAhlMelee = (attacker: Pick<Combatant, "meleeRating">, target
 export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice: DicePair, woundDice: DicePair, cover = 0, fireMode: FireMode = "snap", targetEvading = false, attackerSuppressed = false, attackerBraced = false, visibilityModifier = 0, attackerReady = false, attackerAimed = false, situationalHitModifier = 0, situationalWoundModifier = 0): SnapShotResult | null => {
   const profile = snapShotTarget(attacker, target);
   if (!profile) return null;
-  const usesAutomaticFireBonus = fireMode === "automatic" || attacker.weapon.inherentAutomaticFireBonus;
+  const usesAutomaticFireBonus = fireMode === "automatic" || (fireMode === "covering" && attacker.weapon.automatic) || attacker.weapon.inherentAutomaticFireBonus;
   const automaticFireModifier = usesAutomaticFireBonus ? automaticFireModifierForRange(profile.rangeBand, attacker.weapon.automaticFireBonusByRange) : 0;
   if (automaticFireModifier === null) return null;
   const hitRoll = hitDice.first + hitDice.second;
@@ -92,7 +99,7 @@ export const resolveSnapShot = (attacker: Combatant, target: Combatant, hitDice:
   const bracedModifier = attackerBraced ? 1 : 0;
   const readyModifier = attackerReady ? 1 : 0;
   const aimModifier = attackerAimed ? 1 : 0;
-  const hitModifier = attacker.weaponSkill + weaponAccuracy - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 2 : 0) - (fireMode === "covering" || fireMode === "suppressive" ? 2 : 0) + automaticFireModifier + arcModifier + evadeModifier + postureModifier + bracedModifier + readyModifier + aimModifier + visibilityModifier + situationalHitModifier - (attackerSuppressed ? 1 : 0) - cover;
+  const hitModifier = attacker.weaponSkill + weaponAccuracy - (attacker.woundState === "light" ? 1 : 0) - (fireMode === "snap" ? 2 : 0) - (fireMode === "covering" ? 1 : fireMode === "suppressive" ? 2 : 0) + automaticFireModifier + arcModifier + evadeModifier + postureModifier + bracedModifier + readyModifier + aimModifier + visibilityModifier + situationalHitModifier - (attackerSuppressed ? 1 : 0) - cover;
   const hitTotal = hitRoll + hitModifier;
   if (hitTotal < profile.targetNumber) return { ...profile, hit: false, hitRoll, hitModifier, hitTotal, weaponAccuracy, weaponPenetration, attackArc, arcModifier, evadeModifier, postureModifier, bracedModifier, visibilityModifier, readyModifier, aimModifier, situationalHitModifier, situationalWoundModifier, woundRoll: null, woundTotal: null, cover, woundState: target.woundState };
   const woundRoll = woundDice.first + woundDice.second;

@@ -1,4 +1,5 @@
-import reducer, { activateTacticalCharacter, fireAtTacticalTerrain, initializeTacticalMap, interactWithTacticalTerrain, selectTacticalTerrainObject } from "../slice";
+import reducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalTreatment, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalMovementMode, toggleTacticalPosture } from "../slice";
+import { collateralBlastCells, grenadeBlastCells, hasLineOfSight, meleeEnemies, pointKey, rangedEnemies } from "../geometry";
 import type { CharacterCombatState } from "../types";
 
 const stateWithCrewAt = (position: { x: number; y: number }, doorOpenById: Record<string, boolean> = {}): CharacterCombatState => {
@@ -7,14 +8,142 @@ const stateWithCrewAt = (position: { x: number; y: number }, doorOpenById: Recor
     ...initialized,
     tacticalMap: {
       ...initialized.tacticalMap!,
-      characterPositions: { ...initialized.tacticalMap!.characterPositions, "crew-1": position },
+      scenario: {
+        ...initialized.tacticalMap!.scenario,
+        combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position } : unit),
+      },
       doorOpenById,
+      actionPhaseStartPositionByCombatantId: { ...initialized.tacticalMap!.actionPhaseStartPositionByCombatantId, "crew-1": { ...position } },
       activeCharacterId: "crew-1",
     },
   };
 };
 
 describe("tactical terrain interactions", () => {
+  it("resets the complete tactical scenario while preserving HUD placement", () => {
+    const initialized = reducer(undefined, initializeTacticalMap([
+      { id: "crew-1", weaponSkill: 2 },
+      { id: "crew-2", weaponSkill: 1 },
+    ]));
+    const characterHudLayout = { visible: false, pinned: true, position: { x: 310, y: 120 } };
+    const enemyHudLayout = { visible: false, pinned: true, position: { x: 850, y: 120 } };
+    const actionHudLayout = { visible: true, pinned: true, position: { x: 640, y: 180 } };
+    const characterInformationHudLayout = { visible: true, pinned: false, position: { x: 420, y: 90 } };
+    const eventsHudLayout = { visible: false, pinned: true, position: { x: 700, y: 90 } };
+    const scenarioHudLayout = { visible: false, pinned: true, position: { x: 500, y: 180 } };
+    const changed: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 60, y: 60 }, facing: "west" as const, posture: "prone" as const }
+            : unit.id === "crew-2"
+              ? { ...unit, position: { x: 61, y: 60 }, facing: "east" as const, posture: "prone" as const }
+              : unit.side === "enemy"
+                ? { ...unit, defeated: true, health: 0 }
+                : unit),
+        },
+        movementAnimationByCharacterId: { "crew-1": { sequence: 4, path: [{ x: 60, y: 60 }], mode: "run" } },
+        characterHudLayout,
+        enemyHudLayout,
+        actionHudLayout,
+        characterInformationHudLayout,
+        eventsHudLayout,
+        scenarioHudLayout,
+        movementMode: "trot",
+        plannedDestination: { x: 62, y: 60 },
+        plannedMeleeTargetId: "enemy-1",
+        grenadeTargeting: true,
+        plannedGrenadeTarget: { x: 61, y: 61 },
+        lastGrenadeImpact: { kind: "fragmentation", intended: { x: 61, y: 61 }, landing: { x: 62, y: 61 }, scattered: true, blastCells: [{ x: 62, y: 61 }] },
+        lastWeaponImpact: { weaponName: "Test Weapon", ammunitionKind: "test-blast", ammunitionLabel: "Test Blast", point: { x: 62, y: 61 }, blastCells: [{ x: 62, y: 61 }], hit: true },
+        coveringFireTargeting: true,
+        plannedCoveringFireTarget: { x: 60, y: 62 },
+        coveringFireLanes: [{ attackerId: "crew-1", target: { x: 60, y: 62 }, cells: [{ x: 60, y: 61 }, { x: 60, y: 62 }] }],
+        plannedTreatmentTargetId: "crew-2",
+        draggingCombatantByCarrierId: { "crew-1": "crew-2" },
+        ahlMeleeStunUntilTurnById: { "crew-1": 6 },
+        selectedTerrainObjectId: "control-room-alpha:terminal",
+        doorOpenById: { "control-room-alpha:north:door:4": true },
+        terminalActiveById: { "control-room-alpha:terminal": true },
+        terrainDamageById: { "control-room-alpha:north:wall:3": 7 },
+        destroyedTerrainObjectIds: ["control-room-alpha:north:wall:3"],
+        ammunitionByCharacterId: { "crew-1": 1, "crew-2": 0 },
+        bracedCombatantIds: ["crew-1"],
+        coweringCombatantIds: ["crew-2", "enemy-1"],
+        panickedCombatantIds: ["enemy-2"],
+        pendingCasualtyMoraleChecks: [{ witnessId: "crew-1", casualtyId: "crew-2", occurrence: 4 }],
+        casualtyMoraleOccurrence: 4,
+        visibleHostileIdsAtPhaseStartByCombatantId: { "crew-1": ["enemy-1"] },
+        pendingUnexpectedFireMoraleChecks: [{ combatantId: "crew-1", attackerId: "enemy-1", occurrence: 3 }],
+        unexpectedFireMoraleOccurrence: 3,
+        turn: 5,
+        actionPointsByCharacterId: { "crew-1": 1, "crew-2": 0 },
+        actedCharacterIds: ["crew-2"],
+        activeCharacterId: "crew-2",
+      },
+    };
+
+    const reset = reducer(changed, resetTacticalScenario());
+
+    expect(reset.tacticalMap).toMatchObject({
+      scenario: { id: "default-tactical-control-room", width: 100, height: 100 },
+      movementAnimationByCharacterId: {},
+      characterHudLayout,
+      enemyHudLayout,
+      actionHudLayout,
+      characterInformationHudLayout,
+      eventsHudLayout,
+      scenarioHudLayout,
+      movementMode: "walk",
+      plannedDestination: null,
+      plannedMeleeTargetId: null,
+      grenadeTargeting: false,
+      plannedGrenadeTarget: null,
+      lastGrenadeImpact: null,
+      lastWeaponImpact: null,
+      coveringFireTargeting: false,
+      plannedCoveringFireTarget: null,
+      coveringFireLanes: [],
+      plannedTreatmentTargetId: null,
+      draggingCombatantByCarrierId: {},
+      ahlMeleeStunUntilTurnById: {},
+      selectedTerrainObjectId: null,
+      doorOpenById: {},
+      terminalActiveById: {},
+      terrainDamageById: {},
+      destroyedTerrainObjectIds: [],
+      ammunitionByCharacterId: { "crew-1": 4, "crew-2": 30 },
+      ammunitionByCombatantAndKind: { "crew-1": { "discard-sabot": 4, he: 4, flechette: 4 } },
+      bracedCombatantIds: [],
+      coweringCombatantIds: [],
+      panickedCombatantIds: [],
+      pendingCasualtyMoraleChecks: [],
+      casualtyMoraleOccurrence: 0,
+      pendingUnexpectedFireMoraleChecks: [],
+      unexpectedFireMoraleOccurrence: 0,
+      turn: 1,
+      actionPointsByCharacterId: { "crew-1": 6, "crew-2": 6 },
+      actedCharacterIds: [],
+      activeCharacterId: "crew-1",
+    });
+    expect(reset.tacticalMap?.scenario.combatants.map((unit) => ({ id: unit.id, side: unit.side, position: unit.position, facing: unit.facing, posture: unit.posture, weaponSkill: unit.weaponSkill, defeated: unit.defeated }))).toEqual([
+      { id: "crew-1", side: "player", position: { x: 48, y: 50 }, facing: "south", posture: "standing", weaponSkill: 2, defeated: false },
+      { id: "crew-2", side: "player", position: { x: 51, y: 50 }, facing: "south", posture: "standing", weaponSkill: 1, defeated: false },
+      { id: "enemy-1", side: "enemy", position: { x: 47, y: 57 }, facing: "north", posture: "standing", weaponSkill: 1, defeated: false },
+      { id: "enemy-2", side: "enemy", position: { x: 50, y: 59 }, facing: "north", posture: "standing", weaponSkill: 0, defeated: false },
+    ]);
+    expect(reset.tacticalMap?.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.weapon.name)).toEqual(["Light Assault Gun", "Submachine Gun"]);
+    expect(reset.tacticalMap?.scenario.combatants.map((unit) => ({ id: unit.id, moraleFactor: unit.moraleFactor, leadershipRating: unit.leadershipRating }))).toEqual([
+      { id: "crew-1", moraleFactor: 7, leadershipRating: 1 },
+      { id: "crew-2", moraleFactor: 7, leadershipRating: 0 },
+      { id: "enemy-1", moraleFactor: 7, leadershipRating: 0 },
+      { id: "enemy-2", moraleFactor: 7, leadershipRating: 1 },
+    ]);
+  });
+
   it("clears selected terrain when the active character changes", () => {
     let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
     state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
@@ -23,31 +152,1364 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.selectedTerrainObjectId).toBeNull();
   });
 
-  it("opens an adjacent door for 6 AP and ends the activation", () => {
-    let state = stateWithCrewAt({ x: 48, y: 53 });
-    state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
-    state = reducer(state, interactWithTacticalTerrain());
-    expect(state.tacticalMap?.doorOpenById["control-room-alpha:north:door:4"]).toBe(true);
-    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
-    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+  it("selects a visible enemy and previews the existing snap-shot mode", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    expect(state.tacticalMap?.plannedAttackTargetId).toBe("enemy-1");
+    state = reducer(state, selectTacticalAttackMode("snap"));
+    expect(state.tacticalMap?.plannedAttackMode).toBe("snap");
+    state = reducer(state, cancelTacticalAttack());
+    expect(state.tacticalMap?.plannedAttackTargetId).toBeNull();
+    expect(state.tacticalMap?.plannedAttackMode).toBeNull();
   });
 
-  it("closes an adjacent open door for 3 AP", () => {
-    let state = stateWithCrewAt({ x: 48, y: 53 }, { "control-room-alpha:north:door:4": true });
-    state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
-    state = reducer(state, interactWithTacticalTerrain());
-    expect(state.tacticalMap?.doorOpenById["control-room-alpha:north:door:4"]).toBe(false);
+  it("resolves a tactical snap shot with the existing AP, ammunition, and wound rules", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("snap"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } }));
+    const enemy = state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1");
+    expect(enemy).toMatchObject({ health: 0, defeated: true, woundState: "dead" });
     expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(3);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(3);
+    expect(state.tacticalMap?.plannedAttackTargetId).toBeNull();
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+    expect(state.tacticalMap?.events[0]).toContain("crew-1 snap fired at Security Guard");
+  });
+
+  it("aims for 2 AP, applies +1 to the next attack, then clears the aim", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, aimTacticalAttack());
+    expect(state.tacticalMap?.aimedTargetId).toBe("enemy-1");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 aimed at Security Guard (2 AP)");
+    state = reducer(state, selectTacticalAttackMode("snap"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 5, second: 4 }, woundDice: { first: 6, second: 6 } }));
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")).toMatchObject({ defeated: true, woundState: "dead" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(1);
+    expect(state.tacticalMap?.aimedTargetId).toBeNull();
+  });
+
+  it("clears tactical aim when the active character changes", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, aimTacticalAttack());
+    state = reducer(state, activateTacticalCharacter("crew-2"));
+    expect(state.tacticalMap?.aimedTargetId).toBeNull();
+  });
+
+  it("drives tactical ammunition selection, attacks, and reloads from arbitrary weapon profile data", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    const profiles = [
+      { kind: "needle-round", label: "Needle", effectiveRange: 8, longRange: 16, extremeRange: 24, penetration: 1, automatic: false, structuralDamage: 1 },
+      { kind: "storm-round", label: "Storm", effectiveRange: 12, longRange: 24, extremeRange: 36, penetration: 5, automatic: true, automaticFireBonusByRange: { effective: 2, long: 1 }, collateralBlast: true, structuralDamage: 3 },
+    ];
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? {
+            ...unit,
+            weapon: { ...unit.weapon, name: "Profile Test Weapon", magazineSize: 5, ammunitionKind: "needle-round", ammunitionProfiles: profiles, effectiveRange: 8, longRange: 16, extremeRange: 24, penetration: 1, automatic: false, structuralDamage: 1 },
+          } : unit),
+        },
+        ammunitionByCharacterId: { ...state.tacticalMap!.ammunitionByCharacterId, "crew-1": 3 },
+        ammunitionByCombatantAndKind: { ...state.tacticalMap!.ammunitionByCombatantAndKind, "crew-1": { "needle-round": 3, "storm-round": 5 } },
+      },
+    };
+
+    state = reducer(state, selectTacticalWeaponAmmunition("storm-round"));
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.weapon).toMatchObject({ ammunitionKind: "storm-round", penetration: 5, automatic: true, structuralDamage: 3 });
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(5);
+    state = reducer(state, selectTacticalWeaponAmmunition("needle-round"));
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(3);
+    state = reducer(state, selectTacticalWeaponAmmunition("storm-round"));
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("automatic"));
+    expect(state.tacticalMap?.plannedAttackMode).toBe("automatic");
+    const targetPosition = state.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-1")!.position;
+    const expectedBlastCells = collateralBlastCells(state.tacticalMap!.scenario, targetPosition);
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 }, collateralRolls: {} }));
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(2);
+    expect(state.tacticalMap?.ammunitionByCombatantAndKind["crew-1"]).toEqual({ "needle-round": 3, "storm-round": 2 });
+    expect(state.tacticalMap?.lastWeaponImpact).toEqual({ weaponName: "Profile Test Weapon", ammunitionKind: "storm-round", ammunitionLabel: "Storm", point: targetPosition, blastCells: expectedBlastCells, hit: true });
+
+    state = {
+      ...state,
+      tacticalMap: { ...state.tacticalMap!, activeCharacterId: "crew-1", actedCharacterIds: [], actionPointsByCharacterId: { ...state.tacticalMap!.actionPointsByCharacterId, "crew-1": 3 } },
+    };
+    state = reducer(state, reloadTacticalWeapon());
+    expect(state.tacticalMap?.ammunitionByCombatantAndKind["crew-1"]).toEqual({ "needle-round": 3, "storm-round": 5 });
+  });
+
+  it("previews and cancels a tactical fragmentation grenade without spending it", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, beginTacticalGrenadeTargeting());
+    expect(state.tacticalMap).toMatchObject({ grenadeTargeting: true, movementMode: null, lastGrenadeImpact: null });
+    state = reducer(state, previewTacticalGrenadeTarget({ x: 47, y: 57 }));
+    expect(state.tacticalMap?.plannedGrenadeTarget).toEqual({ x: 47, y: 57 });
+    state = reducer(state, cancelTacticalGrenadeTargeting());
+
+    expect(state.tacticalMap).toMatchObject({ grenadeTargeting: false, plannedGrenadeTarget: null, movementMode: "walk" });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.grenades).toBe(1);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+  });
+
+  it("resolves a tactical fragmentation grenade with existing scatter, blast, wound, AP, and inventory rules", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, beginTacticalGrenadeTargeting());
+    state = reducer(state, previewTacticalGrenadeTarget({ x: 47, y: 57 }));
+    state = reducer(state, confirmTacticalGrenade({
+      throwDice: { first: 6, second: 6 },
+      scatterDice: { first: 1, second: 1 },
+      rollsByCombatantId: { "enemy-1": { first: 6, second: 6 } },
+      collateralRolls: { "enemy-1": { checkDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } },
+    }));
+
+    expect(state.tacticalMap?.lastGrenadeImpact).toMatchObject({ kind: "fragmentation", intended: { x: 47, y: 57 }, landing: { x: 47, y: 57 }, scattered: false });
+    expect(state.tacticalMap?.lastGrenadeImpact?.blastCells).toHaveLength(25);
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")).toMatchObject({ defeated: true, woundState: "dead" });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.grenades).toBe(0);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("crew-1 landed a fragmentation grenade at 47,57")]));
+  });
+
+  it("gives both tactical test characters one smoke grenade", () => {
+    const state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const players = state.tacticalMap!.scenario.combatants.filter((unit) => unit.side === "player");
+
+    expect(players.map((unit) => unit.smokeGrenades)).toEqual([1, 1]);
+  });
+
+  it("throws tactical smoke with grenade targeting and scatter rules without causing wounds", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    const targetBefore = state.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    state = reducer(state, beginTacticalSmokeGrenadeTargeting());
+    state = reducer(state, previewTacticalGrenadeTarget({ x: 47, y: 57 }));
+    state = reducer(state, confirmTacticalGrenade({
+      throwDice: { first: 6, second: 6 },
+      scatterDice: { first: 1, second: 1 },
+      rollsByCombatantId: { "enemy-1": { first: 6, second: 6 } },
+      collateralRolls: { "enemy-1": { checkDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } },
+    }));
+
+    const expectedSmoke = grenadeBlastCells(state.tacticalMap!.scenario, { x: 47, y: 57 });
+    const targetAfter = state.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    expect(state.tacticalMap?.lastGrenadeImpact).toEqual({ kind: "smoke", intended: { x: 47, y: 57 }, landing: { x: 47, y: 57 }, scattered: false, blastCells: expectedSmoke });
+    expect(state.tacticalMap?.scenario.smokeCells).toEqual(expectedSmoke);
+    expect(targetAfter).toMatchObject({ health: targetBefore.health, woundState: targetBefore.woundState, defeated: targetBefore.defeated });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.smokeGrenades).toBe(0);
+    expect(state.tacticalMap?.smokeClearsAtTurnByCell).toEqual(Object.fromEntries(expectedSmoke.map((cell) => [pointKey(cell), 4])));
+    expect(hasLineOfSight(state.tacticalMap!.scenario, { x: 47, y: 55 }, { x: 47, y: 57 })).toBe(false);
+  });
+
+  it("places tactical smoke at the scattered landing square after a missed throw", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, beginTacticalSmokeGrenadeTargeting());
+    state = reducer(state, previewTacticalGrenadeTarget({ x: 47, y: 57 }));
+    state = reducer(state, confirmTacticalGrenade({
+      throwDice: { first: 1, second: 1 },
+      scatterDice: { first: 1, second: 1 },
+      rollsByCombatantId: {},
+      collateralRolls: {},
+    }));
+
+    const impact = state.tacticalMap!.lastGrenadeImpact!;
+    expect(impact.scattered).toBe(true);
+    expect(impact.landing).not.toEqual(impact.intended);
+    expect(state.tacticalMap?.scenario.smokeCells).toEqual(grenadeBlastCells(state.tacticalMap!.scenario, impact.landing));
+  });
+
+  it("clears tactical smoke after three turns and restores it on scenario reset", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const smokeCell = { x: 48, y: 53 };
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        turn: 3,
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { ...initialized.tacticalMap!.actionPointsByCharacterId, "crew-1": 0, "crew-2": 0 },
+        scenario: { ...initialized.tacticalMap!.scenario, smokeCells: [smokeCell] },
+        smokeClearsAtTurnByCell: { [pointKey(smokeCell)]: 4 },
+      },
+    };
+
+    const nextTurn = reducer(ready, runTacticalEnemyPhase({ enemyRolls: {} }));
+    expect(nextTurn.tacticalMap?.turn).toBe(4);
+    expect(nextTurn.tacticalMap?.scenario.smokeCells).toEqual([]);
+    expect(nextTurn.tacticalMap?.smokeClearsAtTurnByCell).toEqual({});
+
+    const changed: CharacterCombatState = {
+      ...nextTurn,
+      tacticalMap: {
+        ...nextTurn.tacticalMap!,
+        scenario: {
+          ...nextTurn.tacticalMap!.scenario,
+          smokeCells: [smokeCell],
+          combatants: nextTurn.tacticalMap!.scenario.combatants.map((unit) => unit.side === "player" ? { ...unit, smokeGrenades: 0 } : unit),
+        },
+      },
+    };
+    const reset = reducer(changed, resetTacticalScenario());
+    expect(reset.tacticalMap?.scenario.smokeCells ?? []).toEqual([]);
+    expect(reset.tacticalMap?.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.smokeGrenades)).toEqual([1, 1]);
+  });
+
+  it("previews and cancels tactical treatment without spending AP or a medkit", () => {
+    const initialized = stateWithCrewAt({ x: 47, y: 55 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 47, y: 56 }, woundState: "light" as const } : unit),
+        },
+      },
+    };
+    state = reducer(state, previewTacticalTreatment("crew-2"));
+    expect(state.tacticalMap).toMatchObject({ plannedTreatmentTargetId: "crew-2", movementMode: null });
+    state = reducer(state, cancelTacticalTreatment());
+
+    expect(state.tacticalMap).toMatchObject({ plannedTreatmentTargetId: null, movementMode: "walk" });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.medkits).toBe(1);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+  });
+
+  it("treats an adjacent light wound for 6 AP and one medkit", () => {
+    const initialized = stateWithCrewAt({ x: 47, y: 55 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 47, y: 56 }, woundState: "light" as const } : unit),
+        },
+      },
+    };
+    state = reducer(state, previewTacticalTreatment("crew-2"));
+    state = reducer(state, confirmTacticalTreatment());
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-2")).toMatchObject({ woundState: "healthy", seriousWounds: 0, defeated: false });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.medkits).toBe(0);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 treated crew-2: healthy");
+  });
+
+  it("stabilizes an adjacent serious wound without returning the patient to action", () => {
+    const initialized = stateWithCrewAt({ x: 47, y: 55 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 47, y: 56 }, woundState: "serious" as const, seriousWounds: 1, defeated: true, health: 0 } : unit),
+        },
+      },
+    };
+    state = reducer(state, previewTacticalTreatment("crew-2"));
+    state = reducer(state, confirmTacticalTreatment());
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-2")).toMatchObject({ woundState: "serious", seriousWounds: 1, defeated: true, health: 0 });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.medkits).toBe(0);
+    expect(state.tacticalMap?.activeCharacterId).toBeNull();
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 treated crew-2: serious stabilized; remains incapacitated");
+  });
+
+  it("begins and releases dragging for an adjacent incapacitated non-dead ally", () => {
+    const initialized = stateWithCrewAt({ x: 47, y: 55 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 46, y: 55 }, woundState: "serious" as const, seriousWounds: 1, defeated: true, health: 0 } : unit),
+        },
+      },
+    };
+    state = reducer(state, beginTacticalDragging("crew-2"));
+    expect(state.tacticalMap?.draggingCombatantByCarrierId).toEqual({ "crew-1": "crew-2" });
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 began dragging crew-2");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    expect(state.tacticalMap?.plannedAttackTargetId).toBeNull();
+
+    state = reducer(state, releaseTacticalDraggedCombatant());
+    expect(state.tacticalMap?.draggingCombatantByCarrierId).toEqual({});
+    expect(state.tacticalMap?.events[0]).toBe("crew-2 released");
+  });
+
+  it("limits a dragging carrier to two squares and moves the patient behind them", () => {
+    const initialized = stateWithCrewAt({ x: 48, y: 50 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 47, y: 50 }, woundState: "serious" as const, seriousWounds: 1, defeated: true, health: 0 } : unit),
+        },
+      },
+    };
+    state = reducer(state, beginTacticalDragging("crew-2"));
+    state = reducer(state, previewTacticalMove({ x: 48, y: 53 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 48, y: 50 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+
+    state = reducer(state, previewTacticalMove({ x: 48, y: 52 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 48, y: 52 });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-2")?.position).toEqual({ x: 48, y: 51 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(2);
+    expect(state.tacticalMap?.draggingCombatantByCarrierId).toEqual({ "crew-1": "crew-2" });
+
+    state = reducer(state, previewTacticalMove({ x: 48, y: 55 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 48, y: 52 });
+
+  });
+
+  it("previews and cancels a tactical AHL melee exchange without ending activation", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 11, y: 10 }, facing: "west" as const }
+              : unit),
+        },
+      },
+    };
+    state = reducer(state, previewTacticalMelee("enemy-1"));
+    expect(state.tacticalMap).toMatchObject({ plannedMeleeTargetId: "enemy-1", movementMode: null });
+    state = reducer(state, cancelTacticalMelee());
+
+    expect(state.tacticalMap).toMatchObject({ plannedMeleeTargetId: null, movementMode: "walk" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
     expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
   });
 
-  it("activates an adjacent terminal for 6 AP and ends the activation", () => {
+  it("allows an adjacent target to be deliberately selected for either fire or melee", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 11, y: 10 }, facing: "west" as const }
+              : unit),
+        },
+      },
+    };
+
+    expect(rangedEnemies(state.tacticalMap!.scenario, "crew-1").map((unit) => unit.id)).toContain("enemy-1");
+    expect(meleeEnemies(state.tacticalMap!.scenario, "crew-1").map((unit) => unit.id)).toContain("enemy-1");
+
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    expect(state.tacticalMap).toMatchObject({ plannedAttackTargetId: "enemy-1", plannedMeleeTargetId: null });
+
+    state = reducer(state, previewTacticalMelee("enemy-1"));
+    expect(state.tacticalMap).toMatchObject({ plannedAttackTargetId: null, plannedMeleeTargetId: "enemy-1" });
+  });
+
+  it("keeps a same-square enemy melee-only", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    const scenario = {
+      ...initialized.tacticalMap!.scenario,
+      walls: [],
+      doors: [],
+      objects: [],
+      combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+        ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+        : unit.id === "enemy-1"
+          ? { ...unit, position: { x: 10, y: 10 }, facing: "west" as const }
+          : unit),
+    };
+
+    expect(rangedEnemies(scenario, "crew-1").map((unit) => unit.id)).not.toContain("enemy-1");
+    expect(meleeEnemies(scenario, "crew-1").map((unit) => unit.id)).toContain("enemy-1");
+  });
+
+  it("resolves tactical AHL melee and its eligible return attack simultaneously", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const, meleeRating: 7, armor: 0, armorName: "Clothing" }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 11, y: 10 }, facing: "west" as const, meleeRating: 0, armor: 0, armorName: "Clothing" }
+              : unit),
+        },
+      },
+    };
+    state = reducer(state, previewTacticalMelee("enemy-1"));
+    state = reducer(state, confirmTacticalMelee({ attackRoll: 6, responseRoll: 6 }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")).toMatchObject({ woundState: "dead", defeated: true, health: 0 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(state.tacticalMap?.actedCharacterIds).toContain("crew-1");
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([
+      expect.stringContaining("AHL melee exchange resolved simultaneously"),
+      expect.stringContaining("crew-1 → Security Guard"),
+      expect.stringContaining("Security Guard → crew-1"),
+    ]));
+  });
+
+  it("previews and resolves an AHL melee dive after the enemy defensive snap", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const, meleeRating: 7, armor: 0, armorName: "Clothing" }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 12, y: 10 }, facing: "west" as const, meleeRating: 0, armor: 0, armorName: "Clothing" }
+              : unit.id === "enemy-2"
+                ? { ...unit, defeated: true, health: 0 }
+                : unit),
+        },
+      },
+    };
+    const enemyAmmunition = state.tacticalMap!.ammunitionByCharacterId["enemy-1"];
+
+    state = reducer(state, setTacticalMovementMode("trot"));
+    state = reducer(state, previewTacticalMeleeDive("enemy-1"));
+    expect(state.tacticalMap).toMatchObject({ plannedMeleeTargetId: "enemy-1", plannedDestination: { x: 12, y: 10 }, movementMode: "trot" });
+
+    const canceled = reducer(state, previewTacticalMove(null));
+    expect(canceled.tacticalMap).toMatchObject({ plannedMeleeTargetId: null, plannedDestination: null, movementMode: "trot" });
+
+    state = reducer(canceled, previewTacticalMeleeDive("enemy-1"));
+    state = reducer(state, confirmTacticalMove({
+      moraleDice: { first: 1, second: 1 },
+      snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+      enemyReactionRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      meleeDice: { attackRoll: 4, responseRoll: 6 },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 12, y: 10 });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")).toMatchObject({ position: { x: 12, y: 10 }, woundState: "dead", defeated: true });
+    expect(state.tacticalMap?.actionPointsByCharacterId["enemy-1"]).toBe(3);
+    expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(enemyAmmunition - 1);
+    expect(state.tacticalMap?.actedCharacterIds).toContain("crew-1");
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([
+      expect.stringContaining("Security Guard defensive snap fired at crew-1"),
+      expect.stringContaining("crew-1 dive → Security Guard"),
+      expect.stringContaining("roll 4 → 6: dead"),
+      expect.stringContaining("AHL melee dive resolved simultaneously"),
+    ]));
+  });
+
+  it("does not resolve the melee dive when the defensive snap kills the diver", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const, armor: 0, armorName: "Clothing" }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 12, y: 10 }, facing: "west" as const }
+              : unit.id === "enemy-2"
+                ? { ...unit, defeated: true, health: 0 }
+                : unit),
+        },
+      },
+    };
+
+    state = reducer(state, setTacticalMovementMode("trot"));
+    state = reducer(state, previewTacticalMeleeDive("enemy-1"));
+    state = reducer(state, confirmTacticalMove({
+      moraleDice: { first: 1, second: 1 },
+      snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+      enemyReactionRolls: { "enemy-1": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } },
+      meleeDice: { attackRoll: 6, responseRoll: 1 },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")).toMatchObject({ defeated: true, position: { x: 11, y: 10 } });
+    expect(state.tacticalMap?.events.some((event) => event.includes("AHL melee dive resolved simultaneously"))).toBe(false);
+  });
+
+  it("enters an enemy-occupied square, ends movement, and leaves melee optional", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 12, y: 10 }, facing: "west" as const }
+              : unit.id === "enemy-2"
+                ? { ...unit, defeated: true, health: 0 }
+                : unit),
+        },
+      },
+    };
+    const enemyAmmunition = state.tacticalMap!.ammunitionByCharacterId["enemy-1"];
+
+    state = reducer(state, previewTacticalEnemyEntry("enemy-1"));
+    expect(state.tacticalMap).toMatchObject({ plannedEnemyEntryTargetId: "enemy-1", plannedDestination: { x: 12, y: 10 }, movementMode: "walk" });
+
+    const canceled = reducer(state, previewTacticalMove(null));
+    expect(canceled.tacticalMap).toMatchObject({ plannedEnemyEntryTargetId: null, plannedDestination: null, movementMode: "walk" });
+
+    let bypass = reducer(canceled, previewTacticalMove({ x: 13, y: 10 }));
+    bypass = reducer(bypass, confirmTacticalMove({
+      moraleDice: { first: 1, second: 1 },
+      snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+    }));
+    expect(bypass.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 10, y: 10 });
+
+    state = reducer(canceled, previewTacticalEnemyEntry("enemy-1"));
+    state = reducer(state, confirmTacticalMove({
+      moraleDice: { first: 1, second: 1 },
+      snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+      enemyReactionRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 12, y: 10 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(1);
+    expect(state.tacticalMap?.actionPointsByCharacterId["enemy-1"]).toBe(3);
+    expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(enemyAmmunition - 1);
+    expect(state.tacticalMap).toMatchObject({ activeCharacterId: "crew-1", movementMode: null, enemySquareEnteredCombatantIds: ["crew-1"] });
+    expect(state.tacticalMap?.actedCharacterIds).not.toContain("crew-1");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([
+      expect.stringContaining("Security Guard defensive snap fired at crew-1"),
+      expect.stringContaining("crew-1 entered Security Guard's square"),
+    ]));
+
+    state = reducer(state, setTacticalMovementMode("walk"));
+    expect(state.tacticalMap?.movementMode).toBeNull();
+    state = reducer(state, previewTacticalMelee("enemy-1"));
+    expect(state.tacticalMap).toMatchObject({ plannedMeleeTargetId: "enemy-1", movementMode: null });
+  });
+
+  it("commits a tactical covering-fire lane for 3 AP and reserves its ammunition", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, beginTacticalCoveringFire());
+    expect(state.tacticalMap).toMatchObject({ coveringFireTargeting: true, movementMode: null });
+
+    state = reducer(state, previewTacticalCoveringFire({ x: 47, y: 57 }));
+    expect(state.tacticalMap?.plannedCoveringFireTarget).toEqual({ x: 47, y: 57 });
+    state = reducer(state, confirmTacticalCoveringFire());
+
+    expect(state.tacticalMap?.coveringFireLanes).toEqual([{ attackerId: "crew-1", target: { x: 47, y: 57 }, cells: [{ x: 47, y: 56 }, { x: 47, y: 57 }, { x: 47, y: 58 }, { x: 47, y: 59 }, { x: 47, y: 60 }, { x: 47, y: 61 }, { x: 47, y: 62 }] }]);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(3);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(4);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 covers lane through 47,57 (3 AP, 1 ammo reserved)");
+  });
+
+  it("cancels tactical covering-fire targeting without spending AP or ammunition", () => {
+    let state = stateWithCrewAt({ x: 47, y: 55 });
+    state = reducer(state, beginTacticalCoveringFire());
+    state = reducer(state, previewTacticalCoveringFire({ x: 47, y: 57 }));
+    state = reducer(state, cancelTacticalCoveringFire());
+
+    expect(state.tacticalMap).toMatchObject({ coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], movementMode: "walk" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(4);
+  });
+
+  it("lets the default LAG select a visible covering-fire square and rejects a square behind the control-room wall", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = reducer(state, beginTacticalCoveringFire());
+
+    state = reducer(state, previewTacticalCoveringFire({ x: 47, y: 57 }));
+    expect(state.tacticalMap?.plannedCoveringFireTarget).toBeNull();
+
+    state = reducer(state, previewTacticalCoveringFire({ x: 48, y: 52 }));
+    expect(state.tacticalMap?.plannedCoveringFireTarget).toEqual({ x: 48, y: 52 });
+  });
+
+  it("fires a committed tactical covering-fire lane when an enemy occupies its danger space", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 50, y: 55 }, facing: "south" as const }
+            : unit.id === "crew-2" || unit.id === "enemy-1"
+              ? { ...unit, defeated: true, health: 0 }
+              : unit.id === "enemy-2"
+                ? { ...unit, position: { x: 50, y: 58 }, facing: "north" as const }
+                : unit),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        coveringFireLanes: [{ attackerId: "crew-1", target: { x: 50, y: 58 }, cells: [{ x: 50, y: 56 }, { x: 50, y: 57 }, { x: 50, y: 58 }] }],
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+    }));
+
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(3);
+    expect(state.tacticalMap?.suppressedCombatantIds).not.toContain("enemy-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("crew-1 covering fired at Control Room Officer")]));
+    expect(state.tacticalMap?.coveringFireLanes).toEqual([]);
+  });
+
+  it("clears an untriggered tactical covering-fire area at the end of the enemy phase", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const lane = { attackerId: "crew-1", target: { x: 48, y: 51 }, cells: [{ x: 48, y: 51 }] };
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        coveringFireLanes: [lane],
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: {
+        "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+        "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+      },
+    }));
+
+    expect(state.tacticalMap?.turn).toBe(2);
+    expect(state.tacticalMap?.coveringFireLanes).toEqual([]);
+  });
+
+  it("offers the covering-fire shooter a retained snap shot before beginning the next turn", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 47, y: 55 }, facing: "south" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 47, y: 58 }, facing: "north" as const }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 3, "crew-2": 0, "enemy-1": 0 },
+        coveringFireCommittedCombatantIds: ["crew-1"],
+        coveringFireLanes: [{ attackerId: "crew-1", target: { x: 48, y: 55 }, cells: [{ x: 48, y: 55 }] }],
+      },
+    };
+    const ammunition = ready.tacticalMap!.ammunitionByCharacterId["crew-1"];
+
+    let state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+
+    expect(state.tacticalMap).toMatchObject({ turn: 1, activeCharacterId: "crew-1", pendingCoveringFireSnapIds: ["crew-1"], coveringFireLanes: [] });
+    state = reducer(state, resolveTacticalCoveringFireSnap({
+      fire: true,
+      targetId: "enemy-1",
+      hitDice: { first: 1, second: 1 },
+      woundDice: { first: 1, second: 1 },
+      phaseRolls: { enemyRolls: {} },
+    }));
+
+    expect(state.tacticalMap?.turn).toBe(2);
+    expect(state.tacticalMap?.pendingCoveringFireSnapIds).toEqual([]);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition - 1);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("crew-1 retained snap fired at Security Guard")]));
+  });
+
+  it("allows the covering-fire shooter to decline the retained snap shot", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: { ...initialized.tacticalMap!.scenario, combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.side === "enemy" ? { ...unit, defeated: true, health: 0 } : unit) },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 3, "crew-2": 0 },
+        coveringFireCommittedCombatantIds: ["crew-1"],
+      },
+    };
+    const ammunition = ready.tacticalMap!.ammunitionByCharacterId["crew-1"];
+    let state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: {} }));
+    state = reducer(state, resolveTacticalCoveringFireSnap({ fire: false, hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 }, phaseRolls: { enemyRolls: {} } }));
+
+    expect(state.tacticalMap?.turn).toBe(2);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining(["crew-1 declined the retained snap shot"]));
+  });
+
+  it("stops an enemy before a covering-fire danger space after a failed exposure check", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          width: 24,
+          height: 6,
+          walls: [],
+          doors: [],
+          objects: [{ id: "cover-console", kind: "console", position: { x: 19, y: 2 }, label: "Cover Console" }],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 1, y: 2 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 20, y: 2 }, facing: "west" as const }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        coveringFireLanes: [{ attackerId: "crew-1", target: { x: 19, y: 1 }, cells: [{ x: 19, y: 1 }, { x: 20, y: 1 }, { x: 19, y: 2 }, { x: 19, y: 3 }, { x: 20, y: 3 }] }],
+      },
+    };
+    const ammunition = ready.tacticalMap!.ammunitionByCharacterId["crew-1"];
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      coveringFireMoraleRolls: { "enemy-1": { first: 6, second: 6 } },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.position).toEqual({ x: 20, y: 2 });
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Security Guard exposure-to-covering-fire morale 12/7: stopped before danger space")]));
+    expect(state.tacticalMap?.events.some((event) => event.includes("covering fired"))).toBe(false);
+  });
+
+  it("allows covering fire to trigger after a passed exposure check", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          width: 24,
+          height: 6,
+          walls: [],
+          doors: [],
+          objects: [{ id: "cover-console", kind: "console", position: { x: 19, y: 2 }, label: "Cover Console" }],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 1, y: 2 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 20, y: 2 }, facing: "west" as const }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        coveringFireLanes: [{ attackerId: "crew-1", target: { x: 19, y: 1 }, cells: [{ x: 19, y: 1 }, { x: 20, y: 1 }, { x: 19, y: 2 }, { x: 19, y: 3 }, { x: 20, y: 3 }] }],
+      },
+    };
+    const ammunition = ready.tacticalMap!.ammunitionByCharacterId["crew-1"];
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      coveringFireMoraleRolls: { "enemy-1": { first: 1, second: 1 } },
+    }));
+
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition - 1);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([
+      expect.stringContaining("Security Guard exposure-to-covering-fire morale 2/7: passed"),
+      expect.stringContaining("crew-1 covering fired as Security Guard crossed the lane"),
+    ]));
+  });
+
+  it("resolves automatic fire for 6 AP and 3 ammunition with the existing two-hit danger-space limit", () => {
+    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
+    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    const enemyTemplate = state.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-2")!;
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          combatants: [
+            ...state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 47, y: 55 } } : unit.id === "enemy-2" ? { ...unit, position: { x: 47, y: 58 } } : unit),
+            { ...enemyTemplate, id: "enemy-3", name: "Rear Guard", position: { x: 47, y: 59 } },
+          ],
+        },
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("automatic"));
+    expect(state.tacticalMap?.plannedAttackMode).toBe("automatic");
+    state = reducer(state, confirmTacticalAttack({
+      hitDice: { first: 6, second: 6 },
+      woundDice: { first: 6, second: 6 },
+      secondaryRolls: {
+        "enemy-2": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } },
+        "enemy-3": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } },
+      },
+    }));
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(27);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.defeated).toBe(true);
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-2")?.defeated).toBe(true);
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-3")?.woundState).toBe("healthy");
+    expect(state.tacticalMap?.events.filter((event) => event.includes("automatic fired")).length).toBe(2);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+  });
+
+  it("uses automatic fire to suppress a tactical target without causing a wound", () => {
+    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
+    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 47, y: 55 } } : unit),
+        },
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("suppressive"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } }));
+
+    expect(state.tacticalMap?.suppressedCombatantIds).toContain("enemy-1");
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.woundState).toBe("healthy");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(27);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events[0]).toContain("crew-1 suppressive fired at Security Guard");
+  });
+
+  it("spends tactical suppressive-fire AP and ammunition when suppression fails", () => {
+    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
+    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 47, y: 55 } } : unit),
+        },
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("suppressive"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 1, second: 1 }, woundDice: { first: 6, second: 6 } }));
+
+    expect(state.tacticalMap?.suppressedCombatantIds).not.toContain("enemy-1");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(27);
+    expect(state.tacticalMap?.events[0]).toContain("held position");
+  });
+
+  it("does not spend resources trying to suppress an already suppressed tactical target", () => {
+    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
+    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 47, y: 55 } } : unit),
+        },
+        suppressedCombatantIds: ["enemy-1"],
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("suppressive"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } }));
+
+    expect(state.tacticalMap?.plannedAttackMode).toBeNull();
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(30);
+  });
+
+  it("rallies a suppressed tactical crew member for 3 AP and preserves the activation", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const suppressed: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: { ...initialized.tacticalMap!, suppressedCombatantIds: ["crew-1"], plannedDestination: { x: 48, y: 51 } },
+    };
+
+    const state = reducer(suppressed, rallyTacticalCharacter());
+
+    expect(state.tacticalMap?.suppressedCombatantIds).not.toContain("crew-1");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(3);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+    expect(state.tacticalMap?.plannedDestination).toBeNull();
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 rallied (3 AP)");
+  });
+
+  it("ends the activation when Rally spends the crew member's last 3 AP", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const suppressed: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        suppressedCombatantIds: ["crew-1"],
+        actionPointsByCharacterId: { "crew-1": 3, "crew-2": 6 },
+      },
+    };
+
+    const state = reducer(suppressed, rallyTacticalCharacter());
+
+    expect(state.tacticalMap?.suppressedCombatantIds).not.toContain("crew-1");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.actedCharacterIds).toContain("crew-1");
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+  });
+
+  it("evades exactly one legal square for 6 AP and ends the activation", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = reducer(state, setTacticalMovementMode("evade"));
+    state = reducer(state, previewTacticalMove({ x: 48, y: 51 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 48, y: 51 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.evadingCombatantIds).toEqual(["crew-1"]);
+    expect(state.tacticalMap?.actedCharacterIds).toContain("crew-1");
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 evaded to 48,51 (6 AP)");
+  });
+
+  it("sidesteps or backsteps one non-forward square for 4 AP while preserving facing", () => {
+    let state = stateWithCrewAt({ x: 10, y: 10 });
+    state = reducer(state, setTacticalMovementMode("sidestep"));
+    state = reducer(state, previewTacticalMove({ x: 11, y: 10 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    const character = state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1");
+    expect(character?.position).toEqual({ x: 11, y: 10 });
+    expect(character?.facing).toBe("south");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(2);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 sidestepped/backstepped to 11,10 (4 AP)");
+  });
+
+  it("does not allow sidestep mode to move into a forward square", () => {
+    let state = stateWithCrewAt({ x: 10, y: 10 });
+    state = reducer(state, setTacticalMovementMode("sidestep"));
+    state = reducer(state, previewTacticalMove({ x: 10, y: 11 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 10, y: 10 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+  });
+
+  it("charges tactical movement congestion only for active occupants", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    const withOccupant = (defeated: boolean): CharacterCombatState => ({
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "south" as const }
+            : unit.id === "crew-2"
+              ? { ...unit, position: { x: 10, y: 11 }, defeated, health: defeated ? 0 : unit.health, woundState: defeated ? "serious" as const : unit.woundState }
+              : unit),
+        },
+      },
+    });
+
+    let activeOccupant = reducer(withOccupant(false), previewTacticalMove({ x: 10, y: 11 }));
+    activeOccupant = reducer(activeOccupant, confirmTacticalMove(undefined));
+    expect(activeOccupant.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 10, y: 11 });
+    expect(activeOccupant.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(3);
+    expect(activeOccupant.tacticalMap?.events[0]).toBe("crew-1 moved to 10,11 (3 AP)");
+
+    let incapacitatedOccupant = reducer(withOccupant(true), previewTacticalMove({ x: 10, y: 11 }));
+    incapacitatedOccupant = reducer(incapacitatedOccupant, confirmTacticalMove(undefined));
+    expect(incapacitatedOccupant.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
+    expect(incapacitatedOccupant.tacticalMap?.events[0]).toBe("crew-1 moved to 10,11 (2 AP)");
+  });
+
+  it("stops crew movement before adjacency and snap fires after a failed morale check", () => {
+    let state = stateWithCrewAt({ x: 10, y: 10 });
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" || unit.id === "enemy-2"
+            ? { ...unit, defeated: true, health: 0 }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 13, y: 10 } }
+              : unit),
+        },
+      },
+    };
+    const ammunition = state.tacticalMap!.ammunitionByCharacterId["crew-1"];
+    state = reducer(state, previewTacticalMove({ x: 12, y: 10 }));
+    state = reducer(state, confirmTacticalMove({ moraleDice: { first: 6, second: 6 }, snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 11, y: 10 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition - 1);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([
+      expect.stringContaining("crew-1 moving-adjacent morale 12/7: stopped before Security Guard"),
+      expect.stringContaining("crew-1 moving-adjacent failure snap fired at Security Guard"),
+    ]));
+  });
+
+  it("allows crew movement into adjacency after a passed morale check", () => {
+    let state = stateWithCrewAt({ x: 10, y: 10 });
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" || unit.id === "enemy-2"
+            ? { ...unit, defeated: true, health: 0 }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 13, y: 10 } }
+              : unit),
+        },
+      },
+    };
+    state = reducer(state, previewTacticalMove({ x: 12, y: 10 }));
+    state = reducer(state, confirmTacticalMove({ moraleDice: { first: 1, second: 1 }, snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 12, y: 10 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(1);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("crew-1 moving-adjacent morale 2/7: passed")]));
+  });
+
+  it("allows a stationary enemy to spend 3 AP on a defensive snap as crew enters adjacency", () => {
+    let state = stateWithCrewAt({ x: 10, y: 10 });
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" || unit.id === "enemy-2"
+            ? { ...unit, defeated: true, health: 0 }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 13, y: 10 }, facing: "west" as const }
+              : unit),
+        },
+      },
+    };
+    const ammunition = state.tacticalMap!.ammunitionByCharacterId["enemy-1"];
+    state = reducer(state, previewTacticalMove({ x: 12, y: 10 }));
+    const planned = state;
+    state = reducer(planned, confirmTacticalMove({
+      moraleDice: { first: 1, second: 1 },
+      snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+      enemyReactionRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 12, y: 10 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["enemy-1"]).toBe(3);
+    expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(ammunition - 1);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Security Guard defensive snap fired at crew-1")]));
+
+    const stopped = reducer(planned, confirmTacticalMove({
+      moraleDice: { first: 1, second: 1 },
+      snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+      enemyReactionRolls: { "enemy-1": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } },
+    }));
+    expect(stopped.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")).toMatchObject({ position: { x: 12, y: 10 }, defeated: true });
+    expect(stopped.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(stopped.tacticalMap).toMatchObject({ scenarioStatus: "defeat", activeCharacterId: null });
+    expect(stopped.tacticalMap?.events).toContain("Defeat — all crew are incapacitated");
+  });
+
+  it("uses an enemy's remaining 3 AP for a snap instead of a 6-AP attack", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 } }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 12, y: 10 }, facing: "west" as const, weapon: { ...unit.weapon, automatic: false } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { ...initialized.tacticalMap!.actionPointsByCharacterId, "crew-1": 0, "crew-2": 0, "enemy-1": 3, "enemy-2": 0 },
+      },
+    };
+    const ammunition = ready.tacticalMap!.ammunitionByCharacterId["enemy-1"];
+    const state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+
+    expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(ammunition - 1);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Security Guard snap fired at crew-1")]));
+    expect(state.tacticalMap?.events.some((event) => event.includes("Security Guard aimed fired"))).toBe(false);
+  });
+
+  it("braces a prone tactical crew member for 2 AP and adds +1 ranged accuracy", () => {
+    const base = stateWithCrewAt({ x: 47, y: 55 });
+    const prone: CharacterCombatState = {
+      ...base,
+      tacticalMap: {
+        ...base.tacticalMap!,
+        scenario: {
+          ...base.tacticalMap!.scenario,
+          combatants: base.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, posture: "prone" as const } : unit),
+        },
+      },
+    };
+    let unbraced = reducer(prone, selectTacticalAttackTarget("enemy-1"));
+    unbraced = reducer(unbraced, selectTacticalAttackMode("snap"));
+    unbraced = reducer(unbraced, confirmTacticalAttack({ hitDice: { first: 2, second: 2 }, woundDice: { first: 1, second: 1 } }));
+
+    let braced = reducer(prone, braceTacticalWeapon());
+    expect(braced.tacticalMap?.bracedCombatantIds).toEqual(["crew-1"]);
+    expect(braced.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
+    expect(braced.tacticalMap?.events[0]).toBe("crew-1 braced their weapon (2 AP)");
+    braced = reducer(braced, selectTacticalAttackTarget("enemy-1"));
+    braced = reducer(braced, selectTacticalAttackMode("snap"));
+    braced = reducer(braced, confirmTacticalAttack({ hitDice: { first: 2, second: 2 }, woundDice: { first: 1, second: 1 } }));
+
+    const hitTotal = (state: CharacterCombatState) => Number(state.tacticalMap?.events.find((event) => event.includes("snap fired"))?.match(/hit (\d+)\//)?.[1]);
+    expect(hitTotal(braced)).toBe(hitTotal(unbraced) + 1);
+  });
+
+  it("rejects tactical bracing while standing or suppressed and clears it on standing", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = reducer(state, braceTacticalWeapon());
+    expect(state.tacticalMap?.bracedCombatantIds).toEqual([]);
+
+    state = reducer(state, toggleTacticalPosture());
+    state = { ...state, tacticalMap: { ...state.tacticalMap!, suppressedCombatantIds: ["crew-1"] } };
+    state = reducer(state, braceTacticalWeapon());
+    expect(state.tacticalMap?.bracedCombatantIds).toEqual([]);
+
+    state = { ...state, tacticalMap: { ...state.tacticalMap!, suppressedCombatantIds: [] } };
+    state = reducer(state, braceTacticalWeapon());
+    expect(state.tacticalMap?.bracedCombatantIds).toEqual(["crew-1"]);
+    state = { ...state, tacticalMap: { ...state.tacticalMap!, actionPointsByCharacterId: { ...state.tacticalMap!.actionPointsByCharacterId, "crew-1": 6 } } };
+    state = reducer(state, toggleTacticalPosture());
+    expect(state.tacticalMap?.bracedCombatantIds).toEqual([]);
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.posture).toBe("standing");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 stood up (6 AP)");
+  });
+
+  it("requires all 6 AP to stand a prone tactical crew member", () => {
+    const base = stateWithCrewAt({ x: 47, y: 55 });
+    const prone: CharacterCombatState = {
+      ...base,
+      tacticalMap: {
+        ...base.tacticalMap!,
+        scenario: {
+          ...base.tacticalMap!.scenario,
+          combatants: base.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, posture: "prone" as const } : unit),
+        },
+        actionPointsByCharacterId: { ...base.tacticalMap!.actionPointsByCharacterId, "crew-1": 5 },
+      },
+    };
+
+    const state = reducer(prone, toggleTacticalPosture());
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.posture).toBe("prone");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(5);
+  });
+
+  it("rejects an Evade destination more than one square away", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = reducer(state, setTacticalMovementMode("evade"));
+    state = reducer(state, previewTacticalMove({ x: 48, y: 52 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 48, y: 50 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(state.tacticalMap?.evadingCombatantIds).toEqual([]);
+  });
+
+  it("rejects Evade into an active-occupied square because its 6 AP cannot also pay congestion", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 10, y: 11 } } : unit),
+        },
+      },
+    };
+    state = reducer(state, setTacticalMovementMode("evade"));
+    state = reducer(state, previewTacticalMove({ x: 10, y: 11 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 10, y: 10 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(state.tacticalMap?.evadingCombatantIds).toEqual([]);
+  });
+
+  it("applies the tactical Evade −2 to enemy ranged fire and expires it before the next activation", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 50, y: 55 } }
+            : unit.id === "crew-2" || unit.id === "enemy-1"
+              ? { ...unit, defeated: true, health: 0 }
+              : unit.id === "enemy-2"
+                ? { ...unit, position: { x: 50, y: 58 }, facing: "north" as const }
+                : unit),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        evadingCombatantIds: ["crew-1"],
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 4, second: 4 }, woundDice: { first: 6, second: 6 } } },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.woundState).toBe("healthy");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Control Room Officer aimed fired at crew-1: hit 6/8 · miss")]));
+    expect(state.tacticalMap?.evadingCombatantIds).toEqual([]);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+  });
+
+  it("does not select an enemy blocked by the closed control-room wall", () => {
+    const state = reducer(reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"])), selectTacticalAttackTarget("enemy-1"));
+    expect(state.tacticalMap?.plannedAttackTargetId).toBeNull();
+  });
+
+  it("reloads for 3 AP, clears targeting, logs the event, and advances an exhausted activation", () => {
+    const base = stateWithCrewAt({ x: 47, y: 55 });
+    const state = reducer({
+      ...base,
+      tacticalMap: {
+        ...base.tacticalMap!,
+        ammunitionByCharacterId: { ...base.tacticalMap!.ammunitionByCharacterId, "crew-1": 1 },
+        actionPointsByCharacterId: { ...base.tacticalMap!.actionPointsByCharacterId, "crew-1": 3 },
+        plannedAttackTargetId: "enemy-1",
+        plannedAttackMode: "snap",
+      },
+    }, reloadTacticalWeapon());
+    expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(4);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.plannedAttackTargetId).toBeNull();
+    expect(state.tacticalMap?.plannedAttackMode).toBeNull();
+    expect(state.tacticalMap?.events[0]).toBe("crew-1 reloaded (3 AP)");
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+  });
+
+  it("commands an adjacent door to open next action phase for 2 AP", () => {
+    let state = stateWithCrewAt({ x: 48, y: 53 });
+    state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
+    state = reducer(state, interactWithTacticalTerrain());
+    expect(state.tacticalMap?.doorOpenById["control-room-alpha:north:door:4"]).toBeUndefined();
+    expect(state.tacticalMap?.pendingDoorCommandsById["control-room-alpha:north:door:4"]).toEqual({ open: true, resolvesAtTurn: 2, characterId: "crew-1" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+
+    state = { ...state, tacticalMap: { ...state.tacticalMap!, activeCharacterId: null, actedCharacterIds: ["crew-1", "crew-2"] } };
+    state = reducer(state, runTacticalEnemyPhase({ enemyRolls: {} }));
+    expect(state.tacticalMap?.doorOpenById["control-room-alpha:north:door:4"]).toBe(true);
+    expect(state.tacticalMap?.pendingDoorCommandsById).toEqual({});
+    expect(state.tacticalMap?.events).toContain("Control-room door opened at the start of Turn 2");
+  });
+
+  it("commands an adjacent open door to close next action phase for 2 AP", () => {
+    let state = stateWithCrewAt({ x: 48, y: 53 }, { "control-room-alpha:north:door:4": true });
+    state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
+    state = reducer(state, interactWithTacticalTerrain());
+    expect(state.tacticalMap?.doorOpenById["control-room-alpha:north:door:4"]).toBe(true);
+    expect(state.tacticalMap?.pendingDoorCommandsById["control-room-alpha:north:door:4"]).toEqual({ open: false, resolvesAtTurn: 2, characterId: "crew-1" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+  });
+
+  it("activates the Security Terminal and completes the default scenario", () => {
     let state = stateWithCrewAt({ x: 48, y: 57 });
     state = reducer(state, selectTacticalTerrainObject("control-room-alpha:terminal"));
     state = reducer(state, interactWithTacticalTerrain());
     expect(state.tacticalMap?.terminalActiveById["control-room-alpha:terminal"]).toBe(true);
     expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
-    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap).toMatchObject({ scenarioStatus: "victory", activeCharacterId: null });
+    expect(state.tacticalMap?.events[0]).toBe("Victory — crew-1 secured Security Terminal");
+    state = reducer(state, activateTacticalCharacter("crew-2"));
+    expect(state.tacticalMap?.activeCharacterId).toBeNull();
   });
 
   it("rejects terrain interaction when the character is not adjacent", () => {
@@ -56,6 +1518,39 @@ describe("tactical terrain interactions", () => {
     state = reducer(state, interactWithTacticalTerrain());
     expect(state.tacticalMap?.doorOpenById["control-room-alpha:north:door:4"]).toBeUndefined();
     expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+  });
+
+  it("uses action-phase-start adjacency for tactical sliding-door commands", () => {
+    let beganAdjacent = stateWithCrewAt({ x: 48, y: 53 });
+    beganAdjacent = {
+      ...beganAdjacent,
+      tacticalMap: {
+        ...beganAdjacent.tacticalMap!,
+        scenario: {
+          ...beganAdjacent.tacticalMap!.scenario,
+          combatants: beganAdjacent.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 40, y: 40 } } : unit),
+        },
+      },
+    };
+    beganAdjacent = reducer(beganAdjacent, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
+    beganAdjacent = reducer(beganAdjacent, interactWithTacticalTerrain());
+    expect(beganAdjacent.tacticalMap?.pendingDoorCommandsById["control-room-alpha:north:door:4"]?.open).toBe(true);
+
+    let movedAdjacent = stateWithCrewAt({ x: 40, y: 40 });
+    movedAdjacent = {
+      ...movedAdjacent,
+      tacticalMap: {
+        ...movedAdjacent.tacticalMap!,
+        scenario: {
+          ...movedAdjacent.tacticalMap!.scenario,
+          combatants: movedAdjacent.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 48, y: 53 } } : unit),
+        },
+      },
+    };
+    movedAdjacent = reducer(movedAdjacent, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
+    movedAdjacent = reducer(movedAdjacent, interactWithTacticalTerrain());
+    expect(movedAdjacent.tacticalMap?.pendingDoorCommandsById).toEqual({});
+    expect(movedAdjacent.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
   });
 
   it("uses the selected armory weapon, ammunition, and existing door breach threshold", () => {
@@ -76,5 +1571,437 @@ describe("tactical terrain interactions", () => {
     state = reducer(state, fireAtTacticalTerrain({ hitDice: { first: 6, second: 6 } }));
     expect(state.tacticalMap?.destroyedTerrainObjectIds).toEqual(["control-room-alpha:north:wall:3"]);
     expect(state.tacticalMap?.destroyedTerrainObjectIds).not.toContain("control-room-alpha:north:wall:2");
+  });
+
+  it("waits for an explicit end turn after every living crew activation is complete", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = reducer(state, finishTacticalActivation());
+    state = reducer(state, finishTacticalActivation());
+
+    expect(state.tacticalMap).toMatchObject({
+      turn: 1,
+      activeCharacterId: null,
+      actedCharacterIds: ["crew-1", "crew-2"],
+      actionPointsByCharacterId: { "crew-1": 6, "crew-2": 6 },
+    });
+    state = reducer(state, activateTacticalCharacter("crew-1"));
+    expect(state.tacticalMap?.activeCharacterId).toBeNull();
+  });
+
+  it("runs enemy fire with the existing wound rules, then refreshes living crew for the next turn", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 50, y: 55 }, armor: 4, armorName: "Flak Vest" }
+            : unit.id === "crew-2"
+              ? { ...unit, position: { x: 51, y: 55 } }
+              : unit.id === "enemy-1"
+                ? { ...unit, defeated: true, health: 0 }
+                : unit.id === "enemy-2"
+                  ? { ...unit, position: { x: 50, y: 58 }, facing: "north" as const }
+                  : unit),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        lastWeaponImpact: { weaponName: "Profile Test Weapon", ammunitionKind: "storm-round", ammunitionLabel: "Storm", point: { x: 50, y: 58 }, blastCells: [{ x: 50, y: 58 }], hit: true },
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } },
+    }));
+
+    expect(state.tacticalMap?.turn).toBe(2);
+    expect(state.tacticalMap?.lastWeaponImpact).toBeNull();
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")).toMatchObject({ defeated: true, woundState: "serious" });
+    expect(state.tacticalMap?.actionPointsByCharacterId).toEqual({ "crew-1": 0, "crew-2": 6, "enemy-1": 0, "enemy-2": 6 });
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Control Room Officer aimed fired at crew-1")]));
+    expect(state.tacticalMap?.events[0]).toBe("Turn 2 begins");
+  });
+
+  it("moves default-scenario enemies toward the crew when the control-room wall blocks fire", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+      },
+    };
+    const starts = Object.fromEntries(ready.tacticalMap!.scenario.combatants.filter((unit) => unit.side === "enemy").map((unit) => [unit.id, unit.position]));
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: {
+        "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+        "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } },
+      },
+    }));
+
+    const movedEnemyIds = state.tacticalMap!.scenario.combatants.filter((unit) => unit.side === "enemy" && (unit.position.x !== starts[unit.id].x || unit.position.y !== starts[unit.id].y)).map((unit) => unit.id);
+    expect(movedEnemyIds.length).toBeGreaterThan(0);
+    expect(state.tacticalMap?.events.some((event) => event.includes("moved to") || event.includes("opened control-room"))).toBe(true);
+  });
+
+  it("stops enemy movement before adjacency and snap fires after a failed morale check", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const enemyTemplate = initialized.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 } }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 16, y: 10 }, facing: "west" as const, weapon: { ...unit.weapon, effectiveRange: 3, longRange: 3, extremeRange: 3, automatic: false } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+      },
+    };
+    const ammunition = ready.tacticalMap!.ammunitionByCharacterId["enemy-1"];
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      movingAdjacentMoraleRolls: { "enemy-1": { first: 6, second: 6 } },
+      movingAdjacentSnapRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.position).toEqual({ x: 13, y: 10 });
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([
+      expect.stringContaining("Security Guard moving-adjacent morale 12/7: stopped before crew-1"),
+      expect.stringContaining("Security Guard moving-adjacent failure snap fired at crew-1"),
+    ]));
+    expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(ammunition - 1);
+    expect(enemyTemplate.weapon.magazineSize).toBe(ammunition);
+  });
+
+  it("pauses enemy movement for an eligible stationary crew defensive snap shot", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 11 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 16, y: 10 }, facing: "west" as const, concealed: true, weapon: { ...unit.weapon, effectiveRange: 3, longRange: 3, extremeRange: 3, automatic: false } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 6, "crew-2": 0 },
+      },
+    };
+    const ammunition = ready.tacticalMap!.ammunitionByCharacterId["crew-1"];
+    const pending = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      movingAdjacentMoraleRolls: { "enemy-1": { first: 1, second: 1 } },
+    }));
+
+    expect(pending.tacticalMap?.turn).toBe(1);
+    expect(pending.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.position).toEqual({ x: 11, y: 11 });
+    expect(pending.tacticalMap?.pendingAdjacencyReaction).toEqual({ moverId: "enemy-1", defenderIds: ["crew-1"] });
+
+    const fired = reducer(pending, resolveTacticalAdjacencyReaction({ fire: true, hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }));
+    expect(fired.tacticalMap?.pendingAdjacencyReaction).toBeNull();
+    expect(fired.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(3);
+    expect(fired.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition - 1);
+    expect(fired.tacticalMap?.events[0]).toContain("crew-1 defensive snap fired at Security Guard");
+
+    const declined = reducer(pending, resolveTacticalAdjacencyReaction({ fire: false, hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }));
+    expect(declined.tacticalMap?.pendingAdjacencyReaction).toBeNull();
+    expect(declined.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(declined.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition);
+    expect(declined.tacticalMap?.events[0]).toBe("crew-1 declined the defensive snap shot");
+    const resumed = reducer(declined, runTacticalEnemyPhase({ enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+    expect(resumed.tacticalMap?.turn).toBe(2);
+    expect(resumed.tacticalMap?.pendingAdjacencyReaction).toBeNull();
+  });
+
+  it("does not offer an adjacency reaction to crew who moved", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 16, y: 10 }, facing: "west" as const, weapon: { ...unit.weapon, effectiveRange: 3, longRange: 3, extremeRange: 3, automatic: false } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 3, "crew-2": 0 },
+        movedCombatantIds: ["crew-1"],
+      },
+    };
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      movingAdjacentMoraleRolls: { "enemy-1": { first: 1, second: 1 } },
+    }));
+
+    expect(state.tacticalMap?.pendingAdjacencyReaction).toBeNull();
+    expect(state.tacticalMap?.turn).toBe(2);
+    expect(state.tacticalMap?.events.some((event) => event.includes("may snap fire"))).toBe(false);
+  });
+
+  it("recovers a cowering player at phase start with same-square leadership and no AP cost", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 48, y: 50 }, leadershipRating: 1 }
+            : unit.id === "crew-2"
+              ? { ...unit, position: { x: 48, y: 50 } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        coweringCombatantIds: ["crew-2"],
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: {},
+      coweringRecoveryRolls: { "crew-2": { first: 4, second: 4 } },
+    }));
+
+    expect(state.tacticalMap?.coweringCombatantIds).toEqual([]);
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-2"]).toBe(6);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("crew-2 cowering recovery 8/8 · leadership +1: recovered")]));
+  });
+
+  it("queues friendly-casualty morale for a surviving witness with line of sight", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+            : unit.id === "crew-2"
+              ? { ...unit, defeated: true, health: 0 }
+              : unit.id === "enemy-1"
+                ? { ...unit, position: { x: 12, y: 10 } }
+                : { ...unit, position: { x: 12, y: 11 } }),
+        },
+        activeCharacterId: "crew-1",
+        actionPointsByCharacterId: { "crew-1": 6, "crew-2": 0 },
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("aimed"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.defeated).toBe(true);
+    expect(state.tacticalMap?.pendingCasualtyMoraleChecks).toContainEqual(expect.objectContaining({ witnessId: "enemy-2", casualtyId: "enemy-1" }));
+  });
+
+  it("queues unexpected-fire morale when the target did not see the attacker at phase start", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+            : unit.id === "crew-2"
+              ? { ...unit, defeated: true, health: 0 }
+              : unit.id === "enemy-1"
+                ? { ...unit, position: { x: 12, y: 10 } }
+                : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: "crew-1",
+        actionPointsByCharacterId: { "crew-1": 6, "crew-2": 0 },
+        visibleHostileIdsAtPhaseStartByCombatantId: { "enemy-1": [] },
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("aimed"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }));
+
+    expect(state.tacticalMap?.pendingUnexpectedFireMoraleChecks).toContainEqual(expect.objectContaining({ combatantId: "enemy-1", attackerId: "crew-1" }));
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.defeated).toBe(false);
+  });
+
+  it("does not queue unexpected-fire morale when the attacker was visible at phase start", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 12, y: 10 } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: "crew-1",
+        actionPointsByCharacterId: { "crew-1": 6, "crew-2": 0 },
+        visibleHostileIdsAtPhaseStartByCombatantId: { "enemy-1": ["crew-1"] },
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("aimed"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }));
+
+    expect(state.tacticalMap?.pendingUnexpectedFireMoraleChecks).toEqual([]);
+  });
+
+  it("sends a failed unexpected-fire target into the existing panic flight", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          width: 8,
+          height: 6,
+          walls: [{ id: "panic-cover", from: { x: 4, y: 1 }, to: { x: 4, y: 4 } }],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 1, y: 2 } }
+            : unit.id === "crew-2" || unit.id === "enemy-1"
+              ? { ...unit, defeated: true, health: 0 }
+              : { ...unit, position: { x: 3, y: 2 } }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        pendingUnexpectedFireMoraleChecks: [{ combatantId: "enemy-2", attackerId: "crew-1", occurrence: 1 }],
+        unexpectedFireMoraleOccurrence: 1,
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      unexpectedFireMoraleRolls: { "enemy-2": { "crew-1": { first: 6, second: 6 } } },
+    }));
+
+    expect(state.tacticalMap?.coweringCombatantIds).toContain("enemy-2");
+    expect(state.tacticalMap?.panickedCombatantIds).not.toContain("enemy-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Control Room Officer unexpected-fire morale from crew-1: 12/7: panicked")]));
+  });
+
+  it("forces a failed casualty witness to flee to complete cover and cower", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          width: 8,
+          height: 6,
+          walls: [{ id: "panic-cover", from: { x: 4, y: 1 }, to: { x: 4, y: 4 } }],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 1, y: 2 } }
+            : unit.id === "crew-2"
+              ? { ...unit, defeated: true, health: 0 }
+              : unit.id === "enemy-1"
+                ? { ...unit, position: { x: 3, y: 3 }, defeated: true, health: 0, woundState: "dead" as const }
+                : { ...unit, position: { x: 3, y: 2 } }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        pendingCasualtyMoraleChecks: [{ witnessId: "enemy-2", casualtyId: "enemy-1", occurrence: 1 }],
+        casualtyMoraleOccurrence: 1,
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      casualtyMoraleRolls: { "enemy-2": { "enemy-1": { first: 6, second: 6 } } },
+    }));
+    const witness = state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-2");
+
+    expect(witness?.position).not.toEqual({ x: 3, y: 2 });
+    expect(state.tacticalMap?.coweringCombatantIds).toContain("enemy-2");
+    expect(state.tacticalMap?.panickedCombatantIds).not.toContain("enemy-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([
+      expect.stringContaining("Control Room Officer friendly-casualty morale after Security Guard: 12/7: panicked"),
+      expect.stringContaining("Control Room Officer fled to"),
+    ]));
+  });
+
+  it("keeps a failed cowering enemy from acting during its phase", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const enemy = initialized.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-1")!;
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "enemy-2" ? { ...unit, defeated: true, health: 0 } : unit),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        coweringCombatantIds: ["enemy-1"],
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-1": { hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } } },
+      coweringRecoveryRolls: { "enemy-1": { first: 6, second: 6 } },
+    }));
+
+    expect(state.tacticalMap?.coweringCombatantIds).toContain("enemy-1");
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.position).toEqual(enemy.position);
+    expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(enemy.weapon.magazineSize);
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Security Guard cowering recovery 12/7: remains cowering")]));
   });
 });

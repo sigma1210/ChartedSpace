@@ -1,10 +1,11 @@
 import { buildTrainingScenario } from "../trainingScenario";
 import { buildArmorySweepScenario, buildCaptureBridgeScenario, buildCargoDeckScenario, buildCarrierDeckScenario, buildEngineRoomScenario, buildHoldAirlockScenario, buildRescueScenario, characterCombatScenarios } from "../scenarios";
 import { validateCombatScenario } from "../scenarioValidator";
+import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
 
 describe("character combat scenario validator", () => {
   it("accepts every registered scenario", () => {
-    expect([buildTrainingScenario(), buildEngineRoomScenario(), buildCargoDeckScenario(), buildCarrierDeckScenario(), buildRescueScenario(), buildHoldAirlockScenario(), buildArmorySweepScenario(), buildCaptureBridgeScenario()].map((scenario) => validateCombatScenario(scenario))).toEqual([[], [], [], [], [], [], [], []]);
+    expect([buildTrainingScenario(), buildEngineRoomScenario(), buildCargoDeckScenario(), buildCarrierDeckScenario(), buildRescueScenario(), buildHoldAirlockScenario(), buildArmorySweepScenario(), buildCaptureBridgeScenario(), buildDefaultTacticalScenario()].map((scenario) => validateCombatScenario(scenario))).toEqual([[], [], [], [], [], [], [], [], []]);
     expect(() => characterCombatScenarios.forEach((entry) => entry.build())).not.toThrow();
   });
 

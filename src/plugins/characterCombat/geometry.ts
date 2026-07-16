@@ -3,6 +3,14 @@ import { distanceInSquares, snapShotTarget } from "./combatResolution";
 import { tacticalMovementEdgeKey } from "./tacticalTerrain";
 
 export const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
+export const activeOccupantCounts = (combatants: readonly Pick<Combatant, "id" | "position" | "defeated">[], excludedCombatantId?: string) => {
+  const counts = new Map<string, number>();
+  combatants.filter((unit) => unit.id !== excludedCombatantId && !unit.defeated).forEach((unit) => {
+    const key = pointKey(unit.position);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+  return counts;
+};
 export const inFieldOfFire = (attacker: Pick<Combatant, "position" | "facing">, target: GridPoint) => {
   const dx = target.x - attacker.position.x;
   const dy = target.y - attacker.position.y;
@@ -553,6 +561,24 @@ export const fireLaneCells = (scenario: CombatScenario, from: GridPoint, to: Gri
   return cells.filter((cell) => !samePoint(cell, from));
 };
 
+export const coveringFireDangerSpaceCells = (scenario: CombatScenario, from: GridPoint, directionTarget: GridPoint, maximumRange: number) => {
+  const dx = directionTarget.x - from.x;
+  const dy = directionTarget.y - from.y;
+  const magnitude = Math.hypot(dx, dy);
+  if (magnitude === 0 || !hasLineOfSight(scenario, from, directionTarget)) return [];
+  const cells = new Map<string, GridPoint>();
+  const samples = Math.max(1, Math.ceil(maximumRange * 16));
+  for (let index = 1; index <= samples; index += 1) {
+    const distance = index / 16;
+    const point = { x: Math.floor(from.x + 0.5 + dx / magnitude * distance), y: Math.floor(from.y + 0.5 + dy / magnitude * distance) };
+    if (point.x < 0 || point.y < 0 || point.x >= scenario.width || point.y >= scenario.height) break;
+    if (samePoint(point, from) || cells.has(pointKey(point))) continue;
+    if (!hasLineOfSight(scenario, from, point)) break;
+    cells.set(pointKey(point), point);
+  }
+  return [...cells.values()];
+};
+
 export const automaticFireSecondaryTargets = (scenario: CombatScenario, attackerId: string, primaryTargetId: string) => {
   const attacker = scenario.combatants.find((unit) => unit.id === attackerId && !unit.defeated);
   const primary = scenario.combatants.find((unit) => unit.id === primaryTargetId && !unit.defeated);
@@ -676,9 +702,9 @@ export const reachableMovement = (scenario: CombatScenario, combatantId: string,
   return results;
 };
 
-export const reachableOpenMapMovement = ({ width, height, origin, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>() }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string> }) => {
+export const reachableOpenMapMovement = ({ width, height, origin, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>() }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number> }) => {
   const results = new Map<string, PlannedMove>();
-  const queue: { point: GridPoint; path: GridPoint[]; cost: number; facing: Combatant["facing"] }[] = [{ point: origin, path: [], cost: 0, facing }];
+  const queue: { point: GridPoint; path: GridPoint[]; cost: number; facing: Combatant["facing"]; costBreakdown: string[] }[] = [{ point: origin, path: [], cost: 0, facing, costBreakdown: [] }];
   const stateKey = (point: GridPoint, direction: Combatant["facing"]) => `${pointKey(point)}:${direction}`;
   const bestCost = new Map([[stateKey(origin, facing), 0]]);
   while (queue.length > 0) {
@@ -688,6 +714,8 @@ export const reachableOpenMapMovement = ({ width, height, origin, facing, allowa
     for (const destination of movementNeighbors(current.point)) {
       if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
       if (blockedCells.has(pointKey(destination))) continue;
+      const activeOccupants = activeOccupantsByCell.get(pointKey(destination)) ?? 0;
+      if (activeOccupants >= 4) continue;
       const diagonal = current.point.x !== destination.x && current.point.y !== destination.y;
       const crossingEdges = diagonal ? [
         tacticalMovementEdgeKey(current.point, { x: destination.x, y: current.point.y }),
@@ -697,16 +725,40 @@ export const reachableOpenMapMovement = ({ width, height, origin, facing, allowa
       ] : [tacticalMovementEdgeKey(current.point, destination)];
       if (crossingEdges.some((edge) => blockedEdges.has(edge))) continue;
       for (const nextFacing of movementFacingChoices(current.facing, current.point, destination, trotting)) {
-        const cost = current.cost + movementTurnCost(current.facing, nextFacing, trotting) + movementStepCost({}, current.point, destination, nextFacing, trotting);
+        const cost = current.cost + movementTurnCost(current.facing, nextFacing, trotting) + movementStepCost({}, current.point, destination, nextFacing, trotting) + activeOccupants;
         const key = stateKey(destination, nextFacing);
         if (cost > allowance || cost >= (bestCost.get(key) ?? Number.POSITIVE_INFINITY)) continue;
         bestCost.set(key, cost);
         const path = [...current.path, destination];
+        const costBreakdown = activeOccupants > 0 ? [...current.costBreakdown, `congestion +${activeOccupants}`] : current.costBreakdown;
         const existing = results.get(pointKey(destination));
-        if (!existing || cost < existing.cost) results.set(pointKey(destination), { combatantId: "tactical-map", destination, path, cost, finalFacing: nextFacing });
-        queue.push({ point: destination, path, cost, facing: nextFacing });
+        if (!existing || cost < existing.cost) results.set(pointKey(destination), { combatantId: "tactical-map", destination, path, cost, finalFacing: nextFacing, costBreakdown });
+        queue.push({ point: destination, path, cost, facing: nextFacing, costBreakdown });
       }
     }
+  }
+  return results;
+};
+
+export const sidestepAndBackstepMoves = ({ width, height, origin, facing, allowance, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>() }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number> }) => {
+  const results = new Map<string, PlannedMove>();
+  if (allowance < 4) return results;
+  for (const destination of movementNeighbors(origin)) {
+    if (forwardStep(facing, origin, destination)) continue;
+    if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
+    if (blockedCells.has(pointKey(destination))) continue;
+    const activeOccupants = activeOccupantsByCell.get(pointKey(destination)) ?? 0;
+    const cost = 4 + activeOccupants;
+    if (activeOccupants >= 4 || cost > allowance) continue;
+    const diagonal = origin.x !== destination.x && origin.y !== destination.y;
+    const crossingEdges = diagonal ? [
+      tacticalMovementEdgeKey(origin, { x: destination.x, y: origin.y }),
+      tacticalMovementEdgeKey(origin, { x: origin.x, y: destination.y }),
+      tacticalMovementEdgeKey({ x: destination.x, y: origin.y }, destination),
+      tacticalMovementEdgeKey({ x: origin.x, y: destination.y }, destination),
+    ] : [tacticalMovementEdgeKey(origin, destination)];
+    if (crossingEdges.some((edge) => blockedEdges.has(edge))) continue;
+    results.set(pointKey(destination), { combatantId: "tactical-map", destination, path: [destination], cost, finalFacing: facing, costBreakdown: activeOccupants > 0 ? [`congestion +${activeOccupants}`] : [] });
   }
   return results;
 };

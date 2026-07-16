@@ -1,5 +1,5 @@
-import { pointKey, reachableOpenMapMovement } from "../geometry";
-import { createControlRoom, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
+import { pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves } from "../geometry";
+import { createControlRoom, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
 
 describe("tactical Control Room", () => {
   it("creates a 9 by 9 room with independent perimeter targets and four centered doors", () => {
@@ -48,6 +48,69 @@ describe("tactical Control Room", () => {
     });
     expect(moves.has(pointKey({ x: 14, y: 20 }))).toBe(false);
     expect(moves.has(pointKey({ x: 15, y: 20 }))).toBe(false);
+  });
+
+  it("offers the five AHL sidestep and backstep squares for 4 AP without changing facing", () => {
+    const moves = sidestepAndBackstepMoves({ width: 10, height: 10, origin: { x: 5, y: 5 }, facing: "north", allowance: 4 });
+
+    expect([...moves.keys()].sort()).toEqual(["4:5", "4:6", "5:6", "6:5", "6:6"]);
+    expect([...moves.values()].every((move) => move.cost === 4 && move.path.length === 1 && move.finalFacing === "north")).toBe(true);
+    expect(moves.has("5:4")).toBe(false);
+    expect(moves.has("4:4")).toBe(false);
+    expect(moves.has("6:4")).toBe(false);
+  });
+
+  it("does not offer sidestep and backstep through blocked cells or edges", () => {
+    const origin = { x: 5, y: 5 };
+    const moves = sidestepAndBackstepMoves({
+      width: 10,
+      height: 10,
+      origin,
+      facing: "north",
+      allowance: 4,
+      blockedCells: new Set(["4:5"]),
+      blockedEdges: new Set([tacticalMovementEdgeKey(origin, { x: 6, y: 5 })]),
+    });
+
+    expect(moves.has("4:5")).toBe(false);
+    expect(moves.has("6:5")).toBe(false);
+    expect(moves.has("5:6")).toBe(true);
+  });
+
+  it("adds AHL active-occupant congestion to movement and enforces the four-character limit", () => {
+    const congested = reachableOpenMapMovement({
+      width: 10,
+      height: 10,
+      origin: { x: 5, y: 5 },
+      facing: "south",
+      allowance: 6,
+      trotting: false,
+      activeOccupantsByCell: new Map([["5:6", 2]]),
+    });
+    expect(congested.get("5:6")).toMatchObject({ cost: 4, costBreakdown: ["congestion +2"] });
+
+    const full = reachableOpenMapMovement({
+      width: 10,
+      height: 10,
+      origin: { x: 5, y: 5 },
+      facing: "south",
+      allowance: 6,
+      trotting: false,
+      activeOccupantsByCell: new Map([["5:6", 4]]),
+    });
+    expect(full.has("5:6")).toBe(false);
+  });
+
+  it("adds congestion to the fixed AHL sidestep and backstep cost", () => {
+    const moves = sidestepAndBackstepMoves({
+      width: 10,
+      height: 10,
+      origin: { x: 5, y: 5 },
+      facing: "north",
+      allowance: 5,
+      activeOccupantsByCell: new Map([["5:6", 1]]),
+    });
+    expect(moves.get("5:6")).toMatchObject({ cost: 5, costBreakdown: ["congestion +1"], finalFacing: "north" });
   });
 
   it("combines intact targets into smooth visual runs with clean corner joins", () => {
