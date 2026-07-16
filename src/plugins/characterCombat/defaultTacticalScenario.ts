@@ -1,7 +1,13 @@
 import { characterCombatArmor, characterCombatWeapons } from "./equipment";
 import { assertValidCombatScenario } from "./scenarioValidator";
 import { FIRST_TACTICAL_CONTROL_ROOM } from "./tacticalTerrain";
-import type { CombatScenario, MapObject } from "./types";
+import type { CombatScenario, MapObject, TacticalLightingPreset } from "./types";
+
+export const defaultTacticalLighting = (preset: TacticalLightingPreset) => {
+  return {
+    exteriorLighting: preset === "exterior-lit" ? "illuminated" as const : "dark" as const,
+  };
+};
 
 const buildScenarioTerrain = () => {
   const walls: CombatScenario["walls"] = [];
@@ -20,10 +26,10 @@ const buildScenarioTerrain = () => {
     objects.push({ id: object.id, kind: "console", position: { ...object.position }, label: object.label });
   });
 
-  return { walls, doors, objects };
+  return { walls, doors, objects, interiorCells: FIRST_TACTICAL_CONTROL_ROOM.interiorCells.map((cell) => ({ ...cell })), lightSources: FIRST_TACTICAL_CONTROL_ROOM.lightSources.map((source) => ({ ...source, position: { ...source.position } })) };
 };
 
-export const buildDefaultTacticalScenario = (): CombatScenario => {
+export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPreset): CombatScenario => {
   const terrain = buildScenarioTerrain();
 
   return assertValidCombatScenario({
@@ -36,8 +42,11 @@ export const buildDefaultTacticalScenario = (): CombatScenario => {
     walls: terrain.walls,
     doors: terrain.doors,
     objects: terrain.objects,
+    interiorCells: terrain.interiorCells,
+    lightSources: terrain.lightSources,
     fireCells: [{ x: 48, y: 51 }],
     smokeCells: [],
+    ...(lightingPreset ? defaultTacticalLighting(lightingPreset) : {}),
     combatants: [
       {
         id: "player-1", name: "Boarding Lead", side: "player", position: { x: 48, y: 50 }, facing: "south", posture: "standing",

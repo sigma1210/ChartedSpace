@@ -1,5 +1,7 @@
-import reducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalMovementMode, toggleTacticalPosture } from "../slice";
-import { collateralBlastCells, grenadeBlastCells, hasLineOfSight, meleeEnemies, pointKey, rangedEnemies } from "../geometry";
+import reducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture } from "../slice";
+import { recordTacticalExploration } from "../slice";
+import { recordTacticalEnemySightings } from "../slice";
+import { collateralBlastCells, grenadeBlastCells, hasLineOfSight, meleeEnemies, pointKey, rangedEnemies, tacticalLightingLevelAt } from "../geometry";
 import type { CharacterCombatState } from "../types";
 
 const stateWithCrewAt = (position: { x: number; y: number }, doorOpenById: Record<string, boolean> = {}): CharacterCombatState => {
@@ -124,10 +126,12 @@ describe("tactical terrain interactions", () => {
       casualtyMoraleOccurrence: 0,
       pendingUnexpectedFireMoraleChecks: [],
       unexpectedFireMoraleOccurrence: 0,
+      scenarioStatus: "setup",
+      lightingPreset: "exterior-dark",
       turn: 1,
-      actionPointsByCharacterId: { "crew-1": 6, "crew-2": 6 },
+      actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
       actedCharacterIds: [],
-      activeCharacterId: "crew-1",
+      activeCharacterId: null,
     });
     expect(reset.tacticalMap?.scenario.combatants.map((unit) => ({ id: unit.id, side: unit.side, position: unit.position, facing: unit.facing, posture: unit.posture, weaponSkill: unit.weaponSkill, defeated: unit.defeated }))).toEqual([
       { id: "crew-1", side: "player", position: { x: 48, y: 50 }, facing: "south", posture: "standing", weaponSkill: 2, defeated: false },
@@ -142,6 +146,97 @@ describe("tactical terrain interactions", () => {
       { id: "enemy-1", moraleFactor: 7, leadershipRating: 0 },
       { id: "enemy-2", moraleFactor: 7, leadershipRating: 1 },
     ]);
+  });
+
+  it("chooses the exterior light level before starting and preserves it on reset", () => {
+    let state = reducer(undefined, initializeTacticalMapSetup(["crew-1", "crew-2"]));
+    expect(state.tacticalMap).toMatchObject({ scenarioStatus: "setup", lightingPreset: "exterior-dark", activeCharacterId: null });
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 44, y: 54 })).toBe("illuminated");
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 43, y: 54 })).toBe("dark");
+
+    state = reducer(state, selectTacticalLightingPreset("exterior-lit"));
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 52, y: 62 })).toBe("illuminated");
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 53, y: 62 })).toBe("illuminated");
+
+    state = reducer(state, startTacticalScenario());
+    expect(state.tacticalMap).toMatchObject({ scenarioStatus: "active", lightingPreset: "exterior-lit", activeCharacterId: "crew-1" });
+    expect(state.tacticalMap?.actionPointsByCharacterId).toMatchObject({ "crew-1": 6, "crew-2": 6 });
+
+    state = reducer(state, resetTacticalScenario());
+    expect(state.tacticalMap).toMatchObject({ scenarioStatus: "setup", lightingPreset: "exterior-lit", activeCharacterId: null });
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 44, y: 54 })).toBe("illuminated");
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 43, y: 54 })).toBe("illuminated");
+  });
+
+  it("toggles terrain lights during setup while fire remains a light source", () => {
+    let state = reducer(undefined, initializeTacticalMapSetup(["crew-1", "crew-2"]));
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 44, y: 54 })).toBe("illuminated");
+
+    state = reducer(state, setTacticalTerrainLights(false));
+    expect(state.tacticalMap?.scenario.lightSources?.every((source) => source.on === false)).toBe(true);
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 44, y: 54 })).toBe("dark");
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 48, y: 51 })).toBe("illuminated");
+
+    state = reducer(state, resetTacticalScenario());
+    expect(state.tacticalMap?.scenario.lightSources?.every((source) => source.on === true)).toBe(true);
+  });
+
+  it("accumulates explored cells and clears later exploration on reset", () => {
+    let state = reducer(undefined, initializeTacticalMapSetup(["crew-1", "crew-2"]));
+    const initialExploration = state.tacticalMap?.exploredCellKeys ?? [];
+    expect(initialExploration).toEqual([]);
+
+    state = reducer(state, recordTacticalExploration(["48:60"]));
+    expect(state.tacticalMap?.exploredCellKeys).toEqual(expect.arrayContaining([...initialExploration, "48:60"]));
+
+    state = reducer(state, resetTacticalScenario());
+    expect(state.tacticalMap?.exploredCellKeys).toEqual([]);
+  });
+
+  it("records, updates, retains, and clears last-known enemy positions", () => {
+    let state = reducer(undefined, initializeTacticalMapSetup(["crew-1", "crew-2"]));
+    const firstPosition = { x: 47, y: 57 };
+
+    state = reducer(state, recordTacticalEnemySightings({
+      visibleCellKeys: [pointKey(firstPosition)],
+      enemies: [{ id: "enemy-1", position: firstPosition }],
+    }));
+    expect(state.tacticalMap?.lastKnownEnemyPositions?.["enemy-1"]).toEqual(firstPosition);
+
+    state = reducer(state, recordTacticalEnemySightings({ visibleCellKeys: ["0:0"], enemies: [] }));
+    expect(state.tacticalMap?.lastKnownEnemyPositions?.["enemy-1"]).toEqual(firstPosition);
+
+    const updatedPosition = { x: 48, y: 57 };
+    state = reducer(state, recordTacticalEnemySightings({
+      visibleCellKeys: [pointKey(updatedPosition)],
+      enemies: [{ id: "enemy-1", position: updatedPosition }],
+    }));
+    expect(state.tacticalMap?.lastKnownEnemyPositions?.["enemy-1"]).toEqual(updatedPosition);
+
+    state = reducer(state, recordTacticalEnemySightings({ visibleCellKeys: [pointKey(updatedPosition)], enemies: [] }));
+    expect(state.tacticalMap?.lastKnownEnemyPositions?.["enemy-1"]).toBeUndefined();
+
+    state = reducer(state, recordTacticalEnemySightings({
+      visibleCellKeys: [pointKey(firstPosition)],
+      enemies: [{ id: "enemy-1", position: firstPosition }],
+    }));
+    state = reducer(state, resetTacticalScenario());
+    expect(state.tacticalMap?.lastKnownEnemyPositions).toEqual({});
+  });
+
+  it("does not create movement animations for enemies that remain outside crew LOS", () => {
+    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    state = reducer(state, finishTacticalActivation());
+    state = reducer(state, finishTacticalActivation());
+    state = reducer(state, runTacticalEnemyPhase({
+      enemyRolls: {
+        "enemy-1": { hitDice: { first: 3, second: 4 }, woundDice: { first: 3, second: 4 } },
+        "enemy-2": { hitDice: { first: 3, second: 4 }, woundDice: { first: 3, second: 4 } },
+      },
+    }));
+
+    expect(state.tacticalMap?.movementAnimationByCharacterId).toEqual({});
+    expect(state.tacticalMap?.events.some((event) => event.includes("Security Guard") || event.includes("Control Room Officer"))).toBe(false);
   });
 
   it("clears selected terrain when the active character changes", () => {
@@ -365,12 +460,14 @@ describe("tactical terrain interactions", () => {
     let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
     const fire = { x: 48, y: 51 };
     expect(state.tacticalMap?.scenario.fireCells).toContainEqual(fire);
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 49, y: 51 })).toBe("illuminated");
 
     state = reducer(state, previewTacticalExtinguishFire(fire));
     expect(state.tacticalMap?.plannedExtinguishFire).toEqual(fire);
     state = reducer(state, confirmTacticalExtinguishFire());
 
     expect(state.tacticalMap?.scenario.fireCells).not.toContainEqual(fire);
+    expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 49, y: 51 })).toBe("dark");
     expect(state.tacticalMap?.scenario.smokeCells).toContainEqual(fire);
     expect(state.tacticalMap?.smokeClearsAtTurnByCell[pointKey(fire)]).toBe(2);
     expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(3);
@@ -1847,7 +1944,7 @@ describe("tactical terrain interactions", () => {
 
     const movedEnemyIds = state.tacticalMap!.scenario.combatants.filter((unit) => unit.side === "enemy" && (unit.position.x !== starts[unit.id].x || unit.position.y !== starts[unit.id].y)).map((unit) => unit.id);
     expect(movedEnemyIds.length).toBeGreaterThan(0);
-    expect(state.tacticalMap?.events.some((event) => event.includes("moved to") || event.includes("opened control-room"))).toBe(true);
+    expect(state.tacticalMap?.events.some((event) => event.includes("moved to") || event.includes("opened control-room"))).toBe(false);
   });
 
   it("stops enemy movement before adjacency and snap fires after a failed morale check", () => {
@@ -2201,6 +2298,6 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.coweringCombatantIds).toContain("enemy-1");
     expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.position).toEqual(enemy.position);
     expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(enemy.weapon.magazineSize);
-    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Security Guard cowering recovery 12/7: remains cowering")]));
+    expect(state.tacticalMap?.events.some((event) => event.includes("Security Guard cowering recovery"))).toBe(false);
   });
 });

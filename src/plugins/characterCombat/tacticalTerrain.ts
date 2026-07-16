@@ -1,4 +1,4 @@
-import type { GridPoint } from "./types";
+import type { GridPoint, TacticalLightSource } from "./types";
 
 export type TacticalRotation = 0 | 90 | 180 | 270;
 export type TacticalTerminalKind = "generic" | "navigation" | "engineering" | "security" | "communications";
@@ -31,7 +31,7 @@ export interface TacticalTerminal extends TacticalTerrainBase {
 
 export type TacticalTerrainObject = TacticalWallSegment | TacticalDoor | TacticalTerminal;
 export interface ControlRoomDefinition { id: string; origin: GridPoint; rotation?: TacticalRotation; terminal: TacticalTerminalDefinition }
-export interface ControlRoom { id: string; origin: GridPoint; rotation: TacticalRotation; width: 9; height: 9; objects: TacticalTerrainObject[] }
+export interface ControlRoom { id: string; origin: GridPoint; rotation: TacticalRotation; width: 9; height: 9; objects: TacticalTerrainObject[]; interiorCells: GridPoint[]; lightSources: TacticalLightSource[] }
 
 const rotateCell = (point: GridPoint, rotation: TacticalRotation): GridPoint => {
   if (rotation === 90) return { x: 8 - point.y, y: point.x };
@@ -78,7 +78,14 @@ export const createControlRoom = ({ id, origin, rotation = 0, terminal }: Contro
     position: worldPoint(origin, terminalLocal), facing: ((terminal.facing ?? 0) + rotation) % 360 as TacticalRotation,
     operational: terminal.operational ?? true, blocking: true, targetable: true, integrity: 2,
   });
-  return { id, origin, rotation, width: 9, height: 9, objects };
+  const interiorCells = Array.from({ length: 9 }, (_, x) => Array.from({ length: 9 }, (_, y) => worldPoint(origin, rotateCell({ x, y }, rotation)))).flat();
+  const lightSources = [{ x: 2, y: 2 }, { x: 6, y: 2 }, { x: 2, y: 6 }, { x: 6, y: 6 }].map((position, index) => ({
+    id: `${id}:ceiling-light:${index + 1}`,
+    position: worldPoint(origin, rotateCell(position, rotation)),
+    range: 3,
+    on: true,
+  }));
+  return { id, origin, rotation, width: 9, height: 9, objects, interiorCells, lightSources };
 };
 
 const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;

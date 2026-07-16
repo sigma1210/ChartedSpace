@@ -1,4 +1,4 @@
-import type { CombatScenario, Combatant, DoorSegment, GridPoint, MoraleState, PlannedMove, WallSegment } from "./types";
+import type { CombatScenario, Combatant, DoorSegment, GridPoint, LightingLevel, MoraleState, PlannedMove, TacticalLightSource, WallSegment } from "./types";
 import { distanceInSquares, snapShotTarget } from "./combatResolution";
 import { tacticalMovementEdgeKey } from "./tacticalTerrain";
 
@@ -525,6 +525,139 @@ export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: Gr
 
 export const lightingLevelAt = (scenario: CombatScenario, point: GridPoint) => scenario.flareCells?.some((cell) => samePoint(cell, point)) ? "illuminated" : scenario.lightingByCell?.[pointKey(point)] ?? scenario.defaultLighting ?? "illuminated";
 
+export const tacticalLightSources = (scenario: CombatScenario) => [
+  ...(scenario.lightSources ?? []).filter((source) => source.on !== false),
+  ...(scenario.fireCells ?? []).map((position) => ({ id: `fire:${pointKey(position)}`, position, range: 1 })),
+];
+
+export const tacticalLightReaches = (scenario: CombatScenario, source: TacticalLightSource, point: GridPoint) => {
+  if (Math.max(Math.abs(source.position.x - point.x), Math.abs(source.position.y - point.y)) > source.range || !hasLineOfSight(scenario, source.position, point)) return false;
+  const interior = new Set((scenario.interiorCells ?? []).map(pointKey));
+  const sourceInside = interior.has(pointKey(source.position));
+  const pointInside = interior.has(pointKey(point));
+  if (sourceInside === pointInside) return true;
+  return scenario.doors.some((door) => {
+    if (!door.open) return false;
+    const [first, second] = doorAdjacentCells(door);
+    const firstInside = interior.has(pointKey(first));
+    const secondInside = interior.has(pointKey(second));
+    if (firstInside === secondInside) return false;
+    const insideCell = firstInside ? first : second;
+    const outsideCell = firstInside ? second : first;
+    return samePoint(point, sourceInside ? outsideCell : insideCell);
+  });
+};
+
+export const tacticalBaseLightingLevelAt = (scenario: CombatScenario, point: GridPoint) => {
+  const interior = new Set((scenario.interiorCells ?? []).map(pointKey));
+  if (!interior.has(pointKey(point))) return scenario.exteriorLighting ?? lightingLevelAt(scenario, point);
+  if (scenario.exteriorLighting === "illuminated" && scenario.doors.some((door) => {
+    if (!door.open) return false;
+    const [first, second] = doorAdjacentCells(door);
+    const firstInside = interior.has(pointKey(first));
+    const secondInside = interior.has(pointKey(second));
+    if (firstInside === secondInside) return false;
+    return samePoint(point, firstInside ? first : second);
+  })) return "illuminated" as const;
+  return "dark" as const;
+};
+
+export const tacticalLightPatchVisibleAt = (scenario: CombatScenario, source: TacticalLightSource, point: GridPoint) => tacticalLightReaches(scenario, source, point) && tacticalBaseLightingLevelAt(scenario, point) !== "illuminated";
+
+export const tacticalLightingLevelAt = (scenario: CombatScenario, point: GridPoint) => {
+  const illuminatedBySource = tacticalLightSources(scenario).some((source) => tacticalLightReaches(scenario, source, point));
+  if (illuminatedBySource || scenario.flareCells?.some((cell) => samePoint(cell, point))) return "illuminated" as const;
+  return tacticalBaseLightingLevelAt(scenario, point);
+};
+
+const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
+  const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
+  const elevated = new Set(Object.entries(scenario.terrainByCell ?? {}).filter(([, terrain]) => terrain === "elevated").map(([key]) => key));
+  const closeMachinery = new Set(scenario.objects.filter((object) => object.coverType === "close-machinery" || (object.kind === "cover" && /machin|manifold/i.test(object.label))).map((object) => pointKey(object.position)));
+  const blockedEdges = new Set<string>();
+  const addBlockedSegment = (segment: WallSegment) => {
+    if (segment.from.x === segment.to.x) {
+      for (let y = Math.min(segment.from.y, segment.to.y); y < Math.max(segment.from.y, segment.to.y); y += 1) blockedEdges.add(tacticalMovementEdgeKey({ x: segment.from.x - 1, y }, { x: segment.from.x, y }));
+      return;
+    }
+    for (let x = Math.min(segment.from.x, segment.to.x); x < Math.max(segment.from.x, segment.to.x); x += 1) blockedEdges.add(tacticalMovementEdgeKey({ x, y: segment.from.y - 1 }, { x, y: segment.from.y }));
+  };
+  scenario.walls.forEach(addBlockedSegment);
+  scenario.doors.filter((door) => !door.open).forEach(addBlockedSegment);
+  const edgeClear = (from: GridPoint, to: GridPoint) => !blockedEdges.has(tacticalMovementEdgeKey(from, to));
+
+  return (from: GridPoint, to: GridPoint) => {
+    if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
+    const groundToGround = !elevated.has(pointKey(from)) && !elevated.has(pointKey(to));
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const samples = Math.max(Math.abs(dx), Math.abs(dy)) * 8;
+    let cell = from;
+    for (let index = 1; index <= samples; index += 1) {
+      const next = { x: Math.floor(from.x + 0.5 + dx * index / samples), y: Math.floor(from.y + 0.5 + dy * index / samples) };
+      if (samePoint(next, cell)) continue;
+      const nextKey = pointKey(next);
+      if (smoke.has(nextKey)) return false;
+      if (groundToGround && !samePoint(next, to) && elevated.has(nextKey)) return false;
+      if (closeMachinery.has(nextKey) && !samePoint(next, from) && !samePoint(next, to)) {
+        const fromAdjacent = Math.max(Math.abs(from.x - next.x), Math.abs(from.y - next.y)) === 1;
+        const toAdjacent = Math.max(Math.abs(to.x - next.x), Math.abs(to.y - next.y)) === 1;
+        if (!fromAdjacent && !toAdjacent) return false;
+      }
+      if (next.x !== cell.x && next.y !== cell.y) {
+        const horizontal = { x: next.x, y: cell.y };
+        const vertical = { x: cell.x, y: next.y };
+        const horizontalRoute = edgeClear(cell, horizontal) && edgeClear(horizontal, next);
+        const verticalRoute = edgeClear(cell, vertical) && edgeClear(vertical, next);
+        if (!horizontalRoute && !verticalRoute) return false;
+      } else if (!edgeClear(cell, next)) return false;
+      cell = next;
+    }
+    return true;
+  };
+};
+
+export const tacticalCrewVisibilityMask = (scenario: CombatScenario) => {
+  const mask = new Map<string, LightingLevel>();
+  const observers = scenario.combatants.filter((unit) => unit.side === "player" && !unit.defeated && !unit.surrendered);
+  const lineOfSight = preparedTacticalLineOfSight(scenario);
+  const interior = new Set((scenario.interiorCells ?? []).map(pointKey));
+  const flares = new Set((scenario.flareCells ?? []).map(pointKey));
+  const exteriorLightThroughDoor = new Set<string>();
+  if (scenario.exteriorLighting === "illuminated") scenario.doors.filter((door) => door.open).forEach((door) => {
+    const [first, second] = doorAdjacentCells(door);
+    const firstInside = interior.has(pointKey(first));
+    const secondInside = interior.has(pointKey(second));
+    if (firstInside !== secondInside) exteriorLightThroughDoor.add(pointKey(firstInside ? first : second));
+  });
+  const sourceLit = new Set<string>();
+  tacticalLightSources(scenario).forEach((source) => {
+    for (let x = Math.max(0, source.position.x - source.range); x <= Math.min(scenario.width - 1, source.position.x + source.range); x += 1) {
+      for (let y = Math.max(0, source.position.y - source.range); y <= Math.min(scenario.height - 1, source.position.y + source.range); y += 1) {
+        const point = { x, y };
+        if (tacticalLightReaches(scenario, source, point)) sourceLit.add(pointKey(point));
+      }
+    }
+  });
+  const lightingAt = (point: GridPoint): LightingLevel => {
+    const key = pointKey(point);
+    if (sourceLit.has(key) || flares.has(key) || exteriorLightThroughDoor.has(key)) return "illuminated";
+    if (interior.has(key)) return "dark";
+    return scenario.exteriorLighting ?? scenario.lightingByCell?.[key] ?? scenario.defaultLighting ?? "illuminated";
+  };
+  for (const observer of observers) {
+    for (let x = 0; x < scenario.width; x += 1) {
+      for (let y = 0; y < scenario.height; y += 1) {
+        const point = { x, y };
+        if (mask.has(pointKey(point))) continue;
+        if (!samePoint(observer.position, point) && !lineOfSight(observer.position, point)) continue;
+        mask.set(pointKey(point), lightingAt(point));
+      }
+    }
+  }
+  return mask;
+};
+
 export const visibilityAssessment = (scenario: CombatScenario, attacker: Combatant, target: Combatant) => {
   if (target.concealed) return { visible: false, modifier: 0, level: lightingLevelAt(scenario, target.position), reason: "concealed" as const };
   if (!hasLineOfSight(scenario, attacker.position, target.position)) return { visible: false, modifier: 0, level: lightingLevelAt(scenario, target.position), reason: "blocked" as const };
@@ -540,6 +673,65 @@ export const visibilityAssessment = (scenario: CombatScenario, attacker: Combata
   if (level === "emergency") return { visible: true, modifier: enhancedVision ? 0 : -2, level, reason: "emergency" as const };
   if (enhancedVision && range <= 6) return { visible: true, modifier: -2, level, reason: "enhanced" as const };
   return { visible: false, modifier: 0, level, reason: "dark" as const };
+};
+
+export const tacticalVisibilityAssessment = (scenario: CombatScenario, observer: Combatant, target: Combatant) => {
+  const observerLighting = tacticalLightingLevelAt(scenario, observer.position);
+  const targetLighting = tacticalLightingLevelAt(scenario, target.position);
+  const range = distanceInSquares(observer, target);
+  const visionEnhanced = observer.visionMode === "enhanced" || observer.weapon.enhancedVision === true;
+  const geometricLineOfSight = hasLineOfSight(scenario, observer.position, target.position);
+
+  if (target.concealed) return {
+    observable: false,
+    hasLineOfSight: geometricLineOfSight,
+    observerLighting,
+    targetLighting,
+    range,
+    darknessModifier: 0,
+    visionEnhanced,
+    reason: "concealed" as const,
+  };
+  if (!geometricLineOfSight) return {
+    observable: false,
+    hasLineOfSight: false,
+    observerLighting,
+    targetLighting,
+    range,
+    darknessModifier: 0,
+    visionEnhanced,
+    reason: "blocked" as const,
+  };
+  if (targetLighting !== "dark") return {
+    observable: true,
+    hasLineOfSight: true,
+    observerLighting,
+    targetLighting,
+    range,
+    darknessModifier: 0,
+    visionEnhanced,
+    reason: "illuminated-target" as const,
+  };
+  if (visionEnhanced) return {
+    observable: true,
+    hasLineOfSight: true,
+    observerLighting,
+    targetLighting,
+    range,
+    darknessModifier: 0,
+    visionEnhanced,
+    reason: "enhanced-vision" as const,
+  };
+  return {
+    observable: true,
+    hasLineOfSight: true,
+    observerLighting,
+    targetLighting,
+    range,
+    darknessModifier: -range,
+    visionEnhanced,
+    reason: "darkness" as const,
+  };
 };
 
 const tracedCells = (from: GridPoint, to: GridPoint) => {
@@ -665,6 +857,13 @@ export const rangedEnemies = (scenario: CombatScenario, combatantId: string) => 
   if (!attacker) return [];
   return scenario.combatants.filter((target) => target.side !== attacker.side && !target.defeated
     && inFieldOfFire(attacker, target.position) && snapShotTarget(attacker, target) && visibilityAssessment(scenario, attacker, target).visible);
+};
+
+export const tacticalRangedEnemies = (scenario: CombatScenario, combatantId: string) => {
+  const attacker = scenario.combatants.find((unit) => unit.id === combatantId && !unit.defeated);
+  if (!attacker) return [];
+  return scenario.combatants.filter((target) => target.side !== attacker.side && !target.defeated
+    && inFieldOfFire(attacker, target.position) && snapShotTarget(attacker, target) && tacticalVisibilityAssessment(scenario, attacker, target).observable);
 };
 
 export const reachableMovement = (scenario: CombatScenario, combatantId: string, allowance = 4, trotting = false, maxSteps = Number.POSITIVE_INFINITY) => {
