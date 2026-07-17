@@ -91,7 +91,7 @@ describe("AHL tactical visibility", () => {
     const northDoor = scenario.doors.find((door) => door.id === "control-room-alpha:north:door:4");
     expect(northDoor).toBeDefined();
 
-    const outsideDoor = { x: 48, y: 53 };
+    const outsideDoor = { x: 48, y: 37 };
     expect(tacticalLightingLevelAt(scenario, outsideDoor)).toBe("dark");
     expect(scenario.lightSources?.some((source) => tacticalLightReaches(scenario, source, outsideDoor))).toBe(false);
 
@@ -102,12 +102,12 @@ describe("AHL tactical visibility", () => {
     northDoor!.open = true;
     expect(tacticalLightingLevelAt(scenario, outsideDoor)).toBe("illuminated");
     expect(scenario.lightSources?.some((source) => tacticalLightReaches(scenario, source, outsideDoor))).toBe(true);
-    expect(tacticalLightingLevelAt(scenario, { x: 47, y: 53 })).toBe("illuminated");
-    expect(scenario.lightSources?.some((source) => tacticalLightReaches(scenario, source, { x: 47, y: 53 }))).toBe(false);
+    expect(tacticalLightingLevelAt(scenario, { x: 47, y: 37 })).toBe("illuminated");
+    expect(scenario.lightSources?.some((source) => tacticalLightReaches(scenario, source, { x: 47, y: 37 }))).toBe(false);
 
     scenario.exteriorLighting = "dark";
     expect(tacticalLightingLevelAt(scenario, outsideDoor)).toBe("illuminated");
-    expect(tacticalLightingLevelAt(scenario, { x: 47, y: 53 })).toBe("dark");
+    expect(tacticalLightingLevelAt(scenario, { x: 47, y: 37 })).toBe("dark");
   });
 
   it("lets illuminated exterior light reach only the directly adjacent interior doorway cell", () => {
@@ -117,13 +117,13 @@ describe("AHL tactical visibility", () => {
     const northDoor = scenario.doors.find((door) => door.id === "control-room-alpha:north:door:4");
     expect(northDoor).toBeDefined();
 
-    const insideDoor = { x: 48, y: 54 };
+    const insideDoor = { x: 48, y: 38 };
     expect(tacticalLightingLevelAt(scenario, insideDoor)).toBe("dark");
 
     northDoor!.open = true;
     expect(tacticalLightingLevelAt(scenario, insideDoor)).toBe("illuminated");
-    expect(tacticalLightingLevelAt(scenario, { x: 47, y: 54 })).toBe("dark");
-    expect(tacticalLightingLevelAt(scenario, { x: 48, y: 55 })).toBe("dark");
+    expect(tacticalLightingLevelAt(scenario, { x: 47, y: 38 })).toBe("dark");
+    expect(tacticalLightingLevelAt(scenario, { x: 48, y: 39 })).toBe("dark");
   });
 
   it("uses the exterior level only outside and requires a source inside", () => {

@@ -1,4 +1,4 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import uiReducer from "./slices/uiSlice";
 import notificationsReducer from "./slices/notificationsSlice";
 import galaxyReducer from "./slices/galaxySlice";
@@ -16,18 +16,21 @@ import {
 
 installPluginWorkflowHandlers();
 
-export const store = configureStore({
-  reducer: {
-    ui: uiReducer,
-    notifications: notificationsReducer,
-    galaxy: galaxyReducer,
-    turn: turnReducer,
-    availableCrew: availableCrewReducer,
-    system: systemReducer,
-    systemScene: systemSceneReducer,
-    hud: hudReducer,
-    plugins: pluginsReducer,
-  },
+export const rootReducer = combineReducers({
+  ui: uiReducer,
+  notifications: notificationsReducer,
+  galaxy: galaxyReducer,
+  turn: turnReducer,
+  availableCrew: availableCrewReducer,
+  system: systemReducer,
+  systemScene: systemSceneReducer,
+  hud: hudReducer,
+  plugins: pluginsReducer,
+});
+
+export const createAppStore = (preloadedState?: ReturnType<typeof rootReducer>) => configureStore({
+  reducer: rootReducer,
+  preloadedState,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
@@ -36,6 +39,8 @@ export const store = configureStore({
       },
     }),
 });
+
+export const store = createAppStore();
 
 if (typeof window !== "undefined") {
   const storedHudLayouts = loadStoredHudLayouts();
@@ -52,6 +57,6 @@ if (typeof window !== "undefined") {
   });
 }
 
-export type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch;
-export type AppStore = typeof store;
+export type AppStore = ReturnType<typeof createAppStore>;
+export type RootState = ReturnType<AppStore["getState"]>;
+export type AppDispatch = AppStore["dispatch"];

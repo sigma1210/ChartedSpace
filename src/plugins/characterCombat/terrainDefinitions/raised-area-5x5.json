@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "raised-area-5x5",
+  "label": "Raised Area 5x5",
+  "size": { "width": 5, "height": 5 },
+  "cellRegions": [
+    { "terrainType": "elevated", "origin": { "x": 0, "y": 0 }, "width": 5, "height": 5 }
+  ],
+  "boundaryRuns": [],
+  "objects": [],
+  "lightSources": [],
+  "elevationAccessCells": [
+    { "x": 2, "y": -1 }
+  ]
+}

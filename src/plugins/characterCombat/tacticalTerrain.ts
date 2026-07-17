@@ -1,4 +1,4 @@
-import type { GridPoint, TacticalLightSource } from "./types";
+import type { CombatScenario, GridPoint, TacticalLightSource } from "./types";
 
 export type TacticalRotation = 0 | 90 | 180 | 270;
 export type TacticalTerminalKind = "generic" | "navigation" | "engineering" | "security" | "communications";
@@ -93,6 +93,48 @@ export const tacticalMovementEdgeKey = (first: GridPoint, second: GridPoint) => 
 export const tacticalTerrainBlockedCells = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalTerminal => object.kind === "terminal" && object.blocking).map((object) => pointKey(object.position)));
 export const tacticalTerrainBlockedEdges = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalWallSegment | TacticalDoor => object.kind !== "terminal" && object.blocking && (object.kind !== "door" || !object.open)).map((object) => tacticalMovementEdgeKey(object.separates.first, object.separates.second)));
 
+const cellsSeparatedBy = (from: GridPoint, to: GridPoint) => from.x === to.x
+  ? { first: { x: from.x - 1, y: Math.min(from.y, to.y) }, second: { x: from.x, y: Math.min(from.y, to.y) } }
+  : { first: { x: Math.min(from.x, to.x), y: from.y - 1 }, second: { x: Math.min(from.x, to.x), y: from.y } };
+
+export const tacticalTerrainObjectsForScenario = (scenario: CombatScenario): TacticalTerrainObject[] => scenario.terrainObjects ?? [
+  ...scenario.walls.map((wall): TacticalWallSegment => ({
+    id: wall.id,
+    kind: "wall",
+    edge: { from: { ...wall.from }, to: { ...wall.to } },
+    separates: cellsSeparatedBy(wall.from, wall.to),
+    blocking: true,
+    targetable: true,
+    integrity: 3,
+  })),
+  ...scenario.doors.map((door): TacticalDoor => ({
+    id: door.id,
+    kind: "door",
+    edge: { from: { ...door.from }, to: { ...door.to } },
+    separates: cellsSeparatedBy(door.from, door.to),
+    blocking: true,
+    targetable: true,
+    integrity: 2,
+    open: door.open,
+  })),
+  ...scenario.objects.filter((object) => object.kind === "console").map((object): TacticalTerminal => ({
+    id: object.id,
+    kind: "terminal",
+    position: { ...object.position },
+    terminalKind: "generic",
+    label: object.label,
+    facing: 0,
+    operational: true,
+    blocking: true,
+    targetable: true,
+    integrity: 2,
+  })),
+];
+
+export const activeTacticalTerrainObjects = (scenario: CombatScenario, doorOpenById: Record<string, boolean>, destroyedIds: readonly string[] = []) => tacticalTerrainObjectsForScenario(scenario)
+  .filter((object) => !destroyedIds.includes(object.id))
+  .map((object) => object.kind === "door" ? { ...object, open: doorOpenById[object.id] ?? object.open } : object);
+
 export interface TacticalWallVisualRun { edge: { from: GridPoint; to: GridPoint }; segmentIds: string[] }
 
 export const tacticalWallVisualRuns = (objects: TacticalTerrainObject[]): TacticalWallVisualRun[] => {
@@ -138,5 +180,3 @@ export const tacticalWallCornerPoints = (objects: TacticalTerrainObject[]) => {
   });
   return [...connections.values()].filter((connection) => connection.orientations.size === 2).map((connection) => connection.point);
 };
-
-export const FIRST_TACTICAL_CONTROL_ROOM = createControlRoom({ id: "control-room-alpha", origin: { x: 44, y: 54 }, terminal: { kind: "security", label: "Security Terminal", facing: 180 } });

@@ -901,8 +901,9 @@ export const reachableMovement = (scenario: CombatScenario, combatantId: string,
   return results;
 };
 
-export const reachableOpenMapMovement = ({ width, height, origin, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>() }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number> }) => {
+export const reachableOpenMapMovement = ({ width, height, origin, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationAccessCells = [] }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationAccessCells?: GridPoint[] }) => {
   const results = new Map<string, PlannedMove>();
+  const elevationAccess = new Set(elevationAccessCells.map(pointKey));
   const queue: { point: GridPoint; path: GridPoint[]; cost: number; facing: Combatant["facing"]; costBreakdown: string[] }[] = [{ point: origin, path: [], cost: 0, facing, costBreakdown: [] }];
   const stateKey = (point: GridPoint, direction: Combatant["facing"]) => `${pointKey(point)}:${direction}`;
   const bestCost = new Map([[stateKey(origin, facing), 0]]);
@@ -913,6 +914,10 @@ export const reachableOpenMapMovement = ({ width, height, origin, facing, allowa
     for (const destination of movementNeighbors(current.point)) {
       if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
       if (blockedCells.has(pointKey(destination))) continue;
+      const currentElevated = terrainByCell?.[pointKey(current.point)] === "elevated";
+      const destinationElevated = terrainByCell?.[pointKey(destination)] === "elevated";
+      if (currentElevated !== destinationElevated && !elevationAccess.has(pointKey(current.point)) && !elevationAccess.has(pointKey(destination))) continue;
+      if (current.point.x !== destination.x && current.point.y !== destination.y && currentElevated !== destinationElevated) continue;
       const activeOccupants = activeOccupantsByCell.get(pointKey(destination)) ?? 0;
       if (activeOccupants >= 4) continue;
       const diagonal = current.point.x !== destination.x && current.point.y !== destination.y;
@@ -939,13 +944,16 @@ export const reachableOpenMapMovement = ({ width, height, origin, facing, allowa
   return results;
 };
 
-export const sidestepAndBackstepMoves = ({ width, height, origin, facing, allowance, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>() }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number> }) => {
+export const sidestepAndBackstepMoves = ({ width, height, origin, facing, allowance, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationAccessCells = [] }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationAccessCells?: GridPoint[] }) => {
   const results = new Map<string, PlannedMove>();
+  const elevationAccess = new Set(elevationAccessCells.map(pointKey));
   if (allowance < 4) return results;
   for (const destination of movementNeighbors(origin)) {
     if (forwardStep(facing, origin, destination)) continue;
     if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
     if (blockedCells.has(pointKey(destination))) continue;
+    const changesElevation = (terrainByCell?.[pointKey(origin)] === "elevated") !== (terrainByCell?.[pointKey(destination)] === "elevated");
+    if (changesElevation && !elevationAccess.has(pointKey(origin)) && !elevationAccess.has(pointKey(destination))) continue;
     const activeOccupants = activeOccupantsByCell.get(pointKey(destination)) ?? 0;
     const cost = 4 + activeOccupants;
     if (activeOccupants >= 4 || cost > allowance) continue;

@@ -1,7 +1,214 @@
 import { pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves } from "../geometry";
+import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
 import { createControlRoom, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
 
 describe("tactical Control Room", () => {
+  it("clones an editable scenario draft without changing the immutable base definition", () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.title = "Edited Draft";
+    draft.map.width = 80;
+    draft.terrainPlacements[0].origin = { x: 20, y: 30 };
+
+    expect(defaultTacticalScenarioDefinition).toMatchObject({ title: "Control Room Assault", map: { width: 72 }, terrainPlacements: [{ origin: { x: 44, y: 38 } }] });
+    expect(buildDefaultTacticalScenario("exterior-dark", draft)).toMatchObject({ title: "Edited Draft", width: 80 });
+    expect(resolveTacticalScenarioTerrain(draft).terrainObjects.find((object) => object.id === "control-room-alpha:terminal")).toMatchObject({ position: { x: 24, y: 34 } });
+  });
+
+  it("resolves the default control room from scenario and terrain JSON", () => {
+    const terrain = resolveTacticalScenarioTerrain(defaultTacticalScenarioDefinition);
+
+    expect(terrain.terrainObjects.filter((object) => object.kind === "wall")).toHaveLength(32);
+    expect(terrain.terrainObjects.filter((object) => object.kind === "door")).toHaveLength(4);
+    expect(terrain.interiorCells).toHaveLength(81);
+    expect(terrain.lightSources).toHaveLength(4);
+    expect(terrain.terrainObjects.find((object) => object.kind === "terminal")).toMatchObject({
+      id: "control-room-alpha:terminal",
+      position: { x: 48, y: 42 },
+      terminalKind: "security",
+      label: "Security Terminal",
+      facing: 180,
+    });
+  });
+
+  it("resolves the raised-area palette piece as a playable 7 by 7 top with one external stair cell", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: "raised-area-1", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 as const }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario("exterior-dark", definition);
+
+    expect(tacticalTerrainPalette.find((item) => item.id === "raised-area")).toMatchObject({ label: "Raised Area 7x7", size: { width: 7, height: 7 } });
+    expect(Object.values(terrain.terrainByCell).filter((value) => value === "elevated")).toHaveLength(49);
+    expect(terrain.elevationAccessCells).toEqual([{ x: 13, y: 9 }]);
+    expect(scenario.terrainByCell?.["10:10"]).toBe("elevated");
+    expect(scenario.elevationAccessCells).toEqual([{ x: 13, y: 9 }]);
+
+    const stairMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 13, y: 9 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationAccessCells: scenario.elevationAccessCells });
+    const blockedEdgeMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 12, y: 9 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationAccessCells: scenario.elevationAccessCells });
+    expect(stairMoves.has("13:10")).toBe(true);
+    expect(blockedEdgeMoves.has("12:10")).toBe(false);
+  });
+
+  it.each([
+    { id: "raised-area-5x5", label: "Raised Area 5x5", size: 5, elevatedCells: 25, stair: { x: 12, y: 9 } },
+    { id: "raised-area-3x3", label: "Raised Area 3x3", size: 3, elevatedCells: 9, stair: { x: 11, y: 9 } },
+  ])("resolves $label with a playable top and external stair", ({ id, label, size, elevatedCells, stair }) => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: `${id}-1`, terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 0 as const }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width: size, height: size } });
+    expect(Object.values(terrain.terrainByCell).filter((value) => value === "elevated")).toHaveLength(elevatedCells);
+    expect(terrain.elevationAccessCells).toEqual([stair]);
+  });
+
+  it.each([
+    { id: "raised-area-3x5", label: "Raised Area 3x5", width: 3, height: 5, elevatedCells: 15 },
+    { id: "raised-area-3x7", label: "Raised Area 3x7", width: 3, height: 7, elevatedCells: 21 },
+  ])("resolves and rotates $label", ({ id, label, width, height, elevatedCells }) => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: `${id}-1`, terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 90 as const }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width, height } });
+    expect(Object.values(terrain.terrainByCell).filter((value) => value === "elevated")).toHaveLength(elevatedCells);
+    expect(terrain.elevationAccessCells).toEqual([{ x: 10 + height, y: 11 }]);
+  });
+
+  it("resolves and rotates an empty 3x3 room with one centered door", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: "room-3x3-1", terrainDefinitionId: "room-3x3", origin: { x: 10, y: 10 }, rotation: 90 as const }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const doors = terrain.terrainObjects.filter((object) => object.kind === "door");
+
+    expect(tacticalTerrainPalette.find((item) => item.id === "room-3x3")).toMatchObject({ label: "Room 3x3", size: { width: 3, height: 3 } });
+    expect(terrain.interiorCells).toHaveLength(9);
+    expect(terrain.terrainObjects.filter((object) => object.kind === "wall")).toHaveLength(11);
+    expect(doors).toHaveLength(1);
+    expect(doors[0]).toMatchObject({
+      id: "room-3x3-1:north:door:1",
+      edge: { from: { x: 13, y: 11 }, to: { x: 13, y: 12 } },
+      separates: { first: { x: 12, y: 11 }, second: { x: 13, y: 11 } },
+    });
+  });
+
+  it.each([
+    { id: "room-3x5", label: "Room 3x5", width: 3, height: 5, doorOffset: 1 },
+    { id: "room-3x7", label: "Room 3x7", width: 3, height: 7, doorOffset: 1 },
+    { id: "room-5x5", label: "Room 5x5", width: 5, height: 5, doorOffset: 2 },
+  ])("resolves and rotates $label with one centered door", ({ id, label, width, height, doorOffset }) => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: `${id}-1`, terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 90 as const }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const doors = terrain.terrainObjects.filter((object) => object.kind === "door");
+
+    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width, height } });
+    expect(terrain.interiorCells).toHaveLength(width * height);
+    expect(terrain.terrainObjects.filter((object) => object.kind === "wall")).toHaveLength(2 * width + 2 * height - 1);
+    expect(doors).toHaveLength(1);
+    expect(doors[0]).toMatchObject({
+      edge: { from: { x: 10 + height, y: 10 + doorOffset }, to: { x: 10 + height, y: 11 + doorOffset } },
+      separates: { first: { x: 9 + height, y: 10 + doorOffset }, second: { x: 10 + height, y: 10 + doorOffset } },
+    });
+  });
+
+  it("resolves multiple independently rotated placements from one palette definition", () => {
+    const terrain = resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        defaultTacticalScenarioDefinition.terrainPlacements[0],
+        {
+          id: "control-room-beta",
+          terrainDefinitionId: "control-room",
+          origin: { x: 10, y: 20 },
+          rotation: 90,
+          objectSettings: { terminal: { label: "Engineering Console", terminalKind: "engineering", facing: 90 } },
+        },
+      ],
+    });
+
+    expect(terrain.terrainObjects).toHaveLength(74);
+    expect(terrain.interiorCells).toHaveLength(162);
+    expect(terrain.lightSources).toHaveLength(8);
+    expect(new Set(terrain.terrainObjects.map((object) => object.id)).size).toBe(terrain.terrainObjects.length);
+    expect(terrain.terrainObjects.find((object) => object.id === "control-room-beta:north:wall:0")).toMatchObject({
+      edge: { from: { x: 19, y: 20 }, to: { x: 19, y: 21 } },
+    });
+    expect(terrain.terrainObjects.find((object) => object.id === "control-room-beta:terminal")).toMatchObject({
+      position: { x: 14, y: 24 },
+      terminalKind: "engineering",
+      label: "Engineering Console",
+      facing: 180,
+    });
+  });
+
+  it("merges matching boundaries when control rooms are placed directly beside each other", () => {
+    const terrain = resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "control-room-north", terrainDefinitionId: "control-room", origin: { x: 10, y: 10 }, rotation: 0 },
+        { id: "control-room-south", terrainDefinitionId: "control-room", origin: { x: 10, y: 19 }, rotation: 0 },
+      ],
+    });
+
+    expect(terrain.terrainObjects.filter((object) => object.kind === "wall")).toHaveLength(56);
+    expect(terrain.terrainObjects.filter((object) => object.kind === "door")).toHaveLength(7);
+    expect(new Set(terrain.walls.map((wall) => `${wall.from.x}:${wall.from.y}:${wall.to.x}:${wall.to.y}`)).size).toBe(terrain.walls.length);
+    expect(() => buildDefaultTacticalScenario("exterior-dark", {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "control-room-north", terrainDefinitionId: "control-room", origin: { x: 10, y: 10 }, rotation: 0 },
+        { id: "control-room-south", terrainDefinitionId: "control-room", origin: { x: 10, y: 19 }, rotation: 0 },
+      ],
+    })).not.toThrow();
+  });
+
+  it("rejects overlapping terrain placements", () => {
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        defaultTacticalScenarioDefinition.terrainPlacements[0],
+        {
+          ...defaultTacticalScenarioDefinition.terrainPlacements[0],
+          id: "control-room-overlap",
+          origin: { x: 48, y: 58 },
+        },
+      ],
+    })).toThrow("overlap");
+  });
+
+  it("rejects a placement whose doorway would connect outside the map", () => {
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{
+        id: "control-room-east-edge",
+        terrainDefinitionId: "control-room",
+        origin: { x: 63, y: 20 },
+        rotation: 0,
+      }],
+    })).toThrow("doorway that does not connect two valid map cells");
+
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{
+        id: "control-room-near-east-edge",
+        terrainDefinitionId: "control-room",
+        origin: { x: 62, y: 20 },
+        rotation: 0,
+      }],
+    })).not.toThrow();
+  });
+
   it("creates a 9 by 9 room with independent perimeter targets and four centered doors", () => {
     const room = createControlRoom({ id: "bridge", origin: { x: 10, y: 20 }, terminal: { kind: "navigation", label: "Helm" } });
     const walls = room.objects.filter((object) => object.kind === "wall");

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "room-5x5",
+  "label": "Room 5x5",
+  "size": { "width": 5, "height": 5 },
+  "cellRegions": [
+    { "terrainType": "interior", "origin": { "x": 0, "y": 0 }, "width": 5, "height": 5 }
+  ],
+  "boundaryRuns": [
+    { "side": "north", "start": 0, "length": 5, "doorOffsets": [2] },
+    { "side": "east", "start": 0, "length": 5, "doorOffsets": [] },
+    { "side": "south", "start": 0, "length": 5, "doorOffsets": [] },
+    { "side": "west", "start": 0, "length": 5, "doorOffsets": [] }
+  ],
+  "objects": [],
+  "lightSources": []
+}

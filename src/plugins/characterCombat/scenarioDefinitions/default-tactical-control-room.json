@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "default-tactical-control-room",
+  "title": "Control Room Assault",
+  "briefing": "The boarding crew has reached a hostile vessel's security control room.",
+  "objective": "Secure the Security Terminal.",
+  "map": {
+    "width": 72,
+    "height": 48
+  },
+  "terrainPlacements": [
+    {
+      "id": "control-room-alpha",
+      "terrainDefinitionId": "control-room",
+      "origin": { "x": 44, "y": 38 },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "terminalKind": "security",
+          "label": "Security Terminal",
+          "facing": 180
+        }
+      }
+    }
+  ],
+  "fireCells": [{ "x": 48, "y": 35 }],
+  "smokeCells": []
+}

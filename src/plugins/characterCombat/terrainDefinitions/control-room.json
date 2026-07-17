@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "control-room",
+  "label": "Control Room",
+  "size": { "width": 9, "height": 9 },
+  "cellRegions": [
+    { "terrainType": "interior", "origin": { "x": 0, "y": 0 }, "width": 9, "height": 9 }
+  ],
+  "boundaryRuns": [
+    { "side": "north", "start": 0, "length": 9, "doorOffsets": [4] },
+    { "side": "east", "start": 0, "length": 9, "doorOffsets": [4] },
+    { "side": "south", "start": 0, "length": 9, "doorOffsets": [4] },
+    { "side": "west", "start": 0, "length": 9, "doorOffsets": [4] }
+  ],
+  "objects": [
+    {
+      "id": "terminal",
+      "kind": "terminal",
+      "position": { "x": 4, "y": 4 },
+      "terminalKind": "generic",
+      "label": "Control Room Console",
+      "facing": 0,
+      "operational": true,
+      "blocking": true,
+      "targetable": true,
+      "integrity": 2
+    }
+  ],
+  "lightSources": [
+    { "id": "ceiling-light:1", "position": { "x": 2, "y": 2 }, "range": 3, "on": true },
+    { "id": "ceiling-light:2", "position": { "x": 6, "y": 2 }, "range": 3, "on": true },
+    { "id": "ceiling-light:3", "position": { "x": 2, "y": 6 }, "range": 3, "on": true },
+    { "id": "ceiling-light:4", "position": { "x": 6, "y": 6 }, "range": 3, "on": true }
+  ]
+}
