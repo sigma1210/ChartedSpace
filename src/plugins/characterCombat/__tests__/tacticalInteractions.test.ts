@@ -201,6 +201,21 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 49, y: 34 });
   });
 
+  it("moves a tactical unit onto a bridge deck at its supported elevation", () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.terrainPlacements = [
+      { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 47, y: 32 }, rotation: 0 },
+      { id: "south-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 47, y: 38 }, rotation: 180 },
+      { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 48, y: 34 }, rotation: 0 },
+    ];
+    let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
+    state = reducer(state, startTacticalScenario());
+    state = reducer(state, previewTacticalMove({ x: 48, y: 35 }));
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")).toMatchObject({ position: { x: 48, y: 35 }, elevationLevel: 1 });
+  });
+
   it("spends the full activation entering a tactical close-machinery cell", () => {
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     draft.fireCells = [];

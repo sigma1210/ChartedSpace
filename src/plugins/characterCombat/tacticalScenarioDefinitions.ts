@@ -13,8 +13,11 @@ import closeMachinery2x2DefinitionJson from "./terrainDefinitions/close-machiner
 import closeMachinery3x3DefinitionJson from "./terrainDefinitions/close-machinery-3x3.json";
 import closeMachinery4x4DefinitionJson from "./terrainDefinitions/close-machinery-4x4.json";
 import console1x1DefinitionJson from "./terrainDefinitions/console-1x1.json";
+import bridge1x5DefinitionJson from "./terrainDefinitions/bridge-1x5.json";
+import bridge1x7DefinitionJson from "./terrainDefinitions/bridge-1x7.json";
+import bridge1x9DefinitionJson from "./terrainDefinitions/bridge-1x9.json";
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
-import type { CombatScenario, GridPoint, MapObject, TacticalLightSource, TerrainType } from "./types";
+import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TerrainType } from "./types";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
 
 type BoundarySide = "north" | "east" | "south" | "west";
@@ -41,6 +44,7 @@ export interface TacticalTerrainDefinitionFile {
   }[];
   lightSources: TacticalLightSource[];
   elevationAccessCells?: GridPoint[];
+  bridgeDeck?: boolean;
 }
 
 export interface TacticalTerrainPlacement {
@@ -74,6 +78,7 @@ export interface ResolvedTacticalScenarioTerrain {
   elevationLevelByCell: Record<string, number>;
   closeMachineryCells: GridPoint[];
   elevationAccessCells: GridPoint[];
+  bridges: TacticalBridge[];
 }
 
 const deepFreeze = <T,>(value: T): T => {
@@ -99,6 +104,9 @@ const closeMachinery2x2Definition = deepFreeze(closeMachinery2x2DefinitionJson a
 const closeMachinery3x3Definition = deepFreeze(closeMachinery3x3DefinitionJson as TacticalTerrainDefinitionFile);
 const closeMachinery4x4Definition = deepFreeze(closeMachinery4x4DefinitionJson as TacticalTerrainDefinitionFile);
 const console1x1Definition = deepFreeze(console1x1DefinitionJson as TacticalTerrainDefinitionFile);
+const bridge1x5Definition = deepFreeze(bridge1x5DefinitionJson as TacticalTerrainDefinitionFile);
+const bridge1x7Definition = deepFreeze(bridge1x7DefinitionJson as TacticalTerrainDefinitionFile);
+const bridge1x9Definition = deepFreeze(bridge1x9DefinitionJson as TacticalTerrainDefinitionFile);
 export const defaultTacticalScenarioDefinition = deepFreeze(defaultScenarioDefinitionJson as TacticalScenarioDefinitionFile);
 export const cloneTacticalScenarioDefinition = (definition: TacticalScenarioDefinitionFile): TacticalScenarioDefinitionFile => JSON.parse(JSON.stringify(definition)) as TacticalScenarioDefinitionFile;
 const tacticalTerrainDefinitions = new Map([
@@ -117,6 +125,9 @@ const tacticalTerrainDefinitions = new Map([
   [closeMachinery3x3Definition.id, closeMachinery3x3Definition],
   [closeMachinery4x4Definition.id, closeMachinery4x4Definition],
   [console1x1Definition.id, console1x1Definition],
+  [bridge1x5Definition.id, bridge1x5Definition],
+  [bridge1x7Definition.id, bridge1x7Definition],
+  [bridge1x9Definition.id, bridge1x9Definition],
 ]);
 export const tacticalTerrainPalette = [...tacticalTerrainDefinitions.values()].map((definition) => ({
   id: definition.id,
@@ -127,7 +138,9 @@ export const tacticalTerrainPalette = [...tacticalTerrainDefinitions.values()].m
     ...definition.cellRegions.flatMap((region) => Array.from({ length: region.width }, (_, x) => Array.from({ length: region.height }, (_, y) => ({ x: region.origin.x + x, y: region.origin.y + y }))).flat()),
     ...(definition.elevationAccessCells ?? []).map((point) => ({ ...point })),
     ];
-    return cells.length > 0 ? cells : definition.objects.map((object) => ({ ...object.position }));
+    if (cells.length > 0) return cells;
+    if (definition.bridgeDeck) return Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => ({ x, y }))).flat();
+    return definition.objects.map((object) => ({ ...object.position }));
   })(),
 }));
 
@@ -203,13 +216,16 @@ const resolveTerrainPlacement = (definition: TacticalTerrainDefinitionFile, plac
   const closeMachineryCells = resolvedRegions.filter((region) => region.terrainType === "close-machinery").flatMap((region) => region.cells);
   const terrainByCell = Object.fromEntries(resolvedRegions.filter((region) => region.terrainType !== "interior" && region.terrainType !== "close-machinery").flatMap((region) => region.cells.map((point) => [`${point.x}:${point.y}`, region.terrainType as TerrainType])));
   const elevationAccessCells = (definition.elevationAccessCells ?? []).map((point) => worldPoint(placement.origin, rotatedCell(point, definition.size, placement.rotation)));
+  const bridgeCells = definition.bridgeDeck
+    ? Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => worldPoint(placement.origin, rotatedCell({ x, y }, definition.size, placement.rotation)))).flat()
+    : [];
   const occupiedCells = [...resolvedRegions.filter((region) => region.terrainType !== "close-machinery").flatMap((region) => region.cells), ...elevationAccessCells];
   const lightSources = definition.lightSources.map((source) => ({
     ...source,
     id: `${placement.id}:${source.id}`,
     position: worldPoint(placement.origin, rotatedCell(source.position, definition.size, placement.rotation)),
   }));
-  return { objects, interiorCells, elevatedCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, occupiedCells };
+  return { objects, interiorCells, elevatedCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, bridgeCells, occupiedCells };
 };
 
 export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinitionFile): ResolvedTacticalScenarioTerrain => {
@@ -220,6 +236,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const terrainByCell: Record<string, TerrainType> = {};
   const elevationLevelByCell: Record<string, number> = {};
   const closeMachineryCells: GridPoint[] = [];
+  const bridges: TacticalBridge[] = [];
   const elevationAccessCells: GridPoint[] = [];
   const placementIds = new Set<string>();
   const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
@@ -236,7 +253,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         throw new Error(`Tactical terrain placement ${placement.id} has a doorway that does not connect two valid map cells.`);
       }
     });
-    [...resolved.occupiedCells, ...resolved.closeMachineryCells].forEach((point) => {
+    [...resolved.occupiedCells, ...resolved.closeMachineryCells, ...resolved.bridgeCells].forEach((point) => {
       if (!validCell(point)) throw new Error(`Tactical terrain placement ${placement.id} extends outside the map at ${point.x}:${point.y}`);
     });
     terrainObjects.push(...resolved.objects);
@@ -299,6 +316,39 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     });
   });
 
+  const bridgeOwnerByCell = new Map<string, string>();
+  records.filter((record) => record.resolved.bridgeCells.length > 0).forEach((record) => {
+    const cells = record.resolved.bridgeCells;
+    const first = cells[0];
+    const last = cells[cells.length - 1];
+    const direction = { x: Math.sign(cells[1].x - first.x), y: Math.sign(cells[1].y - first.y) };
+    const before = { x: first.x - direction.x, y: first.y - direction.y };
+    const after = { x: last.x + direction.x, y: last.y + direction.y };
+    const supportOptions = [
+      { first, last, openDeckCells: cells.slice(1, -1) },
+      { first: before, last: after, openDeckCells: cells },
+    ];
+    const support = supportOptions.find((option) => {
+      const firstOwner = topRaisedOwnerByCell.get(pointKey(option.first));
+      const lastOwner = topRaisedOwnerByCell.get(pointKey(option.last));
+      const firstLevel = elevationLevelByCell[pointKey(option.first)] ?? 0;
+      const lastLevel = elevationLevelByCell[pointKey(option.last)] ?? 0;
+      return Boolean(firstOwner && lastOwner && firstOwner !== lastOwner && firstLevel === lastLevel);
+    });
+    if (!support) throw new Error(`Bridge placement ${record.placement.id} must connect two raised areas at the same height.`);
+    support.openDeckCells.forEach((point) => {
+      const key = pointKey(point);
+      if (topRaisedOwnerByCell.has(key) || nonRaisedOwnerByCell.has(key)) throw new Error(`Bridge placement ${record.placement.id} intersects solid terrain at ${key}.`);
+    });
+    cells.forEach((point) => {
+      const key = pointKey(point);
+      const existing = bridgeOwnerByCell.get(key);
+      if (existing) throw new Error(`Bridge placements ${existing} and ${record.placement.id} overlap at ${key}.`);
+      bridgeOwnerByCell.set(key, record.placement.id);
+    });
+    bridges.push({ id: record.placement.id, cells: cells.map((point) => ({ ...point })), elevationLevel: elevationLevelByCell[pointKey(support.first)] });
+  });
+
   const closeMachineryPlacements = records.filter((record) => record.resolved.closeMachineryCells.length > 0).map((record) => ({ id: record.placement.id, cells: record.resolved.closeMachineryCells }));
   const machineryOwnerByCell = new Map<string, string>();
   closeMachineryPlacements.forEach(({ id, cells }) => {
@@ -308,7 +358,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       if (existing && existing !== id) throw new Error(`Tactical terrain placements ${existing} and ${id} overlap at ${key}`);
       machineryOwnerByCell.set(key, id);
     });
-    if (cells.some((point) => nonRaisedOwnerByCell.has(pointKey(point)))) throw new Error(`Close machinery placement ${id} overlaps another terrain placement.`);
+    if (cells.some((point) => nonRaisedOwnerByCell.has(pointKey(point)) || bridgeOwnerByCell.has(pointKey(point)))) throw new Error(`Close machinery placement ${id} overlaps another terrain placement.`);
     const underlyingOwners = cells.map((point) => topRaisedOwnerByCell.get(pointKey(point)));
     const coveredOwners = new Set(underlyingOwners.filter((owner): owner is string => Boolean(owner)));
     if (coveredOwners.size > 0) {
@@ -331,6 +381,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     if (existing) throw new Error(`Tactical terminals ${existing} and ${terminal.id} overlap at ${key}`);
     if (machineryCells.has(key)) throw new Error(`Tactical terminal ${terminal.id} overlaps close machinery at ${key}`);
     if (stairCells.has(key)) throw new Error(`Tactical terminal ${terminal.id} overlaps stairs at ${key}`);
+    if (bridgeOwnerByCell.has(key)) throw new Error(`Tactical terminal ${terminal.id} overlaps a bridge at ${key}`);
     terminalByCell.set(key, terminal.id);
   });
 
@@ -361,5 +412,5 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     else if (object.kind === "door") doors.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to }, open: object.open });
     else objects.push({ id: object.id, kind: "console", position: { ...object.position }, label: object.label });
   });
-  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, closeMachineryCells, elevationAccessCells };
+  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, closeMachineryCells, elevationAccessCells, bridges };
 };

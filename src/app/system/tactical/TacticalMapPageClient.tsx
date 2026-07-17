@@ -13,7 +13,7 @@ import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire
 import { updateTacticalEnemyHud, updateTacticalScenarioHud } from "@/plugins/characterCombat/slice";
 import { recordTacticalExploration } from "@/plugins/characterCombat/slice";
 import { recordTacticalEnemySightings } from "@/plugins/characterCombat/slice";
-import { activeOccupantCounts, automaticFireSecondaryTargets, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, grenadeBlastCells, meleeEnemies, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalBaseLightingLevelAt, tacticalCrewVisibilityMask, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightSources, tacticalRangedEnemies, tacticalVisibilityAssessment, terrainHeightAt, treatableAllies, validCoveringFireTargets } from "@/plugins/characterCombat/geometry";
+import { automaticFireSecondaryTargets, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, grenadeBlastCells, meleeEnemies, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalBaseLightingLevelAt, tacticalCrewVisibilityMask, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightSources, tacticalOccupantCounts, tacticalRangedEnemies, tacticalVisibilityAssessment, terrainHeightAt, treatableAllies, validCoveringFireTargets } from "@/plugins/characterCombat/geometry";
 import { automaticFireModifierForRange, snapShotTarget, weaponAccuracyForRange, weaponPenetrationForRange } from "@/plugins/characterCombat/combatResolution";
 import type { Combatant, CombatScenario, TacticalMapState } from "@/plugins/characterCombat/types";
 import { buildDefaultTacticalScenario } from "@/plugins/characterCombat/defaultTacticalScenario";
@@ -39,6 +39,10 @@ const tacticalRaisedSurfaceHeightAt = (scenario: CombatScenario, point: { x: num
 const tacticalVisualHeightAt = (scenario: CombatScenario, point: { x: number; y: number }) => {
   const surfaceHeight = tacticalRaisedSurfaceHeightAt(scenario, point);
   return scenario.elevationAccessCells?.some((cell) => pointKey(cell) === pointKey(point)) ? surfaceHeight + TACTICAL_WALL_HEIGHT / 2 : surfaceHeight;
+};
+const tacticalCombatantHeight = (scenario: CombatScenario, combatant: Combatant) => {
+  const bridgeLevel = scenario.bridges?.find((bridge) => bridge.cells.some((cell) => pointKey(cell) === pointKey(combatant.position)))?.elevationLevel;
+  return bridgeLevel !== undefined && combatant.elevationLevel === bridgeLevel ? bridgeLevel * TACTICAL_WALL_HEIGHT : tacticalVisualHeightAt(scenario, combatant.position);
 };
 const rollDicePair = () => ({ first: Math.floor(Math.random() * 6) + 1, second: Math.floor(Math.random() * 6) + 1 });
 const safeCanvasEvents: NonNullable<ComponentProps<typeof Canvas>["events"]> = (store) => {
@@ -123,6 +127,25 @@ const TacticalCloseMachineryTerrain = ({ scenario, onSelectCell }: { scenario: C
   })}
 </>;
 
+const TacticalBridges = ({ scenario, onSelectCell }: { scenario: CombatScenario; onSelectCell: (point: { x: number; y: number }) => void }) => <>
+  {(scenario.bridges ?? []).flatMap((bridge) => {
+    const first = bridge.cells[0];
+    const last = bridge.cells[bridge.cells.length - 1];
+    const vertical = first.x === last.x;
+    const deckHeight = bridge.elevationLevel * TACTICAL_WALL_HEIGHT;
+    return bridge.cells.map((cell, index) => <group key={`bridge:${bridge.id}:${index}`} position={[cell.x + 0.5 - scenario.width / 2, deckHeight, cell.y + 0.5 - scenario.height / 2]} onClick={(event) => { event.stopPropagation(); onSelectCell(cell); }}>
+      <mesh position={[0, -0.07, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.92, 0.14, 0.92]} />
+        <meshStandardMaterial color="#64748b" roughness={0.66} metalness={0.3} />
+      </mesh>
+      {[-0.43, 0.43].map((side) => <mesh key={side} position={vertical ? [side, 0.18, 0] : [0, 0.18, side]} castShadow>
+        <boxGeometry args={vertical ? [0.06, 0.3, 0.92] : [0.92, 0.3, 0.06]} />
+        <meshStandardMaterial color="#94a3b8" roughness={0.55} metalness={0.4} />
+      </mesh>)}
+    </group>);
+  })}
+</>;
+
 const TacticalLightingOverlay = ({ scenario }: { scenario: CombatScenario }) => {
   const sourceLitCells = new Map<string, { x: number; y: number }>();
   tacticalLightSources(scenario).forEach((source) => {
@@ -198,12 +221,12 @@ const LastKnownEnemyMarkers = ({ positions, visibleEnemyIds, width, height }: { 
   </group>)}
 </>;
 
-const MovementPerimeter = ({ cells, scenario }: { cells: Map<string, { x: number; y: number }>; scenario: CombatScenario }) => {
+const MovementPerimeter = ({ cells, scenario }: { cells: Map<string, { x: number; y: number; elevationLevel?: number }>; scenario: CombatScenario }) => {
   const positions = useMemo(() => {
     const values: number[] = [];
     const occupied = new Set(cells.keys());
-    const edge = (cell: { x: number; y: number }, fromX: number, fromY: number, toX: number, toY: number) => {
-      const elevation = tacticalVisualHeightAt(scenario, cell) + 0.045;
+    const edge = (cell: { x: number; y: number; elevationLevel?: number }, fromX: number, fromY: number, toX: number, toY: number) => {
+      const elevation = (cell.elevationLevel !== undefined ? cell.elevationLevel * TACTICAL_WALL_HEIGHT : tacticalVisualHeightAt(scenario, cell)) + 0.045;
       values.push(fromX - scenario.width / 2, elevation, fromY - scenario.height / 2, toX - scenario.width / 2, elevation, toY - scenario.height / 2);
     };
     cells.forEach((cell) => {
@@ -222,11 +245,11 @@ const MovementPerimeter = ({ cells, scenario }: { cells: Map<string, { x: number
   </lineSegments>;
 };
 
-const MovementPreview = ({ origin, path, destination, scenario }: { origin: { x: number; y: number }; path: { x: number; y: number }[]; destination: { x: number; y: number }; scenario: CombatScenario }) => {
-  const worldPoint = (point: { x: number; y: number }): [number, number, number] => [point.x + 0.5 - scenario.width / 2, tacticalVisualHeightAt(scenario, point) + 0.075, point.y + 0.5 - scenario.height / 2];
+const MovementPreview = ({ origin, originElevationLevel, path, elevationLevels, destination, scenario }: { origin: { x: number; y: number }; originElevationLevel?: number; path: { x: number; y: number }[]; elevationLevels?: number[]; destination: { x: number; y: number }; scenario: CombatScenario }) => {
+  const worldPoint = (point: { x: number; y: number }, level?: number): [number, number, number] => [point.x + 0.5 - scenario.width / 2, (level !== undefined ? level * TACTICAL_WALL_HEIGHT : tacticalVisualHeightAt(scenario, point)) + 0.075, point.y + 0.5 - scenario.height / 2];
   return <>
-    <Line points={[worldPoint(origin), ...path.map(worldPoint)]} color="#67e8f9" lineWidth={2} />
-    <mesh position={worldPoint(destination)} rotation={[-Math.PI / 2, 0, 0]}>
+    <Line points={[worldPoint(origin, originElevationLevel), ...path.map((point, index) => worldPoint(point, elevationLevels?.[index]))]} color="#67e8f9" lineWidth={2} />
+    <mesh position={worldPoint(destination, elevationLevels?.[elevationLevels.length - 1])} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[0.22, 0.38, 24]} />
       <meshBasicMaterial color="#facc15" />
     </mesh>
@@ -397,25 +420,26 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
   const reachableMoves = useMemo(() => {
     if (!selectedPosition || !tacticalMap.movementMode) return new Map();
     if (selectedProne) return new Map();
-    const activeOccupantsByCell = activeOccupantCounts(combatants, selected?.id);
+    const activeOccupantsByCell = tacticalOccupantCounts(tacticalMap.scenario, selected?.id);
     const moves = tacticalMap.movementMode === "sidestep"
       ? sidestepAndBackstepMoves({ width: mapWidth, height: mapHeight, origin: selectedPosition, facing: selectedFacing, allowance: selectedActionPoints, blockedCells, blockedEdges, activeOccupantsByCell, terrainByCell: tacticalMap.scenario.terrainByCell, elevationLevelByCell: tacticalMap.scenario.elevationLevelByCell, closeMachineryCells: tacticalMap.scenario.closeMachineryCells, elevationAccessCells: tacticalMap.scenario.elevationAccessCells })
-      : reachableOpenMapMovement({ width: mapWidth, height: mapHeight, origin: selectedPosition, facing: selectedFacing, allowance: Math.min(6, selectedActionPoints), trotting: tacticalMap.movementMode === "trot", blockedCells, blockedEdges, activeOccupantsByCell, terrainByCell: tacticalMap.scenario.terrainByCell, elevationLevelByCell: tacticalMap.scenario.elevationLevelByCell, closeMachineryCells: tacticalMap.scenario.closeMachineryCells, elevationAccessCells: tacticalMap.scenario.elevationAccessCells });
-    const enemyPositions = new Set(combatants.filter((unit) => unit.side === "enemy" && !unit.defeated).map((unit) => pointKey(unit.position)));
+      : reachableOpenMapMovement({ width: mapWidth, height: mapHeight, origin: selectedPosition, originElevationLevel: selected?.elevationLevel, facing: selectedFacing, allowance: Math.min(6, selectedActionPoints), trotting: tacticalMap.movementMode === "trot", blockedCells, blockedEdges, activeOccupantsByCell, terrainByCell: tacticalMap.scenario.terrainByCell, elevationLevelByCell: tacticalMap.scenario.elevationLevelByCell, bridges: tacticalMap.scenario.bridges, closeMachineryCells: tacticalMap.scenario.closeMachineryCells, elevationAccessCells: tacticalMap.scenario.elevationAccessCells });
+    const enemyPositions = new Set(combatants.filter((unit) => unit.side === "enemy" && !unit.defeated).map((unit) => `${pointKey(unit.position)}@${unit.elevationLevel ?? tacticalMap.scenario.elevationLevelByCell?.[pointKey(unit.position)] ?? 0}`));
     const legalMoves = new Map([...moves].filter(([, move]) => {
-      const enemyStepIndex = move.path.findIndex((point) => enemyPositions.has(pointKey(point)));
-      const plannedEntry = tacticalMap.plannedEnemyEntryTargetId && pointKey(move.destination) === pointKey(combatants.find((unit) => unit.id === tacticalMap.plannedEnemyEntryTargetId)?.position ?? { x: -1, y: -1 });
+      const enemyStepIndex = move.path.findIndex((point, index) => enemyPositions.has(`${pointKey(point)}@${move.pathElevationLevels?.[index] ?? tacticalMap.scenario.elevationLevelByCell?.[pointKey(point)] ?? 0}`));
+      const entryTarget = combatants.find((unit) => unit.id === tacticalMap.plannedEnemyEntryTargetId);
+      const plannedEntry = entryTarget && pointKey(move.destination) === pointKey(entryTarget.position) && move.finalElevationLevel === (entryTarget.elevationLevel ?? tacticalMap.scenario.elevationLevelByCell?.[pointKey(entryTarget.position)] ?? 0);
       return enemyStepIndex < 0 || (plannedEntry && enemyStepIndex === move.path.length - 1);
     }));
     return tacticalMap.movementMode === "evade"
       ? new Map([...legalMoves].filter(([, move]) => move.path.length === 1 && (activeOccupantsByCell.get(pointKey(move.destination)) ?? 0) === 0))
       : selectedSuppressed || selectedDragging ? new Map([...legalMoves].filter(([, move]) => move.path.length <= 2)) : legalMoves;
-  }, [blockedCells, blockedEdges, combatants, mapHeight, mapWidth, selected?.id, selectedActionPoints, selectedDragging, selectedFacing, selectedPosition, selectedProne, selectedSuppressed, tacticalMap.movementMode, tacticalMap.plannedEnemyEntryTargetId, tacticalMap.scenario.closeMachineryCells, tacticalMap.scenario.elevationAccessCells, tacticalMap.scenario.elevationLevelByCell, tacticalMap.scenario.terrainByCell]);
+  }, [blockedCells, blockedEdges, combatants, mapHeight, mapWidth, selected?.elevationLevel, selected?.id, selectedActionPoints, selectedDragging, selectedFacing, selectedPosition, selectedProne, selectedSuppressed, tacticalMap.movementMode, tacticalMap.plannedEnemyEntryTargetId, tacticalMap.scenario]);
   const reachableCells = useMemo(() => {
-    const cells = new Map([...reachableMoves].map(([key, move]) => [key, move.destination]));
-    if (selectedPosition && tacticalMap.movementMode && reachableMoves.size > 0) cells.set(pointKey(selectedPosition), selectedPosition);
+    const cells = new Map([...reachableMoves].map(([key, move]) => [key, { ...move.destination, elevationLevel: move.finalElevationLevel }]));
+    if (selectedPosition && tacticalMap.movementMode && reachableMoves.size > 0) cells.set(pointKey(selectedPosition), { ...selectedPosition, elevationLevel: selected?.elevationLevel });
     return cells;
-  }, [reachableMoves, selectedPosition, tacticalMap.movementMode]);
+  }, [reachableMoves, selected?.elevationLevel, selectedPosition, tacticalMap.movementMode]);
   const validMeleeDiveTargetIds = new Set(selected && tacticalMap.movementMode === "trot" && !selectedProne && !selectedSuppressed && !selectedDragging
     ? combatants.filter((unit) => unit.side === "enemy" && !unit.defeated && reachableMoves.has(pointKey(unit.position))).map((unit) => unit.id)
     : []);
@@ -437,6 +461,7 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
     <OrbitControls makeDefault target={[focusX, 0, focusZ]} enableDamping dampingFactor={0.12} screenSpacePanning minZoom={8} maxZoom={120} minPolarAngle={0.2} maxPolarAngle={Math.PI / 2.05} />
     <TacticalGrid width={mapWidth} height={mapHeight} gridSize={tacticalMap.gridSize} onSelectCell={selectMapCell} />
     <TacticalElevationTerrain scenario={tacticalMap.scenario} onSelectCell={selectMapCell} />
+    <TacticalBridges scenario={tacticalMap.scenario} onSelectCell={selectMapCell} />
     <TacticalCloseMachineryTerrain scenario={tacticalMap.scenario} onSelectCell={selectMapCell} />
     <TacticalLightingOverlay scenario={tacticalMap.scenario} />
     <TacticalFogOverlay scenario={tacticalMap.scenario} visible={crewVisibility} explored={exploredCells} />
@@ -461,11 +486,11 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
       <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.22} />
     </mesh>)}
     {tacticalTerrain.map((object) => <TacticalTerrainPiece key={object.id} object={object} mapWidth={mapWidth} mapHeight={mapHeight} elevation={object.kind === "terminal" ? tacticalVisualHeightAt(tacticalMap.scenario, object.position) : 0} selected={tacticalMap.selectedTerrainObjectId === object.id} terminalActive={object.kind === "terminal" && Boolean(tacticalMap.terminalActiveById[object.id])} damage={tacticalMap.terrainDamageById[object.id] ?? 0} onSelect={(point) => tacticalMap.coveringFireTargeting ? dispatch(previewTacticalCoveringFire(point)) : dispatch(selectTacticalTerrainObject(object.id))} />)}
-    {selectedPosition && plannedMove && <MovementPreview origin={selectedPosition} path={plannedMove.path} destination={plannedMove.destination} scenario={tacticalMap.scenario} />}
+    {selectedPosition && plannedMove && <MovementPreview origin={selectedPosition} originElevationLevel={selected?.elevationLevel} path={plannedMove.path} elevationLevels={plannedMove.pathElevationLevels} destination={plannedMove.destination} scenario={tacticalMap.scenario} />}
     {combatants.filter((combatant) => combatant.side === "player" || crewVisibility.has(pointKey(combatant.position))).map((combatant) => {
       const animation = tacticalMap.movementAnimationByCharacterId[combatant.id];
-      const worldMovement = animation ? { ...animation, path: animation.path.map((point) => [point.x + 0.5 - mapWidth / 2, tacticalVisualHeightAt(tacticalMap.scenario, point) + 0.02, point.y + 0.5 - mapHeight / 2] as [number, number, number]) } : undefined;
-      return <MapCombatant key={combatant.id} combatant={combatant} mapWidth={mapWidth} mapHeight={mapHeight} elevation={tacticalVisualHeightAt(tacticalMap.scenario, combatant.position)} movement={worldMovement} selected={selected?.id === combatant.id} targetable={validTargetIds.has(combatant.id) || validMeleeTargetIds.has(combatant.id) || validMeleeDiveTargetIds.has(combatant.id)} targeted={tacticalMap.plannedAttackTargetId === combatant.id || tacticalMap.plannedMeleeTargetId === combatant.id} onSelect={() => {
+      const worldMovement = animation ? { ...animation, path: animation.path.map((point, index) => [point.x + 0.5 - mapWidth / 2, (animation.elevationLevels?.[index] !== undefined ? animation.elevationLevels[index] * TACTICAL_WALL_HEIGHT : tacticalVisualHeightAt(tacticalMap.scenario, point)) + 0.02, point.y + 0.5 - mapHeight / 2] as [number, number, number]) } : undefined;
+      return <MapCombatant key={combatant.id} combatant={combatant} mapWidth={mapWidth} mapHeight={mapHeight} elevation={tacticalCombatantHeight(tacticalMap.scenario, combatant)} movement={worldMovement} selected={selected?.id === combatant.id} targetable={validTargetIds.has(combatant.id) || validMeleeTargetIds.has(combatant.id) || validMeleeDiveTargetIds.has(combatant.id)} targeted={tacticalMap.plannedAttackTargetId === combatant.id || tacticalMap.plannedMeleeTargetId === combatant.id} onSelect={() => {
         if (tacticalMap.coveringFireTargeting) {
           dispatch(previewTacticalCoveringFire(combatant.position));
           return;
@@ -597,13 +622,13 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const selectedStructure = selectedTerrain?.kind === "wall" || selectedTerrain?.kind === "door" ? selectedTerrain : null;
   const selectedStructureThreshold = selectedStructure?.kind === "door" ? 5 : 25;
   const selectedStructureDamage = selectedStructure ? tacticalMap.terrainDamageById[selectedStructure.id] ?? 0 : 0;
-  const activeOccupantsByCell = activeOccupantCounts(tacticalMap.scenario.combatants, activeCombatant?.id);
+  const activeOccupantsByCell = tacticalOccupantCounts(tacticalMap.scenario, activeCombatant?.id);
   const previewedMoves = selectedPosition && activeCombatant && tacticalMap.movementMode
     ? selectedProne
       ? new Map()
       : new Map([...(tacticalMap.movementMode === "sidestep"
         ? sidestepAndBackstepMoves({ width: tacticalMap.scenario.width, height: tacticalMap.scenario.height, origin: selectedPosition, facing: activeCombatant.facing, allowance: selectedActionPoints, blockedCells, blockedEdges, activeOccupantsByCell, terrainByCell: tacticalMap.scenario.terrainByCell, elevationLevelByCell: tacticalMap.scenario.elevationLevelByCell, closeMachineryCells: tacticalMap.scenario.closeMachineryCells, elevationAccessCells: tacticalMap.scenario.elevationAccessCells })
-        : reachableOpenMapMovement({ width: tacticalMap.scenario.width, height: tacticalMap.scenario.height, origin: selectedPosition, facing: activeCombatant.facing, allowance: Math.min(6, selectedActionPoints), trotting: tacticalMap.movementMode === "trot", blockedCells, blockedEdges, activeOccupantsByCell, terrainByCell: tacticalMap.scenario.terrainByCell, elevationLevelByCell: tacticalMap.scenario.elevationLevelByCell, closeMachineryCells: tacticalMap.scenario.closeMachineryCells, elevationAccessCells: tacticalMap.scenario.elevationAccessCells }))]
+        : reachableOpenMapMovement({ width: tacticalMap.scenario.width, height: tacticalMap.scenario.height, origin: selectedPosition, originElevationLevel: activeCombatant.elevationLevel, facing: activeCombatant.facing, allowance: Math.min(6, selectedActionPoints), trotting: tacticalMap.movementMode === "trot", blockedCells, blockedEdges, activeOccupantsByCell, terrainByCell: tacticalMap.scenario.terrainByCell, elevationLevelByCell: tacticalMap.scenario.elevationLevelByCell, bridges: tacticalMap.scenario.bridges, closeMachineryCells: tacticalMap.scenario.closeMachineryCells, elevationAccessCells: tacticalMap.scenario.elevationAccessCells }))]
         .filter(([, move]) => tacticalMap.movementMode === "evade" ? move.path.length === 1 && (activeOccupantsByCell.get(pointKey(move.destination)) ?? 0) === 0 : (!selectedSuppressed && !draggedCombatant) || move.path.length <= 2))
     : null;
   const previewedMove = tacticalMap.plannedDestination ? previewedMoves?.get(pointKey(tacticalMap.plannedDestination)) ?? null : null;

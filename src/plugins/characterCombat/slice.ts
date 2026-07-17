@@ -4,7 +4,7 @@ import { activeOccupantCounts, adjacencyEntryStepIndex, adjacentEnemies, adjacen
 import { accumulateWound, automaticFireModifierForRange, distanceInSquares, escalateWoundState, resolveAhlMelee, resolveAhlMoraleCheck, resolveSnapShot, snapShotTarget, weaponPenetrationForRange, woundStateForTotal, type AhlMeleeEffect, type DicePair, type SnapShotResult } from "./combatResolution";
 import { diveOptions, reachableCrawling } from "./geometry";
 import { ahlMeleeDiveMoves } from "./geometry";
-import { reachableOpenMapMovement, sidestepAndBackstepMoves } from "./geometry";
+import { reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalOccupantCounts } from "./geometry";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "./enemyTactics";
 import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalTerrainObjectsForScenario, type TacticalDoor, type TacticalTerminal } from "./tacticalTerrain";
 import { armoryLoadouts } from "./equipment";
@@ -1145,7 +1145,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const target = map ? tacticalCombatant(map, action.payload) : null;
     if (!map || !moverId || !mover || !target || mover.defeated || target.defeated || mover.side === target.side || mover.posture === "prone" || map.movementMode !== "walk" || map.draggingCombatantByCarrierId[moverId] || map.enemySquareEnteredCombatantIds.includes(moverId)) return;
     const terrain = activeTacticalTerrainObjects(map.scenario, map.doorOpenById, map.destroyedTerrainObjectIds);
-    const moves = reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin: mover.position, facing: mover.facing, allowance: Math.min(6, map.actionPointsByCharacterId[moverId] ?? 0), trotting: false, blockedCells: tacticalTerrainBlockedCells(terrain), blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: activeOccupantCounts(map.scenario.combatants, moverId), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells });
+    const moves = reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin: mover.position, originElevationLevel: mover.elevationLevel, facing: mover.facing, allowance: Math.min(6, map.actionPointsByCharacterId[moverId] ?? 0), trotting: false, blockedCells: tacticalTerrainBlockedCells(terrain), blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: tacticalOccupantCounts(map.scenario, moverId), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, bridges: map.scenario.bridges, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells });
     const move = moves.get(pointKey(target.position));
     if (!move || (map.suppressedCombatantIds.includes(moverId) && move.path.length > 2)) return;
     const crossedEnemyBeforeDestination = move.path.slice(0, -1).some((point) => map.scenario.combatants.some((unit) => unit.side !== mover.side && !unit.defeated && pointKey(unit.position) === pointKey(point)));
@@ -1586,7 +1586,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const target = map ? tacticalCombatant(map, action.payload) : null;
     if (!map || !attackerId || !attacker || !target || target.side === attacker.side || target.defeated || attacker.defeated || attacker.posture === "prone" || map.movementMode !== "trot" || map.draggingCombatantByCarrierId[attackerId] || map.suppressedCombatantIds.includes(attackerId)) return;
     const terrain = activeTacticalTerrainObjects(map.scenario, map.doorOpenById, map.destroyedTerrainObjectIds);
-    const moves = reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin: attacker.position, facing: attacker.facing, allowance: Math.min(6, map.actionPointsByCharacterId[attackerId] ?? 0), trotting: true, blockedCells: tacticalTerrainBlockedCells(terrain), blockedEdges: tacticalTerrainBlockedEdges(terrain), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells });
+    const moves = reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin: attacker.position, originElevationLevel: attacker.elevationLevel, facing: attacker.facing, allowance: Math.min(6, map.actionPointsByCharacterId[attackerId] ?? 0), trotting: true, blockedCells: tacticalTerrainBlockedCells(terrain), blockedEdges: tacticalTerrainBlockedEdges(terrain), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, bridges: map.scenario.bridges, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells });
     if (!moves.has(pointKey(target.position))) return;
     map.plannedMeleeTargetId = target.id;
     map.plannedDestination = { ...target.position };
@@ -2148,10 +2148,14 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const blockedCells = tacticalTerrainBlockedCells(terrain);
     const moves = mode === "sidestep"
       ? sidestepAndBackstepMoves({ width: map.scenario.width, height: map.scenario.height, origin, facing: character?.facing ?? "south", allowance: available, blockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: activeOccupantCounts(map.scenario.combatants, id), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells })
-      : reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin, facing: character?.facing ?? "south", allowance: Math.min(6, available), trotting: mode === "trot", blockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: activeOccupantCounts(map.scenario.combatants, id), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells });
+      : reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin, originElevationLevel: character?.elevationLevel, facing: character?.facing ?? "south", allowance: Math.min(6, available), trotting: mode === "trot", blockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: tacticalOccupantCounts(map.scenario, id), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, bridges: map.scenario.bridges, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells });
     const move = moves.get(pointKey(destination));
-    if (!move || (mode !== "evade" && move.cost > available) || (mode === "evade" && (move.path.length !== 1 || (activeOccupantCounts(map.scenario.combatants, id).get(pointKey(destination)) ?? 0) > 0)) || ((dragged || map.suppressedCombatantIds.includes(id)) && move.path.length > 2)) return;
-    const hostileEntryStepIndex = move.path.findIndex((point) => map.scenario.combatants.some((unit) => unit.side !== character.side && !unit.defeated && pointKey(unit.position) === pointKey(point)));
+    if (!move) return;
+    const destinationLevel = move.finalElevationLevel ?? map.scenario.elevationLevelByCell?.[pointKey(destination)] ?? 0;
+    if ((mode !== "evade" && move.cost > available) || (mode === "evade" && (move.path.length !== 1 || (tacticalOccupantCounts(map.scenario, id).get(`${pointKey(destination)}@${destinationLevel}`) ?? 0) > 0)) || ((dragged || map.suppressedCombatantIds.includes(id)) && move.path.length > 2)) return;
+    const hostileEntryStepIndex = move.path.findIndex((point, index) => map.scenario.combatants.some((unit) => unit.side !== character.side && !unit.defeated
+      && pointKey(unit.position) === pointKey(point)
+      && (unit.elevationLevel ?? map.scenario.elevationLevelByCell?.[pointKey(unit.position)] ?? 0) === (move.pathElevationLevels?.[index] ?? map.scenario.elevationLevelByCell?.[pointKey(point)] ?? 0)));
     const occupiedDestinationTarget = enemyEntryTarget ?? meleeDiveTarget;
     if (hostileEntryStepIndex >= 0 && (!occupiedDestinationTarget || hostileEntryStepIndex !== move.path.length - 1 || pointKey(occupiedDestinationTarget.position) !== pointKey(destination))) return;
     const adjacencyEntry = character ? firstTacticalAdjacencyEntry(map, character, move.path) : null;
@@ -2237,8 +2241,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       character.position = { ...origin };
     }
     const sequence = (map.movementAnimationByCharacterId[id]?.sequence ?? 0) + 1;
-    map.movementAnimationByCharacterId[id] = { sequence, path: [{ ...origin }, ...move.path.map((point) => ({ ...point }))], mode: !prone && mode === "trot" ? "run" : "walk" };
+    map.movementAnimationByCharacterId[id] = { sequence, path: [{ ...origin }, ...move.path.map((point) => ({ ...point }))], elevationLevels: [character.elevationLevel ?? map.scenario.elevationLevelByCell?.[pointKey(origin)] ?? 0, ...(move.pathElevationLevels ?? move.path.map((point) => map.scenario.elevationLevelByCell?.[pointKey(point)] ?? 0))], mode: !prone && mode === "trot" ? "run" : "walk" };
     character.position = { ...move.destination };
+    character.elevationLevel = move.finalElevationLevel;
     if (!map.movedCombatantIds.includes(id)) map.movedCombatantIds.push(id);
     character.facing = move.finalFacing ?? character.facing ?? "south";
     if (dragged) {

@@ -12,6 +12,29 @@ import { createAppStore, store, type AppStore } from "@/store";
 
 const freshDefaultDraft = () => cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
 const definitionsMatch = (first: TacticalScenarioDefinitionFile, second: TacticalScenarioDefinitionFile) => JSON.stringify(first) === JSON.stringify(second);
+const placementRotations = (terrainDefinitionId: string): TacticalTerrainPlacement["rotation"][] => terrainDefinitionId.startsWith("bridge-") ? [0, 90, 180, 270] : [0];
+const rotatePreviewCell = (point: { x: number; y: number }, size: { width: number; height: number }, rotation: TacticalTerrainPlacement["rotation"]) => {
+  if (rotation === 90) return { x: size.height - 1 - point.y, y: point.x };
+  if (rotation === 180) return { x: size.width - 1 - point.x, y: size.height - 1 - point.y };
+  if (rotation === 270) return { x: point.y, y: size.width - 1 - point.x };
+  return point;
+};
+const placementCandidates = (terrainDefinitionId: string, anchor: { x: number; y: number }) => {
+  const paletteItem = tacticalTerrainPalette.find((item) => item.id === terrainDefinitionId);
+  if (!paletteItem) return [];
+  const candidates = placementRotations(terrainDefinitionId).flatMap((rotation) => {
+    const cells = paletteItem.previewCells.map((cell) => rotatePreviewCell(cell, paletteItem.size, rotation));
+    const anchors = terrainDefinitionId.startsWith("bridge-") ? cells : [{ x: 0, y: 0 }];
+    return anchors.map((cell) => ({ rotation, cells, origin: { x: anchor.x - cell.x, y: anchor.y - cell.y } }));
+  });
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = `${candidate.origin.x}:${candidate.origin.y}:${candidate.rotation}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 const DraftPreview = ({ definition, selectedPlacementId, placementKind, placementHover, dragPlacement, selectPlacement, hoverPlacement, beginDrag, endDrag, placeTerrain, moveTerrain }: {
   definition: TacticalScenarioDefinitionFile;
@@ -51,18 +74,21 @@ const DraftPreview = ({ definition, selectedPlacementId, placementKind, placemen
       ? { width: definition.size.height, height: definition.size.width }
       : definition.size;
   };
-  const placementPreview = useMemo(() => {
+  const placementPreview = (() => {
     if (!placementKind || !placementHover) return null;
     const paletteItem = tacticalTerrainPalette.find((item) => item.id === placementKind);
     if (!paletteItem) return null;
-    const previewPlacement: TacticalTerrainPlacement = { id: "terrain-placement-preview", terrainDefinitionId: placementKind, origin: placementHover, rotation: 0 };
-    try {
-      resolveTacticalScenarioTerrain({ ...definition, terrainPlacements: [...definition.terrainPlacements, previewPlacement] });
-      return { origin: placementHover, cells: paletteItem.previewCells, valid: true };
-    } catch {
-      return { origin: placementHover, cells: paletteItem.previewCells, valid: false };
+    for (const candidate of placementCandidates(placementKind, placementHover)) {
+      const previewPlacement: TacticalTerrainPlacement = { id: "terrain-placement-preview", terrainDefinitionId: placementKind, origin: candidate.origin, rotation: candidate.rotation };
+      try {
+        resolveTacticalScenarioTerrain({ ...definition, terrainPlacements: [...definition.terrainPlacements, previewPlacement] });
+        return { origin: candidate.origin, cells: candidate.cells, valid: true };
+      } catch {
+        // Try the next bridge orientation.
+      }
     }
-  }, [definition, placementHover, placementKind]);
+    return { origin: placementHover, cells: paletteItem.previewCells, valid: false };
+  })();
 
   if (!resolved.terrain) return <div className="flex h-full items-center justify-center p-8 font-mono text-sm text-red-200">{resolved.error}</div>;
   const { terrain } = resolved;
@@ -98,6 +124,7 @@ const DraftPreview = ({ definition, selectedPlacementId, placementKind, placemen
       return <rect key={`terrain:${key}`} x={x} y={y} width="1" height="1" fill={terrainType === "elevated" ? elevatedColor : terrainType === "close-machinery" ? "#b45309" : "#475569"} opacity={terrainType === "elevated" ? Math.min(0.42 + elevationLevel * 0.12, 0.78) : 0.46} />;
     })}
     {terrain.closeMachineryCells.map((cell) => <rect key={`close-machinery:${cell.x}:${cell.y}`} x={cell.x} y={cell.y} width="1" height="1" fill="#b45309" opacity="0.62" />)}
+    {terrain.bridges.flatMap((bridge) => bridge.cells.map((cell, index) => <rect key={`bridge:${bridge.id}:${index}`} x={cell.x + 0.08} y={cell.y + 0.08} width="0.84" height="0.84" fill="#7c3aed" stroke="#c4b5fd" strokeWidth="0.1" opacity="0.78" />))}
     {terrain.elevationAccessCells.map((cell) => <rect key={`stairs:${cell.x}:${cell.y}`} x={cell.x + 0.08} y={cell.y + 0.08} width="0.84" height="0.84" fill="#cbd5e1" stroke="#0891b2" strokeWidth="0.12" />)}
     {terrain.walls.map((wall) => <line key={wall.id} x1={wall.from.x} y1={wall.from.y} x2={wall.to.x} y2={wall.to.y} stroke="#94a3b8" strokeWidth="0.22" />)}
     {terrain.doors.map((door) => <line key={door.id} x1={door.from.x} y1={door.from.y} x2={door.to.x} y2={door.to.y} stroke="#fbbf24" strokeWidth="0.32" />)}
@@ -175,10 +202,21 @@ const TacticalScenarioEditorClient = () => {
       suffix += 1;
       id = `${placementKind}-${suffix}`;
     }
-    const placement: TacticalTerrainPlacement = { id, terrainDefinitionId: placementKind, origin, rotation: 0 };
-    if (updatePlacements([...draft.terrainPlacements, placement])) {
-      setSelectedPlacementId(id);
+    let lastError = "That terrain placement is not valid.";
+    for (const placementCandidate of placementCandidates(placementKind, origin)) {
+      const placement: TacticalTerrainPlacement = { id, terrainDefinitionId: placementKind, origin: placementCandidate.origin, rotation: placementCandidate.rotation };
+      const candidate = { ...draft, terrainPlacements: [...draft.terrainPlacements, placement] };
+      try {
+        resolveTacticalScenarioTerrain(candidate);
+        setDraft(candidate);
+        setPlacementError(null);
+        setSelectedPlacementId(id);
+        return;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : lastError;
+      }
     }
+    setPlacementError(lastError);
   };
   const selectedPlacement = draft.terrainPlacements.find((placement) => placement.id === selectedPlacementId) ?? null;
   const selectedHasTerminal = selectedPlacement?.terrainDefinitionId === "control-room" || selectedPlacement?.terrainDefinitionId === "console-1x1";

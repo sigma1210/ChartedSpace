@@ -23,6 +23,7 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     doors: terrain.doors,
     objects: terrain.objects,
     terrainObjects: terrain.terrainObjects,
+    bridges: terrain.bridges,
     interiorCells: terrain.interiorCells,
     lightSources: terrain.lightSources,
     terrainByCell: terrain.terrainByCell,

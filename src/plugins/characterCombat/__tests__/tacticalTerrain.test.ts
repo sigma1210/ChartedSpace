@@ -1,4 +1,4 @@
-import { coverAssessment, hasLineOfSight, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, terrainHeightAt } from "../geometry";
+import { coverAssessment, hasLineOfSight, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalOccupantCounts, terrainHeightAt } from "../geometry";
 import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
 import { createControlRoom, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
@@ -207,6 +207,67 @@ describe("tactical Control Room", () => {
     };
 
     expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("overlap at");
+  });
+
+  it.each([
+    { id: "bridge-1x5", length: 5 },
+    { id: "bridge-1x7", length: 7 },
+    { id: "bridge-1x9", length: 9 },
+  ])("provides the $id palette piece", ({ id, length }) => {
+    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ size: { width: 1, height: length } });
+  });
+
+  it("connects equal-height raised areas while preserving movement below the bridge", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "south-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 16 }, rotation: 180 as const },
+        { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 12 }, rotation: 0 as const },
+      ],
+    };
+    const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
+    expect(scenario.bridges).toEqual([{ id: "bridge", elevationLevel: 1, cells: [{ x: 11, y: 12 }, { x: 11, y: 13 }, { x: 11, y: 14 }, { x: 11, y: 15 }, { x: 11, y: 16 }] }]);
+
+    const deckMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 11, y: 12 }, originElevationLevel: 1, facing: "south", allowance: 6, trotting: false, terrainByCell: scenario.terrainByCell, elevationLevelByCell: scenario.elevationLevelByCell, bridges: scenario.bridges, elevationAccessCells: scenario.elevationAccessCells });
+    expect(deckMoves.get("11:15")).toMatchObject({ finalElevationLevel: 1, pathElevationLevels: [1, 1, 1] });
+
+    const groundMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 10, y: 14 }, originElevationLevel: 0, facing: "east", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationLevelByCell: scenario.elevationLevelByCell, bridges: scenario.bridges, elevationAccessCells: scenario.elevationAccessCells });
+    expect(groundMoves.get("11:14")).toMatchObject({ finalElevationLevel: 0 });
+
+    scenario.combatants[0].position = { x: 11, y: 14 };
+    scenario.combatants[0].elevationLevel = 1;
+    scenario.combatants[1].position = { x: 11, y: 14 };
+    scenario.combatants[1].elevationLevel = 0;
+    const occupants = tacticalOccupantCounts(scenario);
+    expect(occupants.get("11:14@1")).toBe(1);
+    expect(occupants.get("11:14@0")).toBe(1);
+  });
+
+  it("places a bridge whose full stated length spans the open gap", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "south-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 18 }, rotation: 180 as const },
+        { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 13 }, rotation: 0 as const },
+      ],
+    };
+
+    const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
+
+    expect(scenario.bridges).toEqual([{ id: "bridge", elevationLevel: 1, cells: [{ x: 11, y: 13 }, { x: 11, y: 14 }, { x: 11, y: 15 }, { x: 11, y: 16 }, { x: 11, y: 17 }] }]);
+  });
+
+  it("rejects a bridge without two raised supports at the same height", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 12 }, rotation: 0 as const },
+      ],
+    };
+    expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("must connect two raised areas at the same height");
   });
 
   it("resolves and configures a placeable 1x1 console", () => {
