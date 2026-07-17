@@ -1,4 +1,4 @@
-import { pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves } from "../geometry";
+import { coverAssessment, hasLineOfSight, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, terrainHeightAt } from "../geometry";
 import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
 import { createControlRoom, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
@@ -120,6 +120,193 @@ describe("tactical Control Room", () => {
       edge: { from: { x: 10 + height, y: 10 + doorOffset }, to: { x: 10 + height, y: 11 + doorOffset } },
       separates: { first: { x: 9 + height, y: 10 + doorOffset }, second: { x: 10 + height, y: 10 + doorOffset } },
     });
+  });
+
+  it.each([
+    { id: "close-machinery-1x1", label: "Close Machinery 1x1", size: 1, cells: 1 },
+    { id: "close-machinery-2x2", label: "Close Machinery 2x2", size: 2, cells: 4 },
+    { id: "close-machinery-3x3", label: "Close Machinery 3x3", size: 3, cells: 9 },
+    { id: "close-machinery-4x4", label: "Close Machinery 4x4", size: 4, cells: 16 },
+  ])("resolves $label as traversable machinery cells", ({ id, label, size, cells }) => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: `${id}-1`, terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 90 as const }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width: size, height: size } });
+    expect(terrain.closeMachineryCells).toHaveLength(cells);
+    expect(Object.values(terrain.terrainByCell)).not.toContain("close-machinery");
+    expect(terrain.terrainObjects).toHaveLength(0);
+  });
+
+  it("places close machinery on one raised area without replacing its elevation", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "machinery", terrainDefinitionId: "close-machinery-3x3", origin: { x: 11, y: 11 }, rotation: 90 as const },
+        { id: "platform", terrainDefinitionId: "raised-area-5x5", origin: { x: 10, y: 10 }, rotation: 0 as const },
+      ],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
+
+    expect(terrain.closeMachineryCells).toHaveLength(9);
+    expect(terrain.terrainByCell["11:11"]).toBe("elevated");
+    expect(scenario.closeMachineryCells).toContainEqual({ x: 11, y: 11 });
+    expect(scenario.terrainByCell?.["11:11"]).toBe("elevated");
+  });
+
+  it("rejects close machinery that overhangs a raised area", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "machinery", terrainDefinitionId: "close-machinery-4x4", origin: { x: 10, y: 10 }, rotation: 0 as const },
+      ],
+    };
+
+    expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("must fit entirely within one raised-area placement");
+  });
+
+  it("stacks smaller raised areas and places machinery and a console on the highest surface", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "top", terrainDefinitionId: "raised-area-3x3", origin: { x: 12, y: 12 }, rotation: 0 as const },
+        { id: "base", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "machinery", terrainDefinitionId: "close-machinery-1x1", origin: { x: 12, y: 12 }, rotation: 0 as const },
+        { id: "middle", terrainDefinitionId: "raised-area-5x5", origin: { x: 11, y: 11 }, rotation: 0 as const },
+        { id: "console", terrainDefinitionId: "console-1x1", origin: { x: 13, y: 13 }, rotation: 0 as const },
+      ],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
+
+    expect(terrain.elevationLevelByCell["10:10"]).toBe(1);
+    expect(terrain.elevationLevelByCell["11:11"]).toBe(2);
+    expect(terrain.elevationLevelByCell["12:12"]).toBe(3);
+    expect(terrain.elevationLevelByCell["13:11"]).toBe(2);
+    expect(terrain.closeMachineryCells).toContainEqual({ x: 12, y: 12 });
+    expect(terrain.terrainObjects.find((object) => object.id === "console:terminal")).toMatchObject({ position: { x: 13, y: 13 } });
+    expect(terrainHeightAt(scenario, { x: 13, y: 13 })).toBeCloseTo(1.95);
+
+    const stairMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 13, y: 11 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationLevelByCell: scenario.elevationLevelByCell, elevationAccessCells: scenario.elevationAccessCells });
+    const blockedEdgeMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 12, y: 11 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationLevelByCell: scenario.elevationLevelByCell, elevationAccessCells: scenario.elevationAccessCells });
+    expect(stairMoves.has("13:12")).toBe(true);
+    expect(blockedEdgeMoves.has("12:12")).toBe(false);
+  });
+
+  it("rejects a stacked raised area when its staircase overhangs the supporting surface", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "base", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "overhanging", terrainDefinitionId: "raised-area-5x5", origin: { x: 10, y: 10 }, rotation: 0 as const },
+      ],
+    };
+
+    expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("overlap at");
+  });
+
+  it("resolves and configures a placeable 1x1 console", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{
+        id: "standalone-console",
+        terrainDefinitionId: "console-1x1",
+        origin: { x: 10, y: 10 },
+        rotation: 90 as const,
+        objectSettings: { terminal: { label: "Reactor Console", terminalKind: "engineering" as const } },
+      }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(tacticalTerrainPalette.find((item) => item.id === "console-1x1")).toMatchObject({ label: "Console 1x1", size: { width: 1, height: 1 }, previewCells: [{ x: 0, y: 0 }] });
+    expect(terrain.terrainObjects).toContainEqual(expect.objectContaining({
+      id: "standalone-console:terminal",
+      kind: "terminal",
+      position: { x: 10, y: 10 },
+      facing: 90,
+      label: "Reactor Console",
+      terminalKind: "engineering",
+      completesScenario: false,
+    }));
+  });
+
+  it("places a console on a raised area while preserving the raised cell", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "standalone-console", terrainDefinitionId: "console-1x1", origin: { x: 11, y: 11 }, rotation: 0 as const },
+      ],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(terrain.terrainByCell["11:11"]).toBe("elevated");
+    expect(terrain.terrainObjects.find((object) => object.id === "standalone-console:terminal")).toMatchObject({ position: { x: 11, y: 11 } });
+  });
+
+  it("rejects a console on stairs, close machinery, or another console", () => {
+    const placements = [
+      { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+      { id: "stairs-console", terrainDefinitionId: "console-1x1", origin: { x: 11, y: 9 }, rotation: 0 as const },
+    ];
+    expect(() => resolveTacticalScenarioTerrain({ ...defaultTacticalScenarioDefinition, terrainPlacements: placements })).toThrow("overlaps stairs");
+
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "machinery", terrainDefinitionId: "close-machinery-1x1", origin: { x: 20, y: 20 }, rotation: 0 },
+        { id: "machinery-console", terrainDefinitionId: "console-1x1", origin: { x: 20, y: 20 }, rotation: 0 },
+      ],
+    })).toThrow("overlaps close machinery");
+
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "console-a", terrainDefinitionId: "console-1x1", origin: { x: 20, y: 20 }, rotation: 0 },
+        { id: "console-b", terrainDefinitionId: "console-1x1", origin: { x: 20, y: 20 }, rotation: 0 },
+      ],
+    })).toThrow("Tactical terminals console-a:terminal and console-b:terminal overlap");
+  });
+
+  it("charges 6 AP to enter each close-machinery square", () => {
+    const movement = (allowance: number) => reachableOpenMapMovement({
+      width: 6,
+      height: 4,
+      origin: { x: 1, y: 1 },
+      facing: "east",
+      allowance,
+      trotting: false,
+      closeMachineryCells: [{ x: 2, y: 1 }, { x: 3, y: 1 }],
+    });
+
+    expect(movement(5).has("2:1")).toBe(false);
+    expect(movement(6).get("2:1")?.cost).toBe(6);
+    expect(movement(6).has("3:1")).toBe(false);
+  });
+
+  it("applies AHL close-machinery fire and cover restrictions", () => {
+    const scenario = buildDefaultTacticalScenario("exterior-lit");
+    const attacker = scenario.combatants.find((unit) => unit.side === "player")!;
+    const target = scenario.combatants.find((unit) => unit.side === "enemy")!;
+    scenario.walls = [];
+    scenario.doors = [];
+    scenario.objects = [];
+    scenario.terrainByCell = {};
+    scenario.closeMachineryCells = [{ x: 4, y: 4 }];
+    attacker.position = { x: 2, y: 4 };
+    target.position = { x: 7, y: 4 };
+
+    expect(hasLineOfSight(scenario, attacker.position, target.position)).toBe(false);
+    target.position = { x: 5, y: 4 };
+    expect(hasLineOfSight(scenario, attacker.position, target.position)).toBe(true);
+    expect(coverAssessment(scenario, attacker.id, target.id)).toEqual({ value: 2, source: "close-machinery" });
+
+    attacker.position = { x: 3, y: 4 };
+    expect(coverAssessment(scenario, attacker.id, target.id)).toEqual({ value: 0, source: null });
   });
 
   it("resolves multiple independently rotated placements from one palette definition", () => {

@@ -12,7 +12,7 @@ export type MoraleState = "steady" | "shaken" | "panicked" | "surrendered";
 export type LightingLevel = "illuminated" | "emergency" | "dark";
 export type TacticalLightingPreset = "exterior-dark" | "exterior-lit";
 export interface TacticalLightSource { id: string; position: GridPoint; range: number; on?: boolean }
-export type TerrainType = "difficult" | "elevated" | "hazardous";
+export type TerrainType = "difficult" | "elevated" | "hazardous" | "close-machinery";
 export type WeaponRangeBand = "effective" | "long" | "extreme";
 export type WeaponVisualCategory = "pistol" | "shotgun" | "smg" | "rifle" | "laser-rifle" | "gauss-rifle";
 export type WeaponAmmunitionKind = string;
@@ -23,7 +23,7 @@ export interface Combatant { moraleFactor?: number }
 
 export interface CombatScenario {
   id: string; title: string; briefing: string; objective: string; width: number; height: number; backgroundImage?: string;
-  walls: WallSegment[]; doors: DoorSegment[]; objects: MapObject[]; combatants: Combatant[]; terrainObjects?: TacticalTerrainObject[]; gravityMode?: "normal" | "zero-g"; defaultLighting?: LightingLevel; lightingByCell?: Record<string, LightingLevel>; exteriorLighting?: LightingLevel; interiorCells?: GridPoint[]; lightSources?: TacticalLightSource[]; terrainByCell?: Record<string, TerrainType>; elevationAccessCells?: GridPoint[]; flareCells?: GridPoint[]; handholds?: GridPoint[]; vacuumSources?: GridPoint[]; fireCells?: GridPoint[]; smokeCells?: GridPoint[]; criticalFireCells?: GridPoint[]; fireSpreadSchedule?: FireSpreadEvent[]; criticalFireDeadlineTurn?: number; victoryCondition?: "secure-objective" | "rescue-extract" | "hold-zone" | "staged-objectives" | "capture-target"; captiveId?: string; captureTargetId?: string; holdUntilTurn?: number; stageObjectiveIds?: string[]; stageUnlockDoorId?: string; defendedObjectiveByCombatantId?: Record<string, string>; flankBiasByCombatantId?: Record<string, "left" | "right">; contestedObjectiveIds?: string[];
+  walls: WallSegment[]; doors: DoorSegment[]; objects: MapObject[]; combatants: Combatant[]; terrainObjects?: TacticalTerrainObject[]; gravityMode?: "normal" | "zero-g"; defaultLighting?: LightingLevel; lightingByCell?: Record<string, LightingLevel>; exteriorLighting?: LightingLevel; interiorCells?: GridPoint[]; lightSources?: TacticalLightSource[]; terrainByCell?: Record<string, TerrainType>; elevationLevelByCell?: Record<string, number>; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[]; flareCells?: GridPoint[]; handholds?: GridPoint[]; vacuumSources?: GridPoint[]; fireCells?: GridPoint[]; smokeCells?: GridPoint[]; criticalFireCells?: GridPoint[]; fireSpreadSchedule?: FireSpreadEvent[]; criticalFireDeadlineTurn?: number; victoryCondition?: "secure-objective" | "rescue-extract" | "hold-zone" | "staged-objectives" | "capture-target"; captiveId?: string; captureTargetId?: string; holdUntilTurn?: number; stageObjectiveIds?: string[]; stageUnlockDoorId?: string; defendedObjectiveByCombatantId?: Record<string, string>; flankBiasByCombatantId?: Record<string, "left" | "right">; contestedObjectiveIds?: string[];
 }
 export type CharacterCombatHudId = "action" | "scenario" | "character" | "crewRoster" | "enemyRoster" | "events" | "legend" | "outcome";
 export type CharacterCombatViewMode = "2d" | "3d";

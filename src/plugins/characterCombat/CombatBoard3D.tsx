@@ -140,14 +140,15 @@ const CombatScene3D = () => {
       </mesh>;
     })}
     {(scenario.elevationAccessCells ?? []).map((point) => {
-      const elevatedNeighbor = [{ x: point.x + 1, y: point.y }, { x: point.x - 1, y: point.y }, { x: point.x, y: point.y + 1 }, { x: point.x, y: point.y - 1 }].find((candidate) => terrainHeightAt(scenario, candidate) > 0);
+      const baseHeight = terrainHeightAt(scenario, point);
+      const elevatedNeighbor = [{ x: point.x + 1, y: point.y }, { x: point.x - 1, y: point.y }, { x: point.x, y: point.y + 1 }, { x: point.x, y: point.y - 1 }].find((candidate) => terrainHeightAt(scenario, candidate) > baseHeight);
       if (!elevatedNeighbor) return null;
       const dx = elevatedNeighbor.x - point.x;
       const dz = elevatedNeighbor.y - point.y;
-      const surfaceHeight = terrainHeightAt(scenario, elevatedNeighbor);
-      return <group key={`elevation-access:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, 0, point.y + 0.5 - scenario.height / 2]}>
+      const riseHeight = terrainHeightAt(scenario, elevatedNeighbor) - baseHeight;
+      return <group key={`elevation-access:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, baseHeight, point.y + 0.5 - scenario.height / 2]}>
         {Array.from({ length: 4 }, (_, index) => {
-          const stepHeight = surfaceHeight * (index + 1) / 4;
+          const stepHeight = riseHeight * (index + 1) / 4;
           const offset = -0.375 + index * 0.25;
           return <mesh key={index} position={[dx * offset, stepHeight / 2, dz * offset]} receiveShadow castShadow raycast={() => null}>
             <boxGeometry args={dx === 0 ? [0.86, stepHeight, 0.24] : [0.24, stepHeight, 0.86]} />
@@ -309,6 +310,6 @@ export const CombatBoard3D = () => {
     if (drag.current.mode === "pan") drag.current.moved = false;
   };
   return <div className="h-full w-full cursor-grab active:cursor-grabbing" onContextMenu={(event) => event.preventDefault()} onWheel={(event) => { event.preventDefault(); dispatch(adjustCameraZoom(event.deltaY < 0 ? 1 : -1)); }} onPointerDown={startPan} onPointerMove={continuePan} onPointerUp={finishPan} onPointerCancel={finishPan} onClickCapture={(event) => { if (drag.current.moved) { event.preventDefault(); event.stopPropagation(); drag.current.moved = false; } }}>
-    <Canvas shadows frameloop="demand" dpr={[1, 1.5]} onPointerMissed={() => { if (!grenadeTargeting && !drag.current.moved) dispatch(selectPlayerCombatant(null)); }}><CombatScene3D /></Canvas>
+    <Canvas shadows="basic" frameloop="demand" dpr={[1, 1.5]} onPointerMissed={() => { if (!grenadeTargeting && !drag.current.moved) dispatch(selectPlayerCombatant(null)); }}><CombatScene3D /></Canvas>
   </div>;
 };

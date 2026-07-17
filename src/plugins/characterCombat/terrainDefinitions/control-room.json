@@ -23,7 +23,8 @@
       "operational": true,
       "blocking": true,
       "targetable": true,
-      "integrity": 2
+      "integrity": 2,
+      "completesScenario": true
     }
   ],
   "lightSources": [

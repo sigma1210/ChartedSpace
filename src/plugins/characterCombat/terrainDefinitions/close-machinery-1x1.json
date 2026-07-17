@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "close-machinery-1x1",
+  "label": "Close Machinery 1x1",
+  "size": { "width": 1, "height": 1 },
+  "cellRegions": [
+    { "terrainType": "close-machinery", "origin": { "x": 0, "y": 0 }, "width": 1, "height": 1 }
+  ],
+  "boundaryRuns": [],
+  "objects": [],
+  "lightSources": []
+}

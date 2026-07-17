@@ -282,6 +282,6 @@ describe("AHL tactical visibility", () => {
     state = reducer(state, selectTacticalAttackMode("snap"));
     state = reducer(state, confirmTacticalAttack({ hitDice: { first: 4, second: 4 }, woundDice: { first: 1, second: 1 } }));
 
-    expect(state.tacticalMap?.events[0]).toContain("hit 5/8 · miss");
+    expect(state.tacticalMap?.events[0]).toContain("raw 2d6 8 · DM -3 · total 5/8 · miss");
   });
 });

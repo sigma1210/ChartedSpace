@@ -26,6 +26,13 @@ export const proneRotationForFacing = (facing: Combatant["facing"]): [number, nu
       ? [Math.PI / 2, 0, 0]
       : [-Math.PI / 2, 0, 0];
 const samePoint = (a: GridPoint, b: GridPoint) => a.x === b.x && a.y === b.y;
+const closeMachineryCellKeys = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells" | "objects">) => new Set([
+  ...(scenario.closeMachineryCells ?? []).map(pointKey),
+  ...Object.entries(scenario.terrainByCell ?? {}).filter(([, terrain]) => terrain === "close-machinery").map(([key]) => key),
+  ...scenario.objects.filter((object) => object.coverType === "close-machinery" || (object.kind === "cover" && /machin|manifold/i.test(object.label))).map((object) => pointKey(object.position)),
+]);
+const isCloseMachineryCell = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, point: GridPoint) => scenario.terrainByCell?.[pointKey(point)] === "close-machinery"
+  || (scenario.closeMachineryCells ?? []).some((cell) => samePoint(cell, point));
 export const remainingCriticalFireCells = (scenario: CombatScenario) => (scenario.criticalFireCells ?? []).filter((critical) => scenario.fireCells?.some((fire) => samePoint(fire, critical)));
 const between = (value: number, a: number, b: number) => value >= Math.min(a, b) && value < Math.max(a, b);
 
@@ -245,7 +252,8 @@ const forwardStep = (facing: Combatant["facing"], origin: GridPoint, destination
 };
 const movementFacingChoices = (facing: Combatant["facing"], origin: GridPoint, destination: GridPoint, trotting: boolean) => facings.filter((candidate) => forwardStep(candidate, origin, destination) || (!trotting && candidate === facing));
 
-export const movementStepCost = (scenario: Pick<CombatScenario, "terrainByCell">, origin: GridPoint, destination: GridPoint, facing?: Combatant["facing"], trotting = false) => {
+export const movementStepCost = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, origin: GridPoint, destination: GridPoint, facing?: Combatant["facing"], trotting = false) => {
+  if (isCloseMachineryCell(scenario, destination)) return 6;
   const diagonal = origin.x !== destination.x && origin.y !== destination.y;
   const terrain = scenario.terrainByCell?.[pointKey(destination)] === "difficult" ? 1 : 0;
   if (!facing) return (diagonal ? 2 : 1) + terrain;
@@ -253,7 +261,7 @@ export const movementStepCost = (scenario: Pick<CombatScenario, "terrainByCell">
   return (trotting ? diagonal ? 1.5 : 1 : diagonal ? 3 : 2) + terrain;
 };
 
-export const movementPathCost = (scenario: Pick<CombatScenario, "terrainByCell">, origin: GridPoint, path: GridPoint[], initialFacing?: Combatant["facing"], trotting = false) => {
+export const movementPathCost = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, origin: GridPoint, path: GridPoint[], initialFacing?: Combatant["facing"], trotting = false) => {
   let facing = initialFacing;
   return path.reduce((total, destination, index) => {
     const from = index === 0 ? origin : path[index - 1];
@@ -266,7 +274,7 @@ export const movementPathCost = (scenario: Pick<CombatScenario, "terrainByCell">
   }, 0);
 };
 
-export const crawlStepCost = (scenario: Pick<CombatScenario, "terrainByCell">, destination: GridPoint) => 2 + (scenario.terrainByCell?.[pointKey(destination)] === "difficult" ? 1 : 0);
+export const crawlStepCost = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, destination: GridPoint) => isCloseMachineryCell(scenario, destination) ? 6 : 2 + (scenario.terrainByCell?.[pointKey(destination)] === "difficult" ? 1 : 0);
 
 export const reachableCrawling = (scenario: CombatScenario, combatantId: string, availableActionPoints: number) => {
   const unit = scenario.combatants.find((combatant) => combatant.id === combatantId && !combatant.defeated && combatant.posture === "prone");
@@ -292,7 +300,7 @@ export const reachableCrawling = (scenario: CombatScenario, combatantId: string,
   return results;
 };
 
-export const pathWithinMovementAllowance = (scenario: Pick<CombatScenario, "terrainByCell">, origin: GridPoint, path: GridPoint[], allowance: number, initialFacing?: Combatant["facing"], trotting = false) => {
+export const pathWithinMovementAllowance = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, origin: GridPoint, path: GridPoint[], allowance: number, initialFacing?: Combatant["facing"], trotting = false) => {
   let cost = 0;
   let facing = initialFacing;
   const result: GridPoint[] = [];
@@ -494,8 +502,9 @@ export const grenadeLandingPoint = (scenario: CombatScenario, thrower: GridPoint
 
 export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: GridPoint) => {
   const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
+  const closeMachinery = closeMachineryCellKeys(scenario);
   if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
-  const groundToGround = terrainHeightAt(scenario, from) === 0 && terrainHeightAt(scenario, to) === 0;
+  const highestEndpoint = Math.max(terrainHeightAt(scenario, from), terrainHeightAt(scenario, to));
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const samples = Math.max(Math.abs(dx), Math.abs(dy)) * 8;
@@ -504,9 +513,8 @@ export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: Gr
     const next = { x: Math.floor(from.x + 0.5 + dx * index / samples), y: Math.floor(from.y + 0.5 + dy * index / samples) };
     if (next.x === cell.x && next.y === cell.y) continue;
     if (smoke.has(pointKey(next))) return false;
-    if (groundToGround && !samePoint(next, to) && terrainHeightAt(scenario, next) > 0) return false;
-    const closeMachinery = scenario.objects.find((object) => object.position.x === next.x && object.position.y === next.y && (object.coverType === "close-machinery" || (object.kind === "cover" && /machin|manifold/i.test(object.label))));
-    if (closeMachinery && !samePoint(next, from) && !samePoint(next, to)) {
+    if (!samePoint(next, to) && terrainHeightAt(scenario, next) > highestEndpoint) return false;
+    if (closeMachinery.has(pointKey(next)) && !samePoint(next, from) && !samePoint(next, to)) {
       const fromAdjacent = Math.max(Math.abs(from.x - next.x), Math.abs(from.y - next.y)) === 1;
       const toAdjacent = Math.max(Math.abs(to.x - next.x), Math.abs(to.y - next.y)) === 1;
       if (!fromAdjacent && !toAdjacent) return false;
@@ -572,8 +580,7 @@ export const tacticalLightingLevelAt = (scenario: CombatScenario, point: GridPoi
 
 const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
   const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
-  const elevated = new Set(Object.entries(scenario.terrainByCell ?? {}).filter(([, terrain]) => terrain === "elevated").map(([key]) => key));
-  const closeMachinery = new Set(scenario.objects.filter((object) => object.coverType === "close-machinery" || (object.kind === "cover" && /machin|manifold/i.test(object.label))).map((object) => pointKey(object.position)));
+  const closeMachinery = closeMachineryCellKeys(scenario);
   const blockedEdges = new Set<string>();
   const addBlockedSegment = (segment: WallSegment) => {
     if (segment.from.x === segment.to.x) {
@@ -588,7 +595,7 @@ const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
 
   return (from: GridPoint, to: GridPoint) => {
     if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
-    const groundToGround = !elevated.has(pointKey(from)) && !elevated.has(pointKey(to));
+    const highestEndpoint = Math.max(terrainHeightAt(scenario, from), terrainHeightAt(scenario, to));
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const samples = Math.max(Math.abs(dx), Math.abs(dy)) * 8;
@@ -598,7 +605,7 @@ const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
       if (samePoint(next, cell)) continue;
       const nextKey = pointKey(next);
       if (smoke.has(nextKey)) return false;
-      if (groundToGround && !samePoint(next, to) && elevated.has(nextKey)) return false;
+      if (!samePoint(next, to) && terrainHeightAt(scenario, next) > highestEndpoint) return false;
       if (closeMachinery.has(nextKey) && !samePoint(next, from) && !samePoint(next, to)) {
         const fromAdjacent = Math.max(Math.abs(from.x - next.x), Math.abs(from.y - next.y)) === 1;
         const toAdjacent = Math.max(Math.abs(to.x - next.x), Math.abs(to.y - next.y)) === 1;
@@ -830,7 +837,11 @@ export const coverAssessment = (scenario: CombatScenario, attackerId: string, ta
     && terrainHeightAt(scenario, object.position) === targetHeight
     && adjacentToTarget(object.position));
   const protectedByConsole = scenario.objects.some((object) => (object.kind === "console" || object.coverType === "console") && line.has(pointKey(object.position)) && adjacentToTarget(object.position));
-  const protectedByMachinery = scenario.objects.some((object) => (object.coverType === "close-machinery" || (object.kind === "cover" && /machin|manifold/i.test(object.label))) && line.has(pointKey(object.position)) && adjacentToTarget(object.position));
+  const attackerTargetAdjacent = Math.max(Math.abs(attacker.position.x - target.position.x), Math.abs(attacker.position.y - target.position.y)) === 1;
+  const protectedByMachinery = !attackerTargetAdjacent && [...closeMachineryCellKeys(scenario)].some((key) => {
+    const machinery = line.get(key);
+    return machinery && adjacentToTarget(machinery) && Math.max(Math.abs(attacker.position.x - machinery.x), Math.abs(attacker.position.y - machinery.y)) !== 1;
+  });
   const cornerClaimant = scenario.combatants.find((unit) => !unit.defeated && samePoint(unit.position, target.position));
   const protectedByCorner = cornerClaimant?.id === target.id && [...scenario.walls, ...scenario.doors]
     .some((segment) => protectedByStructuralCorner(attacker.position, target.position, segment));
@@ -901,9 +912,10 @@ export const reachableMovement = (scenario: CombatScenario, combatantId: string,
   return results;
 };
 
-export const reachableOpenMapMovement = ({ width, height, origin, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationAccessCells = [] }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationAccessCells?: GridPoint[] }) => {
+export const reachableOpenMapMovement = ({ width, height, origin, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationLevelByCell = {}, closeMachineryCells = [], elevationAccessCells = [] }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationLevelByCell?: CombatScenario["elevationLevelByCell"]; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[] }) => {
   const results = new Map<string, PlannedMove>();
   const elevationAccess = new Set(elevationAccessCells.map(pointKey));
+  const elevationLevel = (point: GridPoint) => elevationLevelByCell?.[pointKey(point)] ?? (terrainByCell?.[pointKey(point)] === "elevated" ? 1 : 0);
   const queue: { point: GridPoint; path: GridPoint[]; cost: number; facing: Combatant["facing"]; costBreakdown: string[] }[] = [{ point: origin, path: [], cost: 0, facing, costBreakdown: [] }];
   const stateKey = (point: GridPoint, direction: Combatant["facing"]) => `${pointKey(point)}:${direction}`;
   const bestCost = new Map([[stateKey(origin, facing), 0]]);
@@ -914,10 +926,10 @@ export const reachableOpenMapMovement = ({ width, height, origin, facing, allowa
     for (const destination of movementNeighbors(current.point)) {
       if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
       if (blockedCells.has(pointKey(destination))) continue;
-      const currentElevated = terrainByCell?.[pointKey(current.point)] === "elevated";
-      const destinationElevated = terrainByCell?.[pointKey(destination)] === "elevated";
-      if (currentElevated !== destinationElevated && !elevationAccess.has(pointKey(current.point)) && !elevationAccess.has(pointKey(destination))) continue;
-      if (current.point.x !== destination.x && current.point.y !== destination.y && currentElevated !== destinationElevated) continue;
+      const currentElevation = elevationLevel(current.point);
+      const destinationElevation = elevationLevel(destination);
+      if (currentElevation !== destinationElevation && !elevationAccess.has(pointKey(current.point)) && !elevationAccess.has(pointKey(destination))) continue;
+      if (current.point.x !== destination.x && current.point.y !== destination.y && currentElevation !== destinationElevation) continue;
       const activeOccupants = activeOccupantsByCell.get(pointKey(destination)) ?? 0;
       if (activeOccupants >= 4) continue;
       const diagonal = current.point.x !== destination.x && current.point.y !== destination.y;
@@ -929,7 +941,7 @@ export const reachableOpenMapMovement = ({ width, height, origin, facing, allowa
       ] : [tacticalMovementEdgeKey(current.point, destination)];
       if (crossingEdges.some((edge) => blockedEdges.has(edge))) continue;
       for (const nextFacing of movementFacingChoices(current.facing, current.point, destination, trotting)) {
-        const cost = current.cost + movementTurnCost(current.facing, nextFacing, trotting) + movementStepCost({}, current.point, destination, nextFacing, trotting) + activeOccupants;
+        const cost = current.cost + movementTurnCost(current.facing, nextFacing, trotting) + movementStepCost({ terrainByCell, closeMachineryCells }, current.point, destination, nextFacing, trotting) + activeOccupants;
         const key = stateKey(destination, nextFacing);
         if (cost > allowance || cost >= (bestCost.get(key) ?? Number.POSITIVE_INFINITY)) continue;
         bestCost.set(key, cost);
@@ -944,7 +956,7 @@ export const reachableOpenMapMovement = ({ width, height, origin, facing, allowa
   return results;
 };
 
-export const sidestepAndBackstepMoves = ({ width, height, origin, facing, allowance, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationAccessCells = [] }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationAccessCells?: GridPoint[] }) => {
+export const sidestepAndBackstepMoves = ({ width, height, origin, facing, allowance, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationLevelByCell = {}, closeMachineryCells = [], elevationAccessCells = [] }: { width: number; height: number; origin: GridPoint; facing: Combatant["facing"]; allowance: number; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationLevelByCell?: CombatScenario["elevationLevelByCell"]; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[] }) => {
   const results = new Map<string, PlannedMove>();
   const elevationAccess = new Set(elevationAccessCells.map(pointKey));
   if (allowance < 4) return results;
@@ -952,10 +964,12 @@ export const sidestepAndBackstepMoves = ({ width, height, origin, facing, allowa
     if (forwardStep(facing, origin, destination)) continue;
     if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
     if (blockedCells.has(pointKey(destination))) continue;
-    const changesElevation = (terrainByCell?.[pointKey(origin)] === "elevated") !== (terrainByCell?.[pointKey(destination)] === "elevated");
+    const originElevation = elevationLevelByCell?.[pointKey(origin)] ?? (terrainByCell?.[pointKey(origin)] === "elevated" ? 1 : 0);
+    const destinationElevation = elevationLevelByCell?.[pointKey(destination)] ?? (terrainByCell?.[pointKey(destination)] === "elevated" ? 1 : 0);
+    const changesElevation = originElevation !== destinationElevation;
     if (changesElevation && !elevationAccess.has(pointKey(origin)) && !elevationAccess.has(pointKey(destination))) continue;
     const activeOccupants = activeOccupantsByCell.get(pointKey(destination)) ?? 0;
-    const cost = 4 + activeOccupants;
+    const cost = (isCloseMachineryCell({ terrainByCell, closeMachineryCells }, destination) ? 6 : 4) + activeOccupants;
     if (activeOccupants >= 4 || cost > allowance) continue;
     const diagonal = origin.x !== destination.x && origin.y !== destination.y;
     const crossingEdges = diagonal ? [
@@ -1052,7 +1066,11 @@ export const proposedMoveFor = (scenario: CombatScenario, combatantId: string, d
   reachableMovement(scenario, combatantId, allowance).get(pointKey(destination)) ?? null;
 
 export const pathContains = (path: GridPoint[], point: GridPoint) => path.some((entry) => samePoint(entry, point));
-export const terrainHeightAt = (scenario: Pick<CombatScenario, "terrainByCell">, point: GridPoint) => scenario.terrainByCell?.[pointKey(point)] === "elevated" ? 0.65 : 0;
+export const terrainHeightAt = (scenario: Pick<CombatScenario, "terrainByCell" | "elevationLevelByCell">, point: GridPoint) => {
+  const level = scenario.elevationLevelByCell?.[pointKey(point)];
+  if (level !== undefined) return level * 0.65;
+  return scenario.terrainByCell?.[pointKey(point)] === "elevated" ? 0.65 : 0;
+};
 
 const reactionAdjacent = (scenario: CombatScenario, reactor: GridPoint, mover: GridPoint) => {
   const dx = Math.abs(reactor.x - mover.x);
@@ -1066,5 +1084,5 @@ export const adjacencyEntryStepIndex = (scenario: CombatScenario, reactor: GridP
   const previous = index === 0 ? moverOrigin : path[index - 1];
   return !reactionAdjacent(scenario, reactor, previous) && reactionAdjacent(scenario, reactor, step);
 });
-export const elevationAttackModifier = (scenario: Pick<CombatScenario, "terrainByCell">, attacker: Pick<Combatant, "position" | "posture">, target: Pick<Combatant, "position">) => attacker.posture !== "prone" && terrainHeightAt(scenario, attacker.position) > terrainHeightAt(scenario, target.position) ? 1 : 0;
+export const elevationAttackModifier = (scenario: Pick<CombatScenario, "terrainByCell" | "elevationLevelByCell">, attacker: Pick<Combatant, "position" | "posture">, target: Pick<Combatant, "position">) => attacker.posture !== "prone" && terrainHeightAt(scenario, attacker.position) > terrainHeightAt(scenario, target.position) ? 1 : 0;
 export const structuralVerticalSpan = (baseHeight: number, aboveSurfaceHeight: number) => ({ height: baseHeight + aboveSurfaceHeight, centerY: (baseHeight + aboveSurfaceHeight) / 2 });

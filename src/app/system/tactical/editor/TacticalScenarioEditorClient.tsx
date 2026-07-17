@@ -7,6 +7,7 @@ import { FloatingPluginHud, type FloatingPluginHudLayout } from "@/components/hu
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import TacticalMapPageClient from "../TacticalMapPageClient";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette, type TacticalScenarioDefinitionFile, type TacticalTerrainPlacement } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
+import type { TacticalTerminalKind } from "@/plugins/characterCombat/tacticalTerrain";
 import { createAppStore, store, type AppStore } from "@/store";
 
 const freshDefaultDraft = () => cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
@@ -65,6 +66,11 @@ const DraftPreview = ({ definition, selectedPlacementId, placementKind, placemen
 
   if (!resolved.terrain) return <div className="flex h-full items-center justify-center p-8 font-mono text-sm text-red-200">{resolved.error}</div>;
   const { terrain } = resolved;
+  const orderedPlacements = [...definition.terrainPlacements].sort((first, second) => {
+    const firstSize = placementSize(first);
+    const secondSize = placementSize(second);
+    return secondSize.width * secondSize.height - firstSize.width * firstSize.height;
+  });
   return <svg viewBox={`0 0 ${definition.map.width} ${definition.map.height}`} preserveAspectRatio="xMidYMid meet" className={`h-full w-full bg-[#050a12] ${placementKind ? "cursor-crosshair" : ""}`} aria-label="Scenario draft map preview"
     onPointerDown={(event) => {
       const point = mapPoint(event);
@@ -87,8 +93,11 @@ const DraftPreview = ({ definition, selectedPlacementId, placementKind, placemen
     {terrain.interiorCells.map((cell) => <rect key={`interior:${cell.x}:${cell.y}`} x={cell.x} y={cell.y} width="1" height="1" fill="#164e63" opacity="0.28" />)}
     {Object.entries(terrain.terrainByCell).map(([key, terrainType]) => {
       const [x, y] = key.split(":").map(Number);
-      return <rect key={`terrain:${key}`} x={x} y={y} width="1" height="1" fill={terrainType === "elevated" ? "#0e7490" : "#475569"} opacity="0.46" />;
+      const elevationLevel = terrain.elevationLevelByCell[key] ?? 0;
+      const elevatedColor = elevationLevel >= 3 ? "#67e8f9" : elevationLevel === 2 ? "#22d3ee" : "#0e7490";
+      return <rect key={`terrain:${key}`} x={x} y={y} width="1" height="1" fill={terrainType === "elevated" ? elevatedColor : terrainType === "close-machinery" ? "#b45309" : "#475569"} opacity={terrainType === "elevated" ? Math.min(0.42 + elevationLevel * 0.12, 0.78) : 0.46} />;
     })}
+    {terrain.closeMachineryCells.map((cell) => <rect key={`close-machinery:${cell.x}:${cell.y}`} x={cell.x} y={cell.y} width="1" height="1" fill="#b45309" opacity="0.62" />)}
     {terrain.elevationAccessCells.map((cell) => <rect key={`stairs:${cell.x}:${cell.y}`} x={cell.x + 0.08} y={cell.y + 0.08} width="0.84" height="0.84" fill="#cbd5e1" stroke="#0891b2" strokeWidth="0.12" />)}
     {terrain.walls.map((wall) => <line key={wall.id} x1={wall.from.x} y1={wall.from.y} x2={wall.to.x} y2={wall.to.y} stroke="#94a3b8" strokeWidth="0.22" />)}
     {terrain.doors.map((door) => <line key={door.id} x1={door.from.x} y1={door.from.y} x2={door.to.x} y2={door.to.y} stroke="#fbbf24" strokeWidth="0.32" />)}
@@ -99,11 +108,12 @@ const DraftPreview = ({ definition, selectedPlacementId, placementKind, placemen
     {definition.fireCells.map((cell) => <circle key={`fire:${cell.x}:${cell.y}`} cx={cell.x + 0.5} cy={cell.y + 0.5} r="0.32" fill="#f97316" />)}
     {placementPreview?.cells.map((cell) => <rect key={`placement-preview:${cell.x}:${cell.y}`} x={placementPreview.origin.x + cell.x} y={placementPreview.origin.y + cell.y} width="1" height="1"
       fill={placementPreview.valid ? "#94a3b8" : "#ef4444"} fillOpacity="0.28" stroke={placementPreview.valid ? "#e2e8f0" : "#fecaca"} strokeWidth="0.12" pointerEvents="none" />)}
-    {definition.terrainPlacements.map((placement) => {
+    {orderedPlacements.map((placement) => {
       const size = placementSize(placement);
       const selected = placement.id === selectedPlacementId;
+      const raised = placement.terrainDefinitionId.startsWith("raised-area");
       return <rect key={`placement-control:${placement.id}`} x={placement.origin.x} y={placement.origin.y} width={size.width} height={size.height}
-        fill={selected ? "#22d3ee" : "transparent"} fillOpacity={selected ? 0.16 : 0} stroke={selected ? "#67e8f9" : "transparent"} strokeWidth="0.22"
+        fill={selected ? "#22d3ee" : "transparent"} fillOpacity={selected ? 0.16 : 0} stroke={selected ? "#fef08a" : raised ? "#67e8f9" : "transparent"} strokeOpacity={selected ? 1 : 0.72} strokeWidth={selected ? "0.24" : "0.12"}
         className="cursor-move" onPointerDown={(event) => {
           if (placementKind) return;
           event.stopPropagation();
@@ -171,6 +181,17 @@ const TacticalScenarioEditorClient = () => {
     }
   };
   const selectedPlacement = draft.terrainPlacements.find((placement) => placement.id === selectedPlacementId) ?? null;
+  const selectedHasTerminal = selectedPlacement?.terrainDefinitionId === "control-room" || selectedPlacement?.terrainDefinitionId === "console-1x1";
+  const updateSelectedTerminal = (settings: { label?: string; terminalKind?: TacticalTerminalKind; operational?: boolean; completesScenario?: boolean }) => {
+    if (!selectedPlacement || !selectedHasTerminal) return;
+    updatePlacements(draft.terrainPlacements.map((placement) => placement.id === selectedPlacement.id ? {
+      ...placement,
+      objectSettings: {
+        ...placement.objectSettings,
+        terminal: { ...placement.objectSettings?.terminal, ...settings },
+      },
+    } : placement));
+  };
   const rotateSelectedPlacement = () => {
     if (!selectedPlacement) return;
     const rotation = ((selectedPlacement.rotation + 90) % 360) as TacticalTerrainPlacement["rotation"];
@@ -237,6 +258,22 @@ const TacticalScenarioEditorClient = () => {
               <input type="number" value={selectedPlacement.origin[axis]} onChange={(event) => moveTerrain(selectedPlacement.id, { ...selectedPlacement.origin, [axis]: Number.parseInt(event.target.value, 10) || 0 })} className="mt-1 h-8 w-full border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 outline-none focus:border-cyan-400" />
             </label>)}
           </div>
+          {selectedHasTerminal && <div className="mb-3 border-t border-slate-700 pt-3">
+            <label className="mb-2 block text-[9px] font-bold uppercase tracking-wider text-cyan-200">Console label
+              <input value={selectedPlacement.objectSettings?.terminal?.label ?? (selectedPlacement.terrainDefinitionId === "console-1x1" ? "Console" : "Control Room Console")} onChange={(event) => updateSelectedTerminal({ label: event.target.value })} className="mt-1 h-8 w-full border border-slate-600 bg-slate-950 px-2 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400" />
+            </label>
+            <label className="mb-2 block text-[9px] font-bold uppercase tracking-wider text-cyan-200">Console type
+              <select value={selectedPlacement.objectSettings?.terminal?.terminalKind ?? "generic"} onChange={(event) => updateSelectedTerminal({ terminalKind: event.target.value as TacticalTerminalKind })} className="mt-1 h-8 w-full border border-slate-600 bg-slate-950 px-2 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400">
+                {(["generic", "navigation", "engineering", "security", "communications"] as const).map((kind) => <option key={kind} value={kind}>{kind}</option>)}
+              </select>
+            </label>
+            <label className="mb-2 flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">
+              <input type="checkbox" checked={selectedPlacement.objectSettings?.terminal?.operational ?? true} onChange={(event) => updateSelectedTerminal({ operational: event.target.checked })} /> Operational
+            </label>
+            <label className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">
+              <input type="checkbox" checked={selectedPlacement.objectSettings?.terminal?.completesScenario ?? selectedPlacement.terrainDefinitionId === "control-room"} onChange={(event) => updateSelectedTerminal({ completesScenario: event.target.checked })} /> Completes scenario
+            </label>
+          </div>}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={rotateSelectedPlacement} className="h-8 border border-amber-400 text-[9px] font-bold uppercase text-amber-100">Rotate 90°</button>
             <button type="button" onClick={deleteSelectedPlacement} className="h-8 border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete</button>

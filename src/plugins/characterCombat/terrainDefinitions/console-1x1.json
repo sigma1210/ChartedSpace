@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "console-1x1",
+  "label": "Console 1x1",
+  "size": { "width": 1, "height": 1 },
+  "cellRegions": [],
+  "boundaryRuns": [],
+  "objects": [
+    {
+      "id": "terminal",
+      "kind": "terminal",
+      "position": { "x": 0, "y": 0 },
+      "terminalKind": "generic",
+      "label": "Console",
+      "facing": 0,
+      "operational": true,
+      "blocking": true,
+      "targetable": true,
+      "integrity": 2,
+      "completesScenario": false
+    }
+  ],
+  "lightSources": []
+}

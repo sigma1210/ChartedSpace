@@ -201,6 +201,21 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 49, y: 34 });
   });
 
+  it("spends the full activation entering a tactical close-machinery cell", () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.fireCells = [];
+    draft.terrainPlacements = [{ id: "close-machinery-test", terrainDefinitionId: "close-machinery-1x1", origin: { x: 48, y: 35 }, rotation: 0 }];
+    let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
+    state = reducer(state, startTacticalScenario());
+
+    state = reducer(state, previewTacticalMove({ x: 48, y: 35 }));
+    expect(state.tacticalMap?.plannedDestination).toEqual({ x: 48, y: 35 });
+    state = reducer(state, confirmTacticalMove(undefined));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 48, y: 35 });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+  });
+
   it("toggles terrain lights during setup while fire remains a light source", () => {
     let state = reducer(undefined, initializeTacticalMapSetup(["crew-1", "crew-2"]));
     expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 44, y: 38 })).toBe("illuminated");
@@ -1844,6 +1859,19 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.events[0]).toBe("Victory — crew-1 secured Security Terminal");
     state = reducer(state, activateTacticalCharacter("crew-2"));
     expect(state.tacticalMap?.activeCharacterId).toBeNull();
+  });
+
+  it("activates a standalone console without automatically completing the scenario", () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.terrainPlacements.push({ id: "test-console", terrainDefinitionId: "console-1x1", origin: { x: 49, y: 34 }, rotation: 0 });
+    let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
+    state = reducer(state, startTacticalScenario());
+    state = reducer(state, selectTacticalTerrainObject("test-console:terminal"));
+    state = reducer(state, interactWithTacticalTerrain());
+
+    expect(state.tacticalMap?.terminalActiveById["test-console:terminal"]).toBe(true);
+    expect(state.tacticalMap?.scenarioStatus).toBe("active");
+    expect(state.tacticalMap?.events).toContain("crew-1 activated Console");
   });
 
   it("rejects terrain interaction when the character is not adjacent", () => {

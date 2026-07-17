@@ -26,6 +26,8 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     interiorCells: terrain.interiorCells,
     lightSources: terrain.lightSources,
     terrainByCell: terrain.terrainByCell,
+    elevationLevelByCell: terrain.elevationLevelByCell,
+    closeMachineryCells: terrain.closeMachineryCells,
     elevationAccessCells: terrain.elevationAccessCells,
     fireCells: definition.fireCells.map((point) => ({ ...point })),
     smokeCells: definition.smokeCells.map((point) => ({ ...point })),

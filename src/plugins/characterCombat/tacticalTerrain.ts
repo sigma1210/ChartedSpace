@@ -27,6 +27,7 @@ export interface TacticalTerminal extends TacticalTerrainBase {
   facing: TacticalRotation;
   operational: boolean;
   integrity: number;
+  completesScenario?: boolean;
 }
 
 export type TacticalTerrainObject = TacticalWallSegment | TacticalDoor | TacticalTerminal;
