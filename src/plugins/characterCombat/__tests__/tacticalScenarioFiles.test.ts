@@ -1,0 +1,75 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "../tacticalScenarioDefinitions";
+import {
+  listTacticalScenarioFiles,
+  loadTacticalScenarioFile,
+  saveTacticalScenarioAs,
+} from "../server/tacticalScenarioFiles";
+
+describe("tactical scenario files", () => {
+  let directory: string;
+
+  beforeEach(async () => {
+    directory = await mkdtemp(path.join(tmpdir(), "charted-space-scenarios-"));
+  });
+
+  afterEach(async () => {
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  it("saves a new scenario as formatted JSON and loads it again", async () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.title = "Cargo Deck Assault";
+
+    const saved = await saveTacticalScenarioAs("Cargo Deck Assault", draft, directory);
+    const loaded = await loadTacticalScenarioFile("cargo-deck-assault", directory);
+    const source = await readFile(path.join(directory, "cargo-deck-assault.json"), "utf8");
+
+    expect(saved.id).toBe("cargo-deck-assault");
+    expect(loaded).toEqual(saved);
+    expect(source).toContain('\n  "schemaVersion": 1,');
+    expect(await listTacticalScenarioFiles(directory)).toEqual([
+      { id: "cargo-deck-assault", title: "Cargo Deck Assault", isDefault: false },
+    ]);
+  });
+
+  it("never overwrites an existing scenario", async () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    await saveTacticalScenarioAs("Cargo Deck Assault", draft, directory);
+
+    await expect(saveTacticalScenarioAs("Cargo Deck Assault", draft, directory)).rejects.toMatchObject({
+      code: "scenario-exists",
+      status: 409,
+    });
+  });
+
+  it("protects the immutable default scenario", async () => {
+    await expect(saveTacticalScenarioAs("Default Tactical Control Room", defaultTacticalScenarioDefinition, directory)).rejects.toMatchObject({
+      code: "default-scenario",
+      status: 409,
+    });
+  });
+
+  it("rejects unsafe scenario IDs instead of treating them as paths", async () => {
+    await expect(loadTacticalScenarioFile("../outside", directory)).rejects.toMatchObject({
+      code: "invalid-scenario-id",
+      status: 400,
+    });
+  });
+
+  it("rejects invalid scenario content before writing a file", async () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.fireCells = [{ x: draft.map.width, y: 0 }];
+
+    await expect(saveTacticalScenarioAs("Invalid Fire", draft, directory)).rejects.toMatchObject({
+      code: "invalid-scenario",
+      status: 400,
+    });
+    await expect(loadTacticalScenarioFile("invalid-fire", directory)).rejects.toMatchObject({
+      code: "scenario-not-found",
+      status: 404,
+    });
+  });
+});

@@ -23,6 +23,50 @@ const stateWithCrewAt = (position: { x: number; y: number }, doorOpenById: Recor
   };
 };
 
+const stateWithIrisValve = (): CharacterCombatState => {
+  const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+  draft.terrainPlacements.push({ id: "test-iris", terrainDefinitionId: "iris-valve", origin: { x: 47, y: 38 }, rotation: 0 });
+  let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
+  state = reducer(state, startTacticalScenario());
+  return {
+    ...state,
+    tacticalMap: {
+      ...state.tacticalMap!,
+      scenario: {
+        ...state.tacticalMap!.scenario,
+        combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 47, y: 37 } } : unit),
+      },
+      actionPhaseStartPositionByCombatantId: { ...state.tacticalMap!.actionPhaseStartPositionByCombatantId, "crew-1": { x: 47, y: 37 } },
+      activeCharacterId: "crew-1",
+    },
+  };
+};
+
+const stateWithHatch = (position = { x: 30, y: 30 }): CharacterCombatState => {
+  const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+  draft.terrainPlacements.push({ id: "hatch-a", terrainDefinitionId: "hatch-1x1", origin: position, rotation: 0 });
+  let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
+  state = reducer(state, startTacticalScenario());
+  const characterPosition = { x: position.x - 1, y: position.y };
+  return {
+    ...state,
+    tacticalMap: {
+      ...state.tacticalMap!,
+      scenario: { ...state.tacticalMap!.scenario, combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: characterPosition } : unit) },
+      actionPhaseStartPositionByCombatantId: { ...state.tacticalMap!.actionPhaseStartPositionByCombatantId, "crew-1": characterPosition },
+      activeCharacterId: "crew-1",
+    },
+  };
+};
+
+const stateWithLiquidHydrogen = (filled: boolean): CharacterCombatState => {
+  const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+  draft.terrainPlacements.push({ id: "test-hydrogen", terrainDefinitionId: "liquid-hydrogen-2x2", origin: { x: 49, y: 34 }, rotation: 0, terrainSettings: { filled } });
+  let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
+  state = reducer(state, startTacticalScenario());
+  return { ...state, tacticalMap: { ...state.tacticalMap!, activeCharacterId: "crew-1" } };
+};
+
 describe("tactical terrain interactions", () => {
   it("resets the complete tactical scenario while preserving HUD placement", () => {
     const initialized = reducer(undefined, initializeTacticalMap([
@@ -1862,6 +1906,70 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.pendingDoorCommandsById["control-room-alpha:north:door:4"]).toEqual({ open: false, resolvesAtTurn: 2, characterId: "crew-1" });
     expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
     expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+  });
+
+  it("commands an adjacent iris valve for 2 AP", () => {
+    let state = stateWithIrisValve();
+    state = reducer(state, selectTacticalTerrainObject("test-iris:north:door:0"));
+    state = reducer(state, interactWithTacticalTerrain());
+
+    expect(state.tacticalMap?.pendingDoorCommandsById["test-iris:north:door:0"]).toEqual({ open: true, resolvesAtTurn: 2, characterId: "crew-1" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
+    expect(state.tacticalMap?.events[0]).toContain("activated the iris valve");
+  });
+
+  it("prevents an iris valve opening across a pressure differential", () => {
+    let state = stateWithIrisValve();
+    state = { ...state, tacticalMap: { ...state.tacticalMap!, scenario: { ...state.tacticalMap!.scenario, vacuumSources: [{ x: 47, y: 37 }] } } };
+    state = reducer(state, selectTacticalTerrainObject("test-iris:north:door:0"));
+    state = reducer(state, interactWithTacticalTerrain());
+
+    expect(state.tacticalMap?.pendingDoorCommandsById).toEqual({});
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(state.tacticalMap?.events[0]).toContain("pressure differential");
+  });
+
+  it("commands a hatch to open next turn for 6 AP", () => {
+    let state = stateWithHatch();
+    state = reducer(state, selectTacticalTerrainObject("hatch-a:hatch"));
+    state = reducer(state, interactWithTacticalTerrain());
+    expect(state.tacticalMap?.pendingDoorCommandsById["hatch-a:hatch"]).toEqual({ open: true, resolvesAtTurn: 2, characterId: "crew-1" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.events[0]).toContain("activated the hatch");
+
+    state = reducer(state, finishTacticalActivation());
+    state = reducer(state, runTacticalEnemyPhase({ enemyRolls: {} }));
+    expect(state.tacticalMap?.doorOpenById["hatch-a:hatch"]).toBe(true);
+    expect(state.tacticalMap?.events).toContain("Hatch opened at the start of Turn 2");
+  });
+
+  it("kills a character on the first filled liquid-hydrogen square entered", () => {
+    let state = stateWithLiquidHydrogen(true);
+    state = reducer(state, previewTacticalMove({ x: 50, y: 34 }));
+    state = reducer(state, confirmTacticalMove({ moraleDice: { first: 3, second: 3 }, snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }, enemyReactionRolls: {} }));
+    const character = state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1");
+    expect(character).toMatchObject({ position: { x: 49, y: 34 }, woundState: "dead", defeated: true });
+    expect(state.tacticalMap?.events[0]).toContain("entered liquid hydrogen at 49,34 and was killed");
+  });
+
+  it("allows normal movement across an empty liquid-hydrogen area", () => {
+    let state = stateWithLiquidHydrogen(false);
+    state = reducer(state, previewTacticalMove({ x: 49, y: 34 }));
+    state = reducer(state, confirmTacticalMove({ moraleDice: { first: 3, second: 3 }, snapDice: { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } }, enemyReactionRolls: {} }));
+    const character = state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1");
+    expect(character).toMatchObject({ position: { x: 49, y: 34 }, woundState: "healthy", defeated: false });
+    expect(state.tacticalMap?.events[0]).toContain("moved to 49,34");
+  });
+
+  it("uses the AHL iris-valve penetration modifier and 10-point breach threshold", () => {
+    const base = stateWithIrisValve();
+    let state: CharacterCombatState = { ...base, tacticalMap: { ...base.tacticalMap!, terrainDamageById: { "test-iris:north:door:0": 9 }, ammunitionByCharacterId: { ...base.tacticalMap!.ammunitionByCharacterId, "crew-1": 4 } } };
+    state = reducer(state, selectTacticalTerrainObject("test-iris:north:door:0"));
+    state = reducer(state, fireAtTacticalTerrain({ hitDice: { first: 6, second: 6 } }));
+
+    expect(state.tacticalMap?.terrainDamageById["test-iris:north:door:0"]).toBe(10);
+    expect(state.tacticalMap?.destroyedTerrainObjectIds).toContain("test-iris:north:door:0");
+    expect(state.tacticalMap?.doorOpenById["test-iris:north:door:0"]).toBe(true);
   });
 
   it("activates the Security Terminal and completes the default scenario", () => {

@@ -392,6 +392,24 @@ export const scenarioAvoidingFireForPathfinding = (scenario: CombatScenario): Co
   ],
 });
 
+export const filledLiquidHydrogenCellKeys = (scenario: Pick<CombatScenario, "liquidHydrogenAreas">) => new Set((scenario.liquidHydrogenAreas ?? [])
+  .filter((area) => area.filled)
+  .flatMap((area) => area.cells.map(pointKey)));
+
+export const scenarioAvoidingLiquidHydrogenForPathfinding = (scenario: CombatScenario): CombatScenario => {
+  const hazardousCells = filledLiquidHydrogenCellKeys(scenario);
+  return {
+    ...scenario,
+    objects: [
+      ...scenario.objects,
+      ...[...hazardousCells].filter((key) => !scenario.objects.some((object) => pointKey(object.position) === key)).map((key, index) => {
+        const [x, y] = key.split(":").map(Number);
+        return { id: `pathfinding-liquid-hydrogen-${index}`, kind: "cover" as const, position: { x, y }, label: "Liquid Hydrogen" };
+      }),
+    ],
+  };
+};
+
 const boundaryClear = (scenario: CombatScenario, from: GridPoint, to: GridPoint) => !scenario.walls.some((wall) => wallBlocksStep(from, to, wall))
   && !scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door));
 

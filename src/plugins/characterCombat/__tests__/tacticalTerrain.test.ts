@@ -1,4 +1,4 @@
-import { coverAssessment, hasLineOfSight, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalOccupantCounts, terrainHeightAt } from "../geometry";
+import { coverAssessment, filledLiquidHydrogenCellKeys, hasLineOfSight, pointKey, reachableOpenMapMovement, scenarioAvoidingLiquidHydrogenForPathfinding, shortestPathToAny, sidestepAndBackstepMoves, tacticalOccupantCounts, terrainHeightAt } from "../geometry";
 import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
 import { createControlRoom, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
@@ -13,6 +13,14 @@ describe("tactical Control Room", () => {
     expect(defaultTacticalScenarioDefinition).toMatchObject({ title: "Control Room Assault", map: { width: 72 }, terrainPlacements: [{ origin: { x: 44, y: 38 } }] });
     expect(buildDefaultTacticalScenario("exterior-dark", draft)).toMatchObject({ title: "Edited Draft", width: 80 });
     expect(resolveTacticalScenarioTerrain(draft).terrainObjects.find((object) => object.id === "control-room-alpha:terminal")).toMatchObject({ position: { x: 24, y: 34 } });
+  });
+
+  it("carries editor-placed fires into playtest and rejects invalid fire cells", () => {
+    const definition = { ...defaultTacticalScenarioDefinition, fireCells: [{ x: 4, y: 5 }] };
+
+    expect(buildDefaultTacticalScenario("exterior-lit", definition).fireCells).toEqual([{ x: 4, y: 5 }]);
+    expect(() => resolveTacticalScenarioTerrain({ ...definition, fireCells: [{ x: 4, y: 5 }, { x: 4, y: 5 }] })).toThrow("Duplicate scenario fire at 4:5");
+    expect(() => resolveTacticalScenarioTerrain({ ...definition, fireCells: [{ x: definition.map.width, y: 5 }] })).toThrow("Scenario fire extends outside the map");
   });
 
   it("resolves the default control room from scenario and terrain JSON", () => {
@@ -98,6 +106,102 @@ describe("tactical Control Room", () => {
       edge: { from: { x: 13, y: 11 }, to: { x: 13, y: 12 } },
       separates: { first: { x: 12, y: 11 }, second: { x: 13, y: 11 } },
     });
+  });
+
+  it("replaces one wall edge with a rotatable iris valve portal", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "room", terrainDefinitionId: "room-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "iris", terrainDefinitionId: "iris-valve", origin: { x: 12, y: 11 }, rotation: 90 as const },
+      ],
+    };
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const iris = terrain.terrainObjects.find((object) => object.id === "iris:north:door:0");
+
+    expect(tacticalTerrainPalette.find((item) => item.id === "iris-valve")).toMatchObject({ label: "Iris Valve", size: { width: 1, height: 1 } });
+    expect(iris).toMatchObject({ kind: "door", portalType: "iris-valve", open: false, edge: { from: { x: 13, y: 11 }, to: { x: 13, y: 12 } }, separates: { first: { x: 12, y: 11 }, second: { x: 13, y: 11 } } });
+    expect(terrain.walls.some((wall) => wall.from.x === 13 && wall.to.x === 13 && Math.min(wall.from.y, wall.to.y) === 11)).toBe(false);
+    expect(terrain.doors.find((door) => door.id === "iris:north:door:0")).toMatchObject({ portalType: "iris-valve" });
+    expect(tacticalTerrainBlockedEdges(terrain.terrainObjects)).toContain(tacticalMovementEdgeKey({ x: 12, y: 11 }, { x: 13, y: 11 }));
+  });
+
+  it("resolves a 1x1 hatch as an independent floor portal", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        ...defaultTacticalScenarioDefinition.terrainPlacements,
+        { id: "hatch-a", terrainDefinitionId: "hatch-1x1", origin: { x: 30, y: 30 }, rotation: 0 as const },
+      ],
+    };
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    expect(tacticalTerrainPalette.find((item) => item.id === "hatch-1x1")).toMatchObject({ label: "Hatch 1x1", size: { width: 1, height: 1 }, previewCells: [{ x: 0, y: 0 }] });
+    expect(terrain.terrainObjects.find((object) => object.id === "hatch-a:hatch")).toMatchObject({ kind: "hatch", position: { x: 30, y: 30 }, open: false });
+  });
+
+  it("rejects overlapping hatch placements", () => {
+    const hatch = { id: "hatch-a", terrainDefinitionId: "hatch-1x1", origin: { x: 30, y: 30 }, rotation: 0 as const };
+    expect(() => resolveTacticalScenarioTerrain({ ...defaultTacticalScenarioDefinition, terrainPlacements: [...defaultTacticalScenarioDefinition.terrainPlacements, hatch] })).not.toThrow();
+    expect(() => resolveTacticalScenarioTerrain({ ...defaultTacticalScenarioDefinition, terrainPlacements: [...defaultTacticalScenarioDefinition.terrainPlacements, hatch, { ...hatch, id: "hatch-b" }] })).toThrow("overlap");
+  });
+
+  it.each([
+    { id: "liquid-hydrogen-2x2", label: "Liquid Hydrogen 2x2", size: 2, cells: 4 },
+    { id: "liquid-hydrogen-3x3", label: "Liquid Hydrogen 3x3", size: 3, cells: 9 },
+    { id: "liquid-hydrogen-4x4", label: "Liquid Hydrogen 4x4", size: 4, cells: 16 },
+  ])("resolves $label as a filled liquid-hydrogen area", ({ id, label, size, cells }) => {
+    const definition = { ...defaultTacticalScenarioDefinition, terrainPlacements: [{ id: "hydrogen", terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 0 as const }] };
+    const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
+    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width: size, height: size } });
+    expect(scenario.liquidHydrogenAreas).toEqual([{ id: "hydrogen", cells: expect.any(Array), filled: true, elevationLevel: 0 }]);
+    expect(scenario.liquidHydrogenAreas?.[0].cells).toHaveLength(cells);
+    expect(filledLiquidHydrogenCellKeys(scenario).size).toBe(cells);
+    expect(hasLineOfSight(scenario, { x: 9, y: 10 }, { x: 10 + size, y: 10 })).toBe(true);
+  });
+
+  it("treats an empty liquid-hydrogen area as ordinary floor and excludes filled cells from enemy paths", () => {
+    const emptyDefinition = { ...defaultTacticalScenarioDefinition, terrainPlacements: [{ id: "hydrogen", terrainDefinitionId: "liquid-hydrogen-2x2", origin: { x: 10, y: 10 }, rotation: 0 as const, terrainSettings: { filled: false } }] };
+    const emptyScenario = buildDefaultTacticalScenario("exterior-lit", emptyDefinition);
+    expect(emptyScenario.liquidHydrogenAreas?.[0]).toMatchObject({ filled: false });
+    expect(filledLiquidHydrogenCellKeys(emptyScenario).size).toBe(0);
+    expect(scenarioAvoidingLiquidHydrogenForPathfinding(emptyScenario).objects).toEqual(emptyScenario.objects);
+
+    const filledScenario = buildDefaultTacticalScenario("exterior-lit", { ...emptyDefinition, terrainPlacements: [{ ...emptyDefinition.terrainPlacements[0], terrainSettings: { filled: true } }] });
+    expect(scenarioAvoidingLiquidHydrogenForPathfinding(filledScenario).objects.filter((object) => object.label === "Liquid Hydrogen")).toHaveLength(4);
+    const enemy = filledScenario.combatants.find((unit) => unit.side === "enemy")!;
+    enemy.position = { x: 8, y: 10 };
+    const route = shortestPathToAny(scenarioAvoidingLiquidHydrogenForPathfinding(filledScenario), enemy.id, [{ x: 13, y: 10 }]);
+    expect(route).not.toBeNull();
+    expect(route?.some((point) => filledLiquidHydrogenCellKeys(filledScenario).has(pointKey(point)))).toBe(false);
+  });
+
+  it("places liquid hydrogen on one raised area without losing its elevation and rejects overhang", () => {
+    const supported = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "hydrogen", terrainDefinitionId: "liquid-hydrogen-2x2", origin: { x: 10, y: 10 }, rotation: 0 as const },
+      ],
+    };
+    expect(resolveTacticalScenarioTerrain(supported).liquidHydrogenAreas[0]).toMatchObject({ elevationLevel: 1, filled: true });
+    const overhanging = { ...supported, terrainPlacements: [supported.terrainPlacements[0], { ...supported.terrainPlacements[1], origin: { x: 12, y: 12 } }] };
+    expect(() => resolveTacticalScenarioTerrain(overhanging)).toThrow("must fit entirely within one raised-area placement");
+  });
+
+  it("rejects an iris valve without exactly one underlying wall segment", () => {
+    const unsupported = { ...defaultTacticalScenarioDefinition, terrainPlacements: [{ id: "iris", terrainDefinitionId: "iris-valve", origin: { x: 10, y: 10 }, rotation: 0 as const }] };
+    const overDoor = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [
+        { id: "room", terrainDefinitionId: "room-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
+        { id: "iris", terrainDefinitionId: "iris-valve", origin: { x: 11, y: 10 }, rotation: 0 as const },
+      ],
+    };
+
+    expect(() => resolveTacticalScenarioTerrain(unsupported)).toThrow("must replace one existing wall segment");
+    expect(() => resolveTacticalScenarioTerrain(overDoor)).toThrow("must replace one existing wall segment");
   });
 
   it.each([

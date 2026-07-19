@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Canvas, events as createCanvasEvents } from "@react-three/fiber";
 import { Html, Line, OrbitControls, OrthographicCamera } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Path, Shape } from "three";
 import { FloatingPluginHud } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import { AnimatedCombatantFallback, AnimatedCombatantModel } from "@/plugins/characterCombat/AnimatedCombatantModel";
@@ -13,7 +14,7 @@ import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire
 import { updateTacticalEnemyHud, updateTacticalScenarioHud } from "@/plugins/characterCombat/slice";
 import { recordTacticalExploration } from "@/plugins/characterCombat/slice";
 import { recordTacticalEnemySightings } from "@/plugins/characterCombat/slice";
-import { automaticFireSecondaryTargets, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, grenadeBlastCells, meleeEnemies, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalBaseLightingLevelAt, tacticalCrewVisibilityMask, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightSources, tacticalOccupantCounts, tacticalRangedEnemies, tacticalVisibilityAssessment, terrainHeightAt, treatableAllies, validCoveringFireTargets } from "@/plugins/characterCombat/geometry";
+import { automaticFireSecondaryTargets, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, depressurizedCells, filledLiquidHydrogenCellKeys, grenadeBlastCells, meleeEnemies, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalBaseLightingLevelAt, tacticalCrewVisibilityMask, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightSources, tacticalOccupantCounts, tacticalRangedEnemies, tacticalVisibilityAssessment, terrainHeightAt, treatableAllies, validCoveringFireTargets } from "@/plugins/characterCombat/geometry";
 import { automaticFireModifierForRange, snapShotTarget, weaponAccuracyForRange, weaponPenetrationForRange } from "@/plugins/characterCombat/combatResolution";
 import type { Combatant, CombatScenario, TacticalMapState } from "@/plugins/characterCombat/types";
 import { buildDefaultTacticalScenario } from "@/plugins/characterCombat/defaultTacticalScenario";
@@ -35,6 +36,21 @@ const TACTICAL_WALL_HEIGHT = 1.26;
 const TACTICAL_WALL_CENTER_Y = TACTICAL_WALL_HEIGHT / 2;
 const TACTICAL_DOOR_HEIGHT = 1.23;
 const TACTICAL_DOOR_CENTER_Y = TACTICAL_DOOR_HEIGHT / 2;
+const IRIS_WALL_SHAPE = (() => {
+  const wallBottom = -TACTICAL_DOOR_CENTER_Y;
+  const wallTop = TACTICAL_WALL_HEIGHT - TACTICAL_DOOR_CENTER_Y;
+  const shape = new Shape();
+  shape.moveTo(-0.5, wallBottom);
+  shape.lineTo(0.5, wallBottom);
+  shape.lineTo(0.5, wallTop);
+  shape.lineTo(-0.5, wallTop);
+  shape.closePath();
+  const opening = new Path();
+  opening.absarc(0, 0, 0.31, 0, Math.PI * 2, true);
+  shape.holes.push(opening);
+  return shape;
+})();
+const IRIS_WALL_EXTRUSION = { depth: 0.22, bevelEnabled: false } as const;
 const tacticalRaisedSurfaceHeightAt = (scenario: CombatScenario, point: { x: number; y: number }) => terrainHeightAt(scenario, point) / 0.65 * TACTICAL_WALL_HEIGHT;
 const tacticalVisualHeightAt = (scenario: CombatScenario, point: { x: number; y: number }) => {
   const surfaceHeight = tacticalRaisedSurfaceHeightAt(scenario, point);
@@ -315,10 +331,10 @@ const SmokeArea = ({ cells, width, height }: { cells: { x: number; y: number }[]
   </group>)}
 </>;
 
-const FireArea = ({ cells, selected, width, height }: { cells: { x: number; y: number }[]; selected: { x: number; y: number } | null; width: number; height: number }) => <>
+const FireArea = ({ cells, selected, scenario }: { cells: { x: number; y: number }[]; selected: { x: number; y: number } | null; scenario: CombatScenario }) => <>
   {cells.map((point) => {
     const highlighted = Boolean(selected && pointKey(selected) === pointKey(point));
-    return <group key={`fire:${pointKey(point)}`} position={[point.x + 0.5 - width / 2, 0.24, point.y + 0.5 - height / 2]}>
+    return <group key={`fire:${pointKey(point)}`} position={[point.x + 0.5 - scenario.width / 2, tacticalVisualHeightAt(scenario, point) + 0.24, point.y + 0.5 - scenario.height / 2]}>
       <mesh>
         <coneGeometry args={[highlighted ? 0.36 : 0.3, highlighted ? 0.72 : 0.58, 12]} />
         <meshStandardMaterial color="#fb923c" emissive="#ef4444" emissiveIntensity={highlighted ? 2.4 : 1.6} />
@@ -326,6 +342,28 @@ const FireArea = ({ cells, selected, width, height }: { cells: { x: number; y: n
       <mesh position={[0, -0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.34, 0.42, 24]} />
         <meshBasicMaterial color={highlighted ? "#fef08a" : "#f97316"} />
+      </mesh>
+    </group>;
+  })}
+</>;
+
+const LiquidHydrogenAreas = ({ scenario }: { scenario: CombatScenario }) => <>
+  {(scenario.liquidHydrogenAreas ?? []).map((area) => {
+    const minX = Math.min(...area.cells.map((cell) => cell.x));
+    const maxX = Math.max(...area.cells.map((cell) => cell.x));
+    const minY = Math.min(...area.cells.map((cell) => cell.y));
+    const maxY = Math.max(...area.cells.map((cell) => cell.y));
+    const width = maxX - minX + 1;
+    const depth = maxY - minY + 1;
+    const position: [number, number, number] = [minX + width / 2 - scenario.width / 2, tacticalVisualHeightAt(scenario, area.cells[0]), minY + depth / 2 - scenario.height / 2];
+    return <group key={area.id} position={position}>
+      {[[0, -depth / 2 + 0.08, width, 0.16], [0, depth / 2 - 0.08, width, 0.16], [-width / 2 + 0.08, 0, 0.16, depth], [width / 2 - 0.08, 0, 0.16, depth]].map(([x, z, rimWidth, rimDepth], index) => <mesh key={index} position={[x, 0.09, z]} castShadow receiveShadow>
+        <boxGeometry args={[rimWidth, 0.18, rimDepth]} />
+        <meshStandardMaterial color="#64748b" roughness={0.58} metalness={0.4} />
+      </mesh>)}
+      <mesh position={[0, area.filled ? 0.065 : 0.018, 0]} receiveShadow>
+        <boxGeometry args={[width - 0.24, area.filled ? 0.08 : 0.025, depth - 0.24]} />
+        <meshStandardMaterial color={area.filled ? "#67e8f9" : "#0f172a"} emissive={area.filled ? "#0891b2" : "#000000"} emissiveIntensity={area.filled ? 0.32 : 0} roughness={area.filled ? 0.16 : 0.82} metalness={area.filled ? 0.18 : 0.3} transparent={area.filled} opacity={area.filled ? 0.82 : 1} />
       </mesh>
     </group>;
   })}
@@ -346,6 +384,29 @@ const TacticalTerrainPiece = ({ object, mapWidth, mapHeight, elevation, selected
     <Html center position={[0, 0.78, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-cyan-500/60 bg-slate-950/90 px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-wider text-cyan-100">{object.label}</div></Html>
     </group>;
   }
+  if (object.kind === "hatch") {
+    const position: [number, number, number] = [object.position.x + 0.5 - mapWidth / 2, elevation + 0.035, object.position.y + 0.5 - mapHeight / 2];
+    const rimColor = selected ? "#facc15" : object.open ? "#22c55e" : "#d97706";
+    return <group position={position} onClick={(event) => { event.stopPropagation(); onSelect(object.position); }}>
+      {[[0, 0.39, 0.78, 0.08], [0, -0.39, 0.78, 0.08], [0.39, 0, 0.08, 0.78], [-0.39, 0, 0.08, 0.78]].map(([x, z, width, depth], index) => <mesh key={index} position={[x, 0.015, z]} castShadow receiveShadow>
+        <boxGeometry args={[width, 0.08, depth]} />
+        <meshStandardMaterial color={rimColor} roughness={0.5} metalness={0.62} />
+      </mesh>)}
+      {object.open ? <mesh position={[0, -0.025, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.7, 0.7]} />
+        <meshBasicMaterial color="#020617" />
+      </mesh> : <>
+        <mesh position={[0, 0.015, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.7, 0.06, 0.7]} />
+          <meshStandardMaterial color="#475569" roughness={0.58} metalness={0.55} />
+        </mesh>
+        {[Math.PI / 4, -Math.PI / 4].map((angle) => <mesh key={angle} position={[0, 0.051, 0]} rotation={[0, angle, 0]}>
+          <boxGeometry args={[0.72, 0.01, 0.018]} />
+          <meshBasicMaterial color="#cbd5e1" />
+        </mesh>)}
+      </>}
+    </group>;
+  }
 
   const dx = object.edge.to.x - object.edge.from.x;
   const dy = object.edge.to.y - object.edge.from.y;
@@ -355,6 +416,28 @@ const TacticalTerrainPiece = ({ object, mapWidth, mapHeight, elevation, selected
     <boxGeometry args={horizontal ? [Math.abs(dx), TACTICAL_WALL_HEIGHT, 0.22] : [0.22, TACTICAL_WALL_HEIGHT, Math.abs(dy)]} />
     <meshBasicMaterial color={selected ? "#facc15" : "#f97316"} transparent opacity={selected ? 0.55 : damage > 0 ? 0.4 : 0} depthWrite={false} />
   </mesh>;
+  if (object.portalType === "iris-valve") {
+    return <group position={position} rotation={[0, horizontal ? 0 : Math.PI / 2, 0]} onClick={(event) => { event.stopPropagation(); onSelect({ x: Math.floor(event.point.x + mapWidth / 2), y: Math.floor(event.point.z + mapHeight / 2) }); }}>
+      <mesh position={[0, 0, -0.11]} castShadow receiveShadow>
+        <extrudeGeometry args={[IRIS_WALL_SHAPE, IRIS_WALL_EXTRUSION]} />
+        <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.22} />
+      </mesh>
+      <mesh castShadow receiveShadow>
+        <torusGeometry args={[0.33, 0.055, 10, 32]} />
+        <meshStandardMaterial color={selected ? "#facc15" : object.open ? "#22c55e" : "#d97706"} roughness={0.48} metalness={0.65} />
+      </mesh>
+      {!object.open && <>
+        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.29, 0.29, 0.08, 6]} />
+          <meshStandardMaterial color="#475569" roughness={0.55} metalness={0.58} />
+        </mesh>
+        {[-0.047, 0.047].flatMap((faceZ) => [0, Math.PI / 3, 2 * Math.PI / 3].map((angle) => <mesh key={`${faceZ}:${angle}`} position={[0, 0, faceZ]} rotation={[0, 0, angle]}>
+          <boxGeometry args={[0.55, 0.012, 0.008]} />
+          <meshBasicMaterial color="#cbd5e1" />
+        </mesh>))}
+      </>}
+    </group>;
+  }
   const openScale = object.open ? 0.18 : 1;
   const doorLength = horizontal ? Math.abs(dx) : Math.abs(dy);
   const retractionOffset = object.open ? -doorLength * (1 - openScale) / 2 : 0;
@@ -444,6 +527,7 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
     ? combatants.filter((unit) => unit.side === "enemy" && !unit.defeated && reachableMoves.has(pointKey(unit.position))).map((unit) => unit.id)
     : []);
   const plannedMove = tacticalMap.plannedDestination ? reachableMoves.get(pointKey(tacticalMap.plannedDestination)) ?? null : null;
+  const plannedLiquidHydrogenEntry = plannedMove?.path.find((point: { x: number; y: number }) => filledLiquidHydrogenCellKeys(tacticalMap.scenario).has(pointKey(point))) ?? null;
   const coveringFireTargetOptions = useMemo(() => selected && tacticalMap.coveringFireTargeting ? validCoveringFireTargets(tacticalMap.scenario, selected.id) : [], [selected, tacticalMap.coveringFireTargeting, tacticalMap.scenario]);
   const plannedCoveringFireCells = selectedPosition && selected?.weapon && tacticalMap.plannedCoveringFireTarget ? coveringFireDangerSpaceCells(tacticalMap.scenario, selectedPosition, tacticalMap.plannedCoveringFireTarget, selected.weapon.extremeRange) : [];
   const plannedGrenadeBlastCells = tacticalMap.plannedGrenadeTarget ? tacticalMap.grenadeKind === "smoke" ? grenadeBlastCells(tacticalMap.scenario, tacticalMap.plannedGrenadeTarget) : collateralBlastCells(tacticalMap.scenario, tacticalMap.plannedGrenadeTarget) : [];
@@ -478,15 +562,23 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
     {tacticalMap.lastWeaponImpact && <BlastAreaPreview center={tacticalMap.lastWeaponImpact.point} cells={tacticalMap.lastWeaponImpact.blastCells} width={mapWidth} height={mapHeight} resolved label={`${tacticalMap.lastWeaponImpact.weaponName} ${tacticalMap.lastWeaponImpact.ammunitionLabel} impact`} />}
     {tacticalMap.lastSatchelImpact && <BlastAreaPreview center={tacticalMap.lastSatchelImpact.point} cells={tacticalMap.lastSatchelImpact.blastCells} width={mapWidth} height={mapHeight} resolved label="Satchel impact · penetration 30" color="#f97316" />}
     <SatchelChargeMarkers charges={tacticalMap.satchelCharges} width={mapWidth} height={mapHeight} />
-    <FireArea cells={tacticalMap.scenario.fireCells ?? []} selected={tacticalMap.plannedExtinguishFire ?? null} width={mapWidth} height={mapHeight} />
+    <LiquidHydrogenAreas scenario={tacticalMap.scenario} />
+    <FireArea cells={tacticalMap.scenario.fireCells ?? []} selected={tacticalMap.plannedExtinguishFire ?? null} scenario={tacticalMap.scenario} />
     <SmokeArea cells={tacticalMap.scenario.smokeCells ?? []} width={mapWidth} height={mapHeight} />
     {wallRuns.map((run) => <TacticalWallRun key={run.segmentIds.join(":")} run={run} mapWidth={mapWidth} mapHeight={mapHeight} />)}
     {wallCorners.map((corner) => <mesh key={`${corner.x}:${corner.y}`} position={[corner.x - mapWidth / 2, TACTICAL_WALL_CENTER_Y, corner.y - mapHeight / 2]} castShadow receiveShadow>
       <boxGeometry args={[0.22, TACTICAL_WALL_HEIGHT, 0.22]} />
       <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.22} />
     </mesh>)}
-    {tacticalTerrain.map((object) => <TacticalTerrainPiece key={object.id} object={object} mapWidth={mapWidth} mapHeight={mapHeight} elevation={object.kind === "terminal" ? tacticalVisualHeightAt(tacticalMap.scenario, object.position) : 0} selected={tacticalMap.selectedTerrainObjectId === object.id} terminalActive={object.kind === "terminal" && Boolean(tacticalMap.terminalActiveById[object.id])} damage={tacticalMap.terrainDamageById[object.id] ?? 0} onSelect={(point) => tacticalMap.coveringFireTargeting ? dispatch(previewTacticalCoveringFire(point)) : dispatch(selectTacticalTerrainObject(object.id))} />)}
+    {tacticalTerrain.map((object) => <TacticalTerrainPiece key={object.id} object={object} mapWidth={mapWidth} mapHeight={mapHeight} elevation={object.kind === "terminal" || object.kind === "hatch" ? tacticalVisualHeightAt(tacticalMap.scenario, object.position) : 0} selected={tacticalMap.selectedTerrainObjectId === object.id} terminalActive={object.kind === "terminal" && Boolean(tacticalMap.terminalActiveById[object.id])} damage={tacticalMap.terrainDamageById[object.id] ?? 0} onSelect={(point) => tacticalMap.coveringFireTargeting ? dispatch(previewTacticalCoveringFire(point)) : dispatch(selectTacticalTerrainObject(object.id))} />)}
     {selectedPosition && plannedMove && <MovementPreview origin={selectedPosition} originElevationLevel={selected?.elevationLevel} path={plannedMove.path} elevationLevels={plannedMove.pathElevationLevels} destination={plannedMove.destination} scenario={tacticalMap.scenario} />}
+    {plannedLiquidHydrogenEntry && <group position={[plannedLiquidHydrogenEntry.x + 0.5 - mapWidth / 2, tacticalVisualHeightAt(tacticalMap.scenario, plannedLiquidHydrogenEntry) + 0.12, plannedLiquidHydrogenEntry.y + 0.5 - mapHeight / 2]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.28, 0.46, 32]} />
+        <meshBasicMaterial color="#ef4444" />
+      </mesh>
+      <Html center position={[0, 0.52, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-red-400 bg-black/95 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase text-red-100">Lethal liquid hydrogen</div></Html>
+    </group>}
     {combatants.filter((combatant) => combatant.side === "player" || crewVisibility.has(pointKey(combatant.position))).map((combatant) => {
       const animation = tacticalMap.movementAnimationByCharacterId[combatant.id];
       const worldMovement = animation ? { ...animation, path: animation.path.map((point, index) => [point.x + 0.5 - mapWidth / 2, (animation.elevationLevels?.[index] !== undefined ? animation.elevationLevels[index] * TACTICAL_WALL_HEIGHT : tacticalVisualHeightAt(tacticalMap.scenario, point)) + 0.02, point.y + 0.5 - mapHeight / 2] as [number, number, number]) } : undefined;
@@ -583,12 +675,18 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const blockedCells = useMemo(() => tacticalTerrainBlockedCells(tacticalTerrain), [tacticalTerrain]);
   const blockedEdges = useMemo(() => tacticalTerrainBlockedEdges(tacticalTerrain), [tacticalTerrain]);
   const selectedTerrain = tacticalTerrain.find((object) => object.id === tacticalMap.selectedTerrainObjectId) ?? null;
-  const terrainInteractionCost = selectedTerrain?.kind === "door" ? 2 : selectedTerrain?.kind === "terminal" ? 6 : 0;
-  const selectedDoorCommand = selectedTerrain?.kind === "door" ? tacticalMap.pendingDoorCommandsById[selectedTerrain.id] : null;
+  const terrainInteractionCost = selectedTerrain?.kind === "door" ? 2 : selectedTerrain?.kind === "terminal" || selectedTerrain?.kind === "hatch" ? 6 : 0;
+  const selectedDoorCommand = selectedTerrain?.kind === "door" || selectedTerrain?.kind === "hatch" ? tacticalMap.pendingDoorCommandsById[selectedTerrain.id] : null;
+  const vacuumCells = depressurizedCells(tacticalMap.scenario);
+  const selectedPortalPressureBlocked = selectedTerrain?.kind === "door" && selectedTerrain.portalType === "iris-valve" && !selectedTerrain.open
+    ? vacuumCells.has(pointKey(selectedTerrain.separates.first)) !== vacuumCells.has(pointKey(selectedTerrain.separates.second))
+    : false;
   const phaseStartPosition = activeCombatant ? tacticalMap.actionPhaseStartPositionByCombatantId[activeCombatant.id] : null;
   const terrainAdjacent = Boolean(selectedTerrain && (selectedTerrain.kind === "door"
     ? phaseStartPosition && [selectedTerrain.separates.first, selectedTerrain.separates.second].some((point) => point.x === phaseStartPosition.x && point.y === phaseStartPosition.y)
-    : selectedTerrain.kind === "terminal" && selectedPosition && Math.abs(selectedTerrain.position.x - selectedPosition.x) + Math.abs(selectedTerrain.position.y - selectedPosition.y) === 1));
+    : selectedTerrain.kind === "hatch"
+      ? phaseStartPosition && Math.abs(selectedTerrain.position.x - phaseStartPosition.x) + Math.abs(selectedTerrain.position.y - phaseStartPosition.y) === 1
+      : selectedTerrain.kind === "terminal" && selectedPosition && Math.abs(selectedTerrain.position.x - selectedPosition.x) + Math.abs(selectedTerrain.position.y - selectedPosition.y) === 1));
   const terminalAlreadyActive = selectedTerrain?.kind === "terminal" && Boolean(tacticalMap.terminalActiveById[selectedTerrain.id]);
   const selectedWeapon = activeCombatant?.weapon ?? null;
   const selectedAmmunition = activeCombatant ? tacticalMap.ammunitionByCharacterId[activeCombatant.id] ?? 0 : 0;
@@ -620,7 +718,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const plannedAutomaticRisks = activeCombatant && plannedAttackTarget ? automaticFireSecondaryTargets(tacticalMap.scenario, activeCombatant.id, plannedAttackTarget.id) : [];
   const structuralWeaponEligible = Boolean(selectedWeapon && (selectedWeapon.highEnergy ? selectedBraced : selectedWeapon.structuralDamage));
   const selectedStructure = selectedTerrain?.kind === "wall" || selectedTerrain?.kind === "door" ? selectedTerrain : null;
-  const selectedStructureThreshold = selectedStructure?.kind === "door" ? 5 : 25;
+  const selectedStructureThreshold = selectedStructure?.kind === "door" ? selectedStructure.portalType === "iris-valve" ? 10 : 5 : 25;
   const selectedStructureDamage = selectedStructure ? tacticalMap.terrainDamageById[selectedStructure.id] ?? 0 : 0;
   const activeOccupantsByCell = tacticalOccupantCounts(tacticalMap.scenario, activeCombatant?.id);
   const previewedMoves = selectedPosition && activeCombatant && tacticalMap.movementMode
@@ -632,6 +730,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
         .filter(([, move]) => tacticalMap.movementMode === "evade" ? move.path.length === 1 && (activeOccupantsByCell.get(pointKey(move.destination)) ?? 0) === 0 : (!selectedSuppressed && !draggedCombatant) || move.path.length <= 2))
     : null;
   const previewedMove = tacticalMap.plannedDestination ? previewedMoves?.get(pointKey(tacticalMap.plannedDestination)) ?? null : null;
+  const previewedLiquidHydrogenEntry = previewedMove?.path.find((point: { x: number; y: number }) => filledLiquidHydrogenCellKeys(tacticalMap.scenario).has(pointKey(point))) ?? null;
   const selectedEnteredEnemySquare = Boolean(activeCombatant && tacticalMap.enemySquareEnteredCombatantIds.includes(activeCombatant.id));
   const enemyEntryOptions = activeCombatant && tacticalMap.movementMode === "walk" && !selectedProne && !draggedCombatant && !selectedEnteredEnemySquare
     ? enemies.filter((enemy) => !enemy.defeated).flatMap((enemy) => {
@@ -969,10 +1068,10 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
             <div className="text-[7px] tracking-widest text-(--hud-text-dim)">{selectedProne ? "Stand before moving" : tacticalMap.movementMode ? `${tacticalMap.movementMode} perimeter shown` : "No action selected"}</div>
             {selectedTerrain && <div className="flex flex-col gap-2">
               <div className="border-b border-amber-300/40 pb-0.5 font-bold uppercase tracking-wider text-amber-200">Interaction</div>
-              <div className="font-bold text-amber-100">{selectedTerrain.kind === "wall" ? "Wall segment" : selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Open" : "Closed"} door` : selectedTerrain.label}</div>
+              <div className="font-bold text-amber-100">{selectedTerrain.kind === "wall" ? "Wall segment" : selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Open" : "Closed"} ${selectedTerrain.portalType === "iris-valve" ? "iris valve" : "door"}` : selectedTerrain.kind === "hatch" ? `${selectedTerrain.open ? "Open" : "Closed"} hatch` : selectedTerrain.label}</div>
               {selectedTerrain.kind !== "wall" && <><div className={`mt-1 ${terrainAdjacent ? "text-emerald-200" : "text-rose-200"}`}>{terrainAdjacent ? selectedTerrain.kind === "door" ? "Adjacent at phase start" : "Adjacent" : selectedTerrain.kind === "door" ? "Must begin the phase adjacent" : "Move adjacent to interact"}</div>
-                {selectedDoorCommand ? <div className="text-amber-200">Door will {selectedDoorCommand.open ? "open" : "close"} at the start of Turn {selectedDoorCommand.resolvesAtTurn}</div> : selectedTerrain.kind === "terminal" && terminalAlreadyActive ? <div className="text-emerald-200">Terminal active</div> : <button type="button" disabled={!terrainAdjacent || selectedActionPoints < terrainInteractionCost} onClick={() => dispatch(interactWithTacticalTerrain())} className="h-7 w-full border border-amber-300 px-2 text-[8px] font-bold uppercase tracking-wider text-amber-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
-                  {selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Close" : "Open"} door next phase · 2 AP` : "Activate terminal · 6 AP"}
+                {selectedDoorCommand ? <div className="text-amber-200">{selectedTerrain.kind === "hatch" ? "Hatch" : selectedTerrain.kind === "door" && selectedTerrain.portalType === "iris-valve" ? "Iris valve" : "Door"} will {selectedDoorCommand.open ? "open" : "close"} at the start of Turn {selectedDoorCommand.resolvesAtTurn}</div> : selectedPortalPressureBlocked ? <div className="text-rose-200">Cannot open across a pressure differential</div> : selectedTerrain.kind === "terminal" && terminalAlreadyActive ? <div className="text-emerald-200">Terminal active</div> : <button type="button" disabled={!terrainAdjacent || selectedActionPoints < terrainInteractionCost || selectedPortalPressureBlocked} onClick={() => dispatch(interactWithTacticalTerrain())} className="h-7 w-full border border-amber-300 px-2 text-[8px] font-bold uppercase tracking-wider text-amber-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
+                  {selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Close" : "Open"} ${selectedTerrain.portalType === "iris-valve" ? "iris valve" : "door"} next phase · 2 AP` : selectedTerrain.kind === "hatch" ? `${selectedTerrain.open ? "Close" : "Open"} hatch next phase · 6 AP` : "Activate terminal · 6 AP"}
                 </button>}</>}
               {selectedStructure && <div className="flex flex-col gap-1 border-t border-(--hud-border-subtle) pt-2">
                 <div>Integrity damage <span className="text-fuchsia-100">{selectedStructureDamage}/{selectedStructureThreshold}</span></div>
@@ -985,6 +1084,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
             {previewedMove && <div className="flex flex-col gap-1 border border-cyan-300/50 p-1">
               <div>Destination <span className="text-cyan-100">{previewedMove.destination.x}, {previewedMove.destination.y}</span></div>
               <div className="mt-1">Movement cost <span className="text-cyan-100">{tacticalMap.movementMode === "evade" ? 6 : previewedMove.cost}</span></div>
+              {previewedLiquidHydrogenEntry && <div className="font-bold uppercase tracking-wider text-red-200">Lethal: movement stops at liquid hydrogen {previewedLiquidHydrogenEntry.x},{previewedLiquidHydrogenEntry.y}</div>}
               {previewedMove.costBreakdown?.filter((entry: string) => entry.startsWith("congestion")).map((entry: string, index: number) => <div key={`${entry}:${index}`} className="text-amber-200">Occupied square · {entry}</div>)}
               {plannedMeleeDiveTarget && <div className="font-bold text-amber-100">Melee dive into {plannedMeleeDiveTarget.name} · +2 melee roll · no same-square −1 · simultaneous exchange · activation ends</div>}
               {plannedEnemyEntryTarget && <div className="font-bold text-amber-100">Enter {plannedEnemyEntryTarget.name}&apos;s square · defensive fire resolves first · movement ends · melee remains optional</div>}

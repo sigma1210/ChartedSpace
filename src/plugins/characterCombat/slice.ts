@@ -1,12 +1,12 @@
 import { createSlice, current, type PayloadAction } from "@reduxjs/toolkit";
 import type { ArmoryLoadoutId, CharacterCombatHudId, CharacterCombatHudLayout, CharacterCombatState, CharacterCombatViewMode, CombatScenario, CoveringFireLane, FireMode, GridPoint, MoraleState, TacticalLightingPreset, TacticalMapState, WeaponAmmunitionKind, WeaponProfile } from "./types";
-import { activeOccupantCounts, adjacencyEntryStepIndex, adjacentEnemies, adjacentObjectives, automaticFireSecondaryTargets, breachableDoorsAdjacentTo, climbUpOptions, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, decompressionMovesForDoor, depressurizedCells, doorBlastCells, dropDownOptions, elevationAttackModifier, fireLaneCells, grenadeBlastCells, grenadeLandingPoint, grenadeThrowCoverModifier, grenadeThrowRangeModifier, hasLineOfSight, inFieldOfFire, lightingLevelAt, meleeEnemies, movementPathCost, objectiveContesters, openDoorsAdjacentTo, pathWithinMovementAllowance, pointKey, rangedEnemies, reachableMovement, remainingCriticalFireCells, routeAllowingClosedDoors, scenarioAvoidingFireForPathfinding, shortestPathToAny, tacticalRangedEnemies, tacticalVisibilityAssessment, treatableAllies, validCoveringFireTargets, validGrenadeTargets, vaultOptions, visibilityAssessment, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
+import { activeOccupantCounts, adjacencyEntryStepIndex, adjacentEnemies, adjacentObjectives, automaticFireSecondaryTargets, breachableDoorsAdjacentTo, climbUpOptions, closedDoorsAdjacentTo, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, decompressionMovesForDoor, depressurizedCells, doorBlastCells, dropDownOptions, elevationAttackModifier, filledLiquidHydrogenCellKeys, fireLaneCells, grenadeBlastCells, grenadeLandingPoint, grenadeThrowCoverModifier, grenadeThrowRangeModifier, hasLineOfSight, inFieldOfFire, lightingLevelAt, meleeEnemies, movementPathCost, objectiveContesters, openDoorsAdjacentTo, pathWithinMovementAllowance, pointKey, rangedEnemies, reachableMovement, remainingCriticalFireCells, routeAllowingClosedDoors, scenarioAvoidingFireForPathfinding, scenarioAvoidingLiquidHydrogenForPathfinding, shortestPathToAny, tacticalRangedEnemies, tacticalVisibilityAssessment, treatableAllies, validCoveringFireTargets, validGrenadeTargets, vaultOptions, visibilityAssessment, zeroGravityPushes, zeroGravityRecoilPath } from "./geometry";
 import { accumulateWound, automaticFireModifierForRange, distanceInSquares, escalateWoundState, resolveAhlMelee, resolveAhlMoraleCheck, resolveSnapShot, snapShotTarget, weaponPenetrationForRange, woundStateForTotal, type AhlMeleeEffect, type DicePair, type SnapShotResult } from "./combatResolution";
 import { diveOptions, reachableCrawling } from "./geometry";
 import { ahlMeleeDiveMoves } from "./geometry";
 import { reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalOccupantCounts } from "./geometry";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "./enemyTactics";
-import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalTerrainObjectsForScenario, type TacticalDoor, type TacticalTerminal } from "./tacticalTerrain";
+import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalTerrainObjectsForScenario, type TacticalDoor, type TacticalTerminal, type TacticalTerrainObject } from "./tacticalTerrain";
 import { armoryLoadouts } from "./equipment";
 import { buildDefaultTacticalScenario, defaultTacticalLighting } from "./defaultTacticalScenario";
 import type { TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
@@ -41,6 +41,14 @@ const buildHydratedDefaultTacticalScenario = (entries: readonly TacticalCrewInpu
 const tacticalPlayerIds = (map: TacticalMapState) => map.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id);
 const tacticalCombatant = (map: TacticalMapState, id: string | null | undefined) => id ? map.scenario.combatants.find((unit) => unit.id === id) ?? null : null;
 const tacticalTerrainObject = (map: TacticalMapState, id: string | null | undefined) => id ? tacticalTerrainObjectsForScenario(map.scenario).find((object) => object.id === id) ?? null : null;
+const tacticalStructureBreachThreshold = (object: TacticalTerrainObject) => object.kind === "door" ? object.portalType === "iris-valve" ? 10 : 5 : 25;
+const tacticalStructurePenetrationModifier = (object: TacticalTerrainObject) => object.kind === "door" && object.portalType === "iris-valve" ? -5 : -4;
+const irisValveAcrossPressureDifferential = (map: TacticalMapState, doorId: string) => {
+  const object = tacticalTerrainObject(map, doorId);
+  if (object?.kind !== "door" || object.portalType !== "iris-valve") return false;
+  const vacuum = depressurizedCells(map.scenario);
+  return vacuum.has(pointKey(object.separates.first)) !== vacuum.has(pointKey(object.separates.second));
+};
 type AmmunitionProfile = NonNullable<WeaponProfile["ammunitionProfiles"]>[number];
 const applyAmmunitionProfile = (weapon: WeaponProfile, profile: AmmunitionProfile) => {
   weapon.ammunitionKind = profile.kind;
@@ -99,10 +107,16 @@ const resolveTacticalPendingDoorCommands = (map: TacticalMapState) => {
   Object.entries(map.pendingDoorCommandsById).forEach(([doorId, command]) => {
     if (command.resolvesAtTurn > map.turn) return;
     if (!map.destroyedTerrainObjectIds.includes(doorId)) {
+      const object = tacticalTerrainObject(map, doorId);
+      if (command.open && irisValveAcrossPressureDifferential(map, doorId)) {
+        map.events.unshift(`Iris valve ${doorId} could not open across a pressure differential at the start of Turn ${map.turn}`);
+        delete map.pendingDoorCommandsById[doorId];
+        return;
+      }
       map.doorOpenById[doorId] = command.open;
       const scenarioDoor = map.scenario.doors.find((door) => door.id === doorId);
       if (scenarioDoor) scenarioDoor.open = command.open;
-      map.events.unshift(`Control-room door ${command.open ? "opened" : "closed"} at the start of Turn ${map.turn}`);
+      map.events.unshift(`${object?.kind === "hatch" ? "Hatch" : object?.kind === "door" && object.portalType === "iris-valve" ? "Iris valve" : "Control-room door"} ${command.open ? "opened" : "closed"} at the start of Turn ${map.turn}`);
     }
     delete map.pendingDoorCommandsById[doorId];
   });
@@ -427,10 +441,10 @@ const resolveTacticalSatchelCharge = (map: TacticalMapState, chargeId: string, r
     if ((object.kind !== "wall" && object.kind !== "door") || map.destroyedTerrainObjectIds.includes(object.id)) return;
     const distance = Math.min(tacticalSquareDistance(charge.position, object.separates.first), tacticalSquareDistance(charge.position, object.separates.second));
     if (distance > 2 || (distance > 0 && ![object.separates.first, object.separates.second].some((point) => hasLineOfSight(map.scenario, charge.position, point)))) return;
-    const damage = Math.max(0, Math.floor(30 / (2 ** distance)) - 4);
+    const damage = Math.max(0, Math.floor(30 / (2 ** distance)) + tacticalStructurePenetrationModifier(object));
     if (damage === 0) return;
     map.terrainDamageById[object.id] = (map.terrainDamageById[object.id] ?? 0) + damage;
-    const threshold = object.kind === "door" ? 5 : 25;
+    const threshold = tacticalStructureBreachThreshold(object);
     if (map.terrainDamageById[object.id] < threshold) return;
     if (!map.destroyedTerrainObjectIds.includes(object.id)) map.destroyedTerrainObjectIds.push(object.id);
     if (object.kind === "door") {
@@ -1072,9 +1086,22 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       const adjacentAtPhaseStart = Boolean(startPosition && [door.separates.first, door.separates.second].some((point) => point.x === startPosition.x && point.y === startPosition.y));
       const open = map.doorOpenById[door.id] ?? door.open;
       if (!adjacentAtPhaseStart || map.pendingDoorCommandsById[door.id] || (map.actionPointsByCharacterId[characterId] ?? 0) < 2) return;
+      if (!open && irisValveAcrossPressureDifferential(map, door.id)) {
+        map.events.unshift(`${character.name} could not open ${door.id} across a pressure differential`);
+        return;
+      }
       map.pendingDoorCommandsById[door.id] = { open: !open, resolvesAtTurn: map.turn + 1, characterId };
       map.actionPointsByCharacterId[characterId] -= 2;
-      interactionEvent = `${character.name} activated the control-room door to ${open ? "close" : "open"} at the start of Turn ${map.turn + 1} (2 AP)`;
+      interactionEvent = `${character.name} activated the ${door.portalType === "iris-valve" ? "iris valve" : "control-room door"} to ${open ? "close" : "open"} at the start of Turn ${map.turn + 1} (2 AP)`;
+    } else if (object.kind === "hatch") {
+      const hatch = object;
+      const startPosition = map.actionPhaseStartPositionByCombatantId[characterId];
+      const adjacentAtPhaseStart = Boolean(startPosition && distanceBetween(startPosition, hatch.position) === 1);
+      const open = map.doorOpenById[hatch.id] ?? hatch.open;
+      if (!adjacentAtPhaseStart || map.pendingDoorCommandsById[hatch.id] || (map.actionPointsByCharacterId[characterId] ?? 0) < 6) return;
+      map.pendingDoorCommandsById[hatch.id] = { open: !open, resolvesAtTurn: map.turn + 1, characterId };
+      map.actionPointsByCharacterId[characterId] -= 6;
+      interactionEvent = `${character.name} activated the hatch to ${open ? "close" : "open"} at the start of Turn ${map.turn + 1} (6 AP)`;
     } else if (object.kind === "terminal") {
       const terminal = object as TacticalTerminal;
       const adjacent = Math.abs(terminal.position.x - character.position.x) + Math.abs(terminal.position.y - character.position.y) === 1;
@@ -1112,9 +1139,11 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const targetNumber = rangeBand === "effective" ? 8 : rangeBand === "long" ? 10 : 12;
     if (hitTotal >= targetNumber) {
       const penetration = weaponPenetrationForRange(weapon, rangeBand);
-      const damage = weapon.structuralDamage ?? Math.max(0, penetration - 4);
+      const damage = object.kind === "door" && object.portalType === "iris-valve"
+        ? Math.max(0, penetration + tacticalStructurePenetrationModifier(object))
+        : weapon.structuralDamage ?? Math.max(0, penetration + tacticalStructurePenetrationModifier(object));
       map.terrainDamageById[object.id] = (map.terrainDamageById[object.id] ?? 0) + damage;
-      const threshold = object.kind === "door" ? 5 : 25;
+      const threshold = tacticalStructureBreachThreshold(object);
       if (map.terrainDamageById[object.id] >= threshold) {
         if (!map.destroyedTerrainObjectIds.includes(object.id)) map.destroyedTerrainObjectIds.push(object.id);
         if (object.kind === "door") map.doorOpenById[object.id] = true;
@@ -1922,7 +1951,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         { x: target.position.x + 1, y: target.position.y }, { x: target.position.x, y: target.position.y + 1 },
         { x: target.position.x - 1, y: target.position.y }, { x: target.position.x, y: target.position.y - 1 },
       ].filter((point) => point.x >= 0 && point.y >= 0 && point.x < scenario.width && point.y < scenario.height);
-      const routeScenario = current(map.scenario);
+      const routeScenario = scenarioAvoidingLiquidHydrogenForPathfinding(current(map.scenario));
       let route = shortestPathToAny(routeScenario, enemy.id, goals);
       if (!route) {
         const doorRoute = routeAllowingClosedDoors(routeScenario, enemy.id, goals);
@@ -1933,6 +1962,10 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
           }
           const scenarioDoor = scenario.doors.find((door) => door.id === doorRoute.door!.id);
           if (!scenarioDoor) continue;
+          if (irisValveAcrossPressureDifferential(map, scenarioDoor.id)) {
+            recordTacticalObservedEvent(map, enemy, `${enemy.name} could not open ${scenarioDoor.id} across a pressure differential`);
+            continue;
+          }
           scenarioDoor.open = true;
           map.doorOpenById[scenarioDoor.id] = true;
           map.actionPointsByCharacterId[enemy.id] -= 6;
@@ -2149,8 +2182,18 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const moves = mode === "sidestep"
       ? sidestepAndBackstepMoves({ width: map.scenario.width, height: map.scenario.height, origin, facing: character?.facing ?? "south", allowance: available, blockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: activeOccupantCounts(map.scenario.combatants, id), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells })
       : reachableOpenMapMovement({ width: map.scenario.width, height: map.scenario.height, origin, originElevationLevel: character?.elevationLevel, facing: character?.facing ?? "south", allowance: Math.min(6, available), trotting: mode === "trot", blockedCells, blockedEdges: tacticalTerrainBlockedEdges(terrain), activeOccupantsByCell: tacticalOccupantCounts(map.scenario, id), terrainByCell: map.scenario.terrainByCell, elevationLevelByCell: map.scenario.elevationLevelByCell, bridges: map.scenario.bridges, closeMachineryCells: map.scenario.closeMachineryCells, elevationAccessCells: map.scenario.elevationAccessCells });
-    const move = moves.get(pointKey(destination));
-    if (!move) return;
+    const selectedMove = moves.get(pointKey(destination));
+    if (!selectedMove) return;
+    const liquidHydrogenCells = filledLiquidHydrogenCellKeys(map.scenario);
+    const liquidHydrogenStepIndex = selectedMove.path.findIndex((point) => liquidHydrogenCells.has(pointKey(point)));
+    const enteredLiquidHydrogen = liquidHydrogenStepIndex >= 0;
+    const move = enteredLiquidHydrogen ? {
+      ...selectedMove,
+      destination: selectedMove.path[liquidHydrogenStepIndex],
+      path: selectedMove.path.slice(0, liquidHydrogenStepIndex + 1),
+      pathElevationLevels: selectedMove.pathElevationLevels?.slice(0, liquidHydrogenStepIndex + 1),
+      finalElevationLevel: selectedMove.pathElevationLevels?.[liquidHydrogenStepIndex] ?? map.scenario.elevationLevelByCell?.[pointKey(selectedMove.path[liquidHydrogenStepIndex])] ?? 0,
+    } : selectedMove;
     const destinationLevel = move.finalElevationLevel ?? map.scenario.elevationLevelByCell?.[pointKey(destination)] ?? 0;
     if ((mode !== "evade" && move.cost > available) || (mode === "evade" && (move.path.length !== 1 || (tacticalOccupantCounts(map.scenario, id).get(`${pointKey(destination)}@${destinationLevel}`) ?? 0) > 0)) || ((dragged || map.suppressedCombatantIds.includes(id)) && move.path.length > 2)) return;
     const hostileEntryStepIndex = move.path.findIndex((point, index) => map.scenario.combatants.some((unit) => unit.side !== character.side && !unit.defeated
@@ -2253,6 +2296,18 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       map.movementAnimationByCharacterId[dragged.id] = { sequence: (map.movementAnimationByCharacterId[dragged.id]?.sequence ?? 0) + 1, path: [draggedOrigin, ...draggedPath], mode: "walk" };
     }
     map.bracedCombatantIds = map.bracedCombatantIds.filter((combatantId) => combatantId !== id);
+    if (enteredLiquidHydrogen) {
+      applyTacticalWound(map, character, "dead");
+      map.actionPointsByCharacterId[id] = 0;
+      map.plannedDestination = null;
+      map.plannedEnemyEntryTargetId = null;
+      map.plannedMeleeTargetId = null;
+      map.movementMode = "walk";
+      if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
+      map.events.unshift(`${character.name} entered liquid hydrogen at ${character.position.x},${character.position.y} and was killed`);
+      advanceTacticalPlayerActivation(map);
+      return;
+    }
     const enteredEnemySquare = Boolean(enemyEntryTarget && !enemyEntryTarget.defeated && pointKey(enemyEntryTarget.position) === pointKey(character.position));
     map.events.unshift(mode === "evade" ? `${character.name} evaded to ${move.destination.x},${move.destination.y} (6 AP)` : mode === "sidestep" ? `${character.name} sidestepped/backstepped to ${move.destination.x},${move.destination.y} (4 AP)` : enteredEnemySquare ? `${character.name} entered ${enemyEntryTarget!.name}'s square at ${move.destination.x},${move.destination.y}; movement ended (${move.cost} AP)` : `${character.name} moved to ${move.destination.x},${move.destination.y} (${move.cost} AP)`);
     map.actionPointsByCharacterId[id] = mode === "evade" ? 0 : Math.max(0, available - move.cost);

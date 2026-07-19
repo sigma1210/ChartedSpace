@@ -18,7 +18,13 @@ interface TacticalBoundary extends TacticalTerrainBase {
 }
 
 export interface TacticalWallSegment extends TacticalBoundary { kind: "wall" }
-export interface TacticalDoor extends TacticalBoundary { kind: "door"; open: boolean }
+export interface TacticalDoor extends TacticalBoundary { kind: "door"; open: boolean; portalType?: "sliding-door" | "iris-valve" }
+export interface TacticalHatch extends TacticalTerrainBase {
+  kind: "hatch";
+  position: GridPoint;
+  open: boolean;
+  integrity: number;
+}
 export interface TacticalTerminal extends TacticalTerrainBase {
   kind: "terminal";
   position: GridPoint;
@@ -30,7 +36,7 @@ export interface TacticalTerminal extends TacticalTerrainBase {
   completesScenario?: boolean;
 }
 
-export type TacticalTerrainObject = TacticalWallSegment | TacticalDoor | TacticalTerminal;
+export type TacticalTerrainObject = TacticalWallSegment | TacticalDoor | TacticalHatch | TacticalTerminal;
 export interface ControlRoomDefinition { id: string; origin: GridPoint; rotation?: TacticalRotation; terminal: TacticalTerminalDefinition }
 export interface ControlRoom { id: string; origin: GridPoint; rotation: TacticalRotation; width: 9; height: 9; objects: TacticalTerrainObject[]; interiorCells: GridPoint[]; lightSources: TacticalLightSource[] }
 
@@ -62,7 +68,7 @@ export const createControlRoom = ({ id, origin, rotation = 0, terminal }: Contro
     const separates = { first: worldPoint(origin, rotateCell(inside, rotation)), second: worldPoint(origin, rotateCell(outside, rotation)) };
     const isDoor = offset === 4;
     const boundary = { id: `${id}:${side}:${isDoor ? "door" : "wall"}:${offset}`, edge, separates, blocking: true, targetable: true, integrity: isDoor ? 2 : 3 };
-    if (isDoor) objects.push({ ...boundary, kind: "door", open: false });
+    if (isDoor) objects.push({ ...boundary, kind: "door", open: false, portalType: "sliding-door" });
     else objects.push({ ...boundary, kind: "wall" });
   };
 
@@ -92,7 +98,7 @@ export const createControlRoom = ({ id, origin, rotation = 0, terminal }: Contro
 const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 export const tacticalMovementEdgeKey = (first: GridPoint, second: GridPoint) => [pointKey(first), pointKey(second)].sort().join("|");
 export const tacticalTerrainBlockedCells = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalTerminal => object.kind === "terminal" && object.blocking).map((object) => pointKey(object.position)));
-export const tacticalTerrainBlockedEdges = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalWallSegment | TacticalDoor => object.kind !== "terminal" && object.blocking && (object.kind !== "door" || !object.open)).map((object) => tacticalMovementEdgeKey(object.separates.first, object.separates.second)));
+export const tacticalTerrainBlockedEdges = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalWallSegment | TacticalDoor => (object.kind === "wall" || object.kind === "door") && object.blocking && (object.kind !== "door" || !object.open)).map((object) => tacticalMovementEdgeKey(object.separates.first, object.separates.second)));
 
 const cellsSeparatedBy = (from: GridPoint, to: GridPoint) => from.x === to.x
   ? { first: { x: from.x - 1, y: Math.min(from.y, to.y) }, second: { x: from.x, y: Math.min(from.y, to.y) } }
@@ -117,6 +123,7 @@ export const tacticalTerrainObjectsForScenario = (scenario: CombatScenario): Tac
     targetable: true,
     integrity: 2,
     open: door.open,
+    portalType: door.portalType ?? "sliding-door",
   })),
   ...scenario.objects.filter((object) => object.kind === "console").map((object): TacticalTerminal => ({
     id: object.id,
@@ -134,7 +141,7 @@ export const tacticalTerrainObjectsForScenario = (scenario: CombatScenario): Tac
 
 export const activeTacticalTerrainObjects = (scenario: CombatScenario, doorOpenById: Record<string, boolean>, destroyedIds: readonly string[] = []) => tacticalTerrainObjectsForScenario(scenario)
   .filter((object) => !destroyedIds.includes(object.id))
-  .map((object) => object.kind === "door" ? { ...object, open: doorOpenById[object.id] ?? object.open } : object);
+  .map((object) => object.kind === "door" || object.kind === "hatch" ? { ...object, open: doorOpenById[object.id] ?? object.open } : object);
 
 export interface TacticalWallVisualRun { edge: { from: GridPoint; to: GridPoint }; segmentIds: string[] }
 

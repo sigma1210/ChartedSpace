@@ -24,6 +24,7 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     objects: terrain.objects,
     terrainObjects: terrain.terrainObjects,
     bridges: terrain.bridges,
+    liquidHydrogenAreas: terrain.liquidHydrogenAreas,
     interiorCells: terrain.interiorCells,
     lightSources: terrain.lightSources,
     terrainByCell: terrain.terrainByCell,

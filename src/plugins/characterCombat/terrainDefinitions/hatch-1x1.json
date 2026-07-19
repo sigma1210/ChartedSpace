@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "hatch-1x1",
+  "label": "Hatch 1x1",
+  "size": { "width": 1, "height": 1 },
+  "cellRegions": [],
+  "boundaryRuns": [],
+  "objects": [
+    {
+      "id": "hatch",
+      "kind": "hatch",
+      "position": { "x": 0, "y": 0 },
+      "open": false,
+      "blocking": false,
+      "targetable": true,
+      "integrity": 2
+    }
+  ],
+  "lightSources": []
+}

@@ -16,8 +16,13 @@ import console1x1DefinitionJson from "./terrainDefinitions/console-1x1.json";
 import bridge1x5DefinitionJson from "./terrainDefinitions/bridge-1x5.json";
 import bridge1x7DefinitionJson from "./terrainDefinitions/bridge-1x7.json";
 import bridge1x9DefinitionJson from "./terrainDefinitions/bridge-1x9.json";
+import irisValveDefinitionJson from "./terrainDefinitions/iris-valve.json";
+import hatch1x1DefinitionJson from "./terrainDefinitions/hatch-1x1.json";
+import liquidHydrogen2x2DefinitionJson from "./terrainDefinitions/liquid-hydrogen-2x2.json";
+import liquidHydrogen3x3DefinitionJson from "./terrainDefinitions/liquid-hydrogen-3x3.json";
+import liquidHydrogen4x4DefinitionJson from "./terrainDefinitions/liquid-hydrogen-4x4.json";
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
-import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TerrainType } from "./types";
+import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType } from "./types";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
 
 type BoundarySide = "north" | "east" | "south" | "west";
@@ -28,8 +33,8 @@ export interface TacticalTerrainDefinitionFile {
   label: string;
   size: { width: number; height: number };
   cellRegions: { terrainType: "interior" | TerrainType; origin: GridPoint; width: number; height: number }[];
-  boundaryRuns: { side: BoundarySide; start: number; length: number; doorOffsets: number[] }[];
-  objects: {
+  boundaryRuns: { side: BoundarySide; start: number; length: number; doorOffsets: number[]; portalType?: "sliding-door" | "iris-valve" }[];
+  objects: ({
     id: string;
     kind: "terminal";
     position: GridPoint;
@@ -41,10 +46,19 @@ export interface TacticalTerrainDefinitionFile {
     targetable: boolean;
     integrity: number;
     completesScenario?: boolean;
-  }[];
+  } | {
+    id: string;
+    kind: "hatch";
+    position: GridPoint;
+    open: boolean;
+    blocking: boolean;
+    targetable: boolean;
+    integrity: number;
+  })[];
   lightSources: TacticalLightSource[];
   elevationAccessCells?: GridPoint[];
   bridgeDeck?: boolean;
+  liquidHydrogen?: boolean;
 }
 
 export interface TacticalTerrainPlacement {
@@ -52,6 +66,7 @@ export interface TacticalTerrainPlacement {
   terrainDefinitionId: string;
   origin: GridPoint;
   rotation: TacticalRotation;
+  terrainSettings?: { filled?: boolean };
   objectSettings?: Record<string, { terminalKind?: TacticalTerminalKind; label?: string; facing?: TacticalRotation; operational?: boolean; completesScenario?: boolean }>;
 }
 
@@ -79,6 +94,7 @@ export interface ResolvedTacticalScenarioTerrain {
   closeMachineryCells: GridPoint[];
   elevationAccessCells: GridPoint[];
   bridges: TacticalBridge[];
+  liquidHydrogenAreas: TacticalLiquidHydrogenArea[];
 }
 
 const deepFreeze = <T,>(value: T): T => {
@@ -107,6 +123,11 @@ const console1x1Definition = deepFreeze(console1x1DefinitionJson as TacticalTerr
 const bridge1x5Definition = deepFreeze(bridge1x5DefinitionJson as TacticalTerrainDefinitionFile);
 const bridge1x7Definition = deepFreeze(bridge1x7DefinitionJson as TacticalTerrainDefinitionFile);
 const bridge1x9Definition = deepFreeze(bridge1x9DefinitionJson as TacticalTerrainDefinitionFile);
+const irisValveDefinition = deepFreeze(irisValveDefinitionJson as TacticalTerrainDefinitionFile);
+const hatch1x1Definition = deepFreeze(hatch1x1DefinitionJson as TacticalTerrainDefinitionFile);
+const liquidHydrogen2x2Definition = deepFreeze(liquidHydrogen2x2DefinitionJson as TacticalTerrainDefinitionFile);
+const liquidHydrogen3x3Definition = deepFreeze(liquidHydrogen3x3DefinitionJson as TacticalTerrainDefinitionFile);
+const liquidHydrogen4x4Definition = deepFreeze(liquidHydrogen4x4DefinitionJson as TacticalTerrainDefinitionFile);
 export const defaultTacticalScenarioDefinition = deepFreeze(defaultScenarioDefinitionJson as TacticalScenarioDefinitionFile);
 export const cloneTacticalScenarioDefinition = (definition: TacticalScenarioDefinitionFile): TacticalScenarioDefinitionFile => JSON.parse(JSON.stringify(definition)) as TacticalScenarioDefinitionFile;
 const tacticalTerrainDefinitions = new Map([
@@ -128,6 +149,11 @@ const tacticalTerrainDefinitions = new Map([
   [bridge1x5Definition.id, bridge1x5Definition],
   [bridge1x7Definition.id, bridge1x7Definition],
   [bridge1x9Definition.id, bridge1x9Definition],
+  [irisValveDefinition.id, irisValveDefinition],
+  [hatch1x1Definition.id, hatch1x1Definition],
+  [liquidHydrogen2x2Definition.id, liquidHydrogen2x2Definition],
+  [liquidHydrogen3x3Definition.id, liquidHydrogen3x3Definition],
+  [liquidHydrogen4x4Definition.id, liquidHydrogen4x4Definition],
 ]);
 export const tacticalTerrainPalette = [...tacticalTerrainDefinitions.values()].map((definition) => ({
   id: definition.id,
@@ -139,6 +165,7 @@ export const tacticalTerrainPalette = [...tacticalTerrainDefinitions.values()].m
     ...(definition.elevationAccessCells ?? []).map((point) => ({ ...point })),
     ];
     if (cells.length > 0) return cells;
+    if (definition.liquidHydrogen) return Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => ({ x, y }))).flat();
     if (definition.bridgeDeck) return Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => ({ x, y }))).flat();
     return definition.objects.map((object) => ({ ...object.position }));
   })(),
@@ -191,11 +218,19 @@ const resolveTerrainPlacement = (definition: TacticalTerrainDefinitionFile, plac
       const isDoor = run.doorOffsets.includes(offset);
       const id = `${placement.id}:${run.side}:${isDoor ? "door" : "wall"}:${offset}`;
       const common = { id, edge, separates, blocking: true, targetable: true, integrity: isDoor ? 2 : 3 };
-      objects.push(isDoor ? { ...common, kind: "door", open: false } : { ...common, kind: "wall" });
+      objects.push(isDoor ? { ...common, kind: "door", open: false, portalType: run.portalType ?? "sliding-door" } : { ...common, kind: "wall" });
     }
   });
 
   definition.objects.forEach((object) => {
+    if (object.kind === "hatch") {
+      objects.push({
+        ...object,
+        id: `${placement.id}:${object.id}`,
+        position: worldPoint(placement.origin, rotatedCell(object.position, definition.size, placement.rotation)),
+      });
+      return;
+    }
     const settings = placement.objectSettings?.[object.id];
     objects.push({
       ...object,
@@ -219,13 +254,16 @@ const resolveTerrainPlacement = (definition: TacticalTerrainDefinitionFile, plac
   const bridgeCells = definition.bridgeDeck
     ? Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => worldPoint(placement.origin, rotatedCell({ x, y }, definition.size, placement.rotation)))).flat()
     : [];
+  const liquidHydrogenFootprintCells = definition.liquidHydrogen
+    ? Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => worldPoint(placement.origin, rotatedCell({ x, y }, definition.size, placement.rotation)))).flat()
+    : [];
   const occupiedCells = [...resolvedRegions.filter((region) => region.terrainType !== "close-machinery").flatMap((region) => region.cells), ...elevationAccessCells];
   const lightSources = definition.lightSources.map((source) => ({
     ...source,
     id: `${placement.id}:${source.id}`,
     position: worldPoint(placement.origin, rotatedCell(source.position, definition.size, placement.rotation)),
   }));
-  return { objects, interiorCells, elevatedCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, bridgeCells, occupiedCells };
+  return { objects, interiorCells, elevatedCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, bridgeCells, liquidHydrogenFootprintCells, liquidHydrogenFilled: placement.terrainSettings?.filled !== false, occupiedCells };
 };
 
 export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinitionFile): ResolvedTacticalScenarioTerrain => {
@@ -237,10 +275,18 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const elevationLevelByCell: Record<string, number> = {};
   const closeMachineryCells: GridPoint[] = [];
   const bridges: TacticalBridge[] = [];
+  const liquidHydrogenAreas: TacticalLiquidHydrogenArea[] = [];
   const elevationAccessCells: GridPoint[] = [];
   const placementIds = new Set<string>();
   const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
   const validCell = (point: GridPoint) => point.x >= 0 && point.y >= 0 && point.x < scenario.map.width && point.y < scenario.map.height;
+  const fireCellKeys = new Set<string>();
+  scenario.fireCells.forEach((point) => {
+    if (!validCell(point)) throw new Error(`Scenario fire extends outside the map at ${pointKey(point)}.`);
+    const key = pointKey(point);
+    if (fireCellKeys.has(key)) throw new Error(`Duplicate scenario fire at ${key}.`);
+    fireCellKeys.add(key);
+  });
   const records = scenario.terrainPlacements.map((placement) => {
     if (placementIds.has(placement.id)) throw new Error(`Duplicate tactical terrain placement ID: ${placement.id}`);
     placementIds.add(placement.id);
@@ -253,7 +299,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         throw new Error(`Tactical terrain placement ${placement.id} has a doorway that does not connect two valid map cells.`);
       }
     });
-    [...resolved.occupiedCells, ...resolved.closeMachineryCells, ...resolved.bridgeCells].forEach((point) => {
+    [...resolved.occupiedCells, ...resolved.closeMachineryCells, ...resolved.bridgeCells, ...resolved.liquidHydrogenFootprintCells].forEach((point) => {
       if (!validCell(point)) throw new Error(`Tactical terrain placement ${placement.id} extends outside the map at ${point.x}:${point.y}`);
     });
     terrainObjects.push(...resolved.objects);
@@ -385,32 +431,87 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     terminalByCell.set(key, terminal.id);
   });
 
+  const hatchRecords = records.filter((record) => record.placement.terrainDefinitionId === "hatch-1x1");
+  const hatchByCell = new Map<string, string>();
+  hatchRecords.forEach((record) => {
+    const hatch = record.resolved.objects.find((object) => object.kind === "hatch");
+    if (!hatch || !validCell(hatch.position)) throw new Error(`Hatch placement ${record.placement.id} extends outside the map.`);
+    const key = pointKey(hatch.position);
+    const existing = hatchByCell.get(key);
+    if (existing) throw new Error(`Hatch placements ${existing} and ${record.placement.id} overlap at ${key}.`);
+    if (machineryCells.has(key)) throw new Error(`Hatch placement ${record.placement.id} overlaps close machinery at ${key}.`);
+    if (stairCells.has(key)) throw new Error(`Hatch placement ${record.placement.id} overlaps stairs at ${key}.`);
+    if (bridgeOwnerByCell.has(key)) throw new Error(`Hatch placement ${record.placement.id} overlaps a bridge at ${key}.`);
+    if (terminalByCell.has(key)) throw new Error(`Hatch placement ${record.placement.id} overlaps a console at ${key}.`);
+    hatchByCell.set(key, record.placement.id);
+
+  });
+
+  const liquidHydrogenOwnerByCell = new Map<string, string>();
+  records.filter((record) => record.resolved.liquidHydrogenFootprintCells.length > 0).forEach((record) => {
+    const cells = record.resolved.liquidHydrogenFootprintCells;
+    cells.forEach((point) => {
+      const key = pointKey(point);
+      const existing = liquidHydrogenOwnerByCell.get(key);
+      if (existing) throw new Error(`Liquid-hydrogen placements ${existing} and ${record.placement.id} overlap at ${key}.`);
+      if (machineryCells.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps close machinery at ${key}.`);
+      if (stairCells.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps stairs at ${key}.`);
+      if (bridgeOwnerByCell.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps a bridge at ${key}.`);
+      if (terminalByCell.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps a console at ${key}.`);
+      if (hatchByCell.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps a hatch at ${key}.`);
+      liquidHydrogenOwnerByCell.set(key, record.placement.id);
+    });
+    const raisedOwners = cells.map((point) => topRaisedOwnerByCell.get(pointKey(point)));
+    const coveredOwners = new Set(raisedOwners.filter((owner): owner is string => Boolean(owner)));
+    if (coveredOwners.size > 0 && (coveredOwners.size !== 1 || raisedOwners.some((owner) => owner !== raisedOwners[0]))) {
+      throw new Error(`Liquid-hydrogen placement ${record.placement.id} must fit entirely within one raised-area placement.`);
+    }
+    const levels = new Set(cells.map((point) => elevationLevelByCell[pointKey(point)] ?? 0));
+    if (levels.size !== 1) throw new Error(`Liquid-hydrogen placement ${record.placement.id} must occupy one elevation level.`);
+    liquidHydrogenAreas.push({ id: record.placement.id, cells: cells.map((point) => ({ ...point })), filled: record.resolved.liquidHydrogenFilled, elevationLevel: [...levels][0] });
+  });
+
   const walls: CombatScenario["walls"] = [];
   const doors: CombatScenario["doors"] = [];
   const objects: MapObject[] = [];
-  const mergedTerrainObjects: TacticalTerrainObject[] = [];
+  const mergedNonBoundaryObjects: TacticalTerrainObject[] = [];
   const boundaryByEdge = new Map<string, TacticalTerrainObject>();
-  terrainObjects.forEach((object) => {
-    if (object.kind !== "wall" && object.kind !== "door") {
-      mergedTerrainObjects.push(object);
-      return;
-    }
+  const boundaryEdgeKey = (object: Extract<TacticalTerrainObject, { kind: "wall" | "door" }>) => {
     const vertical = object.edge.from.x === object.edge.to.x;
-    const edgeKey = vertical
+    return vertical
       ? `v:${object.edge.from.x}:${Math.min(object.edge.from.y, object.edge.to.y)}:${Math.max(object.edge.from.y, object.edge.to.y)}`
       : `h:${object.edge.from.y}:${Math.min(object.edge.from.x, object.edge.to.x)}:${Math.max(object.edge.from.x, object.edge.to.x)}`;
+  };
+  terrainObjects.filter((object): object is Extract<TacticalTerrainObject, { kind: "door" }> => object.kind === "door" && object.portalType === "iris-valve").forEach((iris) => {
+    const edgeKey = boundaryEdgeKey(iris);
+    const underlying = terrainObjects.filter((candidate): candidate is Extract<TacticalTerrainObject, { kind: "wall" | "door" }> => candidate !== iris && (candidate.kind === "wall" || candidate.kind === "door") && boundaryEdgeKey(candidate) === edgeKey);
+    if (!underlying.some((candidate) => candidate.kind === "wall") || underlying.some((candidate) => candidate.kind === "door")) {
+      throw new Error(`Iris valve placement ${iris.id} must replace one existing wall segment.`);
+    }
+  });
+  terrainObjects.forEach((object) => {
+    if (object.kind !== "wall" && object.kind !== "door") {
+      mergedNonBoundaryObjects.push(object);
+      return;
+    }
+    const edgeKey = boundaryEdgeKey(object);
     const existing = boundaryByEdge.get(edgeKey);
     if (!existing) {
       boundaryByEdge.set(edgeKey, object);
-      mergedTerrainObjects.push(object);
       return;
     }
+    if (object.kind === "door" && object.portalType === "iris-valve" && existing.kind === "wall") {
+      boundaryByEdge.set(edgeKey, object);
+      return;
+    }
+    if (existing.kind === "door" && existing.portalType === "iris-valve" && object.kind === "wall") return;
     if (existing.kind !== object.kind) throw new Error(`Tactical terrain boundary conflict between ${existing.id} and ${object.id}.`);
   });
+  const mergedTerrainObjects = [...mergedNonBoundaryObjects, ...boundaryByEdge.values()];
   mergedTerrainObjects.forEach((object) => {
     if (object.kind === "wall") walls.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to } });
-    else if (object.kind === "door") doors.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to }, open: object.open });
-    else objects.push({ id: object.id, kind: "console", position: { ...object.position }, label: object.label });
+    else if (object.kind === "door") doors.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to }, open: object.open, portalType: object.portalType ?? "sliding-door" });
+    else if (object.kind === "terminal") objects.push({ id: object.id, kind: "console", position: { ...object.position }, label: object.label });
   });
-  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, closeMachineryCells, elevationAccessCells, bridges };
+  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, closeMachineryCells, elevationAccessCells, bridges, liquidHydrogenAreas };
 };
