@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "default-tactical-control-room",
+  "consoleVictoryDefinitionId": "default-tactical-control-room",
   "title": "Control Room Assault",
   "briefing": "The boarding crew has reached a hostile vessel's security control room.",
   "objective": "Secure the Security Terminal.",
@@ -21,6 +22,22 @@
           "facing": 180
         }
       }
+    }
+  ],
+  "enemyPlacements": [
+    {
+      "id": "enemy-1",
+      "type": "gang-member",
+      "name": "Gang Member 1",
+      "position": { "x": 47, "y": 41 },
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "enemy-2",
+      "type": "gang-leader",
+      "name": "Gang Leader 1",
+      "position": { "x": 50, "y": 43 },
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-brown-v1.png"
     }
   ],
   "fireCells": [{ "x": 48, "y": 35 }],

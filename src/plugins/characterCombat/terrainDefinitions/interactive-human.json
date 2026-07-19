@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "interactive-human",
+  "label": "Interactive Human",
+  "size": { "width": 1, "height": 1 },
+  "cellRegions": [],
+  "boundaryRuns": [],
+  "objects": [
+    {
+      "id": "terminal",
+      "kind": "terminal",
+      "position": { "x": 0, "y": 0 },
+      "terminalKind": "generic",
+      "label": "Interactive Human",
+      "facing": 0,
+      "operational": true,
+      "blocking": true,
+      "targetable": false,
+      "integrity": 1,
+      "visualKind": "human",
+      "modelPath": "/models/character-combat/female.glb"
+    }
+  ],
+  "lightSources": []
+}

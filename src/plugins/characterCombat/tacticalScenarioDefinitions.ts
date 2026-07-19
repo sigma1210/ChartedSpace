@@ -21,6 +21,7 @@ import hatch1x1DefinitionJson from "./terrainDefinitions/hatch-1x1.json";
 import liquidHydrogen2x2DefinitionJson from "./terrainDefinitions/liquid-hydrogen-2x2.json";
 import liquidHydrogen3x3DefinitionJson from "./terrainDefinitions/liquid-hydrogen-3x3.json";
 import liquidHydrogen4x4DefinitionJson from "./terrainDefinitions/liquid-hydrogen-4x4.json";
+import interactiveHumanDefinitionJson from "./terrainDefinitions/interactive-human.json";
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
 import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType } from "./types";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
@@ -46,6 +47,8 @@ export interface TacticalTerrainDefinitionFile {
     targetable: boolean;
     integrity: number;
     completesScenario?: boolean;
+    visualKind?: "console" | "human";
+    modelPath?: string;
   } | {
     id: string;
     kind: "hatch";
@@ -70,14 +73,25 @@ export interface TacticalTerrainPlacement {
   objectSettings?: Record<string, { terminalKind?: TacticalTerminalKind; label?: string; facing?: TacticalRotation; operational?: boolean; completesScenario?: boolean }>;
 }
 
+export type TacticalEnemyType = "gang-member" | "gang-leader";
+export interface TacticalEnemyPlacement {
+  id: string;
+  type: TacticalEnemyType;
+  name: string;
+  position: GridPoint;
+  avatarPath: string;
+}
+
 export interface TacticalScenarioDefinitionFile {
   schemaVersion: 1;
   id: string;
+  consoleVictoryDefinitionId?: string;
   title: string;
   briefing: string;
   objective: string;
   map: { width: number; height: number; backgroundImage?: string };
   terrainPlacements: TacticalTerrainPlacement[];
+  enemyPlacements?: TacticalEnemyPlacement[];
   fireCells: GridPoint[];
   smokeCells: GridPoint[];
 }
@@ -128,6 +142,7 @@ const hatch1x1Definition = deepFreeze(hatch1x1DefinitionJson as TacticalTerrainD
 const liquidHydrogen2x2Definition = deepFreeze(liquidHydrogen2x2DefinitionJson as TacticalTerrainDefinitionFile);
 const liquidHydrogen3x3Definition = deepFreeze(liquidHydrogen3x3DefinitionJson as TacticalTerrainDefinitionFile);
 const liquidHydrogen4x4Definition = deepFreeze(liquidHydrogen4x4DefinitionJson as TacticalTerrainDefinitionFile);
+const interactiveHumanDefinition = deepFreeze(interactiveHumanDefinitionJson as TacticalTerrainDefinitionFile);
 export const defaultTacticalScenarioDefinition = deepFreeze(defaultScenarioDefinitionJson as TacticalScenarioDefinitionFile);
 export const cloneTacticalScenarioDefinition = (definition: TacticalScenarioDefinitionFile): TacticalScenarioDefinitionFile => JSON.parse(JSON.stringify(definition)) as TacticalScenarioDefinitionFile;
 const tacticalTerrainDefinitions = new Map([
@@ -154,7 +169,9 @@ const tacticalTerrainDefinitions = new Map([
   [liquidHydrogen2x2Definition.id, liquidHydrogen2x2Definition],
   [liquidHydrogen3x3Definition.id, liquidHydrogen3x3Definition],
   [liquidHydrogen4x4Definition.id, liquidHydrogen4x4Definition],
+  [interactiveHumanDefinition.id, interactiveHumanDefinition],
 ]);
+export const tacticalPlacementSupportsConsoleOperations = (placement: Pick<TacticalTerrainPlacement, "terrainDefinitionId">) => placement.terrainDefinitionId === "control-room" || placement.terrainDefinitionId === "console-1x1" || placement.terrainDefinitionId === "interactive-human";
 export const tacticalTerrainPalette = [...tacticalTerrainDefinitions.values()].map((definition) => ({
   id: definition.id,
   label: definition.label,

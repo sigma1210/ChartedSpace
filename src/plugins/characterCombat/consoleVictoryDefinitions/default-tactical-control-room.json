@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "default-tactical-control-room",
+  "scenarioId": "default-tactical-control-room",
+  "operations": [
+    {
+      "id": "secure-security-terminal",
+      "consolePlacementId": "control-room-alpha",
+      "label": "Secure Security Terminal",
+      "prerequisites": { "mode": "all", "operationIds": [] },
+      "checks": [
+        { "id": "security-access", "skill": "Security", "difficulty": "average", "apCost": 6 }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": { "type": "victory" }
+    }
+  ]
+}

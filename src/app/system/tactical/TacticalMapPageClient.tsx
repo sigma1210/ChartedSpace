@@ -12,6 +12,7 @@ import { AnimatedCombatantFallback, AnimatedCombatantModel } from "@/plugins/cha
 import { AnimatedCombatantPlacement } from "@/plugins/characterCombat/AnimatedCombatantPlacement";
 import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalDraftPlaytest, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalDraftPlaytest, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
 import { updateTacticalEnemyHud, updateTacticalScenarioHud } from "@/plugins/characterCombat/slice";
+import { attemptTacticalConsoleCheck } from "@/plugins/characterCombat/slice";
 import { recordTacticalExploration } from "@/plugins/characterCombat/slice";
 import { recordTacticalEnemySightings } from "@/plugins/characterCombat/slice";
 import { automaticFireSecondaryTargets, collateralBlastCells, coverProtection, coveringFireDangerSpaceCells, depressurizedCells, filledLiquidHydrogenCellKeys, grenadeBlastCells, meleeEnemies, pointKey, reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalBaseLightingLevelAt, tacticalCrewVisibilityMask, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightSources, tacticalOccupantCounts, tacticalRangedEnemies, tacticalVisibilityAssessment, terrainHeightAt, treatableAllies, validCoveringFireTargets } from "@/plugins/characterCombat/geometry";
@@ -19,6 +20,7 @@ import { automaticFireModifierForRange, snapShotTarget, weaponAccuracyForRange, 
 import type { Combatant, CombatScenario, TacticalMapState } from "@/plugins/characterCombat/types";
 import { buildDefaultTacticalScenario } from "@/plugins/characterCombat/defaultTacticalScenario";
 import type { TacticalScenarioDefinitionFile } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
+import { consoleOperationAvailable, type TacticalConsoleVictoryDefinitionFile } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns, type TacticalTerrainObject, type TacticalWallVisualRun } from "@/plugins/characterCombat/tacticalTerrain";
 import {
   fetchCharacters,
@@ -371,6 +373,19 @@ const LiquidHydrogenAreas = ({ scenario }: { scenario: CombatScenario }) => <>
 
 const TacticalTerrainPiece = ({ object, mapWidth, mapHeight, elevation, selected, terminalActive, damage, onSelect }: { object: TacticalTerrainObject; mapWidth: number; mapHeight: number; elevation: number; selected: boolean; terminalActive: boolean; damage: number; onSelect: (point: { x: number; y: number }) => void }) => {
   if (object.kind === "terminal") {
+    if (object.visualKind === "human") {
+      const position: [number, number, number] = [object.position.x + 0.5 - mapWidth / 2, elevation + 0.02, object.position.y + 0.5 - mapHeight / 2];
+      return <group position={position} rotation={[0, object.facing * Math.PI / 180, 0]} onClick={(event) => { event.stopPropagation(); onSelect(object.position); }}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
+          <ringGeometry args={[0.35, 0.44, 32]} />
+          <meshBasicMaterial color={selected ? "#facc15" : terminalActive ? "#22c55e" : "#a855f7"} transparent opacity={0.9} />
+        </mesh>
+        <Suspense fallback={<AnimatedCombatantFallback color="#a855f7" />}>
+          <AnimatedCombatantModel animation="idle" facing="north" modelPath={object.modelPath ?? "/models/character-combat/female.glb"} />
+        </Suspense>
+        <Html center position={[0, 1.25, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-purple-400/70 bg-slate-950/90 px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-wider text-purple-100">{object.label}</div></Html>
+      </group>;
+    }
     const position: [number, number, number] = [object.position.x + 0.5 - mapWidth / 2, elevation + 0.38, object.position.y + 0.5 - mapHeight / 2];
     return <group position={position} rotation={[0, object.facing * Math.PI / 180, 0]} onClick={(event) => { event.stopPropagation(); onSelect(object.position); }}>
     <mesh castShadow receiveShadow>
@@ -625,10 +640,13 @@ const TacticalCharacterButton = ({ character, actionPoints, selected, onSelect }
 };
 
 const TacticalEnemyStatusCard = ({ combatant, state, sight, selected, onSelect }: { combatant: Combatant; state: string; sight: "target" | "los" | "no-los"; selected: boolean; onSelect: () => void }) => {
+  const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
   const wound = `${combatant.woundState}${(combatant.seriousWounds ?? 0) > 0 ? ` · serious ${combatant.seriousWounds}/2` : ""}`;
   const sightLabel = sight === "target" ? "Target" : sight === "los" ? "LOS" : "No LOS";
+  const portraitPath = combatant.avatarPath ?? null;
+  const showPortrait = portraitPath && failedPortraitPath !== portraitPath;
   return <button type="button" disabled={sight !== "target"} onClick={onSelect} aria-label={`${sight === "target" ? "Target" : "Enemy"} ${combatant.name}, ${sightLabel}, state ${state}, wound ${wound}`} aria-pressed={selected} className={`relative flex h-16 w-24 shrink-0 flex-col justify-end border p-1 text-left transition-colors ${selected ? "border-red-100 bg-red-500/25 text-red-50 shadow-[0_0_12px_rgba(248,113,113,0.4)]" : sight === "target" ? "border-red-300 bg-red-950/80 text-red-100 hover:bg-red-900/80" : sight === "los" ? "border-red-500/50 bg-red-950/50 text-red-200" : "border-slate-600/60 bg-slate-950/80 text-slate-500"} disabled:cursor-not-allowed`}>
-    <span className="absolute left-1 top-1 flex h-7 w-7 items-center justify-center border border-red-400/40 bg-black/60 text-xs font-bold uppercase">{combatant.name.slice(0, 1)}</span>
+    <span className="absolute left-1 top-1 flex h-7 w-7 items-center justify-center overflow-hidden border border-red-400/40 bg-black/60 text-xs font-bold uppercase">{showPortrait ? <Image src={portraitPath} alt="" fill sizes="28px" onError={() => setFailedPortraitPath(portraitPath)} className="object-cover" /> : combatant.name.slice(0, 1)}</span>
     <span className={`absolute right-1 top-1 border px-1 text-[6px] font-bold uppercase ${sight === "target" ? "border-red-300 bg-red-950 text-red-100" : sight === "los" ? "border-amber-300/70 bg-amber-950 text-amber-100" : "border-slate-600 bg-slate-950 text-slate-400"}`}>{sightLabel}</span>
     <span className="w-full truncate text-[7px] font-bold leading-none">{combatant.name}</span>
     <span className="mt-1 w-full truncate text-[6px] uppercase leading-none">State: {state}</span>
@@ -636,7 +654,7 @@ const TacticalEnemyStatusCard = ({ combatant, state, sight, selected, onSelect }
   </button>;
 };
 
-const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition: TacticalScenarioDefinitionFile; onExit: () => void } }) => {
+const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition: TacticalScenarioDefinitionFile; consoleVictory: TacticalConsoleVictoryDefinitionFile; onExit: () => void } }) => {
   const dispatch = useAppDispatch();
   const status = useAppSelector(selectCharactersStatus);
   const allCharacters = useAppSelector(selectCharacters);
@@ -688,6 +706,10 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
       ? phaseStartPosition && Math.abs(selectedTerrain.position.x - phaseStartPosition.x) + Math.abs(selectedTerrain.position.y - phaseStartPosition.y) === 1
       : selectedTerrain.kind === "terminal" && selectedPosition && Math.abs(selectedTerrain.position.x - selectedPosition.x) + Math.abs(selectedTerrain.position.y - selectedPosition.y) === 1));
   const terminalAlreadyActive = selectedTerrain?.kind === "terminal" && Boolean(tacticalMap.terminalActiveById[selectedTerrain.id]);
+  const selectedConsoleOperations = selectedTerrain?.kind === "terminal"
+    ? (tacticalMap.scenario.consoleVictory?.operations ?? []).filter((operation) => `${operation.consolePlacementId}:terminal` === selectedTerrain.id)
+    : [];
+  const availableConsoleOperations = selectedConsoleOperations.filter((operation) => consoleOperationAvailable(operation, tacticalMap.completedConsoleOperationIds ?? []));
   const selectedWeapon = activeCombatant?.weapon ?? null;
   const selectedAmmunition = activeCombatant ? tacticalMap.ammunitionByCharacterId[activeCombatant.id] ?? 0 : 0;
   const coveringFireAmmunition = selectedWeapon?.burstSize ?? (selectedWeapon?.automatic ? 3 : 1);
@@ -780,8 +802,8 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   }, [dispatch, visibleCellKeys, visibleEnemySightings]);
   useEffect(() => {
     if (status !== "loaded" || shipStatus !== "loaded") return;
-    const crew = characters.map((character) => ({ id: character.id, name: character.name, weaponSkill: character.skills.find((skill) => skill.name === "Gun Combat")?.level ?? 0, meleeRating: character.skills.find((skill) => skill.name === "Melee")?.level ?? 0 }));
-    dispatch(draftPlaytest ? initializeTacticalDraftPlaytest({ crew, definition: draftPlaytest.definition }) : initializeTacticalMapSetup(crew));
+    const crew = characters.map((character) => ({ id: character.id, name: character.name, weaponSkill: character.skills.find((skill) => skill.name === "Gun Combat")?.level ?? 0, meleeRating: character.skills.find((skill) => skill.name === "Melee")?.level ?? 0, skills: character.skills }));
+    dispatch(draftPlaytest ? initializeTacticalDraftPlaytest({ crew, definition: draftPlaytest.definition, consoleVictory: draftPlaytest.consoleVictory }) : initializeTacticalMapSetup(crew));
   }, [characters, dispatch, draftPlaytest, shipStatus, status]);
   useEffect(() => {
     const profileId = activeCombatant?.sourceCharacterId ?? activeCombatant?.id ?? null;
@@ -1070,8 +1092,20 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
               <div className="border-b border-amber-300/40 pb-0.5 font-bold uppercase tracking-wider text-amber-200">Interaction</div>
               <div className="font-bold text-amber-100">{selectedTerrain.kind === "wall" ? "Wall segment" : selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Open" : "Closed"} ${selectedTerrain.portalType === "iris-valve" ? "iris valve" : "door"}` : selectedTerrain.kind === "hatch" ? `${selectedTerrain.open ? "Open" : "Closed"} hatch` : selectedTerrain.label}</div>
               {selectedTerrain.kind !== "wall" && <><div className={`mt-1 ${terrainAdjacent ? "text-emerald-200" : "text-rose-200"}`}>{terrainAdjacent ? selectedTerrain.kind === "door" ? "Adjacent at phase start" : "Adjacent" : selectedTerrain.kind === "door" ? "Must begin the phase adjacent" : "Move adjacent to interact"}</div>
-                {selectedDoorCommand ? <div className="text-amber-200">{selectedTerrain.kind === "hatch" ? "Hatch" : selectedTerrain.kind === "door" && selectedTerrain.portalType === "iris-valve" ? "Iris valve" : "Door"} will {selectedDoorCommand.open ? "open" : "close"} at the start of Turn {selectedDoorCommand.resolvesAtTurn}</div> : selectedPortalPressureBlocked ? <div className="text-rose-200">Cannot open across a pressure differential</div> : selectedTerrain.kind === "terminal" && terminalAlreadyActive ? <div className="text-emerald-200">Terminal active</div> : <button type="button" disabled={!terrainAdjacent || selectedActionPoints < terrainInteractionCost || selectedPortalPressureBlocked} onClick={() => dispatch(interactWithTacticalTerrain())} className="h-7 w-full border border-amber-300 px-2 text-[8px] font-bold uppercase tracking-wider text-amber-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
-                  {selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Close" : "Open"} ${selectedTerrain.portalType === "iris-valve" ? "iris valve" : "door"} next phase · 2 AP` : selectedTerrain.kind === "hatch" ? `${selectedTerrain.open ? "Close" : "Open"} hatch next phase · 6 AP` : "Activate terminal · 6 AP"}
+                {selectedDoorCommand ? <div className="text-amber-200">{selectedTerrain.kind === "hatch" ? "Hatch" : selectedTerrain.kind === "door" && selectedTerrain.portalType === "iris-valve" ? "Iris valve" : "Door"} will {selectedDoorCommand.open ? "open" : "close"} at the start of Turn {selectedDoorCommand.resolvesAtTurn}</div> : selectedPortalPressureBlocked ? <div className="text-rose-200">Cannot open across a pressure differential</div> : selectedTerrain.kind === "terminal" ? <div className="flex flex-col gap-1">
+                  {availableConsoleOperations.map((operation) => {
+                    const progress = tacticalMap.consoleOperationProgressById?.[operation.id];
+                    const check = operation.checks.find((candidate) => !progress?.completedCheckIds.includes(candidate.id));
+                    if (!check) return null;
+                    const completed = progress?.completedCheckIds.length ?? 0;
+                    return <button key={operation.id} type="button" disabled={!terrainAdjacent || selectedActionPoints < check.apCost} onClick={() => dispatch(attemptTacticalConsoleCheck({ operationId: operation.id, dice: rollDicePair() }))} className="min-h-8 w-full border border-amber-300 px-2 py-1 text-left text-[8px] font-bold uppercase tracking-wider text-amber-100 disabled:cursor-not-allowed disabled:opacity-40">
+                      <span className="block">{operation.label} · {check.apCost} AP</span>
+                      <span className="block text-[7px] font-normal text-amber-200">{check.skill} · {check.difficulty.replace("-", " ")} {({ simple: 2, easy: 4, routine: 6, average: 8, difficult: 10, "very-difficult": 12, formidable: 14 } as const)[check.difficulty]}+ · check {completed + 1}/{operation.checks.length}</span>
+                    </button>;
+                  })}
+                  {availableConsoleOperations.length === 0 && <div className={terminalAlreadyActive ? "text-emerald-200" : "text-slate-400"}>{terminalAlreadyActive ? selectedTerrain.visualKind === "human" ? "Interaction completed" : "Console operation completed" : selectedTerrain.visualKind === "human" ? "No interaction currently unlocked" : "No console operation currently unlocked"}</div>}
+                </div> : <button type="button" disabled={!terrainAdjacent || selectedActionPoints < terrainInteractionCost || selectedPortalPressureBlocked} onClick={() => dispatch(interactWithTacticalTerrain())} className="h-7 w-full border border-amber-300 px-2 text-[8px] font-bold uppercase tracking-wider text-amber-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
+                  {selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Close" : "Open"} ${selectedTerrain.portalType === "iris-valve" ? "iris valve" : "door"} next phase · 2 AP` : `${selectedTerrain.open ? "Close" : "Open"} hatch next phase · 6 AP`}
                 </button>}</>}
               {selectedStructure && <div className="flex flex-col gap-1 border-t border-(--hud-border-subtle) pt-2">
                 <div>Integrity damage <span className="text-fuchsia-100">{selectedStructureDamage}/{selectedStructureThreshold}</span></div>
@@ -1098,7 +1132,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
             <div className="text-amber-100">Crew activations complete. End the turn to run enemy actions.</div>
             <button type="button" onClick={() => dispatch(runTacticalEnemyPhase(enemyPhaseRolls()))} className="h-7 w-full border border-amber-300 px-2 text-[8px] font-bold uppercase tracking-wider text-amber-100 transition-colors hover:bg-amber-300/15">End Turn</button>
           </> : <div className="text-(--hud-text-dim)">Select a green character.</div>}
-          <button type="button" onClick={() => dispatch(draftPlaytest ? resetTacticalDraftPlaytest(draftPlaytest.definition) : resetTacticalScenario())} className="h-7 w-full border border-red-300 px-2 text-[8px] font-bold uppercase tracking-wider text-red-100 transition-colors hover:bg-red-300/15">Reset Scenario</button>
+          <button type="button" onClick={() => dispatch(draftPlaytest ? resetTacticalDraftPlaytest({ definition: draftPlaytest.definition, consoleVictory: draftPlaytest.consoleVictory }) : resetTacticalScenario())} className="h-7 w-full border border-red-300 px-2 text-[8px] font-bold uppercase tracking-wider text-red-100 transition-colors hover:bg-red-300/15">Reset Scenario</button>
         </section>
       </FloatingPluginHud>
       {(status === "loading" || shipStatus === "loading") && <div className="absolute inset-x-0 bottom-8 text-center font-mono text-xs uppercase tracking-widest text-cyan-200">Loading crew…</div>}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listTacticalScenarioFiles, saveTacticalScenarioAs, TacticalScenarioFileError } from "@/plugins/characterCombat/server/tacticalScenarioFiles";
+import { listTacticalScenarioFiles, saveTacticalScenarioBundleAs, TacticalScenarioFileError } from "@/plugins/characterCombat/server/tacticalScenarioFiles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,18 +17,19 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let body: { name?: unknown; definition?: unknown };
+  let body: { name?: unknown; definition?: unknown; consoleVictory?: unknown };
   try {
-    body = await request.json() as { name?: unknown; definition?: unknown };
+    body = await request.json() as { name?: unknown; definition?: unknown; consoleVictory?: unknown };
   } catch {
     return NextResponse.json({ error: "The request body must be valid JSON." }, { status: 400 });
   }
   try {
     if (typeof body.name !== "string") return NextResponse.json({ error: "A scenario name is required." }, { status: 400 });
-    const definition = await saveTacticalScenarioAs(body.name, body.definition);
+    const saved = await saveTacticalScenarioBundleAs(body.name, body.definition, body.consoleVictory);
     return NextResponse.json({
-      scenario: { id: definition.id, title: definition.title, isDefault: false },
-      definition,
+      scenario: { id: saved.scenario.id, title: saved.scenario.title, isDefault: false },
+      definition: saved.scenario,
+      consoleVictory: saved.consoleVictory,
     }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

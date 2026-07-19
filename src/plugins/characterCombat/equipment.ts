@@ -1,6 +1,8 @@
 import type { ArmoryLoadoutId, CombatScenario, WeaponProfile } from "./types";
 
 export const characterCombatWeapons = {
+  noRangedWeapon: { name: "No Ranged Weapon", effectiveRange: 0, longRange: 0, extremeRange: 0, penetration: 0, automatic: false, magazineSize: 0 },
+  bodyPistol: { name: "Body Pistol", effectiveRange: 4, longRange: 8, extremeRange: 13, penetration: 1, automatic: false, magazineSize: 6, visualCategory: "pistol", accuracyByRange: { long: -1, extreme: -2 }, penetrationByRange: { effective: 1, long: 0, extreme: 0 } },
   holdoutPistol: { name: "Holdout Pistol", effectiveRange: 4, longRange: 8, extremeRange: 13, penetration: 1, automatic: false, magazineSize: 6, visualCategory: "pistol", accuracyByRange: { long: -1, extreme: -2 }, penetrationByRange: { effective: 1, long: 0, extreme: 0 } },
   autopistol: { name: "Autopistol", effectiveRange: 6, longRange: 13, extremeRange: 33, penetration: 1, automatic: false, magazineSize: 12, visualCategory: "pistol", penetrationByRange: { effective: 1, long: 0, extreme: 0 } },
   shotgun: { name: "Shotgun", effectiveRange: 20, longRange: 40, extremeRange: 40, penetration: 3, automatic: false, inherentAutomaticFireBonus: true, automaticFireBonusByRange: { effective: 5, long: 2 }, magazineSize: 6, visualCategory: "shotgun", penetrationByRange: { effective: 3, long: 0, extreme: 0 } },

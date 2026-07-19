@@ -2,9 +2,12 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "../tacticalScenarioDefinitions";
+import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "../tacticalConsoleVictory";
 import {
   listTacticalScenarioFiles,
+  loadTacticalScenarioBundle,
   loadTacticalScenarioFile,
+  saveTacticalScenarioBundleAs,
   saveTacticalScenarioAs,
 } from "../server/tacticalScenarioFiles";
 
@@ -33,6 +36,20 @@ describe("tactical scenario files", () => {
     expect(await listTacticalScenarioFiles(directory)).toEqual([
       { id: "cargo-deck-assault", title: "Cargo Deck Assault", isDefault: false },
     ]);
+  });
+
+  it("saves and loads the scenario and console-victory definitions together", async () => {
+    const scenarioDirectory = path.join(directory, "scenarios");
+    const consoleDirectory = path.join(directory, "consoles");
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    const consoleVictory = cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
+
+    const saved = await saveTacticalScenarioBundleAs("Chained Console Test", draft, consoleVictory, scenarioDirectory, consoleDirectory);
+    const loaded = await loadTacticalScenarioBundle("chained-console-test", scenarioDirectory, consoleDirectory);
+
+    expect(saved.scenario.consoleVictoryDefinitionId).toBe("chained-console-test");
+    expect(saved.consoleVictory).toMatchObject({ id: "chained-console-test", scenarioId: "chained-console-test" });
+    expect(loaded).toEqual(saved);
   });
 
   it("never overwrites an existing scenario", async () => {

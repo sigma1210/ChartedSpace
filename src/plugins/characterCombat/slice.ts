@@ -10,16 +10,17 @@ import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerr
 import { armoryLoadouts } from "./equipment";
 import { buildDefaultTacticalScenario, defaultTacticalLighting } from "./defaultTacticalScenario";
 import type { TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
+import { consoleOperationAvailable, travellerTaskTarget, type TacticalConsoleVictoryDefinitionFile } from "./tacticalConsoleVictory";
 
 const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const highEnergyWeaponReady = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => !unit.weapon.highEnergy
   || state.bracedCombatantIds.includes(unit.id);
 const canAttackStructures = (unit: CombatScenario["combatants"][number]) => Boolean(unit.weapon.highEnergy || unit.weapon.structuralDamage);
 const tacticalHitRollEvent = (result: SnapShotResult, targetNumber = result.targetNumber) => `raw 2d6 ${result.hitRoll} · DM ${result.hitModifier >= 0 ? "+" : ""}${result.hitModifier} · total ${result.hitTotal}/${targetNumber}`;
-type TacticalCrewInput = string | { id: string; name?: string; weaponSkill: number; meleeRating?: number };
-const tacticalCrew = (entries: readonly TacticalCrewInput[]) => entries.slice(0, 2).map((entry) => typeof entry === "string" ? { id: entry, name: entry, weaponSkill: 0, meleeRating: 0 } : { ...entry, name: entry.name ?? entry.id, meleeRating: entry.meleeRating ?? 0 });
-const buildHydratedDefaultTacticalScenario = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], lightingPreset?: TacticalLightingPreset, definition?: TacticalScenarioDefinitionFile) => {
-  const scenario = buildDefaultTacticalScenario(lightingPreset, definition);
+type TacticalCrewInput = string | { id: string; name?: string; weaponSkill: number; meleeRating?: number; skills?: { name: string; level: number }[] };
+const tacticalCrew = (entries: readonly TacticalCrewInput[]) => entries.slice(0, 2).map((entry) => typeof entry === "string" ? { id: entry, name: entry, weaponSkill: 0, meleeRating: 0, skills: [] } : { ...entry, name: entry.name ?? entry.id, meleeRating: entry.meleeRating ?? 0, skills: entry.skills ?? [] });
+const buildHydratedDefaultTacticalScenario = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], lightingPreset?: TacticalLightingPreset, definition?: TacticalScenarioDefinitionFile, consoleVictory?: TacticalConsoleVictoryDefinitionFile) => {
+  const scenario = buildDefaultTacticalScenario(lightingPreset, definition, consoleVictory);
   const crew = tacticalCrew(entries);
   const players = scenario.combatants.filter((unit) => unit.side === "player");
   const tacticalLoadoutIds: readonly ArmoryLoadoutId[] = loadoutIds[0] === "scout" && loadoutIds[1] === "breacher" ? ["lag", "assault"] : loadoutIds;
@@ -30,6 +31,7 @@ const buildHydratedDefaultTacticalScenario = (entries: readonly TacticalCrewInpu
     unit.sourceCharacterId = member.id;
     unit.name = member.name;
     unit.weaponSkill = member.weaponSkill;
+    unit.skills = member.skills.map((skill) => ({ ...skill }));
     unit.meleeRating = member.meleeRating;
     unit.weapon = { ...loadout.weapon };
     unit.armor = loadout.armor.value;
@@ -347,9 +349,9 @@ const resolveTacticalMovingAdjacentSnapShot = (map: TacticalMapState, shooter: C
   map.events.unshift(`${shooter.name} moving-adjacent failure snap fired at ${target.name}: ${tacticalHitRollEvent(result)} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
   return true;
 };
-const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], layouts?: Pick<TacticalMapState, "characterHudLayout" | "enemyHudLayout" | "actionHudLayout" | "characterInformationHudLayout" | "eventsHudLayout" | "scenarioHudLayout">, options: { setup?: boolean; lightingPreset?: TacticalLightingPreset; definition?: TacticalScenarioDefinitionFile } = {}): TacticalMapState => {
+const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], layouts?: Pick<TacticalMapState, "characterHudLayout" | "enemyHudLayout" | "actionHudLayout" | "characterInformationHudLayout" | "eventsHudLayout" | "scenarioHudLayout">, options: { setup?: boolean; lightingPreset?: TacticalLightingPreset; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile } = {}): TacticalMapState => {
   const lightingPreset = options.lightingPreset ?? "exterior-dark";
-  const scenario = buildHydratedDefaultTacticalScenario(entries, loadoutIds, lightingPreset, options.definition);
+  const scenario = buildHydratedDefaultTacticalScenario(entries, loadoutIds, lightingPreset, options.definition, options.consoleVictory);
   const ammunitionByCombatantAndKind = prepareTacticalAmmunition(scenario);
   const playerIds = scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id);
   return {
@@ -397,6 +399,8 @@ const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: rea
     coveringFireCommittedCombatantIds: [],
     pendingCoveringFireSnapIds: [],
     terminalActiveById: {},
+    completedConsoleOperationIds: [],
+    consoleOperationProgressById: {},
     terrainDamageById: {},
     destroyedTerrainObjectIds: [],
     ammunitionByCharacterId: Object.fromEntries(scenario.combatants.map((unit) => [unit.id, unit.weapon.magazineSize ?? 12])),
@@ -995,9 +999,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const lightingPreset = state.tacticalMap?.lightingPreset ?? "exterior-lit";
     state.tacticalMap = freshTacticalMap(action.payload, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, layouts, { setup: true, lightingPreset });
   },
-  initializeTacticalDraftPlaytest: (state, action: PayloadAction<{ crew: TacticalCrewInput[]; definition: TacticalScenarioDefinitionFile }>) => {
+  initializeTacticalDraftPlaytest: (state, action: PayloadAction<{ crew: TacticalCrewInput[]; definition: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile }>) => {
     const lightingPreset: TacticalLightingPreset = "exterior-lit";
-    state.tacticalMap = freshTacticalMap(action.payload.crew, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, undefined, { setup: true, lightingPreset, definition: action.payload.definition });
+    state.tacticalMap = freshTacticalMap(action.payload.crew, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, undefined, { setup: true, lightingPreset, definition: action.payload.definition, consoleVictory: action.payload.consoleVictory });
   },
   selectTacticalLightingPreset: (state, action: PayloadAction<TacticalLightingPreset>) => {
     const map = state.tacticalMap;
@@ -1104,6 +1108,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       interactionEvent = `${character.name} activated the hatch to ${open ? "close" : "open"} at the start of Turn ${map.turn + 1} (6 AP)`;
     } else if (object.kind === "terminal") {
       const terminal = object as TacticalTerminal;
+      if (map.scenario.consoleVictory?.operations.some((operation) => `${operation.consolePlacementId}:terminal` === terminal.id)) return;
       const adjacent = Math.abs(terminal.position.x - character.position.x) + Math.abs(terminal.position.y - character.position.y) === 1;
       if (!terminal.operational || !adjacent || map.terminalActiveById[terminal.id] || (map.actionPointsByCharacterId[characterId] ?? 0) < 6) return;
       map.terminalActiveById[terminal.id] = true;
@@ -1118,6 +1123,53 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     map.selectedTerrainObjectId = null;
     map.movementMode = "walk";
     if (map.actionPointsByCharacterId[characterId] > 0) return;
+    if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
+    advanceTacticalPlayerActivation(map);
+  },
+  attemptTacticalConsoleCheck: (state, action: PayloadAction<{ operationId: string; dice: DicePair }>) => {
+    const map = state.tacticalMap;
+    const characterId = map?.activeCharacterId;
+    const character = map && characterId ? tacticalCombatant(map, characterId) : null;
+    const terminal = map ? tacticalTerrainObject(map, map.selectedTerrainObjectId) : null;
+    const definition = map?.scenario.consoleVictory;
+    const operation = definition?.operations.find((candidate) => candidate.id === action.payload.operationId);
+    if (!map || map.scenarioStatus !== "active" || !characterId || !character || terminal?.kind !== "terminal" || !operation) return;
+    map.completedConsoleOperationIds ??= [];
+    map.consoleOperationProgressById ??= {};
+    if (`${operation.consolePlacementId}:terminal` !== terminal.id || !terminal.operational || !consoleOperationAvailable(operation, map.completedConsoleOperationIds)) return;
+    const adjacent = distanceBetween(terminal.position, character.position) === 1;
+    const progress = map.consoleOperationProgressById[operation.id] ?? { completedCheckIds: [], nextCheckModifier: null };
+    const check = operation.checks.find((candidate) => !progress.completedCheckIds.includes(candidate.id));
+    if (!adjacent || !check || (map.actionPointsByCharacterId[characterId] ?? 0) < check.apCost) return;
+    const skillLevel = character.skills?.find((skill) => skill.name.toLowerCase() === check.skill.toLowerCase())?.level ?? 0;
+    const raw = action.payload.dice.first + action.payload.dice.second;
+    const carriedModifier = progress.nextCheckModifier ?? 0;
+    const total = raw + skillLevel + carriedModifier;
+    const target = travellerTaskTarget(check.difficulty);
+    const passed = total >= target;
+    const nextProgress = {
+      completedCheckIds: passed ? [...progress.completedCheckIds, check.id] : [...progress.completedCheckIds],
+      nextCheckModifier: raw === 12 ? operation.criticalSuccessNextCheckModifier ?? 0 : raw === 2 ? operation.criticalFailureNextCheckModifier ?? 0 : null,
+    };
+    map.consoleOperationProgressById[operation.id] = nextProgress;
+    map.actionPointsByCharacterId[characterId] -= check.apCost;
+    map.events.unshift(`${character.name} attempted ${operation.label} — ${check.skill} ${check.difficulty} ${target}+ · raw 2d6 ${raw} · skill ${skillLevel >= 0 ? "+" : ""}${skillLevel}${carriedModifier ? ` · carried ${carriedModifier >= 0 ? "+" : ""}${carriedModifier}` : ""} · total ${total}/${target}: ${passed ? "passed" : "failed"}`);
+    if (passed && nextProgress.completedCheckIds.length === operation.checks.length) {
+      if (!map.completedConsoleOperationIds.includes(operation.id)) map.completedConsoleOperationIds.push(operation.id);
+      map.events.unshift(`${operation.label} completed`);
+      if (operation.result.type === "victory") {
+        map.terminalActiveById[terminal.id] = true;
+        concludeTacticalScenario(map, "victory", `Victory — ${character.name} completed ${operation.label}`);
+        return;
+      }
+      operation.result.operationIds.forEach((unlockedOperationId) => {
+        const unlocked = definition?.operations.find((candidate) => candidate.id === unlockedOperationId);
+        if (unlocked && consoleOperationAvailable(unlocked, map.completedConsoleOperationIds ?? [])) map.terminalActiveById[`${unlocked.consolePlacementId}:terminal`] = false;
+      });
+      const anotherAvailable = definition?.operations.some((candidate) => candidate.consolePlacementId === operation.consolePlacementId && consoleOperationAvailable(candidate, map.completedConsoleOperationIds ?? [])) ?? false;
+      map.terminalActiveById[terminal.id] = !anotherAvailable;
+    }
+    if ((map.actionPointsByCharacterId[characterId] ?? 0) > 0) return;
     if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
     advanceTacticalPlayerActivation(map);
   },
@@ -1817,7 +1869,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   },
   runTacticalEnemyPhase: (state, action: PayloadAction<TacticalEnemyPhaseRolls>) => {
     const map = state.tacticalMap;
-    if (!map || map.scenarioStatus !== "active" || map.pendingAdjacencyReaction || map.scenario.id !== "default-tactical-control-room" || map.activeCharacterId !== null) return;
+    if (!map || map.scenarioStatus !== "active" || map.pendingAdjacencyReaction || map.activeCharacterId !== null) return;
     const playerIds = tacticalPlayerIds(map);
     const playerPhaseComplete = playerIds.every((id) => map.actedCharacterIds.includes(id) || (map.actionPointsByCharacterId[id] ?? 0) === 0 || tacticalCombatant(map, id)?.defeated);
     if (!playerPhaseComplete) return;
@@ -2134,6 +2186,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       name: unit.name,
       weaponSkill: unit.weaponSkill,
       meleeRating: unit.meleeRating,
+      skills: unit.skills,
     }));
     state.tacticalMap = freshTacticalMap(crew, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, {
       characterHudLayout: map.characterHudLayout,
@@ -2144,7 +2197,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       scenarioHudLayout: map.scenarioHudLayout,
     }, { setup: true, lightingPreset: map.lightingPreset ?? "exterior-dark" });
   },
-  resetTacticalDraftPlaytest: (state, action: PayloadAction<TacticalScenarioDefinitionFile>) => {
+  resetTacticalDraftPlaytest: (state, action: PayloadAction<TacticalScenarioDefinitionFile | { definition: TacticalScenarioDefinitionFile; consoleVictory: TacticalConsoleVictoryDefinitionFile }>) => {
     const map = state.tacticalMap;
     if (!map) return;
     const crew = map.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => ({
@@ -2152,7 +2205,10 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       name: unit.name,
       weaponSkill: unit.weaponSkill,
       meleeRating: unit.meleeRating,
+      skills: unit.skills,
     }));
+    const definition = "definition" in action.payload ? action.payload.definition : action.payload;
+    const consoleVictory = "definition" in action.payload ? action.payload.consoleVictory : undefined;
     state.tacticalMap = freshTacticalMap(crew, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, {
       characterHudLayout: map.characterHudLayout,
       enemyHudLayout: map.enemyHudLayout,
@@ -2160,7 +2216,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       characterInformationHudLayout: map.characterInformationHudLayout,
       eventsHudLayout: map.eventsHudLayout,
       scenarioHudLayout: map.scenarioHudLayout,
-    }, { setup: true, lightingPreset: map.lightingPreset ?? "exterior-dark", definition: action.payload });
+    }, { setup: true, lightingPreset: map.lightingPreset ?? "exterior-dark", definition, consoleVictory });
   },
   confirmTacticalMove: (state, action: PayloadAction<{ moraleDice: DicePair; snapDice: { hitDice: DicePair; woundDice: DicePair }; enemyReactionRolls?: Record<string, { hitDice: DicePair; woundDice: DicePair }>; meleeDice?: { attackRoll: number; responseRoll: number } } | undefined>) => {
     const map = state.tacticalMap;
@@ -4521,6 +4577,7 @@ export const turnTacticalCharacter = slice.actions.turnTacticalCharacter;
 export const toggleTacticalPosture = slice.actions.toggleTacticalPosture;
 export const selectTacticalTerrainObject = slice.actions.selectTacticalTerrainObject;
 export const interactWithTacticalTerrain = slice.actions.interactWithTacticalTerrain;
+export const attemptTacticalConsoleCheck = slice.actions.attemptTacticalConsoleCheck;
 export const fireAtTacticalTerrain = slice.actions.fireAtTacticalTerrain;
 export const updateTacticalCharacterInformationHud = slice.actions.updateTacticalCharacterInformationHud;
 export const updateTacticalEventsHud = slice.actions.updateTacticalEventsHud;

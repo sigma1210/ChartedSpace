@@ -399,6 +399,34 @@ describe("tactical Control Room", () => {
     }));
   });
 
+  it("resolves an interactive human as a stationary, non-targetable terminal using the female model", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{
+        id: "informant",
+        terrainDefinitionId: "interactive-human",
+        origin: { x: 10, y: 10 },
+        rotation: 90 as const,
+        objectSettings: { terminal: { label: "Mara Venn" } },
+      }],
+    };
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(tacticalTerrainPalette.find((item) => item.id === "interactive-human")).toMatchObject({ label: "Interactive Human", size: { width: 1, height: 1 }, previewCells: [{ x: 0, y: 0 }] });
+    expect(terrain.terrainObjects).toContainEqual(expect.objectContaining({
+      id: "informant:terminal",
+      kind: "terminal",
+      position: { x: 10, y: 10 },
+      facing: 90,
+      label: "Mara Venn",
+      blocking: true,
+      targetable: false,
+      visualKind: "human",
+      modelPath: "/models/character-combat/female.glb",
+    }));
+  });
+
   it("places a console on a raised area while preserving the raised cell", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,

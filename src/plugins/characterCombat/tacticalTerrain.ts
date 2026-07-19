@@ -34,6 +34,8 @@ export interface TacticalTerminal extends TacticalTerrainBase {
   operational: boolean;
   integrity: number;
   completesScenario?: boolean;
+  visualKind?: "console" | "human";
+  modelPath?: string;
 }
 
 export type TacticalTerrainObject = TacticalWallSegment | TacticalDoor | TacticalHatch | TacticalTerminal;

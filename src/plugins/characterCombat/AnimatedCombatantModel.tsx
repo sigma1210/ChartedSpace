@@ -7,6 +7,7 @@ import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { Euler, Quaternion, type Group, type Object3D } from "three";
 
 const MODEL_PATH = "/models/character-combat/Soldier.glb";
+const FEMALE_MODEL_PATH = "/models/character-combat/female.glb";
 
 export type CombatantAnimation = "idle" | "walk" | "run";
 export type CombatantFacing = "north" | "east" | "south" | "west";
@@ -36,13 +37,13 @@ const poseOffsets: Record<Exclude<CombatantPose, null>, Record<string, Quaternio
 const posedBoneNames = [...new Set(Object.values(poseOffsets).flatMap((offsets) => Object.keys(offsets)))];
 const identityQuaternion = new Quaternion();
 
-export const AnimatedCombatantModel = ({ animation, facing, pose = null, frozen = false }: { animation: CombatantAnimation; facing: CombatantFacing; pose?: CombatantPose; frozen?: boolean }) => {
+export const AnimatedCombatantModel = ({ animation, facing, pose = null, frozen = false, modelPath = MODEL_PATH }: { animation: CombatantAnimation; facing: CombatantFacing; pose?: CombatantPose; frozen?: boolean; modelPath?: string }) => {
   const group = useRef<Group>(null);
-  const { scene, animations } = useGLTF(MODEL_PATH);
+  const { scene, animations } = useGLTF(modelPath);
   const model = useMemo(() => clone(scene), [scene]);
   const { actions, mixer } = useAnimations(animations, group);
   const invalidate = useThree((state) => state.invalidate);
-  const clipName = animation === "run" ? "Run" : animation === "walk" ? "Walk" : "Idle";
+  const clipName = animation === "run" ? "Run" : animation === "walk" ? "Walk" : modelPath === FEMALE_MODEL_PATH ? "Rifle_Idle" : "Idle";
   const poseBones = useMemo(() => Object.fromEntries(posedBoneNames.map((name) => [name, model.getObjectByName(name)])) as Record<string, Object3D | undefined>, [model]);
   const currentPoseOffsets = useRef(Object.fromEntries(posedBoneNames.map((name) => [name, new Quaternion()])) as Record<string, Quaternion>);
 
@@ -86,3 +87,4 @@ export const AnimatedCombatantFallback = ({ color }: { color: string }) => <grou
 </group>;
 
 useGLTF.preload(MODEL_PATH);
+useGLTF.preload(FEMALE_MODEL_PATH);
