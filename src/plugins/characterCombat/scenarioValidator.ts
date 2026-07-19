@@ -50,6 +50,12 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
     if (existing) add("occupied-cell", `${item.id} overlaps ${existing} at ${position}.`);
     else occupied.set(position, item.id);
   });
+  if (scenario.deploymentCells) {
+    const deploymentCells = new Set(scenario.deploymentCells.map(key));
+    scenario.deploymentCells.forEach((cell) => { if (!inCellBounds(scenario, cell)) add("deployment-bounds", `Deployment square ${key(cell)} is outside the deck.`); });
+    scenario.combatants.filter((unit) => unit.side === "enemy").forEach((unit) => { if (deploymentCells.has(key(unit.position))) add("enemy-deployment", `${unit.id} occupies crew deployment square ${key(unit.position)}.`); });
+    scenario.combatants.filter((unit) => unit.side === "player").forEach((unit) => { if (!deploymentCells.has(key(unit.position))) add("crew-deployment", `${unit.id} must begin inside a crew deployment zone.`); });
+  }
 
   const blocked = new Set(scenario.objects.filter((object) => object.kind === "cover").map((object) => key(object.position)));
   const walkable = new Set<string>();

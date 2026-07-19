@@ -22,11 +22,13 @@ import liquidHydrogen2x2DefinitionJson from "./terrainDefinitions/liquid-hydroge
 import liquidHydrogen3x3DefinitionJson from "./terrainDefinitions/liquid-hydrogen-3x3.json";
 import liquidHydrogen4x4DefinitionJson from "./terrainDefinitions/liquid-hydrogen-4x4.json";
 import interactiveHumanDefinitionJson from "./terrainDefinitions/interactive-human.json";
+import deploymentZone9x9DefinitionJson from "./terrainDefinitions/deployment-zone-9x9.json";
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
 import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType } from "./types";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
 
-type BoundarySide = "north" | "east" | "south" | "west";
+export type TacticalDeploymentEdge = "north" | "east" | "south" | "west";
+type BoundarySide = TacticalDeploymentEdge;
 
 export interface TacticalTerrainDefinitionFile {
   schemaVersion: 1;
@@ -62,6 +64,7 @@ export interface TacticalTerrainDefinitionFile {
   elevationAccessCells?: GridPoint[];
   bridgeDeck?: boolean;
   liquidHydrogen?: boolean;
+  deploymentZone?: boolean;
 }
 
 export interface TacticalTerrainPlacement {
@@ -91,6 +94,7 @@ export interface TacticalScenarioDefinitionFile {
   objective: string;
   map: { width: number; height: number; backgroundImage?: string };
   terrainPlacements: TacticalTerrainPlacement[];
+  deploymentEdges?: TacticalDeploymentEdge[];
   enemyPlacements?: TacticalEnemyPlacement[];
   fireCells: GridPoint[];
   smokeCells: GridPoint[];
@@ -109,6 +113,7 @@ export interface ResolvedTacticalScenarioTerrain {
   elevationAccessCells: GridPoint[];
   bridges: TacticalBridge[];
   liquidHydrogenAreas: TacticalLiquidHydrogenArea[];
+  deploymentCells: GridPoint[];
 }
 
 const deepFreeze = <T,>(value: T): T => {
@@ -143,6 +148,7 @@ const liquidHydrogen2x2Definition = deepFreeze(liquidHydrogen2x2DefinitionJson a
 const liquidHydrogen3x3Definition = deepFreeze(liquidHydrogen3x3DefinitionJson as TacticalTerrainDefinitionFile);
 const liquidHydrogen4x4Definition = deepFreeze(liquidHydrogen4x4DefinitionJson as TacticalTerrainDefinitionFile);
 const interactiveHumanDefinition = deepFreeze(interactiveHumanDefinitionJson as TacticalTerrainDefinitionFile);
+const deploymentZone9x9Definition = deepFreeze(deploymentZone9x9DefinitionJson as TacticalTerrainDefinitionFile);
 export const defaultTacticalScenarioDefinition = deepFreeze(defaultScenarioDefinitionJson as TacticalScenarioDefinitionFile);
 export const cloneTacticalScenarioDefinition = (definition: TacticalScenarioDefinitionFile): TacticalScenarioDefinitionFile => JSON.parse(JSON.stringify(definition)) as TacticalScenarioDefinitionFile;
 const tacticalTerrainDefinitions = new Map([
@@ -170,6 +176,7 @@ const tacticalTerrainDefinitions = new Map([
   [liquidHydrogen3x3Definition.id, liquidHydrogen3x3Definition],
   [liquidHydrogen4x4Definition.id, liquidHydrogen4x4Definition],
   [interactiveHumanDefinition.id, interactiveHumanDefinition],
+  [deploymentZone9x9Definition.id, deploymentZone9x9Definition],
 ]);
 export const tacticalPlacementSupportsConsoleOperations = (placement: Pick<TacticalTerrainPlacement, "terrainDefinitionId">) => placement.terrainDefinitionId === "control-room" || placement.terrainDefinitionId === "console-1x1" || placement.terrainDefinitionId === "interactive-human";
 export const tacticalTerrainPalette = [...tacticalTerrainDefinitions.values()].map((definition) => ({
@@ -182,7 +189,7 @@ export const tacticalTerrainPalette = [...tacticalTerrainDefinitions.values()].m
     ...(definition.elevationAccessCells ?? []).map((point) => ({ ...point })),
     ];
     if (cells.length > 0) return cells;
-    if (definition.liquidHydrogen) return Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => ({ x, y }))).flat();
+    if (definition.liquidHydrogen || definition.deploymentZone) return Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => ({ x, y }))).flat();
     if (definition.bridgeDeck) return Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => ({ x, y }))).flat();
     return definition.objects.map((object) => ({ ...object.position }));
   })(),
@@ -274,13 +281,16 @@ const resolveTerrainPlacement = (definition: TacticalTerrainDefinitionFile, plac
   const liquidHydrogenFootprintCells = definition.liquidHydrogen
     ? Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => worldPoint(placement.origin, rotatedCell({ x, y }, definition.size, placement.rotation)))).flat()
     : [];
+  const deploymentCells = definition.deploymentZone
+    ? Array.from({ length: definition.size.width }, (_, x) => Array.from({ length: definition.size.height }, (_, y) => worldPoint(placement.origin, rotatedCell({ x, y }, definition.size, placement.rotation)))).flat()
+    : [];
   const occupiedCells = [...resolvedRegions.filter((region) => region.terrainType !== "close-machinery").flatMap((region) => region.cells), ...elevationAccessCells];
   const lightSources = definition.lightSources.map((source) => ({
     ...source,
     id: `${placement.id}:${source.id}`,
     position: worldPoint(placement.origin, rotatedCell(source.position, definition.size, placement.rotation)),
   }));
-  return { objects, interiorCells, elevatedCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, bridgeCells, liquidHydrogenFootprintCells, liquidHydrogenFilled: placement.terrainSettings?.filled !== false, occupiedCells };
+  return { objects, interiorCells, elevatedCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, bridgeCells, liquidHydrogenFootprintCells, liquidHydrogenFilled: placement.terrainSettings?.filled !== false, deploymentCells, occupiedCells };
 };
 
 export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinitionFile): ResolvedTacticalScenarioTerrain => {
@@ -293,6 +303,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const closeMachineryCells: GridPoint[] = [];
   const bridges: TacticalBridge[] = [];
   const liquidHydrogenAreas: TacticalLiquidHydrogenArea[] = [];
+  const deploymentCells: GridPoint[] = [];
   const elevationAccessCells: GridPoint[] = [];
   const placementIds = new Set<string>();
   const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
@@ -316,7 +327,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         throw new Error(`Tactical terrain placement ${placement.id} has a doorway that does not connect two valid map cells.`);
       }
     });
-    [...resolved.occupiedCells, ...resolved.closeMachineryCells, ...resolved.bridgeCells, ...resolved.liquidHydrogenFootprintCells].forEach((point) => {
+    [...resolved.occupiedCells, ...resolved.closeMachineryCells, ...resolved.bridgeCells, ...resolved.liquidHydrogenFootprintCells, ...resolved.deploymentCells].forEach((point) => {
       if (!validCell(point)) throw new Error(`Tactical terrain placement ${placement.id} extends outside the map at ${point.x}:${point.y}`);
     });
     terrainObjects.push(...resolved.objects);
@@ -324,6 +335,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     lightSources.push(...resolved.lightSources);
     Object.entries(resolved.terrainByCell).filter(([, terrain]) => terrain !== "elevated").forEach(([key, terrain]) => { terrainByCell[key] = terrain; });
     elevationAccessCells.push(...resolved.elevationAccessCells);
+    deploymentCells.push(...resolved.deploymentCells);
     return { placement, resolved };
   });
 
@@ -530,5 +542,8 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     else if (object.kind === "door") doors.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to }, open: object.open, portalType: object.portalType ?? "sliding-door" });
     else if (object.kind === "terminal") objects.push({ id: object.id, kind: "console", position: { ...object.position }, label: object.label });
   });
-  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, closeMachineryCells, elevationAccessCells, bridges, liquidHydrogenAreas };
+  const deploymentEdges = scenario.deploymentEdges ?? ["south"];
+  const edgeDeploymentCells = Array.from({ length: scenario.map.width }, (_, x) => Array.from({ length: scenario.map.height }, (_, y) => ({ x, y }))).flat().filter((point) => deploymentEdges.some((edge) => edge === "north" ? point.y < 6 : edge === "south" ? point.y >= scenario.map.height - 6 : edge === "west" ? point.x < 6 : point.x >= scenario.map.width - 6));
+  const uniqueDeploymentCells = [...new Map([...edgeDeploymentCells, ...deploymentCells].map((point) => [pointKey(point), point])).values()];
+  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, closeMachineryCells, elevationAccessCells, bridges, liquidHydrogenAreas, deploymentCells: uniqueDeploymentCells };
 };

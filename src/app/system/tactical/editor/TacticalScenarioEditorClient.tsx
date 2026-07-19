@@ -7,7 +7,7 @@ import { Provider } from "react-redux";
 import { FloatingPluginHud, type FloatingPluginHudLayout } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import TacticalMapPageClient from "../TacticalMapPageClient";
-import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalScenarioDefinitionFile, type TacticalTerrainPlacement } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalDeploymentEdge, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalScenarioDefinitionFile, type TacticalTerrainPlacement } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition, TRAVELLER_TASK_DIFFICULTIES, validateTacticalConsoleVictoryDefinition, type TacticalConsoleOperation, type TacticalConsoleVictoryDefinitionFile, type TravellerTaskDifficulty } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { randomTacticalEnemyAvatarPath, tacticalEnemyPalette } from "@/plugins/characterCombat/tacticalEnemyDefinitions";
 import type { TacticalTerminalKind } from "@/plugins/characterCombat/tacticalTerrain";
@@ -191,6 +191,7 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       </pattern>
     </defs>
     <rect x="0" y="0" width={definition.map.width} height={definition.map.height} fill="url(#draft-grid)" />
+    {terrain.deploymentCells.map((cell) => <rect key={`deployment:${cell.x}:${cell.y}`} x={cell.x + 0.05} y={cell.y + 0.05} width="0.9" height="0.9" fill="#22c55e" fillOpacity="0.18" stroke="#86efac" strokeWidth="0.04" pointerEvents="none" />)}
     {terrain.interiorCells.map((cell) => <rect key={`interior:${cell.x}:${cell.y}`} x={cell.x} y={cell.y} width="1" height="1" fill="#164e63" opacity="0.28" />)}
     {Object.entries(terrain.terrainByCell).map(([key, terrainType]) => {
       const [x, y] = key.split(":").map(Number);
@@ -331,6 +332,7 @@ const TacticalScenarioEditorClient = () => {
   const resolutionError = useMemo(() => {
     try {
       const terrain = resolveTacticalScenarioTerrain(draft);
+      if (terrain.deploymentCells.length < 2) throw new Error("Define a crew deployment edge or place a Deployment Zone 9x9 before saving or playtesting.");
       const enemyIds = new Set<string>();
       const enemyCells = new Set<string>();
       (draft.enemyPlacements ?? []).forEach((enemy) => {
@@ -340,6 +342,7 @@ const TacticalScenarioEditorClient = () => {
         if (enemy.position.x < 0 || enemy.position.y < 0 || enemy.position.x >= draft.map.width || enemy.position.y >= draft.map.height) throw new Error(`Enemy ${enemy.name} is outside the map at ${position}.`);
         if (enemyCells.has(position)) throw new Error(`Two enemies occupy ${position}.`);
         if (terrain.objects.some((object) => cellKey(object.position) === position) || terrain.closeMachineryCells.some((cell) => cellKey(cell) === position)) throw new Error(`Enemy ${enemy.name} cannot occupy blocked terrain at ${position}.`);
+        if (terrain.deploymentCells.some((cell) => cellKey(cell) === position)) throw new Error(`Enemy ${enemy.name} cannot occupy the crew deployment zone at ${position}.`);
         enemyIds.add(enemy.id);
         enemyCells.add(position);
       });
@@ -356,10 +359,28 @@ const TacticalScenarioEditorClient = () => {
     const parsed = Number.parseInt(value, 10);
     setDraft((current) => ({ ...current, map: { ...current.map, [field]: Number.isFinite(parsed) ? parsed : 0 } }));
   };
+  const toggleDeploymentEdge = (edge: TacticalDeploymentEdge) => {
+    const currentEdges = draft.deploymentEdges ?? ["south"];
+    const deploymentEdges = currentEdges.includes(edge) ? currentEdges.filter((item) => item !== edge) : [...currentEdges, edge];
+    const candidate = { ...draft, deploymentEdges };
+    try {
+      const terrain = resolveTacticalScenarioTerrain(candidate);
+      const deploymentCells = new Set(terrain.deploymentCells.map(cellKey));
+      const enemy = (candidate.enemyPlacements ?? []).find((item) => deploymentCells.has(cellKey(item.position)));
+      if (enemy) throw new Error(`Enemy ${enemy.name} cannot occupy the crew deployment zone at ${cellKey(enemy.position)}.`);
+      setDraft(candidate);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That deployment edge is not valid.");
+    }
+  };
   const updatePlacements = (placements: TacticalTerrainPlacement[]) => {
     const candidate = { ...draft, terrainPlacements: placements };
     try {
-      resolveTacticalScenarioTerrain(candidate);
+      const terrain = resolveTacticalScenarioTerrain(candidate);
+      const deploymentCells = new Set(terrain.deploymentCells.map(cellKey));
+      const enemy = (candidate.enemyPlacements ?? []).find((item) => deploymentCells.has(cellKey(item.position)));
+      if (enemy) throw new Error(`Enemy ${enemy.name} cannot occupy the crew deployment zone at ${cellKey(enemy.position)}.`);
       setDraft(candidate);
       setPlacementError(null);
       return true;
@@ -400,7 +421,10 @@ const TacticalScenarioEditorClient = () => {
       const placement: TacticalTerrainPlacement = { id, terrainDefinitionId: placementKind, origin: placementCandidate.origin, rotation: placementCandidate.rotation };
       const candidate = { ...draft, terrainPlacements: [...draft.terrainPlacements, placement] };
       try {
-        resolveTacticalScenarioTerrain(candidate);
+        const terrain = resolveTacticalScenarioTerrain(candidate);
+        const deploymentCells = new Set(terrain.deploymentCells.map(cellKey));
+        const enemy = (candidate.enemyPlacements ?? []).find((item) => deploymentCells.has(cellKey(item.position)));
+        if (enemy) throw new Error(`Enemy ${enemy.name} cannot occupy the crew deployment zone at ${cellKey(enemy.position)}.`);
         setDraft(candidate);
         setPlacementError(null);
         setSelectedPlacementId(id);
@@ -419,6 +443,7 @@ const TacticalScenarioEditorClient = () => {
     if ((draft.enemyPlacements ?? []).some((enemy) => enemy.id !== ignoredEnemyId && cellKey(enemy.position) === positionKey)) return `Another enemy already occupies ${positionKey}.`;
     const terrain = resolveTacticalScenarioTerrain(draft);
     if (terrain.objects.some((object) => cellKey(object.position) === positionKey) || terrain.closeMachineryCells.some((cell) => cellKey(cell) === positionKey)) return `An enemy cannot occupy blocked terrain at ${positionKey}.`;
+    if (terrain.deploymentCells.some((cell) => cellKey(cell) === positionKey)) return `An enemy cannot occupy the crew deployment zone at ${positionKey}.`;
     return null;
   };
   const placeEnemy = (position: { x: number; y: number }) => {
@@ -699,6 +724,16 @@ const TacticalScenarioEditorClient = () => {
           <label className="text-[9px] font-bold uppercase tracking-wider text-cyan-200">Map height
             <input type="number" min="1" value={draft.map.height} onChange={(event) => updateDimension("height", event.target.value)} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 outline-none focus:border-cyan-400" />
           </label>
+        </div>
+        <div className="mb-4 border-t border-slate-700 pt-3">
+          <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-emerald-200">Crew deployment edges</div>
+          <div className="mb-2 text-[9px] normal-case text-slate-500">Each selected edge allows setup within six squares of that edge.</div>
+          <div className="grid grid-cols-4 gap-1">
+            {(["north", "east", "south", "west"] as const).map((edge) => {
+              const selected = (draft.deploymentEdges ?? ["south"]).includes(edge);
+              return <button key={edge} type="button" aria-pressed={selected} onClick={() => toggleDeploymentEdge(edge)} className={`h-8 border text-[8px] font-bold uppercase ${selected ? "border-emerald-300 bg-emerald-300/20 text-emerald-50" : "border-slate-700 text-slate-400"}`}>{edge}</button>;
+            })}
+          </div>
         </div>
         <div className="mb-4 border-t border-slate-700 pt-3">
           <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">Terrain placements</div>

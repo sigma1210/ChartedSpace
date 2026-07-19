@@ -9,6 +9,7 @@
     "width": 72,
     "height": 48
   },
+  "deploymentEdges": ["south"],
   "terrainPlacements": [
     {
       "id": "control-room-alpha",
@@ -36,7 +37,7 @@
       "id": "enemy-2",
       "type": "gang-leader",
       "name": "Gang Leader 1",
-      "position": { "x": 50, "y": 43 },
+      "position": { "x": 50, "y": 41 },
       "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-brown-v1.png"
     }
   ],

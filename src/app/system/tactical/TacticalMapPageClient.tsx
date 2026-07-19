@@ -10,7 +10,7 @@ import { FloatingPluginHud } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import { AnimatedCombatantFallback, AnimatedCombatantModel } from "@/plugins/characterCombat/AnimatedCombatantModel";
 import { AnimatedCombatantPlacement } from "@/plugins/characterCombat/AnimatedCombatantPlacement";
-import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalDraftPlaytest, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalDraftPlaytest, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
+import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalDraftPlaytest, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalDraftPlaytest, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
 import { updateTacticalEnemyHud, updateTacticalScenarioHud } from "@/plugins/characterCombat/slice";
 import { attemptTacticalConsoleCheck } from "@/plugins/characterCombat/slice";
 import { recordTacticalExploration } from "@/plugins/characterCombat/slice";
@@ -288,6 +288,13 @@ const CoveringFirePreview = ({ cells, width, height, color }: { cells: { x: numb
   </>;
 };
 
+const DeploymentArea = ({ scenario, onSelectCell }: { scenario: CombatScenario; onSelectCell: (point: { x: number; y: number }) => void }) => <>
+  {(scenario.deploymentCells ?? []).map((cell) => <mesh key={`deployment:${cell.x}:${cell.y}`} position={[cell.x + 0.5 - scenario.width / 2, tacticalVisualHeightAt(scenario, cell) + 0.04, cell.y + 0.5 - scenario.height / 2]} rotation={[-Math.PI / 2, 0, 0]} onClick={(event) => { event.stopPropagation(); onSelectCell(cell); }}>
+    <planeGeometry args={[0.88, 0.88]} />
+    <meshBasicMaterial color="#22c55e" transparent opacity={0.22} depthWrite={false} />
+  </mesh>)}
+</>;
+
 const BlastAreaPreview = ({ center, cells, width, height, resolved, label, color: requestedColor }: { center: { x: number; y: number }; cells: { x: number; y: number }[]; width: number; height: number; resolved: boolean; label: string; color?: string }) => {
   const worldPoint = (point: { x: number; y: number }): [number, number, number] => [point.x + 0.5 - width / 2, 0.095, point.y + 0.5 - height / 2];
   const color = requestedColor ?? (resolved ? "#dc2626" : "#f9a8d4");
@@ -501,7 +508,8 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
   const combatants = tacticalMap.scenario.combatants;
   const focusX = combatants.length > 0 ? combatants.reduce((total, unit) => total + unit.position.x + 0.5 - mapWidth / 2, 0) / combatants.length : 0;
   const focusZ = combatants.length > 0 ? combatants.reduce((total, unit) => total + unit.position.y + 0.5 - mapHeight / 2, 0) / combatants.length : 0;
-  const selected = combatants.find((unit) => unit.id === tacticalMap.activeCharacterId && unit.side === "player") ?? null;
+  const selectedId = tacticalMap.scenarioStatus === "setup" ? tacticalMap.deploymentCharacterId : tacticalMap.activeCharacterId;
+  const selected = combatants.find((unit) => unit.id === selectedId && unit.side === "player") ?? null;
   const selectedPosition = selected?.position ?? null;
   const selectedActionPoints = selected ? tacticalMap.actionPointsByCharacterId[selected.id] ?? 0 : 0;
   const selectedFacing = selected?.facing ?? "south";
@@ -546,8 +554,9 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
   const coveringFireTargetOptions = useMemo(() => selected && tacticalMap.coveringFireTargeting ? validCoveringFireTargets(tacticalMap.scenario, selected.id) : [], [selected, tacticalMap.coveringFireTargeting, tacticalMap.scenario]);
   const plannedCoveringFireCells = selectedPosition && selected?.weapon && tacticalMap.plannedCoveringFireTarget ? coveringFireDangerSpaceCells(tacticalMap.scenario, selectedPosition, tacticalMap.plannedCoveringFireTarget, selected.weapon.extremeRange) : [];
   const plannedGrenadeBlastCells = tacticalMap.plannedGrenadeTarget ? tacticalMap.grenadeKind === "smoke" ? grenadeBlastCells(tacticalMap.scenario, tacticalMap.plannedGrenadeTarget) : collateralBlastCells(tacticalMap.scenario, tacticalMap.plannedGrenadeTarget) : [];
-  const selectMapCell = (point: { x: number; y: number }) => tacticalMap.coveringFireTargeting
-    ? dispatch(previewTacticalCoveringFire(point))
+  const selectMapCell = (point: { x: number; y: number }) => tacticalMap.scenarioStatus === "setup"
+    ? dispatch(deployTacticalCharacter(point))
+    : tacticalMap.coveringFireTargeting ? dispatch(previewTacticalCoveringFire(point))
     : tacticalMap.grenadeTargeting
       ? dispatch(previewTacticalGrenadeTarget(point))
       : dispatch(previewTacticalMove(reachableMoves.has(pointKey(point)) ? point : null));
@@ -562,6 +571,7 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
     <TacticalElevationTerrain scenario={tacticalMap.scenario} onSelectCell={selectMapCell} />
     <TacticalBridges scenario={tacticalMap.scenario} onSelectCell={selectMapCell} />
     <TacticalCloseMachineryTerrain scenario={tacticalMap.scenario} onSelectCell={selectMapCell} />
+    {tacticalMap.scenarioStatus === "setup" && <DeploymentArea scenario={tacticalMap.scenario} onSelectCell={selectMapCell} />}
     <TacticalLightingOverlay scenario={tacticalMap.scenario} />
     <TacticalFogOverlay scenario={tacticalMap.scenario} visible={crewVisibility} explored={exploredCells} />
     <LastKnownEnemyMarkers positions={lastKnownEnemyPositions} visibleEnemyIds={visibleEnemyIds} width={mapWidth} height={mapHeight} />
@@ -594,7 +604,7 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
       </mesh>
       <Html center position={[0, 0.52, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-red-400 bg-black/95 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase text-red-100">Lethal liquid hydrogen</div></Html>
     </group>}
-    {combatants.filter((combatant) => combatant.side === "player" || crewVisibility.has(pointKey(combatant.position))).map((combatant) => {
+    {combatants.filter((combatant) => (combatant.side === "player" ? tacticalMap.scenarioStatus !== "setup" || (tacticalMap.deployedCharacterIds ?? []).includes(combatant.id) : crewVisibility.has(pointKey(combatant.position)))).map((combatant) => {
       const animation = tacticalMap.movementAnimationByCharacterId[combatant.id];
       const worldMovement = animation ? { ...animation, path: animation.path.map((point, index) => [point.x + 0.5 - mapWidth / 2, (animation.elevationLevels?.[index] !== undefined ? animation.elevationLevels[index] * TACTICAL_WALL_HEIGHT : tacticalVisualHeightAt(tacticalMap.scenario, point)) + 0.02, point.y + 0.5 - mapHeight / 2] as [number, number, number]) } : undefined;
       return <MapCombatant key={combatant.id} combatant={combatant} mapWidth={mapWidth} mapHeight={mapHeight} elevation={tacticalCombatantHeight(tacticalMap.scenario, combatant)} movement={worldMovement} selected={selected?.id === combatant.id} targetable={validTargetIds.has(combatant.id) || validMeleeTargetIds.has(combatant.id) || validMeleeDiveTargetIds.has(combatant.id)} targeted={tacticalMap.plannedAttackTargetId === combatant.id || tacticalMap.plannedMeleeTargetId === combatant.id} onSelect={() => {
@@ -625,13 +635,13 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
   </>;
 };
 
-const TacticalCharacterButton = ({ character, actionPoints, selected, onSelect }: { character: CharacterSummary; actionPoints: number; selected: boolean; onSelect: () => void }) => {
+const TacticalCharacterButton = ({ character, actionPoints, selected, disabled, setup, onSelect }: { character: CharacterSummary; actionPoints: number; selected: boolean; disabled: boolean; setup: boolean; onSelect: () => void }) => {
   const portraitPath = character.avatar?.currentPortraitPath ?? null;
   const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
   const showPortrait = portraitPath && failedPortraitPath !== portraitPath;
 
-  return <button type="button" disabled={actionPoints < 1} onClick={onSelect} aria-label={`Select ${character.name}, ${actionPoints} AP`} aria-pressed={selected} title={`Select ${character.name} · ${actionPoints} AP`} className={`group relative flex h-16 w-16 shrink-0 flex-col items-center justify-end border p-1 transition-colors ${selected ? "border-yellow-200 bg-yellow-300/20 text-yellow-50 shadow-[0_0_12px_rgba(250,204,21,0.35)]" : "border-(--hud-border) bg-(--hud-bg)/90 text-(--hud-text-dim) hover:border-cyan-300 hover:text-(--hud-text)"} disabled:cursor-not-allowed disabled:grayscale disabled:opacity-45`}>
-    <span className="absolute right-0.5 top-0.5 border border-emerald-400/60 bg-emerald-950 px-1 text-[7px] text-emerald-100">{actionPoints} AP</span>
+  return <button type="button" disabled={disabled} onClick={onSelect} aria-label={`Select ${character.name}${setup ? " for deployment" : `, ${actionPoints} AP`}`} aria-pressed={selected} title={`Select ${character.name}${setup ? " for deployment" : ` · ${actionPoints} AP`}`} className={`group relative flex h-16 w-16 shrink-0 flex-col items-center justify-end border p-1 transition-colors ${selected ? "border-yellow-200 bg-yellow-300/20 text-yellow-50 shadow-[0_0_12px_rgba(250,204,21,0.35)]" : "border-(--hud-border) bg-(--hud-bg)/90 text-(--hud-text-dim) hover:border-cyan-300 hover:text-(--hud-text)"} disabled:cursor-not-allowed disabled:grayscale disabled:opacity-45`}>
+    <span className="absolute right-0.5 top-0.5 border border-emerald-400/60 bg-emerald-950 px-1 text-[7px] text-emerald-100">{setup ? "Deploy" : `${actionPoints} AP`}</span>
     <span className="relative mb-1 h-10 w-10 overflow-hidden rounded-sm border border-(--hud-border-subtle) bg-black/50">
       {showPortrait ? <Image src={portraitPath} alt="" fill sizes="40px" onError={() => setFailedPortraitPath(portraitPath)} className="object-cover" /> : <span className="flex h-full w-full items-center justify-center text-sm font-bold uppercase">{character.name.slice(0, 1)}</span>}
     </span>
@@ -677,7 +687,8 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const visibleEnemies = useMemo(() => enemies.filter((enemy) => crewVisibility.has(pointKey(enemy.position))), [crewVisibility, enemies]);
   const visibleEnemyIds = useMemo(() => new Set(visibleEnemies.map((enemy) => enemy.id)), [visibleEnemies]);
   const visibleEnemySightings = useMemo(() => visibleEnemies.map((enemy) => ({ id: enemy.id, position: { ...enemy.position } })), [visibleEnemies]);
-  const activeCombatant = tacticalMap.scenario.combatants.find((unit) => unit.id === tacticalMap.activeCharacterId && unit.side === "player") ?? null;
+  const selectedTacticalCharacterId = tacticalScenarioStatus === "setup" ? tacticalMap.deploymentCharacterId : tacticalMap.activeCharacterId;
+  const activeCombatant = tacticalMap.scenario.combatants.find((unit) => unit.id === selectedTacticalCharacterId && unit.side === "player") ?? null;
   const selectedCrewMember = activeCombatant ? characters.find((character) => character.id === (activeCombatant.sourceCharacterId ?? activeCombatant.id)) ?? null : null;
   const selectedPosition = activeCombatant?.position ?? null;
   const selectedLighting = selectedPosition ? tacticalLightingLevelAt(tacticalMap.scenario, selectedPosition) : null;
@@ -688,6 +699,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const draggedCombatant = activeCombatant ? tacticalMap.scenario.combatants.find((unit) => unit.id === tacticalMap.draggingCombatantByCarrierId[activeCombatant.id]) ?? null : null;
   const draggableAllies = activeCombatant && !draggedCombatant ? tacticalMap.scenario.combatants.filter((unit) => unit.side === activeCombatant.side && unit.defeated && unit.woundState !== "dead" && Math.abs(unit.position.x - activeCombatant.position.x) + Math.abs(unit.position.y - activeCombatant.position.y) === 1 && !Object.values(tacticalMap.draggingCombatantByCarrierId).includes(unit.id)) : [];
   const livingPlayerIds = tacticalMap.scenario.combatants.filter((unit) => unit.side === "player" && !unit.defeated).map((unit) => unit.id);
+  const crewDeploymentComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => (tacticalMap.deployedCharacterIds ?? []).includes(id));
   const playerPhaseComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => tacticalMap.actedCharacterIds.includes(id) || (tacticalMap.actionPointsByCharacterId[id] ?? 0) === 0);
   const tacticalTerrain = useMemo(() => activeTacticalTerrainObjects(tacticalMap.scenario, tacticalMap.doorOpenById, tacticalMap.destroyedTerrainObjectIds), [tacticalMap.destroyedTerrainObjectIds, tacticalMap.doorOpenById, tacticalMap.scenario]);
   const blockedCells = useMemo(() => tacticalTerrainBlockedCells(tacticalTerrain), [tacticalTerrain]);
@@ -848,6 +860,9 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
           <div className="text-(--hud-text-dim)">{tacticalMap.scenario.briefing}</div>
           <div className="border-t border-(--hud-border) pt-2"><span className="uppercase text-(--hud-text-dim)">Objective</span><div className="mt-1 font-bold text-(--hud-text)">{tacticalMap.scenario.objective}</div></div>
           {tacticalScenarioStatus === "setup" && <div className="flex flex-col gap-2 border-t border-(--hud-border) pt-2">
+            <div className="font-bold uppercase tracking-wider text-emerald-100">Crew deployment</div>
+            <div className="text-(--hud-text-dim)">Select each crew member, then click a green deployment square.</div>
+            <div className={crewDeploymentComplete ? "text-emerald-200" : "text-amber-200"}>{(tacticalMap.deployedCharacterIds ?? []).length}/{livingPlayerIds.length} crew deployed</div>
             <div className="font-bold uppercase tracking-wider text-amber-100">Starting illumination</div>
             <button type="button" aria-pressed={(tacticalMap.lightingPreset ?? "exterior-dark") === "exterior-dark"} onClick={() => dispatch(selectTacticalLightingPreset("exterior-dark"))} className={`border px-2 py-2 text-left ${tacticalMap.lightingPreset !== "exterior-lit" ? "border-cyan-200 bg-cyan-300/15 text-cyan-50" : "border-(--hud-border) text-(--hud-text-dim)"}`}>
               <span className="block font-bold uppercase">Exterior dark</span>
@@ -862,14 +877,14 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
               <button type="button" aria-pressed={terrainLightsOn} onClick={() => dispatch(setTacticalTerrainLights(true))} className={`border px-2 py-2 font-bold uppercase ${terrainLightsOn ? "border-amber-200 bg-amber-300/15 text-amber-50" : "border-(--hud-border) text-(--hud-text-dim)"}`}>On</button>
               <button type="button" aria-pressed={!terrainLightsOn} onClick={() => dispatch(setTacticalTerrainLights(false))} className={`border px-2 py-2 font-bold uppercase ${!terrainLightsOn ? "border-slate-200 bg-slate-300/15 text-slate-50" : "border-(--hud-border) text-(--hud-text-dim)"}`}>Off</button>
             </div>
-            <button type="button" disabled={!tacticalMap.scenario.combatants.some((unit) => unit.side === "player")} onClick={() => dispatch(startTacticalScenario())} className="h-8 border border-emerald-300 px-2 font-bold uppercase tracking-wider text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Start Scenario</button>
+            <button type="button" disabled={!crewDeploymentComplete} onClick={() => dispatch(startTacticalScenario())} className="h-8 border border-emerald-300 px-2 font-bold uppercase tracking-wider text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Start Scenario</button>
           </div>}
           <div className="text-(--hud-text-dim)">Turn {tacticalMap.turn}</div>
         </div>
       </FloatingPluginHud>
       <FloatingPluginHud title="Characters" layout={tacticalMap.characterHudLayout} onLayoutChange={(layout) => dispatch(updateTacticalCharacterHud(layout))} className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
         <nav aria-label="Tactical character roster" className="flex max-w-[75vw] gap-1 p-1">
-          {characters.map((character) => <TacticalCharacterButton key={character.id} character={character} actionPoints={tacticalMap.actionPointsByCharacterId[character.id] ?? 0} selected={activeCombatant?.id === character.id} onSelect={() => { dispatch(activateTacticalCharacter(character.id)); dispatch(setSelectedProfileCharacter(character.id)); }} />)}
+          {characters.map((character) => <TacticalCharacterButton key={character.id} character={character} actionPoints={tacticalMap.actionPointsByCharacterId[character.id] ?? 0} selected={activeCombatant?.id === character.id} disabled={tacticalScenarioStatus !== "setup" && (tacticalMap.actionPointsByCharacterId[character.id] ?? 0) < 1} setup={tacticalScenarioStatus === "setup"} onSelect={() => { dispatch(tacticalScenarioStatus === "setup" ? selectTacticalDeploymentCharacter(character.id) : activateTacticalCharacter(character.id)); dispatch(setSelectedProfileCharacter(character.id)); }} />)}
           {status === "loaded" && shipStatus === "loaded" && characters.length === 0 && <span className="px-3 py-4 text-(--hud-text-dim)">No assigned character crew</span>}
         </nav>
       </FloatingPluginHud>
@@ -928,7 +943,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
         <section className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto pr-1 normal-case tracking-normal">
           {tacticalScenarioStatus === "setup" ? <div className="flex flex-col gap-2 border border-amber-300/70 p-2 text-amber-100">
             <div className="font-bold uppercase tracking-wider">Scenario setup</div>
-            <div className="text-(--hud-text-dim)">Choose the starting illumination in the Scenario HUD, then start the scenario.</div>
+            <div className="text-(--hud-text-dim)">Select a crew member in the Characters HUD and click a green deployment square. Deploy every crew member before starting.</div>
           </div> : tacticalScenarioStatus !== "active" ? <div className={`flex flex-col gap-2 border p-2 ${tacticalScenarioStatus === "victory" ? "border-emerald-300/70 text-emerald-100" : "border-red-300/70 text-red-100"}`}>
             <div className="font-bold uppercase tracking-wider">{tacticalScenarioStatus === "victory" ? "Victory — Security Terminal Secured" : "Defeat — Crew Incapacitated"}</div>
             <div className="text-(--hud-text-dim)">{tacticalScenarioStatus === "victory" ? "The Control Room Assault objective is complete." : "No crew member remains able to continue the assault."}</div>

@@ -4,6 +4,23 @@ import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, res
 import { createControlRoom, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
 
 describe("tactical Control Room", () => {
+  it("resolves six-square edge deployment zones and a placeable 9x9 interior zone", () => {
+    const edgeTerrain = resolveTacticalScenarioTerrain(defaultTacticalScenarioDefinition);
+    expect(edgeTerrain.deploymentCells).toHaveLength(72 * 6);
+    expect(edgeTerrain.deploymentCells).toContainEqual({ x: 0, y: 42 });
+    expect(edgeTerrain.deploymentCells).not.toContainEqual({ x: 0, y: 41 });
+
+    const interior = resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      deploymentEdges: [],
+      terrainPlacements: [{ id: "interior-deployment", terrainDefinitionId: "deployment-zone-9x9", origin: { x: 10, y: 12 }, rotation: 0 }],
+      enemyPlacements: [],
+    });
+    expect(interior.deploymentCells).toHaveLength(81);
+    expect(interior.deploymentCells).toEqual(expect.arrayContaining([{ x: 10, y: 12 }, { x: 18, y: 20 }]));
+    expect(interior.terrainObjects).toEqual([]);
+    expect(tacticalTerrainPalette.find((item) => item.id === "deployment-zone-9x9")).toMatchObject({ label: "Deployment Zone 9x9", size: { width: 9, height: 9 } });
+  });
   it("clones an editable scenario draft without changing the immutable base definition", () => {
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     draft.title = "Edited Draft";

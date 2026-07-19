@@ -357,6 +357,8 @@ const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: rea
   return {
     scenario,
     scenarioStatus: options.setup ? "setup" : "active",
+    deploymentCharacterId: options.setup ? playerIds[0] ?? null : null,
+    deployedCharacterIds: options.setup ? [] : [...playerIds],
     lightingPreset,
     exploredCellKeys: [],
     lastKnownEnemyPositions: {},
@@ -1035,16 +1037,40 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     sightings.forEach((position, id) => { lastKnown[id] = { ...position }; });
     map.lastKnownEnemyPositions = lastKnown;
   },
+  selectTacticalDeploymentCharacter: (state, action: PayloadAction<string>) => {
+    const map = state.tacticalMap;
+    const unit = map ? tacticalCombatant(map, action.payload) : null;
+    if (!map || map.scenarioStatus !== "setup" || unit?.side !== "player") return;
+    map.deploymentCharacterId = unit.id;
+  },
+  deployTacticalCharacter: (state, action: PayloadAction<GridPoint>) => {
+    const map = state.tacticalMap;
+    const unit = map ? tacticalCombatant(map, map.deploymentCharacterId) : null;
+    if (!map || map.scenarioStatus !== "setup" || unit?.side !== "player") return;
+    const destination = action.payload;
+    const destinationKey = pointKey(destination);
+    if (!(map.scenario.deploymentCells ?? []).some((cell) => pointKey(cell) === destinationKey)) return;
+    const blocked = tacticalTerrainBlockedCells(tacticalTerrainObjectsForScenario(map.scenario));
+    if (blocked.has(destinationKey) || (map.scenario.closeMachineryCells ?? []).some((cell) => pointKey(cell) === destinationKey) || (map.scenario.fireCells ?? []).some((cell) => pointKey(cell) === destinationKey)) return;
+    const deployedIds = new Set(map.deployedCharacterIds ?? []);
+    const occupied = map.scenario.combatants.some((candidate) => candidate.id !== unit.id && (candidate.side === "enemy" || deployedIds.has(candidate.id)) && pointKey(candidate.position) === destinationKey);
+    if (occupied) return;
+    unit.position = { ...destination };
+    unit.elevationLevel = map.scenario.elevationLevelByCell?.[destinationKey] ?? 0;
+    if (!deployedIds.has(unit.id)) map.deployedCharacterIds = [...deployedIds, unit.id];
+    map.events.unshift(`${unit.name} deployed at ${destination.x},${destination.y}`);
+  },
   startTacticalScenario: (state) => {
     const map = state.tacticalMap;
     if (!map || map.scenarioStatus !== "setup") return;
     const livingPlayerIds = tacticalPlayerIds(map).filter((id) => !tacticalCombatant(map, id)?.defeated);
-    if (livingPlayerIds.length === 0) return;
+    if (livingPlayerIds.length === 0 || livingPlayerIds.some((id) => !(map.deployedCharacterIds ?? []).includes(id))) return;
     map.scenarioStatus = "active";
     map.actionPointsByCharacterId = Object.fromEntries(map.scenario.combatants.map((unit) => [unit.id, unit.defeated ? 0 : 6]));
     map.actionPhaseStartPositionByCombatantId = Object.fromEntries(map.scenario.combatants.map((unit) => [unit.id, { ...unit.position }]));
     map.visibleHostileIdsAtPhaseStartByCombatantId = tacticalVisibilitySnapshot(map.scenario);
     map.activeCharacterId = livingPlayerIds[0];
+    map.deploymentCharacterId = null;
     map.events.unshift(`Scenario started · exterior ${map.lightingPreset === "exterior-lit" ? "illuminated" : "dark"}`);
   },
   updateTacticalCharacterHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
@@ -4563,6 +4589,8 @@ export const setTacticalTerrainLights = slice.actions.setTacticalTerrainLights;
 export const recordTacticalExploration = slice.actions.recordTacticalExploration;
 export const recordTacticalEnemySightings = slice.actions.recordTacticalEnemySightings;
 export const startTacticalScenario = slice.actions.startTacticalScenario;
+export const selectTacticalDeploymentCharacter = slice.actions.selectTacticalDeploymentCharacter;
+export const deployTacticalCharacter = slice.actions.deployTacticalCharacter;
 export const setTacticalMovementMode = slice.actions.setTacticalMovementMode;
 export const previewTacticalMove = slice.actions.previewTacticalMove;
 export const activateTacticalCharacter = slice.actions.activateTacticalCharacter;

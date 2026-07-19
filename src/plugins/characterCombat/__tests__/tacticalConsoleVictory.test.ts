@@ -1,4 +1,4 @@
-import reducer, { attemptTacticalConsoleCheck, initializeTacticalDraftPlaytest, resetTacticalDraftPlaytest, selectTacticalTerrainObject, startTacticalScenario } from "../slice";
+import reducer, { attemptTacticalConsoleCheck, deployTacticalCharacter, initializeTacticalDraftPlaytest, resetTacticalDraftPlaytest, selectTacticalDeploymentCharacter, selectTacticalTerrainObject, startTacticalScenario } from "../slice";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "../tacticalScenarioDefinitions";
 import { consoleOperationAvailable, type TacticalConsoleVictoryDefinitionFile } from "../tacticalConsoleVictory";
 
@@ -38,6 +38,8 @@ const startedConsoleState = () => {
     definition: scenario,
     consoleVictory: chainedDefinition,
   }));
+  state = reducer(state, selectTacticalDeploymentCharacter("crew-1"));
+  state = reducer(state, deployTacticalCharacter({ x: 0, y: 42 }));
   state = reducer(state, startTacticalScenario());
   state = {
     ...state,
@@ -113,6 +115,8 @@ describe("tactical console victory", () => {
       definition: scenario,
       consoleVictory: interactionDefinition,
     }));
+    state = reducer(state, selectTacticalDeploymentCharacter("crew-1"));
+    state = reducer(state, deployTacticalCharacter({ x: 0, y: 42 }));
     state = reducer(state, startTacticalScenario());
     state = {
       ...state,

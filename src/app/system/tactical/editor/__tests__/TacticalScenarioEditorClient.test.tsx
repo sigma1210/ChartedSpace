@@ -46,6 +46,8 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain(">Liquid Hydrogen 3x3</button>");
     expect(markup).toContain(">Liquid Hydrogen 4x4</button>");
     expect(markup).toContain(">Interactive Human</button>");
+    expect(markup).toContain(">Deployment Zone 9x9</button>");
+    expect(markup).toContain("Crew deployment edges");
   });
 
   it("offers file loading and non-overwriting Save As controls", () => {

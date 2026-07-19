@@ -89,4 +89,14 @@ describe("tactical scenario files", () => {
       status: 404,
     });
   });
+
+  it("rejects an enemy placed inside a crew deployment zone", async () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.enemyPlacements = [{ ...draft.enemyPlacements![0], position: { x: 0, y: draft.map.height - 1 } }];
+
+    await expect(saveTacticalScenarioAs("Invalid Enemy Deployment", draft, directory)).rejects.toMatchObject({
+      code: "invalid-scenario",
+      status: 400,
+    });
+  });
 });

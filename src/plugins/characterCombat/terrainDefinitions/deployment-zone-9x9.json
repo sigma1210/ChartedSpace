@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "deployment-zone-9x9",
+  "label": "Deployment Zone 9x9",
+  "size": { "width": 9, "height": 9 },
+  "cellRegions": [],
+  "boundaryRuns": [],
+  "objects": [],
+  "lightSources": [],
+  "deploymentZone": true
+}

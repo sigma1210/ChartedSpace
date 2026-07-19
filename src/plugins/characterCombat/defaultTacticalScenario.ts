@@ -16,6 +16,15 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
   const consolePlacementIds = definition.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id);
   const resolvedConsoleVictory = consoleVictory ?? (consolePlacementIds.includes("control-room-alpha") ? defaultTacticalConsoleVictoryDefinition : undefined);
   if (resolvedConsoleVictory) validateTacticalConsoleVictoryDefinition(resolvedConsoleVictory, consolePlacementIds);
+  const enemies = (definition.enemyPlacements ?? []).map(buildTacticalEnemyCombatant);
+  const unavailableDeploymentCells = new Set([
+    ...terrain.objects.map((object) => `${object.position.x}:${object.position.y}`),
+    ...terrain.closeMachineryCells.map((cell) => `${cell.x}:${cell.y}`),
+    ...enemies.map((enemy) => `${enemy.position.x}:${enemy.position.y}`),
+    ...definition.fireCells.map((cell) => `${cell.x}:${cell.y}`),
+  ]);
+  const crewStarts = terrain.deploymentCells.filter((cell) => !unavailableDeploymentCells.has(`${cell.x}:${cell.y}`));
+  if (crewStarts.length < 2) throw new Error(`Scenario ${definition.id} requires at least two open crew deployment squares.`);
 
   return assertValidCombatScenario({
     id: definition.id,
@@ -31,6 +40,7 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     terrainObjects: terrain.terrainObjects,
     bridges: terrain.bridges,
     liquidHydrogenAreas: terrain.liquidHydrogenAreas,
+    deploymentCells: terrain.deploymentCells,
     interiorCells: terrain.interiorCells,
     lightSources: terrain.lightSources,
     terrainByCell: terrain.terrainByCell,
@@ -42,20 +52,20 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     ...(lightingPreset ? defaultTacticalLighting(lightingPreset) : {}),
     combatants: [
       {
-        id: "player-1", name: "Boarding Lead", side: "player", position: { x: 48, y: 34 }, facing: "south", posture: "standing",
+        id: "player-1", name: "Boarding Lead", side: "player", position: { ...crewStarts[0] }, facing: "south", posture: "standing",
         health: 1, defeated: false, surrendered: false, weapon: { ...characterCombatWeapons.laserRifle }, weaponSkill: 1, skills: [{ name: "Security", level: 1 }],
         meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 2, moraleFactor: 7, leadershipRating: 1,
         armor: characterCombatArmor.flakVest.value, armorName: characterCombatArmor.flakVest.name,
         grenades: 1, smokeGrenades: 1, medkits: 1, breachingCharges: 1, woundState: "healthy",
       },
       {
-        id: "player-2", name: "Boarding Support", side: "player", position: { x: 51, y: 34 }, facing: "south", posture: "standing",
+        id: "player-2", name: "Boarding Support", side: "player", position: { ...crewStarts[1] }, facing: "south", posture: "standing",
         health: 1, defeated: false, surrendered: false, weapon: { ...characterCombatWeapons.shotgun }, weaponSkill: 0, skills: [],
         meleeWeapon: { name: "Blade", penetration: 1 }, meleeRating: 1, moraleFactor: 7, leadershipRating: 0,
         armor: characterCombatArmor.combatArmor.value, armorName: characterCombatArmor.combatArmor.name,
         grenades: 1, smokeGrenades: 1, medkits: 1, woundState: "healthy",
       },
-      ...(definition.enemyPlacements ?? []).map(buildTacticalEnemyCombatant),
+      ...enemies,
     ],
   });
 };

@@ -46,6 +46,7 @@ const scenarioSchema = z.object({
     backgroundImage: z.string().min(1).optional(),
   }).strict(),
   terrainPlacements: z.array(placementSchema),
+  deploymentEdges: z.array(z.enum(["north", "east", "south", "west"])).default(["south"]),
   enemyPlacements: z.array(enemyPlacementSchema).default([]),
   fireCells: z.array(gridPointSchema),
   smokeCells: z.array(gridPointSchema),
@@ -128,8 +129,11 @@ export const parseTacticalScenarioFile = (value: unknown): TacticalScenarioDefin
   validateCells(scenario);
   try {
     const terrain = resolveTacticalScenarioTerrain(scenario);
+    if (terrain.deploymentCells.length < 2) throw new TacticalScenarioFileError("Define a crew deployment edge or place a Deployment Zone 9x9.", 400, "invalid-scenario");
+    const deploymentCells = new Set(terrain.deploymentCells.map((cell) => `${cell.x}:${cell.y}`));
     (scenario.enemyPlacements ?? []).forEach((enemy) => {
       const position = `${enemy.position.x}:${enemy.position.y}`;
+      if (deploymentCells.has(position)) throw new TacticalScenarioFileError(`Enemy ${enemy.id} cannot be placed in the crew deployment zone at ${position}.`, 400, "invalid-scenario");
       if (terrain.objects.some((object) => `${object.position.x}:${object.position.y}` === position) || terrain.closeMachineryCells.some((cell) => `${cell.x}:${cell.y}` === position)) {
         throw new TacticalScenarioFileError(`Enemy ${enemy.id} cannot occupy blocked terrain at ${position}.`, 400, "invalid-scenario");
       }
