@@ -5,9 +5,11 @@ import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } fr
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "../tacticalConsoleVictory";
 import { defaultTacticalInteractiveHumanCombatProfile } from "../tacticalInteractiveHuman";
 import {
+  DEFAULT_TACTICAL_SCENARIO_ID,
   listTacticalScenarioFiles,
   loadTacticalScenarioBundle,
   loadTacticalScenarioFile,
+  saveTacticalScenarioBundle,
   saveTacticalScenarioBundleAs,
   saveTacticalScenarioAs,
 } from "../server/tacticalScenarioFiles";
@@ -26,6 +28,7 @@ describe("tactical scenario files", () => {
   it("saves a new scenario as formatted JSON and loads it again", async () => {
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     draft.title = "Cargo Deck Assault";
+    draft.enemyPlacements![0].facing = "east";
 
     const saved = await saveTacticalScenarioAs("Cargo Deck Assault", draft, directory);
     const loaded = await loadTacticalScenarioFile("cargo-deck-assault", directory);
@@ -33,6 +36,7 @@ describe("tactical scenario files", () => {
 
     expect(saved.id).toBe("cargo-deck-assault");
     expect(loaded).toEqual(saved);
+    expect(loaded.enemyPlacements?.[0].facing).toBe("east");
     expect(source).toContain('\n  "schemaVersion": 1,');
     expect(await listTacticalScenarioFiles(directory)).toEqual([
       { id: "cargo-deck-assault", title: "Cargo Deck Assault", isDefault: false },
@@ -53,11 +57,35 @@ describe("tactical scenario files", () => {
     expect(loaded).toEqual(saved);
   });
 
+  it("updates a previously saved non-default scenario and console definition", async () => {
+    const scenarioDirectory = path.join(directory, "scenarios");
+    const consoleDirectory = path.join(directory, "consoles");
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    const consoleVictory = cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
+    await saveTacticalScenarioBundleAs("Chained Console Test", draft, consoleVictory, scenarioDirectory, consoleDirectory);
+
+    draft.title = "Updated Chained Console Test";
+    consoleVictory.operations[0].label = "Updated operation";
+    const saved = await saveTacticalScenarioBundle("chained-console-test", draft, consoleVictory, scenarioDirectory, consoleDirectory);
+    const loaded = await loadTacticalScenarioBundle("chained-console-test", scenarioDirectory, consoleDirectory);
+
+    expect(saved.scenario).toMatchObject({ id: "chained-console-test", title: "Updated Chained Console Test" });
+    expect(saved.consoleVictory.operations[0].label).toBe("Updated operation");
+    expect(loaded).toEqual(saved);
+  });
+
+  it("refuses to update the immutable default scenario", async () => {
+    await expect(saveTacticalScenarioBundle(DEFAULT_TACTICAL_SCENARIO_ID, defaultTacticalScenarioDefinition, defaultTacticalConsoleVictoryDefinition, directory, directory)).rejects.toMatchObject({
+      code: "default-scenario",
+      status: 409,
+    });
+  });
+
   it("preserves interactive-human combat profiles and transformation outcomes", async () => {
     const scenarioDirectory = path.join(directory, "scenarios");
     const consoleDirectory = path.join(directory, "consoles");
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    draft.terrainPlacements.push({ id: "informant", terrainDefinitionId: "interactive-human", origin: { x: 10, y: 10 }, rotation: 0, objectSettings: { terminal: { label: "Mara Venn", combatProfile: { ...defaultTacticalInteractiveHumanCombatProfile, weaponId: "autopistol", skills: [{ name: "Leadership", level: 1 }] } } } });
+    draft.terrainPlacements.push({ id: "informant", terrainDefinitionId: "interactive-human", origin: { x: 10, y: 10 }, rotation: 0, objectSettings: { terminal: { label: "Mara Venn", facing: 270, combatProfile: { ...defaultTacticalInteractiveHumanCombatProfile, weaponId: "autopistol", skills: [{ name: "Leadership", level: 1 }] } } } });
     const consoleVictory = cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
     consoleVictory.operations.push({ id: "recruit-informant", consolePlacementId: "informant", label: "Recruit Mara Venn", prerequisites: { mode: "all", operationIds: [] }, checks: [{ id: "persuade", skill: "Persuade", difficulty: "average", apCost: 2 }], successTransformation: "ally", failureTransformation: "enemy", result: { type: "unlock", operationIds: [] } });
 
@@ -65,7 +93,7 @@ describe("tactical scenario files", () => {
     const loaded = await loadTacticalScenarioBundle("human-transformation", scenarioDirectory, consoleDirectory);
 
     expect(loaded).toEqual(saved);
-    expect(loaded.scenario.terrainPlacements.find((placement) => placement.id === "informant")?.objectSettings?.terminal?.combatProfile).toMatchObject({ weaponId: "autopistol", skills: [{ name: "Leadership", level: 1 }] });
+    expect(loaded.scenario.terrainPlacements.find((placement) => placement.id === "informant")?.objectSettings?.terminal).toMatchObject({ facing: 270, combatProfile: { weaponId: "autopistol", skills: [{ name: "Leadership", level: 1 }] } });
     expect(loaded.consoleVictory.operations.find((operation) => operation.id === "recruit-informant")).toMatchObject({ successTransformation: "ally", failureTransformation: "enemy" });
   });
 

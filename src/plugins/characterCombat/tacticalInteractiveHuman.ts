@@ -46,7 +46,7 @@ export const validateTacticalInteractiveHumanCombatProfile = (profile: TacticalI
   return profile;
 };
 
-export const buildTransformedInteractiveHuman = ({ id, name, side, position, modelPath, profile }: { id: string; name: string; side: CombatSide; position: GridPoint; modelPath?: string; profile: TacticalInteractiveHumanCombatProfile }): Combatant => {
+export const buildTransformedInteractiveHuman = ({ id, name, side, position, facing = "north", modelPath, profile }: { id: string; name: string; side: CombatSide; position: GridPoint; facing?: Combatant["facing"]; modelPath?: string; profile: TacticalInteractiveHumanCombatProfile }): Combatant => {
   validateTacticalInteractiveHumanCombatProfile(profile);
   const weapon = characterCombatWeapons[profile.weaponId];
   const armor = characterCombatArmor[profile.armorId];
@@ -56,7 +56,7 @@ export const buildTransformedInteractiveHuman = ({ id, name, side, position, mod
     side,
     modelPath,
     position: { ...position },
-    facing: "north",
+    facing,
     posture: "standing",
     health: 1,
     defeated: false,

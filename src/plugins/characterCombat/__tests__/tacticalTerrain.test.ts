@@ -1,9 +1,17 @@
 import { coverAssessment, filledLiquidHydrogenCellKeys, hasLineOfSight, pointKey, reachableOpenMapMovement, scenarioAvoidingLiquidHydrogenForPathfinding, shortestPathToAny, sidestepAndBackstepMoves, tacticalOccupantCounts, terrainHeightAt } from "../geometry";
 import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
-import { createControlRoom, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
+import { combatantFacingForTacticalRotation, createControlRoom, interactiveHumanModelFacingForTacticalRotation, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
 
 describe("tactical Control Room", () => {
+  it("maps editor rotations to combatant facing directions", () => {
+    expect(([0, 90, 180, 270] as const).map(combatantFacingForTacticalRotation)).toEqual(["north", "east", "south", "west"]);
+  });
+
+  it("corrects the interactive-human model's reversed forward direction", () => {
+    expect(([0, 90, 180, 270] as const).map(interactiveHumanModelFacingForTacticalRotation)).toEqual(["south", "west", "north", "east"]);
+  });
+
   it("resolves six-square edge deployment zones and a placeable 9x9 interior zone", () => {
     const edgeTerrain = resolveTacticalScenarioTerrain(defaultTacticalScenarioDefinition);
     expect(edgeTerrain.deploymentCells).toHaveLength(72 * 6);

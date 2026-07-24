@@ -10,7 +10,7 @@ import { FloatingPluginHud } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import { AnimatedCombatantFallback, AnimatedCombatantModel } from "@/plugins/characterCombat/AnimatedCombatantModel";
 import { AnimatedCombatantPlacement } from "@/plugins/characterCombat/AnimatedCombatantPlacement";
-import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalDraftPlaytest, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalDraftPlaytest, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
+import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalDraftPlaytest, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalDraftPlaytest, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalDeploymentHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
 import { updateTacticalEnemyHud, updateTacticalScenarioHud } from "@/plugins/characterCombat/slice";
 import { attemptTacticalConsoleCheck } from "@/plugins/characterCombat/slice";
 import { recordTacticalExploration } from "@/plugins/characterCombat/slice";
@@ -21,7 +21,7 @@ import type { Combatant, CombatScenario, TacticalMapState } from "@/plugins/char
 import { buildDefaultTacticalScenario } from "@/plugins/characterCombat/defaultTacticalScenario";
 import type { TacticalScenarioDefinitionFile } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import { consoleOperationAvailable, type TacticalConsoleVictoryDefinitionFile } from "@/plugins/characterCombat/tacticalConsoleVictory";
-import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns, type TacticalTerrainObject, type TacticalWallVisualRun } from "@/plugins/characterCombat/tacticalTerrain";
+import { activeTacticalTerrainObjects, interactiveHumanModelFacingForTacticalRotation, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns, type TacticalTerrainObject, type TacticalWallVisualRun } from "@/plugins/characterCombat/tacticalTerrain";
 import {
   fetchCharacters,
   selectCharacters,
@@ -382,13 +382,13 @@ const TacticalTerrainPiece = ({ object, mapWidth, mapHeight, elevation, selected
   if (object.kind === "terminal") {
     if (object.visualKind === "human") {
       const position: [number, number, number] = [object.position.x + 0.5 - mapWidth / 2, elevation + 0.02, object.position.y + 0.5 - mapHeight / 2];
-      return <group position={position} rotation={[0, object.facing * Math.PI / 180, 0]} onClick={(event) => { event.stopPropagation(); onSelect(object.position); }}>
+      return <group position={position} onClick={(event) => { event.stopPropagation(); onSelect(object.position); }}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
           <ringGeometry args={[0.35, 0.44, 32]} />
           <meshBasicMaterial color={selected ? "#facc15" : terminalActive ? "#22c55e" : "#a855f7"} transparent opacity={0.9} />
         </mesh>
         <Suspense fallback={<AnimatedCombatantFallback color="#a855f7" />}>
-          <AnimatedCombatantModel animation="idle" facing="north" modelPath={object.modelPath ?? "/models/character-combat/female.glb"} />
+          <AnimatedCombatantModel animation="idle" facing={interactiveHumanModelFacingForTacticalRotation(object.facing)} modelPath={object.modelPath ?? "/models/character-combat/female.glb"} />
         </Suspense>
         <Html center position={[0, 1.25, 0]} style={{ pointerEvents: "none" }}><div className="whitespace-nowrap border border-purple-400/70 bg-slate-950/90 px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-wider text-purple-100">{object.label}</div></Html>
       </group>;
@@ -481,14 +481,19 @@ const TacticalWallRun = ({ run, mapWidth, mapHeight }: { run: TacticalWallVisual
   </mesh>;
 };
 
-const MapCombatant = ({ combatant, mapWidth, mapHeight, elevation, movement, selected, targetable, targeted, onSelect }: { combatant: Combatant; mapWidth: number; mapHeight: number; elevation: number; movement?: { sequence: number; path: [number, number, number][]; mode: "walk" | "run" }; selected: boolean; targetable: boolean; targeted: boolean; onSelect: () => void }) => {
+const MapCombatant = ({ combatant, mapWidth, mapHeight, elevation, movement, selected, deploymentFacingIndicator, targetable, targeted, onSelect }: { combatant: Combatant; mapWidth: number; mapHeight: number; elevation: number; movement?: { sequence: number; path: [number, number, number][]; mode: "walk" | "run" }; selected: boolean; deploymentFacingIndicator: boolean; targetable: boolean; targeted: boolean; onSelect: () => void }) => {
   const enemy = combatant.side === "enemy";
   const accent = enemy ? "#ef4444" : "#22d3ee";
+  const facingMarkerPosition: [number, number, number] = combatant.facing === "north" ? [0, 0.025, -0.55] : combatant.facing === "east" ? [0.55, 0.025, 0] : combatant.facing === "south" ? [0, 0.025, 0.55] : [-0.55, 0.025, 0];
   return <AnimatedCombatantPlacement position={[combatant.position.x - mapWidth / 2 + 0.5, elevation + 0.02, combatant.position.y - mapHeight / 2 + 0.5]} rotation={[0, 0, 0]} finalFacing={combatant.facing} movement={movement} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
   {(moving, visualFacing) => <>
     {(!enemy || targetable || targeted) && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
       <ringGeometry args={targeted ? [0.29, 0.49, 32] : targetable ? [0.37, 0.44, 32] : [0.34, 0.47, 32]} />
       <meshBasicMaterial color={targeted ? "#ff1f1f" : selected ? "#facc15" : accent} transparent opacity={targetable || selected || targeted ? 1 : 0.72} />
+    </mesh>}
+    {deploymentFacingIndicator && <mesh position={facingMarkerPosition} rotation={[-Math.PI / 2, 0, 0]}>
+      <circleGeometry args={[0.13, 3]} />
+      <meshBasicMaterial color="#facc15" />
     </mesh>}
     <Suspense fallback={<AnimatedCombatantFallback color={accent} />}>
       <AnimatedCombatantModel animation={moving ? movement?.mode ?? "walk" : "idle"} facing={visualFacing} pose={combatant.woundState === "dead" ? "stunned" : null} modelPath={combatant.modelPath} />
@@ -607,7 +612,7 @@ const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions,
     {combatants.filter((combatant) => (combatant.side === "player" ? tacticalMap.scenarioStatus !== "setup" || (tacticalMap.deployedCharacterIds ?? []).includes(combatant.id) : crewVisibility.has(pointKey(combatant.position)))).map((combatant) => {
       const animation = tacticalMap.movementAnimationByCharacterId[combatant.id];
       const worldMovement = animation ? { ...animation, path: animation.path.map((point, index) => [point.x + 0.5 - mapWidth / 2, (animation.elevationLevels?.[index] !== undefined ? animation.elevationLevels[index] * TACTICAL_WALL_HEIGHT : tacticalVisualHeightAt(tacticalMap.scenario, point)) + 0.02, point.y + 0.5 - mapHeight / 2] as [number, number, number]) } : undefined;
-      return <MapCombatant key={combatant.id} combatant={combatant} mapWidth={mapWidth} mapHeight={mapHeight} elevation={tacticalCombatantHeight(tacticalMap.scenario, combatant)} movement={worldMovement} selected={selected?.id === combatant.id} targetable={validTargetIds.has(combatant.id) || validMeleeTargetIds.has(combatant.id) || validMeleeDiveTargetIds.has(combatant.id)} targeted={tacticalMap.plannedAttackTargetId === combatant.id || tacticalMap.plannedMeleeTargetId === combatant.id} onSelect={() => {
+      return <MapCombatant key={combatant.id} combatant={combatant} mapWidth={mapWidth} mapHeight={mapHeight} elevation={tacticalCombatantHeight(tacticalMap.scenario, combatant)} movement={worldMovement} selected={selected?.id === combatant.id} deploymentFacingIndicator={tacticalMap.scenarioStatus === "setup" && selected?.id === combatant.id} targetable={validTargetIds.has(combatant.id) || validMeleeTargetIds.has(combatant.id) || validMeleeDiveTargetIds.has(combatant.id)} targeted={tacticalMap.plannedAttackTargetId === combatant.id || tacticalMap.plannedMeleeTargetId === combatant.id} onSelect={() => {
         if (tacticalMap.coveringFireTargeting) {
           dispatch(previewTacticalCoveringFire(combatant.position));
           return;
@@ -686,6 +691,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const tacticalScenarioStatus = tacticalMap.scenarioStatus ?? "active";
   const terrainLightsOn = (tacticalMap.scenario.lightSources ?? []).some((source) => source.on !== false);
   const scenarioHudLayout = tacticalMap.scenarioHudLayout ?? { visible: true, pinned: false, position: { x: 320, y: 190 } };
+  const deploymentHudLayout = tacticalMap.deploymentHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 190 } };
   const crewVisibility = useMemo(() => tacticalCrewVisibilityMask(tacticalMap.scenario), [tacticalMap.scenario]);
   const exploredCells = useMemo(() => new Set(tacticalMap.exploredCellKeys ?? []), [tacticalMap.exploredCellKeys]);
   const visibleCellKeys = useMemo(() => [...crewVisibility.keys()], [crewVisibility]);
@@ -706,6 +712,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const livingPlayerIds = tacticalMap.scenario.combatants.filter((unit) => unit.side === "player" && !unit.defeated).map((unit) => unit.id);
   const transformedAllies = tacticalMap.scenario.combatants.filter((unit) => unit.side === "player" && unit.id.endsWith(":combatant"));
   const crewDeploymentComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => (tacticalMap.deployedCharacterIds ?? []).includes(id));
+  const selectedCrewDeployed = Boolean(activeCombatant && (tacticalMap.deployedCharacterIds ?? []).includes(activeCombatant.id));
   const playerPhaseComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => tacticalMap.actedCharacterIds.includes(id) || (tacticalMap.actionPointsByCharacterId[id] ?? 0) === 0);
   const tacticalTerrain = useMemo(() => activeTacticalTerrainObjects(tacticalMap.scenario, tacticalMap.doorOpenById, tacticalMap.destroyedTerrainObjectIds), [tacticalMap.destroyedTerrainObjectIds, tacticalMap.doorOpenById, tacticalMap.scenario]);
   const blockedCells = useMemo(() => tacticalTerrainBlockedCells(tacticalTerrain), [tacticalTerrain]);
@@ -831,7 +838,8 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const hiddenHuds = [
     ...(!tacticalMap.characterHudLayout.visible ? [{ id: "characters", title: "Characters" }] : []),
     ...(!tacticalMap.enemyHudLayout.visible ? [{ id: "enemies", title: "Enemies" }] : []),
-    ...(!tacticalMap.actionHudLayout.visible ? [{ id: "action", title: "Current Action" }] : []),
+    ...(tacticalScenarioStatus !== "setup" && !tacticalMap.actionHudLayout.visible ? [{ id: "action", title: "Current Action" }] : []),
+    ...(tacticalScenarioStatus === "setup" && !deploymentHudLayout.visible ? [{ id: "deployment", title: "Crew Deployment" }] : []),
     ...(!tacticalMap.characterInformationHudLayout.visible ? [{ id: "character-information", title: "Selected Character" }] : []),
     ...(!tacticalMap.eventsHudLayout.visible ? [{ id: "events", title: "Events" }] : []),
     ...(!scenarioHudLayout.visible ? [{ id: "scenario", title: "Scenario" }] : []),
@@ -840,6 +848,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   return <main className="h-screen w-screen overflow-hidden bg-[#050a12] [--hud-accent:#a5f3fc] [--hud-bg:#071019] [--hud-border:#42616e] [--hud-border-subtle:#29434d] [--hud-text:#e2f3f6] [--hud-text-dim:#8faab3]">
     <PluginHudLayer hiddenHuds={hiddenHuds} onRestoreHud={(id) => {
       if (id === "action") dispatch(updateTacticalActionHud({ ...tacticalMap.actionHudLayout, visible: true }));
+      else if (id === "deployment") dispatch(updateTacticalDeploymentHud({ ...deploymentHudLayout, visible: true }));
       else if (id === "enemies") dispatch(updateTacticalEnemyHud({ ...tacticalMap.enemyHudLayout, visible: true }));
       else if (id === "character-information") dispatch(updateTacticalCharacterInformationHud({ ...tacticalMap.characterInformationHudLayout, visible: true }));
       else if (id === "events") dispatch(updateTacticalEventsHud({ ...tacticalMap.eventsHudLayout, visible: true }));
@@ -946,12 +955,28 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
       <FloatingPluginHud title="Events" layout={tacticalMap.eventsHudLayout} onLayoutChange={(layout) => dispatch(updateTacticalEventsHud(layout))} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
         {tacticalMap.events.length ? <div className="flex max-h-28 flex-col gap-1 overflow-y-auto normal-case tracking-normal">{tacticalMap.events.slice(0, 6).map((event, index) => <div key={`${index}:${event}`} className="border-b border-(--hud-border)/50 pb-1 last:border-0">{event}</div>)}</div> : <div className="normal-case tracking-normal text-(--hud-text-dim)">No events.</div>}
       </FloatingPluginHud>
-      <FloatingPluginHud title="Current Action" layout={tacticalMap.actionHudLayout} onLayoutChange={(layout) => dispatch(updateTacticalActionHud(layout))} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+      {tacticalScenarioStatus === "setup" && <FloatingPluginHud title="Crew Deployment" layout={deploymentHudLayout} onLayoutChange={(layout) => dispatch(updateTacticalDeploymentHud(layout))} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+        <section className="flex flex-col gap-2 normal-case tracking-normal">
+          <div className="font-bold uppercase tracking-wider text-emerald-100">Pregame crew state</div>
+          {!activeCombatant ? <div className="text-(--hud-text-dim)">Select a crew member in the Characters HUD.</div> : <>
+            <div className="font-bold text-cyan-100">{activeCombatant.name}</div>
+            {!selectedCrewDeployed ? <div className="border border-amber-300/60 p-2 text-amber-100">Place this crew member on a green deployment square before setting facing or stance.</div> : <>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                <span className="text-(--hud-text-dim)">Facing</span><span className="font-bold capitalize text-yellow-100">{activeCombatant.facing}</span>
+                <span className="text-(--hud-text-dim)">Stance</span><span className="font-bold capitalize">{selectedProne ? "Prone" : "Standing"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <button type="button" onClick={() => dispatch(rotateTacticalDeploymentCharacter("left"))} className="h-7 border border-yellow-300 px-2 font-bold uppercase tracking-wider text-yellow-100">Rotate left</button>
+                <button type="button" onClick={() => dispatch(rotateTacticalDeploymentCharacter("right"))} className="h-7 border border-yellow-300 px-2 font-bold uppercase tracking-wider text-yellow-100">Rotate right</button>
+              </div>
+              <button type="button" onClick={() => dispatch(setTacticalDeploymentPosture(selectedProne ? "standing" : "prone"))} className="h-7 border border-slate-300 px-2 font-bold uppercase tracking-wider text-slate-100">{selectedProne ? "Stand up" : "Set prone"}</button>
+            </>}
+          </>}
+        </section>
+      </FloatingPluginHud>}
+      {tacticalScenarioStatus !== "setup" && <FloatingPluginHud title="Current Action" layout={tacticalMap.actionHudLayout} onLayoutChange={(layout) => dispatch(updateTacticalActionHud(layout))} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
         <section className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto pr-1 normal-case tracking-normal">
-          {tacticalScenarioStatus === "setup" ? <div className="flex flex-col gap-2 border border-amber-300/70 p-2 text-amber-100">
-            <div className="font-bold uppercase tracking-wider">Scenario setup</div>
-            <div className="text-(--hud-text-dim)">Select a crew member in the Characters HUD and click a green deployment square. Deploy every crew member before starting.</div>
-          </div> : tacticalScenarioStatus !== "active" ? <div className={`flex flex-col gap-2 border p-2 ${tacticalScenarioStatus === "victory" ? "border-emerald-300/70 text-emerald-100" : "border-red-300/70 text-red-100"}`}>
+          {tacticalScenarioStatus !== "active" ? <div className={`flex flex-col gap-2 border p-2 ${tacticalScenarioStatus === "victory" ? "border-emerald-300/70 text-emerald-100" : "border-red-300/70 text-red-100"}`}>
             <div className="font-bold uppercase tracking-wider">{tacticalScenarioStatus === "victory" ? "Victory — Security Terminal Secured" : "Defeat — Crew Incapacitated"}</div>
             <div className="text-(--hud-text-dim)">{tacticalScenarioStatus === "victory" ? "The Control Room Assault objective is complete." : "No crew member remains able to continue the assault."}</div>
           </div> : pendingAdjacencyReaction && adjacencyDefender && adjacencyMover ? <div className="flex flex-col gap-2 border border-red-300/70 p-2">
@@ -1156,7 +1181,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
           </> : <div className="text-(--hud-text-dim)">Select a green character.</div>}
           <button type="button" onClick={() => dispatch(draftPlaytest ? resetTacticalDraftPlaytest({ definition: draftPlaytest.definition, consoleVictory: draftPlaytest.consoleVictory }) : resetTacticalScenario())} className="h-7 w-full border border-red-300 px-2 text-[8px] font-bold uppercase tracking-wider text-red-100 transition-colors hover:bg-red-300/15">Reset Scenario</button>
         </section>
-      </FloatingPluginHud>
+      </FloatingPluginHud>}
       {(status === "loading" || shipStatus === "loading") && <div className="absolute inset-x-0 bottom-8 text-center font-mono text-xs uppercase tracking-widest text-cyan-200">Loading crew…</div>}
       {(status === "error" || shipStatus === "error") && <div className="absolute inset-x-0 bottom-8 text-center font-mono text-xs uppercase tracking-widest text-rose-300">Crew could not be loaded</div>}
     </PluginHudLayer>

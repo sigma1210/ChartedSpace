@@ -6,12 +6,13 @@ import { diveOptions, reachableCrawling } from "./geometry";
 import { ahlMeleeDiveMoves } from "./geometry";
 import { reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalOccupantCounts } from "./geometry";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "./enemyTactics";
-import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalTerrainObjectsForScenario, type TacticalDoor, type TacticalTerminal, type TacticalTerrainObject } from "./tacticalTerrain";
+import { activeTacticalTerrainObjects, combatantFacingForTacticalRotation, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalTerrainObjectsForScenario, type TacticalDoor, type TacticalTerminal, type TacticalTerrainObject } from "./tacticalTerrain";
 import { armoryLoadouts } from "./equipment";
 import { buildDefaultTacticalScenario, defaultTacticalLighting } from "./defaultTacticalScenario";
 import type { TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
 import { consoleOperationAvailable, travellerTaskTarget, type TacticalConsoleVictoryDefinitionFile } from "./tacticalConsoleVictory";
 import { buildTransformedInteractiveHuman, defaultTacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
+import { randomTacticalEnemyAvatarPath } from "./tacticalEnemyDefinitions";
 
 const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const highEnergyWeaponReady = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => !unit.weapon.highEnergy
@@ -114,9 +115,11 @@ const transformTacticalInteractiveHuman = (map: TacticalMapState, terminal: Tact
     name: terminal.label,
     side: allegiance === "ally" ? "player" : "enemy",
     position: terminal.position,
+    facing: combatantFacingForTacticalRotation(terminal.facing),
     modelPath: terminal.modelPath,
     profile: terminal.combatProfile ?? defaultTacticalInteractiveHumanCombatProfile,
   });
+  if (allegiance === "enemy") combatant.avatarPath = randomTacticalEnemyAvatarPath();
   combatant.elevationLevel = map.scenario.elevationLevelByCell?.[pointKey(terminal.position)] ?? 0;
   map.scenario.terrainObjects = (map.scenario.terrainObjects ?? []).filter((object) => object.id !== terminal.id);
   map.scenario.objects = map.scenario.objects.filter((object) => object.id !== terminal.id);
@@ -375,7 +378,7 @@ const resolveTacticalMovingAdjacentSnapShot = (map: TacticalMapState, shooter: C
   map.events.unshift(`${shooter.name} moving-adjacent failure snap fired at ${target.name}: ${tacticalHitRollEvent(result)} · ${result.hit ? `wound ${result.woundTotal} (${result.woundState})` : "miss"}`);
   return true;
 };
-const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], layouts?: Pick<TacticalMapState, "characterHudLayout" | "enemyHudLayout" | "actionHudLayout" | "characterInformationHudLayout" | "eventsHudLayout" | "scenarioHudLayout">, options: { setup?: boolean; lightingPreset?: TacticalLightingPreset; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile } = {}): TacticalMapState => {
+const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], layouts?: Pick<TacticalMapState, "characterHudLayout" | "enemyHudLayout" | "actionHudLayout" | "characterInformationHudLayout" | "eventsHudLayout" | "scenarioHudLayout" | "deploymentHudLayout">, options: { setup?: boolean; lightingPreset?: TacticalLightingPreset; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile } = {}): TacticalMapState => {
   const lightingPreset = options.lightingPreset ?? "exterior-dark";
   const scenario = buildHydratedDefaultTacticalScenario(entries, loadoutIds, lightingPreset, options.definition, options.consoleVictory);
   const ammunitionByCombatantAndKind = prepareTacticalAmmunition(scenario);
@@ -393,6 +396,7 @@ const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: rea
     characterHudLayout: layouts?.characterHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 86 } },
     enemyHudLayout: layouts?.enemyHudLayout ?? { visible: true, pinned: false, position: { x: 840, y: 86 } },
     actionHudLayout: layouts?.actionHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 190 } },
+    deploymentHudLayout: layouts?.deploymentHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 190 } },
     characterInformationHudLayout: layouts?.characterInformationHudLayout ?? { visible: true, pinned: false, position: { x: 320, y: 86 } },
     eventsHudLayout: layouts?.eventsHudLayout ?? { visible: true, pinned: false, position: { x: 580, y: 86 } },
     scenarioHudLayout: layouts?.scenarioHudLayout ?? { visible: true, pinned: false, position: { x: 320, y: 190 } },
@@ -1020,11 +1024,11 @@ const beginNextTacticalTurn = (map: TacticalMapState, rolls: TacticalEnemyPhaseR
 export const initialCharacterCombatState: CharacterCombatState = { scenario: null, selectedBoardingTeamIds: [], armoryLoadoutIds: ["scout", "breacher"], combatantStarts: {}, outcome: null, viewMode: "3d", camera: { quarterTurn: 0, azimuth: Math.PI / 4, elevation: Math.PI / 4.75, zoom: 42, focus: null, pan: { x: 0, y: 0 } }, status: "active", turn: 1, selectedCombatantId: null, plannedMove: null, plannedAttackTargetId: null, plannedAttackMode: null, grenadeTargeting: false, plannedGrenadeTarget: null, lastGrenadeImpact: null, plannedOpenDoorId: null, plannedBreachDoorId: null, plannedExtinguishFire: null, smokeClearsAtTurnByCell: {}, placedBreachingChargeByDoorId: {}, structuralDamageById: {}, vacuumExposureByCombatantId: {}, coveringFireTargeting: false, plannedCoveringFireTarget: null, coveringFireLanes: [], overwatchTargeting: false, plannedOverwatchTarget: null, overwatchLanes: [], adjacencyReactionReserveById: {}, adjacencyReactionUsedCombatantIds: [], movedCombatantIds: [], pendingAdjacencyReaction: null, plannedTreatmentTargetId: null, recoveringCombatantIds: [], evadingCombatantIds: [], trottingCombatantIds: [], bracedCombatantIds: [], suppressedCombatantIds: [], draggingCombatantByCarrierId: {}, maintainedTargetByCombatantId: {}, plannedObjectiveId: null, hoveredDestination: null, actionPointsById: {}, ammunitionById: {}, ammunitionByCombatantAndKind: {}, actedCombatantIds: [], events: [], hudLayouts: freshHudLayouts() };
 const slice = createSlice({ name: "characterCombat", initialState: initialCharacterCombatState, reducers: {
   initializeTacticalMap: (state, action: PayloadAction<TacticalCrewInput[]>) => {
-    const layouts = state.tacticalMap ? { characterHudLayout: state.tacticalMap.characterHudLayout, enemyHudLayout: state.tacticalMap.enemyHudLayout, actionHudLayout: state.tacticalMap.actionHudLayout, characterInformationHudLayout: state.tacticalMap.characterInformationHudLayout, eventsHudLayout: state.tacticalMap.eventsHudLayout, scenarioHudLayout: state.tacticalMap.scenarioHudLayout } : undefined;
+    const layouts = state.tacticalMap ? { characterHudLayout: state.tacticalMap.characterHudLayout, enemyHudLayout: state.tacticalMap.enemyHudLayout, actionHudLayout: state.tacticalMap.actionHudLayout, deploymentHudLayout: state.tacticalMap.deploymentHudLayout, characterInformationHudLayout: state.tacticalMap.characterInformationHudLayout, eventsHudLayout: state.tacticalMap.eventsHudLayout, scenarioHudLayout: state.tacticalMap.scenarioHudLayout } : undefined;
     state.tacticalMap = freshTacticalMap(action.payload, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, layouts);
   },
   initializeTacticalMapSetup: (state, action: PayloadAction<TacticalCrewInput[]>) => {
-    const layouts = state.tacticalMap ? { characterHudLayout: state.tacticalMap.characterHudLayout, enemyHudLayout: state.tacticalMap.enemyHudLayout, actionHudLayout: state.tacticalMap.actionHudLayout, characterInformationHudLayout: state.tacticalMap.characterInformationHudLayout, eventsHudLayout: state.tacticalMap.eventsHudLayout, scenarioHudLayout: state.tacticalMap.scenarioHudLayout } : undefined;
+    const layouts = state.tacticalMap ? { characterHudLayout: state.tacticalMap.characterHudLayout, enemyHudLayout: state.tacticalMap.enemyHudLayout, actionHudLayout: state.tacticalMap.actionHudLayout, deploymentHudLayout: state.tacticalMap.deploymentHudLayout, characterInformationHudLayout: state.tacticalMap.characterInformationHudLayout, eventsHudLayout: state.tacticalMap.eventsHudLayout, scenarioHudLayout: state.tacticalMap.scenarioHudLayout } : undefined;
     const lightingPreset = state.tacticalMap?.lightingPreset ?? "exterior-lit";
     state.tacticalMap = freshTacticalMap(action.payload, state.extendedArmoryLoadoutIds ?? state.armoryLoadoutIds, layouts, { setup: true, lightingPreset });
   },
@@ -1087,6 +1091,21 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     if (!deployedIds.has(unit.id)) map.deployedCharacterIds = [...deployedIds, unit.id];
     map.events.unshift(`${unit.name} deployed at ${destination.x},${destination.y}`);
   },
+  rotateTacticalDeploymentCharacter: (state, action: PayloadAction<"left" | "right">) => {
+    const map = state.tacticalMap;
+    const unit = map ? tacticalCombatant(map, map.deploymentCharacterId) : null;
+    if (!map || map.scenarioStatus !== "setup" || unit?.side !== "player" || !(map.deployedCharacterIds ?? []).includes(unit.id)) return;
+    const directions = ["north", "east", "south", "west"] as const;
+    const currentIndex = directions.indexOf(unit.facing);
+    const offset = action.payload === "right" ? 1 : directions.length - 1;
+    unit.facing = directions[(currentIndex + offset) % directions.length];
+  },
+  setTacticalDeploymentPosture: (state, action: PayloadAction<"standing" | "prone">) => {
+    const map = state.tacticalMap;
+    const unit = map ? tacticalCombatant(map, map.deploymentCharacterId) : null;
+    if (!map || map.scenarioStatus !== "setup" || unit?.side !== "player" || !(map.deployedCharacterIds ?? []).includes(unit.id)) return;
+    unit.posture = action.payload;
+  },
   startTacticalScenario: (state) => {
     const map = state.tacticalMap;
     if (!map || map.scenarioStatus !== "setup") return;
@@ -1108,6 +1127,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
   },
   updateTacticalActionHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
     if (state.tacticalMap) state.tacticalMap.actionHudLayout = action.payload;
+  },
+  updateTacticalDeploymentHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.deploymentHudLayout = action.payload;
   },
   updateTacticalCharacterInformationHud: (state, action: PayloadAction<CharacterCombatHudLayout>) => {
     if (state.tacticalMap) state.tacticalMap.characterInformationHudLayout = action.payload;
@@ -1971,6 +1993,22 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
         continue;
       }
 
+      const meleeTarget = meleeEnemies(scenario, enemy.id).find((unit) => unit.side === "player") ?? null;
+      if (meleeTarget) {
+        const sameSquare = pointKey(enemy.position) === pointKey(meleeTarget.position);
+        const attackResult = resolveAhlMelee(enemy, meleeTarget, dice.hitDice.first, sameSquare, false);
+        const returnEligible = meleeEnemies(scenario, meleeTarget.id).some((unit) => unit.id === enemy.id);
+        const returnResult = returnEligible ? resolveAhlMelee(meleeTarget, enemy, dice.hitDice.second, sameSquare, false) : null;
+        applyTacticalAhlMeleeEffect(map, meleeTarget, attackResult.effect);
+        if (returnResult) applyTacticalAhlMeleeEffect(map, enemy, returnResult.effect);
+        map.events.unshift(`${enemy.name} → ${meleeTarget.name}: MF ${attackResult.differential}, column ${attackResult.tableDifferential}, roll ${attackResult.roll}${attackResult.modifiedRoll !== attackResult.roll ? ` → ${attackResult.modifiedRoll}` : ""}: ${attackResult.effect}`);
+        if (returnResult) map.events.unshift(`${meleeTarget.name} → ${enemy.name}: MF ${returnResult.differential}, column ${returnResult.tableDifferential}, roll ${returnResult.roll}${returnResult.modifiedRoll !== returnResult.roll ? ` → ${returnResult.modifiedRoll}` : ""}: ${returnResult.effect}`);
+        map.events.unshift(`AHL melee exchange resolved simultaneously: ${enemy.name} and ${meleeTarget.name}`);
+        map.actionPointsByCharacterId[enemy.id] = 0;
+        if (map.scenarioStatus !== "active") return;
+        continue;
+      }
+
       let attackTarget: CombatScenario["combatants"][number] | null = tacticalRangedEnemies(scenario, enemy.id)
         .filter((unit) => unit.side === "player")
         .sort((a, b) => compareEnemyRangedTargets(scenario, enemy, a, b, map.evadingCombatantIds))[0] ?? null;
@@ -2258,6 +2296,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       characterHudLayout: map.characterHudLayout,
       enemyHudLayout: map.enemyHudLayout,
       actionHudLayout: map.actionHudLayout,
+      deploymentHudLayout: map.deploymentHudLayout,
       characterInformationHudLayout: map.characterInformationHudLayout,
       eventsHudLayout: map.eventsHudLayout,
       scenarioHudLayout: map.scenarioHudLayout,
@@ -2279,6 +2318,7 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
       characterHudLayout: map.characterHudLayout,
       enemyHudLayout: map.enemyHudLayout,
       actionHudLayout: map.actionHudLayout,
+      deploymentHudLayout: map.deploymentHudLayout,
       characterInformationHudLayout: map.characterInformationHudLayout,
       eventsHudLayout: map.eventsHudLayout,
       scenarioHudLayout: map.scenarioHudLayout,
@@ -4631,6 +4671,8 @@ export const recordTacticalEnemySightings = slice.actions.recordTacticalEnemySig
 export const startTacticalScenario = slice.actions.startTacticalScenario;
 export const selectTacticalDeploymentCharacter = slice.actions.selectTacticalDeploymentCharacter;
 export const deployTacticalCharacter = slice.actions.deployTacticalCharacter;
+export const rotateTacticalDeploymentCharacter = slice.actions.rotateTacticalDeploymentCharacter;
+export const setTacticalDeploymentPosture = slice.actions.setTacticalDeploymentPosture;
 export const setTacticalMovementMode = slice.actions.setTacticalMovementMode;
 export const previewTacticalMove = slice.actions.previewTacticalMove;
 export const activateTacticalCharacter = slice.actions.activateTacticalCharacter;
@@ -4648,6 +4690,7 @@ export const interactWithTacticalTerrain = slice.actions.interactWithTacticalTer
 export const attemptTacticalConsoleCheck = slice.actions.attemptTacticalConsoleCheck;
 export const fireAtTacticalTerrain = slice.actions.fireAtTacticalTerrain;
 export const updateTacticalCharacterInformationHud = slice.actions.updateTacticalCharacterInformationHud;
+export const updateTacticalDeploymentHud = slice.actions.updateTacticalDeploymentHud;
 export const updateTacticalEventsHud = slice.actions.updateTacticalEventsHud;
 export const updateTacticalScenarioHud = slice.actions.updateTacticalScenarioHud;
 export const updateTacticalEnemyHud = slice.actions.updateTacticalEnemyHud;

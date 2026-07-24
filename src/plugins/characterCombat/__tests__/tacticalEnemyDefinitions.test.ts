@@ -19,6 +19,13 @@ describe("tactical scenario enemies", () => {
     expect(buildDefaultTacticalScenario(undefined, definition).combatants.filter((combatant) => combatant.side === "enemy")).toEqual([]);
   });
 
+  it("uses the enemy facing saved by the scenario editor", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.enemyPlacements![0].facing = "west";
+
+    expect(buildDefaultTacticalScenario(undefined, definition).combatants.find((combatant) => combatant.id === definition.enemyPlacements![0].id)?.facing).toBe("west");
+  });
+
   it("selects and persists an avatar path from the enemy pool", () => {
     expect(randomTacticalEnemyAvatarPath(() => 0)).toBe(tacticalEnemyAvatarPaths[0]);
     expect(randomTacticalEnemyAvatarPath(() => 0.999)).toBe(tacticalEnemyAvatarPaths[tacticalEnemyAvatarPaths.length - 1]);

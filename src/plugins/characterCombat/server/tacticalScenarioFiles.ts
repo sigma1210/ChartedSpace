@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { link, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, type TacticalScenarioDefinitionFile } from "../tacticalScenarioDefinitions";
@@ -43,6 +43,7 @@ const enemyPlacementSchema = z.object({
   type: z.enum(["gang-member", "gang-leader"]),
   name: z.string().min(1),
   position: gridPointSchema,
+  facing: z.enum(["north", "east", "south", "west"]).default("north"),
   avatarPath: z.string().startsWith("/generated/avatars/pool/").endsWith(".png"),
 }).strict();
 const scenarioSchema = z.object({
@@ -306,6 +307,41 @@ export const saveTacticalScenarioBundleAs = async (name: string, scenarioValue: 
   } catch (error) {
     if (scenarioLinked) await unlink(scenarioDestination).catch(() => undefined);
     if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new TacticalScenarioFileError(`A scenario named ${id} already exists. Choose another name.`, 409, "scenario-exists");
+    throw error;
+  } finally {
+    await Promise.all([unlink(scenarioTemporary).catch(() => undefined), unlink(consoleTemporary).catch(() => undefined)]);
+  }
+  return { scenario, consoleVictory };
+};
+
+export const saveTacticalScenarioBundle = async (scenarioId: string, scenarioValue: unknown, consoleValue: unknown, scenarioDirectory = tacticalScenarioDirectory, consoleDirectory = tacticalConsoleVictoryDirectory) => {
+  const id = safeScenarioId(scenarioId);
+  if (id === DEFAULT_TACTICAL_SCENARIO_ID) throw new TacticalScenarioFileError("The default scenario is immutable. Use Save As.", 409, "default-scenario");
+  await loadTacticalScenarioBundle(id, scenarioDirectory, consoleDirectory);
+  if (!scenarioValue || typeof scenarioValue !== "object" || Array.isArray(scenarioValue)) throw new TacticalScenarioFileError("A scenario definition is required.", 400, "invalid-scenario");
+  if (!consoleValue || typeof consoleValue !== "object" || Array.isArray(consoleValue)) throw new TacticalScenarioFileError("A console-victory definition is required.", 400, "invalid-console-victory");
+  const scenario = parseTacticalScenarioFile({ ...scenarioValue, id, consoleVictoryDefinitionId: id });
+  const consoleVictory = parseTacticalConsoleVictoryFile({ ...consoleValue, id, scenarioId: id }, scenario);
+  const scenarioDestination = scenarioPath(scenarioDirectory, id);
+  const consoleDestination = scenarioPath(consoleDirectory, id);
+  const scenarioTemporary = path.join(scenarioDirectory, `.${id}.${process.pid}.${randomUUID()}.tmp`);
+  const consoleTemporary = path.join(consoleDirectory, `.${id}.${process.pid}.${randomUUID()}.tmp`);
+  const [previousScenario, previousConsole] = await Promise.all([
+    readFile(scenarioDestination, "utf8"),
+    readFile(consoleDestination, "utf8"),
+  ]);
+  await Promise.all([
+    writeFile(scenarioTemporary, `${JSON.stringify(scenario, null, 2)}\n`, { encoding: "utf8", flag: "wx" }),
+    writeFile(consoleTemporary, `${JSON.stringify(consoleVictory, null, 2)}\n`, { encoding: "utf8", flag: "wx" }),
+  ]);
+  let scenarioReplaced = false;
+  try {
+    await rename(scenarioTemporary, scenarioDestination);
+    scenarioReplaced = true;
+    await rename(consoleTemporary, consoleDestination);
+  } catch (error) {
+    if (scenarioReplaced) await writeFile(scenarioDestination, previousScenario, "utf8");
+    await writeFile(consoleDestination, previousConsole, "utf8");
     throw error;
   } finally {
     await Promise.all([unlink(scenarioTemporary).catch(() => undefined), unlink(consoleTemporary).catch(() => undefined)]);

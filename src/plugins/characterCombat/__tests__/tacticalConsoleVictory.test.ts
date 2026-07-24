@@ -103,7 +103,7 @@ describe("tactical console victory", () => {
       id: "informant",
       terrainDefinitionId: "interactive-human",
       origin: { x: 10, y: 10 },
-      rotation: 0,
+      rotation: 90,
       objectSettings: { terminal: { label: "Mara Venn", combatProfile: { ...defaultTacticalInteractiveHumanCombatProfile, weaponId: "autopistol", weaponSkill: 2, armorId: "flakVest" } } },
     }];
     const interactionDefinition: TacticalConsoleVictoryDefinitionFile = {
@@ -143,7 +143,7 @@ describe("tactical console victory", () => {
     expect(state.tacticalMap?.scenarioStatus).toBe("victory");
     expect(state.tacticalMap?.terminalActiveById["informant:terminal"]).toBe(true);
     expect(state.tacticalMap?.scenario.terrainObjects?.some((object) => object.id === "informant:terminal")).toBe(false);
-    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "informant:combatant")).toMatchObject({ name: "Mara Venn", side: "player", modelPath: "/models/character-combat/female.glb", weapon: { name: "Autopistol" }, weaponSkill: 2, armorName: "Flak Vest" });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "informant:combatant")).toMatchObject({ name: "Mara Venn", side: "player", facing: "east", modelPath: "/models/character-combat/female.glb", weapon: { name: "Autopistol" }, weaponSkill: 2, armorName: "Flak Vest" });
     expect(state.tacticalMap?.actionPointsByCharacterId["informant:combatant"]).toBe(0);
     expect(state.tacticalMap?.actedCharacterIds).toContain("informant:combatant");
     expect(state.tacticalMap?.events.some((event) => event.includes("Persuade") && event.includes("raw 2d6 8"))).toBe(true);
@@ -155,7 +155,7 @@ describe("tactical console victory", () => {
       id: "informant",
       terrainDefinitionId: "interactive-human",
       origin: { x: 10, y: 10 },
-      rotation: 0,
+      rotation: 270,
       objectSettings: { terminal: { label: "Mara Venn", combatProfile: { ...defaultTacticalInteractiveHumanCombatProfile, weaponId: "bodyPistol" } } },
     }];
     const interactionDefinition: TacticalConsoleVictoryDefinitionFile = {
@@ -185,7 +185,7 @@ describe("tactical console victory", () => {
     expect(state.tacticalMap?.completedConsoleOperationIds).not.toContain("persuade-informant");
     expect(state.tacticalMap?.resolvedConsoleOperationIds).toContain("persuade-informant");
     expect(state.tacticalMap?.scenario.terrainObjects?.some((object) => object.id === "informant:terminal")).toBe(false);
-    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "informant:combatant")).toMatchObject({ name: "Mara Venn", side: "enemy", weapon: { name: "Body Pistol" } });
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "informant:combatant")).toMatchObject({ name: "Mara Venn", side: "enemy", facing: "west", avatarPath: expect.stringMatching(/^\/generated\/avatars\/pool\/.+\.png$/), weapon: { name: "Body Pistol" } });
     expect(state.tacticalMap?.actionPointsByCharacterId["informant:combatant"]).toBe(6);
     expect(state.tacticalMap?.processedEnemyPhaseCombatantIds).not.toContain("informant:combatant");
     expect(state.tacticalMap?.events.some((event) => event.includes("became an enemy") && event.includes("next enemy phase"))).toBe(true);

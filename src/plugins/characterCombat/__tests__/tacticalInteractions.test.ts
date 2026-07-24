@@ -1,4 +1,4 @@
-import characterCombatReducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture } from "../slice";
+import characterCombatReducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture } from "../slice";
 import { recordTacticalExploration } from "../slice";
 import { recordTacticalEnemySightings } from "../slice";
 import { initializeTacticalDraftPlaytest, resetTacticalDraftPlaytest } from "../slice";
@@ -115,6 +115,21 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap).toMatchObject({ scenarioStatus: "active", activeCharacterId: "crew-1", deployedCharacterIds: ["crew-1", "crew-2"] });
     expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.position).toEqual({ x: 0, y: 42 });
     expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-2")?.position).toEqual({ x: 1, y: 42 });
+  });
+  it("preserves deployment facing and posture when gameplay starts", () => {
+    let state = characterCombatReducer(undefined, initializeTacticalMapSetup(["crew-1"]));
+    state = characterCombatReducer(state, rotateTacticalDeploymentCharacter("right"));
+    state = characterCombatReducer(state, setTacticalDeploymentPosture("prone"));
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")).toMatchObject({ facing: "south", posture: "standing" });
+
+    state = characterCombatReducer(state, deployTacticalCharacter({ x: 0, y: 42 }));
+    state = characterCombatReducer(state, rotateTacticalDeploymentCharacter("right"));
+    state = characterCombatReducer(state, rotateTacticalDeploymentCharacter("right"));
+    state = characterCombatReducer(state, setTacticalDeploymentPosture("prone"));
+    state = characterCombatReducer(state, startTacticalScenario());
+
+    expect(state.tacticalMap?.scenarioStatus).toBe("active");
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")).toMatchObject({ facing: "north", posture: "prone" });
   });
   it("resets the complete tactical scenario while preserving HUD placement", () => {
     const initialized = reducer(undefined, initializeTacticalMap([
@@ -1769,6 +1784,35 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.ammunitionByCharacterId["enemy-1"]).toBe(ammunition - 1);
     expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Security Guard snap fired at crew-1")]));
     expect(state.tacticalMap?.events.some((event) => event.includes("Security Guard aimed fired"))).toBe(false);
+  });
+
+  it("resolves melee instead of holding position when an enemy is adjacent to crew", () => {
+    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 } }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 11, y: 10 } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { ...initialized.tacticalMap!.actionPointsByCharacterId, "crew-1": 0, "crew-2": 0, "enemy-1": 6, "enemy-2": 0 },
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("AHL melee exchange resolved simultaneously: Security Guard and crew-1")]));
+    expect(state.tacticalMap?.events.some((event) => event.includes("Security Guard held position"))).toBe(false);
   });
 
   it("braces a prone tactical crew member for 2 AP and adds +1 ranged accuracy", () => {

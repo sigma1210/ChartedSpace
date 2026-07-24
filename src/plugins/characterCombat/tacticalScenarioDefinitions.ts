@@ -84,6 +84,7 @@ export interface TacticalEnemyPlacement {
   type: TacticalEnemyType;
   name: string;
   position: GridPoint;
+  facing?: "north" | "east" | "south" | "west";
   avatarPath: string;
 }
 

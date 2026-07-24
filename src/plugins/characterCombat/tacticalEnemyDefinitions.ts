@@ -28,7 +28,7 @@ export const buildTacticalEnemyCombatant = (placement: TacticalEnemyPlacement): 
     side: "enemy",
     avatarPath: placement.avatarPath,
     position: { ...placement.position },
-    facing: "north",
+    facing: placement.facing ?? "north",
     posture: "standing",
     health: 1,
     defeated: false,

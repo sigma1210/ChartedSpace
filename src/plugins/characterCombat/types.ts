@@ -63,6 +63,7 @@ export interface TacticalMapState { scenario: CombatScenario; gridSize: number; 
 export interface TacticalMapState { enemyHudLayout: CharacterCombatHudLayout }
 export interface TacticalMapState { scenarioStatus?: "setup" | "active" | "victory" | "defeat"; lightingPreset?: TacticalLightingPreset }
 export interface TacticalMapState { deploymentCharacterId?: string | null; deployedCharacterIds?: string[] }
+export interface TacticalMapState { deploymentHudLayout?: CharacterCombatHudLayout }
 export interface TacticalMapState { exploredCellKeys?: string[] }
 export interface TacticalMapState { lastKnownEnemyPositions?: Record<string, GridPoint> }
 export interface TacticalMapState { scenarioHudLayout?: CharacterCombatHudLayout }

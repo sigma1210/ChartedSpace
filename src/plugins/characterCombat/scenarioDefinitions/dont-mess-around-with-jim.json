@@ -35,6 +35,7 @@
       "objectSettings": {
         "terminal": {
           "label": "Big Jim Walker",
+          "facing": 180,
           "combatProfile": {
             "weaponId": "noRangedWeapon",
             "weaponSkill": 0,
@@ -62,6 +63,7 @@
         "x": 7,
         "y": 10
       },
+      "facing": "south",
       "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-green-v1.png"
     },
     {
@@ -72,6 +74,7 @@
         "x": 9,
         "y": 11
       },
+      "facing": "south",
       "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v1.png"
     },
     {
@@ -82,6 +85,7 @@
         "x": 13,
         "y": 11
       },
+      "facing": "south",
       "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v1.png"
     },
     {
@@ -92,6 +96,7 @@
         "x": 15,
         "y": 10
       },
+      "facing": "south",
       "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
     },
     {
@@ -102,6 +107,7 @@
         "x": 14,
         "y": 7
       },
+      "facing": "south",
       "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v2.png"
     },
     {
@@ -112,6 +118,7 @@
         "x": 8,
         "y": 7
       },
+      "facing": "south",
       "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
     }
   ],

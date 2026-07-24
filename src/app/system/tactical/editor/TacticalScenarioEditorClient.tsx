@@ -41,6 +41,12 @@ const IRIS_VALVE_ID = "iris-valve";
 const INTERACTION_SKILLS = ["Bribery", "Carouse", "Diplomat", "Medic", "Leadership", "Streetwise", "Persuade", "Investigate", "Deception"] as const;
 const cellKey = (point: { x: number; y: number }) => `${point.x}:${point.y}`;
 const gridPoint = (point: { x: number; y: number }) => ({ x: point.x, y: point.y });
+const facingRotation = (facing: NonNullable<TacticalEnemyPlacement["facing"]> | TacticalTerrainPlacement["rotation"]) => typeof facing === "number" ? facing : ({ north: 0, east: 90, south: 180, west: 270 } as const)[facing];
+const facingVector = (facing: NonNullable<TacticalEnemyPlacement["facing"]> | TacticalTerrainPlacement["rotation"]) => {
+  const radians = facingRotation(facing) * Math.PI / 180;
+  return { x: Math.sin(radians), y: -Math.cos(radians) };
+};
+const facingName = (facing: NonNullable<TacticalEnemyPlacement["facing"]> | TacticalTerrainPlacement["rotation"]) => ["North", "East", "South", "West"][facingRotation(facing) / 90] ?? "North";
 type EditorMapPoint = { x: number; y: number; edgeRotation?: TacticalTerrainPlacement["rotation"] };
 const placementRotations = (terrainDefinitionId: string, edgeRotation?: TacticalTerrainPlacement["rotation"]): TacticalTerrainPlacement["rotation"][] => terrainDefinitionId === IRIS_VALVE_ID && edgeRotation !== undefined
   ? [edgeRotation]
@@ -219,14 +225,18 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       <line x1={hatch.position.x + 0.2} y1={hatch.position.y + 0.2} x2={hatch.position.x + 0.8} y2={hatch.position.y + 0.8} stroke="#94a3b8" strokeWidth="0.045" />
       <line x1={hatch.position.x + 0.8} y1={hatch.position.y + 0.2} x2={hatch.position.x + 0.2} y2={hatch.position.y + 0.8} stroke="#94a3b8" strokeWidth="0.045" />
     </g>)}
-    {terrain.terrainObjects.filter((object) => object.kind === "terminal").map((object) => object.visualKind === "human" ? <g key={object.id}>
-      <circle cx={object.position.x + 0.5} cy={object.position.y + 0.31} r="0.16" fill="#c084fc" stroke="#f3e8ff" strokeWidth="0.06" />
-      <path d={`M ${object.position.x + 0.28} ${object.position.y + 0.8} Q ${object.position.x + 0.5} ${object.position.y + 0.44} ${object.position.x + 0.72} ${object.position.y + 0.8}`} fill="#a855f7" stroke="#f3e8ff" strokeWidth="0.06" />
-      <title>{object.label}</title>
-    </g> : <g key={object.id}>
-      <rect x={object.position.x + 0.15} y={object.position.y + 0.15} width="0.7" height="0.7" fill="#22d3ee" />
-      <title>{object.label}</title>
-    </g>)}
+    {terrain.terrainObjects.filter((object) => object.kind === "terminal").map((object) => {
+      if (object.visualKind !== "human") return <g key={object.id} aria-label={object.label}>
+        <rect x={object.position.x + 0.15} y={object.position.y + 0.15} width="0.7" height="0.7" fill="#22d3ee" />
+      </g>;
+      const direction = facingVector(object.facing);
+      return <g key={object.id} aria-label={`${object.label} · facing ${facingName(object.facing)}`}>
+        <circle cx={object.position.x + 0.5} cy={object.position.y + 0.31} r="0.16" fill="#c084fc" stroke="#f3e8ff" strokeWidth="0.06" />
+        <path d={`M ${object.position.x + 0.28} ${object.position.y + 0.8} Q ${object.position.x + 0.5} ${object.position.y + 0.44} ${object.position.x + 0.72} ${object.position.y + 0.8}`} fill="#a855f7" stroke="#f3e8ff" strokeWidth="0.06" />
+        <line x1={object.position.x + 0.5} y1={object.position.y + 0.5} x2={object.position.x + 0.5 + direction.x * 0.4} y2={object.position.y + 0.5 + direction.y * 0.4} stroke="#fef08a" strokeWidth="0.1" />
+        <circle cx={object.position.x + 0.5 + direction.x * 0.4} cy={object.position.y + 0.5 + direction.y * 0.4} r="0.08" fill="#fef08a" />
+      </g>;
+    })}
     {placementPreview?.kind === "terrain" && placementPreview.cells.map((cell) => <rect key={`placement-preview:${cell.x}:${cell.y}`} x={placementPreview.origin.x + cell.x} y={placementPreview.origin.y + cell.y} width="1" height="1"
       fill={placementPreview.valid ? "#94a3b8" : "#ef4444"} fillOpacity="0.28" stroke={placementPreview.valid ? "#e2e8f0" : "#fecaca"} strokeWidth="0.12" pointerEvents="none" />)}
     {placementPreview?.kind === "fire" && <circle cx={placementPreview.origin.x + 0.5} cy={placementPreview.origin.y + 0.5} r="0.34" fill={placementPreview.valid ? "#f97316" : "#ef4444"} fillOpacity="0.58" stroke={placementPreview.valid ? "#fed7aa" : "#fecaca"} strokeWidth="0.12" pointerEvents="none" />}
@@ -265,10 +275,13 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     {enemyKind && enemyHover && <g pointerEvents="none">
       <circle cx={enemyHover.x + 0.5} cy={enemyHover.y + 0.5} r="0.38" fill="#ef4444" fillOpacity="0.35" stroke="#fecaca" strokeWidth="0.12" />
       <text x={enemyHover.x + 0.5} y={enemyHover.y + 0.62} textAnchor="middle" fill="#fee2e2" fontSize="0.34" fontWeight="bold">E</text>
+      <line x1={enemyHover.x + 0.5} y1={enemyHover.y + 0.5} x2={enemyHover.x + 0.5} y2={enemyHover.y + 0.1} stroke="#fef08a" strokeWidth="0.1" />
+      <circle cx={enemyHover.x + 0.5} cy={enemyHover.y + 0.1} r="0.08" fill="#fef08a" />
     </g>}
     {(definition.enemyPlacements ?? []).map((enemy) => {
       const selected = enemy.id === selectedEnemyId;
-      return <g key={enemy.id} data-testid={`enemy-marker-${enemy.id}`} className={placementKind || enemyKind ? undefined : "cursor-move"} onPointerDown={(event) => {
+      const direction = facingVector(enemy.facing ?? "north");
+      return <g key={enemy.id} data-testid={`enemy-marker-${enemy.id}`} aria-label={`${enemy.name} · facing ${facingName(enemy.facing ?? "north")}`} className={placementKind || enemyKind ? undefined : "cursor-move"} onPointerDown={(event) => {
         if (placementKind || enemyKind) return;
         event.stopPropagation();
         const point = mapPoint(event);
@@ -281,7 +294,8 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       }}>
         <circle cx={enemy.position.x + 0.5} cy={enemy.position.y + 0.5} r="0.38" fill="#7f1d1d" stroke={selected ? "#fef08a" : "#f87171"} strokeWidth={selected ? "0.18" : "0.1"} />
         <text x={enemy.position.x + 0.5} y={enemy.position.y + 0.62} textAnchor="middle" fill="#fee2e2" fontSize="0.34" fontWeight="bold">E</text>
-        <title>{enemy.name}</title>
+        <line x1={enemy.position.x + 0.5} y1={enemy.position.y + 0.5} x2={enemy.position.x + 0.5 + direction.x * 0.4} y2={enemy.position.y + 0.5 + direction.y * 0.4} stroke="#fef08a" strokeWidth="0.1" />
+        <circle cx={enemy.position.x + 0.5 + direction.x * 0.4} cy={enemy.position.y + 0.5 + direction.y * 0.4} r="0.08" fill="#fef08a" />
       </g>;
     })}
   </svg>;
@@ -457,7 +471,7 @@ const TacticalScenarioEditorClient = () => {
     let id = `${enemyKind}-${suffix}`;
     while ((draft.enemyPlacements ?? []).some((enemy) => enemy.id === id)) { suffix += 1; id = `${enemyKind}-${suffix}`; }
     const label = tacticalEnemyPalette.find((enemy) => enemy.id === enemyKind)?.label ?? "Enemy";
-    const enemy: TacticalEnemyPlacement = { id, type: enemyKind, name: `${label} ${suffix}`, position: gridPoint(position), avatarPath: randomTacticalEnemyAvatarPath() };
+    const enemy: TacticalEnemyPlacement = { id, type: enemyKind, name: `${label} ${suffix}`, position: gridPoint(position), facing: "north", avatarPath: randomTacticalEnemyAvatarPath() };
     setDraft({ ...draft, enemyPlacements: [...(draft.enemyPlacements ?? []), enemy] });
     setSelectedPlacementId(null);
     setSelectedEnemyId(id);
@@ -527,7 +541,7 @@ const TacticalScenarioEditorClient = () => {
     setSelectedOperationId(null);
   };
   const selectedIsLiquidHydrogen = selectedPlacement?.terrainDefinitionId.startsWith("liquid-hydrogen-") ?? false;
-  const updateSelectedTerminal = (settings: { label?: string; terminalKind?: TacticalTerminalKind; operational?: boolean; completesScenario?: boolean; combatProfile?: TacticalInteractiveHumanCombatProfile }) => {
+  const updateSelectedTerminal = (settings: { label?: string; terminalKind?: TacticalTerminalKind; facing?: TacticalTerrainPlacement["rotation"]; operational?: boolean; completesScenario?: boolean; combatProfile?: TacticalInteractiveHumanCombatProfile }) => {
     if (!selectedPlacement || !selectedHasTerminal) return;
     updatePlacements(draft.terrainPlacements.map((placement) => placement.id === selectedPlacement.id ? {
       ...placement,
@@ -568,6 +582,12 @@ const TacticalScenarioEditorClient = () => {
   const updateSelectedEnemyName = (name: string) => {
     if (!selectedEnemy) return;
     setDraft((current) => ({ ...current, enemyPlacements: (current.enemyPlacements ?? []).map((enemy) => enemy.id === selectedEnemy.id ? { ...enemy, name } : enemy) }));
+  };
+  const rotateSelectedEnemy = () => {
+    if (!selectedEnemy) return;
+    const facings = ["north", "east", "south", "west"] as const;
+    const facing = facings[(facings.indexOf(selectedEnemy.facing ?? "north") + 1) % facings.length];
+    setDraft((current) => ({ ...current, enemyPlacements: (current.enemyPlacements ?? []).map((enemy) => enemy.id === selectedEnemy.id ? { ...enemy, facing } : enemy) }));
   };
   const deleteSelectedEnemy = () => {
     if (!selectedEnemy) return;
@@ -684,6 +704,39 @@ const TacticalScenarioEditorClient = () => {
       setFileBusy(false);
     }
   };
+  const saveScenario = async () => {
+    if (currentScenario.isDefault || !dirty || fileBusy || draftBlocked) return;
+    setFileBusy(true);
+    setFileMessage(null);
+    try {
+      const definition = {
+        ...draft,
+        enemyPlacements: (draft.enemyPlacements ?? []).map((enemy) => ({ ...enemy, position: gridPoint(enemy.position) })),
+        fireCells: draft.fireCells.map(gridPoint),
+        smokeCells: draft.smokeCells.map(gridPoint),
+      };
+      const response = await fetch(`/api/tactical/scenarios/${encodeURIComponent(currentScenario.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ definition, consoleVictory }),
+      });
+      const body = await response.json() as { scenario?: ScenarioSummary; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile; error?: string };
+      if (!response.ok || !body.scenario || !body.definition || !body.consoleVictory) throw new Error(body.error ?? "Could not save the scenario.");
+      const saved = cloneTacticalScenarioDefinition(body.definition);
+      const savedConsoleVictory = cloneTacticalConsoleVictoryDefinition(body.consoleVictory);
+      setDraft(saved);
+      setBaseline(cloneTacticalScenarioDefinition(saved));
+      setConsoleVictory(savedConsoleVictory);
+      setConsoleVictoryBaseline(cloneTacticalConsoleVictoryDefinition(savedConsoleVictory));
+      setCurrentScenario(body.scenario);
+      await refreshScenarioList();
+      setFileMessage({ kind: "success", text: `Saved changes to ${body.scenario.id}.json.` });
+    } catch (error) {
+      setFileMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not save the scenario." });
+    } finally {
+      setFileBusy(false);
+    }
+  };
 
   if (playtest) return <Provider store={playtest.sandbox}>
     <TacticalMapPageClient draftPlaytest={{ definition: playtest.definition, consoleVictory: playtest.consoleVictory, onExit: () => setPlaytest(null) }} />
@@ -713,10 +766,14 @@ const TacticalScenarioEditorClient = () => {
             </select>
           </label>
           <button type="button" onClick={() => void loadScenario()} disabled={fileBusy || !scenarioToLoad} className="mb-3 h-8 w-full border border-cyan-500 text-[9px] font-bold uppercase tracking-wider text-cyan-100 disabled:opacity-40">Load scenario</button>
+          {currentScenario.isDefault && <div className="mb-3 text-[9px] text-amber-300">The default scenario cannot be overwritten. Use Save As.</div>}
           <label className="mb-2 block text-[9px] font-bold uppercase tracking-wider text-slate-400">New scenario name
             <input aria-label="New scenario name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} placeholder="Boarding action" className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-xs normal-case tracking-normal text-slate-100 outline-none placeholder:text-slate-700 focus:border-cyan-400" />
           </label>
-          <button type="button" onClick={() => void saveScenarioAs()} disabled={fileBusy || !saveAsName.trim() || draftBlocked} className="h-8 w-full border border-emerald-500 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:opacity-40">Save as new scenario</button>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => void saveScenario()} disabled={fileBusy || currentScenario.isDefault || !dirty || draftBlocked} className="h-8 border border-emerald-400 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Save changes</button>
+            <button type="button" onClick={() => void saveScenarioAs()} disabled={fileBusy || !saveAsName.trim() || draftBlocked} className="h-8 border border-emerald-500 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:opacity-40">Save as new scenario</button>
+          </div>
           <div className="mt-2 text-[9px] text-slate-500">Save As creates a new JSON file and never overwrites an existing scenario.</div>
           {fileMessage && <div role="status" className={`mt-2 border p-2 text-[10px] ${fileMessage.kind === "error" ? "border-red-500/70 bg-red-950/60 text-red-100" : "border-emerald-500/70 bg-emerald-950/50 text-emerald-100"}`}>{fileMessage.text}</div>}
         </div>
@@ -822,6 +879,7 @@ const TacticalScenarioEditorClient = () => {
               <label className="mb-2 block font-bold text-cyan-200">{selectedIsInteractiveHuman ? "Human name" : "Console name"}
                 <input value={selectedPlacement.objectSettings?.terminal?.label ?? (selectedIsInteractiveHuman ? "Interactive Human" : selectedPlacement.terrainDefinitionId === "console-1x1" ? "Console" : "Control Room Console")} onChange={(event) => updateSelectedTerminal({ label: event.target.value })} className="mt-1 h-8 w-full border border-(--hud-border) bg-slate-950 px-2 text-[10px] normal-case text-slate-100 outline-none focus:border-cyan-400" />
               </label>
+              {selectedIsInteractiveHuman && <button type="button" aria-label="Rotate interactive human 90 degrees" onClick={() => updateSelectedTerminal({ facing: ((((selectedPlacement.objectSettings?.terminal?.facing ?? 0) + 90) % 360) as TacticalTerrainPlacement["rotation"]) })} className="mb-3 h-8 w-full border border-purple-400 font-bold text-purple-100">Facing {facingName((((selectedPlacement.objectSettings?.terminal?.facing ?? 0) + selectedPlacement.rotation) % 360) as TacticalTerrainPlacement["rotation"])} · Rotate 90°</button>}
               <div className={`mb-3 grid items-end gap-2 ${selectedIsInteractiveHuman ? "grid-cols-1" : "grid-cols-[1fr_auto]"}`}>
                 {!selectedIsInteractiveHuman && <label className="block font-bold text-cyan-200">Console type
                   <select value={selectedPlacement.objectSettings?.terminal?.terminalKind ?? "generic"} onChange={(event) => updateSelectedTerminal({ terminalKind: event.target.value as TacticalTerminalKind })} className="mt-1 h-8 w-full border border-(--hud-border) bg-slate-950 px-2 text-[9px] normal-case text-slate-100">
@@ -973,6 +1031,7 @@ const TacticalScenarioEditorClient = () => {
               <label className="mb-3 block font-bold text-red-200">Enemy name
                 <input value={selectedEnemy.name} onChange={(event) => updateSelectedEnemyName(event.target.value)} className="mt-1 h-8 w-full border border-(--hud-border) bg-slate-950 px-2 text-[10px] normal-case text-slate-100 outline-none focus:border-red-400" />
               </label>
+              <button type="button" aria-label="Rotate enemy 90 degrees" onClick={rotateSelectedEnemy} className="mb-3 h-8 w-full border border-amber-400 font-bold text-amber-100">Facing {facingName(selectedEnemy.facing ?? "north")} · Rotate 90°</button>
               <button type="button" onClick={deleteSelectedEnemy} className="w-full border border-red-500 py-1.5 font-bold text-red-100">Delete enemy</button>
               <div className="mt-2 normal-case text-(--hud-text-dim)">You can also press Delete while this enemy is selected.</div>
             </div>

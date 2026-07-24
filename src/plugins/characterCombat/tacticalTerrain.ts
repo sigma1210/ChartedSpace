@@ -1,7 +1,10 @@
-import type { CombatScenario, GridPoint, TacticalLightSource } from "./types";
+import type { Combatant, CombatScenario, GridPoint, TacticalLightSource } from "./types";
 
 export type TacticalRotation = 0 | 90 | 180 | 270;
 export type TacticalTerminalKind = "generic" | "navigation" | "engineering" | "security" | "communications";
+export const combatantFacingForTacticalRotation = (rotation: TacticalRotation): Combatant["facing"] => rotation === 90 ? "east" : rotation === 180 ? "south" : rotation === 270 ? "west" : "north";
+export const interactiveHumanModelFacingForTacticalRotation = (rotation: TacticalRotation): Combatant["facing"] =>
+  combatantFacingForTacticalRotation(((rotation + 180) % 360) as TacticalRotation);
 
 export interface TacticalTerminalDefinition {
   kind: TacticalTerminalKind;

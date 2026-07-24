@@ -48,6 +48,8 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain(">Interactive Human</button>");
     expect(markup).toContain(">Deployment Zone 9x9</button>");
     expect(markup).toContain("Crew deployment edges");
+    expect(markup).not.toContain("<title>");
+    expect(markup).toContain('aria-label="Gang Member 1 · facing North"');
   });
 
   it("offers file loading and non-overwriting Save As controls", () => {
@@ -55,6 +57,7 @@ describe("TacticalScenarioEditorClient", () => {
 
     expect(markup).toContain("Scenario files");
     expect(markup).toContain("Load scenario");
+    expect(markup).toContain("Save changes");
     expect(markup).toContain("Save as new scenario");
     expect(markup).toContain("never overwrites an existing scenario");
     expect(markup).toContain("immutable source");
@@ -88,6 +91,9 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.getByText("Enemy Editor")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Enemy name"), { target: { value: "Razor" } });
     expect(screen.getByDisplayValue("Razor")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rotate enemy 90 degrees" }).textContent).toContain("Facing North");
+    fireEvent.click(screen.getByRole("button", { name: "Rotate enemy 90 degrees" }));
+    expect(screen.getByRole("button", { name: "Rotate enemy 90 degrees" }).textContent).toContain("Facing East");
 
     fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.queryByTestId("enemy-marker-enemy-1")).toBeNull();
