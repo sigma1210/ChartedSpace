@@ -14,6 +14,7 @@ import { initialHudState } from "../slices/hudSlice";
 import { initialCharactersState } from "../../plugins/characters";
 import { initialDemographicsState } from "../../plugins/demographics";
 import { initialEconomyState } from "../../plugins/economy";
+import { initialEquipmentCatalogState } from "../../plugins/equipmentCatalog";
 import { initialExpenseScenarioState } from "../../plugins/expenseScenario";
 import { initialMaydayState } from "../../plugins/mayday";
 import { initialCharacterCombatState } from "../../plugins/characterCombat";
@@ -60,7 +61,7 @@ const makeRoot = (notifications: NotificationsState): RootState => {
       sceneReady: true,
     },
     hud: initialHudState,
-    plugins: { characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
+    plugins: { characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, equipmentCatalog: initialEquipmentCatalogState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
   };
 }
 

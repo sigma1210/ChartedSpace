@@ -7,7 +7,8 @@ import { ahlMeleeDiveMoves } from "./geometry";
 import { reachableOpenMapMovement, sidestepAndBackstepMoves, tacticalOccupantCounts } from "./geometry";
 import { compareEnemyRangedTargets, shouldImproveEnemyRange } from "./enemyTactics";
 import { activeTacticalTerrainObjects, combatantFacingForTacticalRotation, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalTerrainObjectsForScenario, type TacticalDoor, type TacticalTerminal, type TacticalTerrainObject } from "./tacticalTerrain";
-import { armoryLoadouts } from "./equipment";
+import { armoryLoadouts, characterCombatArmor, characterCombatWeapons } from "./equipment";
+import { equipmentCatalogById } from "@/plugins/equipmentCatalog/catalog";
 import { buildDefaultTacticalScenario, defaultTacticalLighting } from "./defaultTacticalScenario";
 import type { TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
 import { consoleOperationAvailable, travellerTaskTarget, type TacticalConsoleVictoryDefinitionFile } from "./tacticalConsoleVictory";
@@ -21,23 +22,29 @@ const canAttackStructures = (unit: CombatScenario["combatants"][number]) => Bool
 const tacticalHitRollEvent = (result: SnapShotResult, targetNumber = result.targetNumber) => `raw 2d6 ${result.hitRoll} · DM ${result.hitModifier >= 0 ? "+" : ""}${result.hitModifier} · total ${result.hitTotal}/${targetNumber}`;
 type TacticalCrewInput = string | { id: string; name?: string; weaponSkill: number; meleeRating?: number; skills?: { name: string; level: number }[] };
 const tacticalCrew = (entries: readonly TacticalCrewInput[]) => entries.slice(0, 2).map((entry) => typeof entry === "string" ? { id: entry, name: entry, weaponSkill: 0, meleeRating: 0, skills: [] } : { ...entry, name: entry.name ?? entry.id, meleeRating: entry.meleeRating ?? 0, skills: entry.skills ?? [] });
-const buildHydratedDefaultTacticalScenario = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], lightingPreset?: TacticalLightingPreset, definition?: TacticalScenarioDefinitionFile, consoleVictory?: TacticalConsoleVictoryDefinitionFile) => {
+const buildHydratedDefaultTacticalScenario = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], lightingPreset?: TacticalLightingPreset, definition?: TacticalScenarioDefinitionFile, consoleVictory?: TacticalConsoleVictoryDefinitionFile, useLegacyLoadouts = false) => {
   const scenario = buildDefaultTacticalScenario(lightingPreset, definition, consoleVictory);
   const crew = tacticalCrew(entries);
   const players = scenario.combatants.filter((unit) => unit.side === "player");
   const tacticalLoadoutIds: readonly ArmoryLoadoutId[] = loadoutIds[0] === "scout" && loadoutIds[1] === "breacher" ? ["lag", "assault"] : loadoutIds;
   players.slice(0, crew.length).forEach((unit, index) => {
     const member = crew[index];
-    const loadout = armoryLoadouts[tacticalLoadoutIds[index] ?? (index === 0 ? "lag" : "assault")];
     unit.id = member.id;
     unit.sourceCharacterId = member.id;
     unit.name = member.name;
     unit.weaponSkill = member.weaponSkill;
     unit.skills = member.skills.map((skill) => ({ ...skill }));
     unit.meleeRating = member.meleeRating;
-    unit.weapon = { ...loadout.weapon };
-    unit.armor = loadout.armor.value;
-    unit.armorName = loadout.armor.name;
+    unit.weapon = { ...characterCombatWeapons.noRangedWeapon };
+    unit.meleeWeapon = { name: "Unarmed", penetration: 0 };
+    unit.armor = 0;
+    unit.armorName = "No Armor";
+    if (useLegacyLoadouts) {
+      const loadout = armoryLoadouts[tacticalLoadoutIds[index] ?? (index === 0 ? "lag" : "assault")];
+      unit.weapon = { ...loadout.weapon };
+      unit.armor = loadout.armor.value;
+      unit.armorName = loadout.armor.name;
+    }
   });
   scenario.combatants = [...players.slice(0, crew.length), ...scenario.combatants.filter((unit) => unit.side === "enemy")];
   return scenario;
@@ -380,7 +387,7 @@ const resolveTacticalMovingAdjacentSnapShot = (map: TacticalMapState, shooter: C
 };
 const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: readonly ArmoryLoadoutId[], layouts?: Pick<TacticalMapState, "characterHudLayout" | "enemyHudLayout" | "actionHudLayout" | "characterInformationHudLayout" | "eventsHudLayout" | "scenarioHudLayout" | "deploymentHudLayout">, options: { setup?: boolean; lightingPreset?: TacticalLightingPreset; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile } = {}): TacticalMapState => {
   const lightingPreset = options.lightingPreset ?? "exterior-dark";
-  const scenario = buildHydratedDefaultTacticalScenario(entries, loadoutIds, lightingPreset, options.definition, options.consoleVictory);
+  const scenario = buildHydratedDefaultTacticalScenario(entries, loadoutIds, lightingPreset, options.definition, options.consoleVictory, !options.setup);
   const ammunitionByCombatantAndKind = prepareTacticalAmmunition(scenario);
   const playerIds = scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id);
   return {
@@ -388,6 +395,7 @@ const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: rea
     scenarioStatus: options.setup ? "setup" : "active",
     deploymentCharacterId: options.setup ? playerIds[0] ?? null : null,
     deployedCharacterIds: options.setup ? [] : [...playerIds],
+    deploymentLoadoutByCharacterId: {},
     lightingPreset,
     exploredCellKeys: [],
     lastKnownEnemyPositions: {},
@@ -1105,6 +1113,70 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const unit = map ? tacticalCombatant(map, map.deploymentCharacterId) : null;
     if (!map || map.scenarioStatus !== "setup" || unit?.side !== "player" || !(map.deployedCharacterIds ?? []).includes(unit.id)) return;
     unit.posture = action.payload;
+  },
+  equipTacticalDeploymentItem: (state, action: PayloadAction<{ characterId: string; lockerItemId: string; catalogItemId: string }>) => {
+    const map = state.tacticalMap;
+    const unit = map ? tacticalCombatant(map, action.payload.characterId) : null;
+    const catalogItem = equipmentCatalogById.get(action.payload.catalogItemId);
+    if (!map || map.scenarioStatus !== "setup" || unit?.side !== "player" || !catalogItem) return;
+    const assignments = { ...(map.deploymentLoadoutByCharacterId ?? {}) };
+    Object.entries(assignments).forEach(([characterId, assignment]) => {
+      if (assignment.weaponLockerItemId !== action.payload.lockerItemId && assignment.armorLockerItemId !== action.payload.lockerItemId) return;
+      const previousUnit = tacticalCombatant(map, characterId);
+      if (previousUnit && assignment.weaponLockerItemId === action.payload.lockerItemId) {
+        previousUnit.weapon = { ...characterCombatWeapons.noRangedWeapon };
+        map.ammunitionByCharacterId[previousUnit.id] = 0;
+        delete map.ammunitionByCombatantAndKind[previousUnit.id];
+      }
+      if (previousUnit && assignment.armorLockerItemId === action.payload.lockerItemId) {
+        previousUnit.armor = 0;
+        previousUnit.armorName = "No Armor";
+      }
+      assignments[characterId] = {
+        ...assignment,
+        ...(assignment.weaponLockerItemId === action.payload.lockerItemId ? { weaponLockerItemId: undefined } : {}),
+        ...(assignment.armorLockerItemId === action.payload.lockerItemId ? { armorLockerItemId: undefined } : {}),
+      };
+    });
+    const currentAssignment = assignments[unit.id] ?? {};
+    if (catalogItem.kind === "weapon") {
+      const weapon = characterCombatWeapons[catalogItem.combatEquipmentId as keyof typeof characterCombatWeapons];
+      if (!weapon) return;
+      assignments[unit.id] = { ...currentAssignment, weaponLockerItemId: action.payload.lockerItemId };
+      unit.weapon = { ...weapon };
+      const profiles = unit.weapon.ammunitionProfiles;
+      if (profiles?.length) {
+        const selectedProfile = profiles.find((profile) => profile.kind === unit.weapon.ammunitionKind) ?? profiles[0];
+        applyAmmunitionProfile(unit.weapon, selectedProfile);
+        map.ammunitionByCombatantAndKind[unit.id] = Object.fromEntries(profiles.map((profile) => [profile.kind, unit.weapon.magazineSize ?? 12]));
+      } else delete map.ammunitionByCombatantAndKind[unit.id];
+      map.ammunitionByCharacterId[unit.id] = unit.weapon.magazineSize ?? 0;
+    } else {
+      const armor = characterCombatArmor[catalogItem.combatEquipmentId as keyof typeof characterCombatArmor];
+      if (!armor) return;
+      assignments[unit.id] = { ...currentAssignment, armorLockerItemId: action.payload.lockerItemId };
+      unit.armor = armor.value;
+      unit.armorName = armor.name;
+    }
+    map.deploymentLoadoutByCharacterId = assignments;
+  },
+  unequipTacticalDeploymentItem: (state, action: PayloadAction<{ characterId: string; kind: "weapon" | "armor" }>) => {
+    const map = state.tacticalMap;
+    const unit = map ? tacticalCombatant(map, action.payload.characterId) : null;
+    if (!map || map.scenarioStatus !== "setup" || unit?.side !== "player") return;
+    const assignments = { ...(map.deploymentLoadoutByCharacterId ?? {}) };
+    const currentAssignment = assignments[unit.id] ?? {};
+    if (action.payload.kind === "weapon") {
+      assignments[unit.id] = { ...currentAssignment, weaponLockerItemId: undefined };
+      unit.weapon = { ...characterCombatWeapons.noRangedWeapon };
+      map.ammunitionByCharacterId[unit.id] = 0;
+      delete map.ammunitionByCombatantAndKind[unit.id];
+    } else {
+      assignments[unit.id] = { ...currentAssignment, armorLockerItemId: undefined };
+      unit.armor = 0;
+      unit.armorName = "No Armor";
+    }
+    map.deploymentLoadoutByCharacterId = assignments;
   },
   startTacticalScenario: (state) => {
     const map = state.tacticalMap;
@@ -4673,6 +4745,8 @@ export const selectTacticalDeploymentCharacter = slice.actions.selectTacticalDep
 export const deployTacticalCharacter = slice.actions.deployTacticalCharacter;
 export const rotateTacticalDeploymentCharacter = slice.actions.rotateTacticalDeploymentCharacter;
 export const setTacticalDeploymentPosture = slice.actions.setTacticalDeploymentPosture;
+export const equipTacticalDeploymentItem = slice.actions.equipTacticalDeploymentItem;
+export const unequipTacticalDeploymentItem = slice.actions.unequipTacticalDeploymentItem;
 export const setTacticalMovementMode = slice.actions.setTacticalMovementMode;
 export const previewTacticalMove = slice.actions.previewTacticalMove;
 export const activateTacticalCharacter = slice.actions.activateTacticalCharacter;

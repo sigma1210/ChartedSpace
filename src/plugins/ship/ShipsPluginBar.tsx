@@ -1,19 +1,20 @@
 "use client";
 
-import { ClipboardList, Gauge, Ship, UsersRound } from "lucide-react";
+import { ClipboardList, Gauge, PackageOpen, Ship, UsersRound } from "lucide-react";
 import { HudIconButton } from "@/components/world/HudPrimitives";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectHudVisible } from "@/store/selectors/hud.selectors";
 import { setHudVisible } from "@/store/slices/hudSlice";
 import { openModal } from "@/store/slices/uiSlice";
 import { selectActiveShip } from "./selectors";
-import { shipCrewListHudId, shipHudId } from "./metadata";
+import { shipCrewListHudId, shipHudId, shipLockerHudId } from "./metadata";
 
 export const ShipsPluginBar = () => {
   const dispatch = useAppDispatch();
   const ship = useAppSelector(selectActiveShip);
   const shipHudVisible = useAppSelector(selectHudVisible(shipHudId));
   const crewListHudVisible = useAppSelector(selectHudVisible(shipCrewListHudId));
+  const lockerHudVisible = useAppSelector(selectHudVisible(shipLockerHudId));
   const ships = ship ? [ship] : [];
 
   const openShipHud = () => {
@@ -26,6 +27,10 @@ export const ShipsPluginBar = () => {
 
   const openCrewListHud = () => {
     dispatch(setHudVisible({ id: shipCrewListHudId, visible: true }));
+  };
+
+  const openLockerHud = () => {
+    dispatch(setHudVisible({ id: shipLockerHudId, visible: true }));
   };
 
   return (
@@ -51,6 +56,12 @@ export const ShipsPluginBar = () => {
           onClick={openShipHud}
         >
           <Gauge size={13} aria-hidden="true" />
+        </HudIconButton>
+        <HudIconButton
+          title={lockerHudVisible ? "Ship locker visible" : "Open ship locker"}
+          onClick={openLockerHud}
+        >
+          <PackageOpen size={13} aria-hidden="true" />
         </HudIconButton>
         <HudIconButton
           title="Manage ship crew"

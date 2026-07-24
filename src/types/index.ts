@@ -8,6 +8,7 @@ export type ModalType =
   | "crewManagement"
   | "characterGeneration"
   | "shipCrewAssignment"
+  | "equipmentCatalog"
   | "mayday"
   | "characterCombat";
 

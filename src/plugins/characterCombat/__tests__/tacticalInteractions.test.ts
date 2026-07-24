@@ -1,4 +1,4 @@
-import characterCombatReducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture } from "../slice";
+import characterCombatReducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, equipTacticalDeploymentItem, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, unequipTacticalDeploymentItem } from "../slice";
 import { recordTacticalExploration } from "../slice";
 import { recordTacticalEnemySightings } from "../slice";
 import { initializeTacticalDraftPlaytest, resetTacticalDraftPlaytest } from "../slice";
@@ -58,6 +58,7 @@ const stateWithIrisValve = (): CharacterCombatState => {
   const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
   draft.terrainPlacements.push({ id: "test-iris", terrainDefinitionId: "iris-valve", origin: { x: 47, y: 38 }, rotation: 0 });
   let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
+  state = reducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "test-lag", catalogItemId: "weapon-light-assault-gun" }));
   state = reducer(state, startTacticalScenario());
   return {
     ...state,
@@ -99,6 +100,46 @@ const stateWithLiquidHydrogen = (filled: boolean): CharacterCombatState => {
 };
 
 describe("tactical terrain interactions", () => {
+  it("assigns individual locker equipment during deployment and locks it when combat starts", () => {
+    let state = characterCombatReducer(undefined, initializeTacticalMapSetup(["crew-1", "crew-2"]));
+    const crew = () => state.tacticalMap!.scenario.combatants.filter((unit) => unit.side === "player");
+    expect(crew().map((unit) => ({ weapon: unit.weapon.name, armor: unit.armor }))).toEqual([
+      { weapon: "No Ranged Weapon", armor: 0 },
+      { weapon: "No Ranged Weapon", armor: 0 },
+    ]);
+
+    state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "locker-weapon-1", catalogItemId: "weapon-autopistol" }));
+    state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "locker-armor-1", catalogItemId: "armor-flak-vest" }));
+    expect(crew()[0]).toMatchObject({ weapon: characterCombatWeapons.autopistol, armorName: "Flak Vest", armor: 4 });
+
+    state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-2", lockerItemId: "locker-weapon-1", catalogItemId: "weapon-autopistol" }));
+    expect(crew()[0].weapon.name).toBe("No Ranged Weapon");
+    expect(crew()[1].weapon.name).toBe("Autopistol");
+    expect(state.tacticalMap?.deploymentLoadoutByCharacterId).toMatchObject({
+      "crew-1": { armorLockerItemId: "locker-armor-1" },
+      "crew-2": { weaponLockerItemId: "locker-weapon-1" },
+    });
+
+    state = characterCombatReducer(state, unequipTacticalDeploymentItem({ characterId: "crew-2", kind: "weapon" }));
+    expect(crew()[1].weapon.name).toBe("No Ranged Weapon");
+    state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-2", lockerItemId: "locker-weapon-1", catalogItemId: "weapon-autopistol" }));
+    state = characterCombatReducer(state, selectTacticalDeploymentCharacter("crew-1"));
+    state = characterCombatReducer(state, deployTacticalCharacter({ x: 0, y: 42 }));
+    state = characterCombatReducer(state, selectTacticalDeploymentCharacter("crew-2"));
+    state = characterCombatReducer(state, deployTacticalCharacter({ x: 1, y: 42 }));
+    state = characterCombatReducer(state, startTacticalScenario());
+    state = characterCombatReducer(state, unequipTacticalDeploymentItem({ characterId: "crew-2", kind: "weapon" }));
+    expect(state.tacticalMap?.scenarioStatus).toBe("active");
+    expect(crew()[1].weapon.name).toBe("Autopistol");
+
+    state = characterCombatReducer(state, resetTacticalScenario());
+    expect(state.tacticalMap?.deploymentLoadoutByCharacterId).toEqual({});
+    expect(crew().map((unit) => ({ weapon: unit.weapon.name, armor: unit.armor }))).toEqual([
+      { weapon: "No Ranged Weapon", armor: 0 },
+      { weapon: "No Ranged Weapon", armor: 0 },
+    ]);
+  });
+
   it("requires every crew member to be placed in a deployment zone before starting", () => {
     let state = characterCombatReducer(undefined, initializeTacticalMapSetup(["crew-1", "crew-2"]));
     state = characterCombatReducer(state, startTacticalScenario());
@@ -226,8 +267,9 @@ describe("tactical terrain interactions", () => {
       terminalActiveById: {},
       terrainDamageById: {},
       destroyedTerrainObjectIds: [],
-      ammunitionByCharacterId: { "crew-1": 4, "crew-2": 30 },
-      ammunitionByCombatantAndKind: { "crew-1": { "discard-sabot": 4, he: 4, flechette: 4 } },
+      ammunitionByCharacterId: { "crew-1": 0, "crew-2": 0 },
+      ammunitionByCombatantAndKind: {},
+      deploymentLoadoutByCharacterId: {},
       bracedCombatantIds: [],
       coweringCombatantIds: [],
       panickedCombatantIds: [],
@@ -248,7 +290,7 @@ describe("tactical terrain interactions", () => {
       { id: "enemy-1", side: "enemy", position: { x: 47, y: 41 }, facing: "north", posture: "standing", weaponSkill: 1, defeated: false },
       { id: "enemy-2", side: "enemy", position: { x: 50, y: 43 }, facing: "north", posture: "standing", weaponSkill: 0, defeated: false },
     ]);
-    expect(reset.tacticalMap?.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.weapon.name)).toEqual(["Light Assault Gun", "Submachine Gun"]);
+    expect(reset.tacticalMap?.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.weapon.name)).toEqual(["No Ranged Weapon", "No Ranged Weapon"]);
     expect(reset.tacticalMap?.scenario.combatants.map((unit) => ({ id: unit.id, moraleFactor: unit.moraleFactor, leadershipRating: unit.leadershipRating }))).toEqual([
       { id: "crew-1", moraleFactor: 7, leadershipRating: 1 },
       { id: "crew-2", moraleFactor: 7, leadershipRating: 0 },

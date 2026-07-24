@@ -4,7 +4,8 @@ import { ShipCrewAssignmentHudContent } from "./ShipCrewAssignmentHud";
 import { ShipCrewListHudContent } from "./ShipCrewListHud";
 import { ShipHudContent, ShipHudIcon } from "./ShipHud";
 import { ShipsPluginBar } from "./ShipsPluginBar";
-import { shipActionsHudId, shipCrewAssignmentHudId, shipCrewListHudId, shipHudId } from "./metadata";
+import { ShipLockerHudContent, ShipLockerHudIcon } from "./ShipLockerHud";
+import { shipActionsHudId, shipCrewAssignmentHudId, shipCrewListHudId, shipHudId, shipLockerHudId } from "./metadata";
 
 export const shipActionsHudRenderer = {
   id: shipActionsHudId,
@@ -30,9 +31,16 @@ export const shipCrewListHudRenderer = {
   Component: ShipCrewListHudContent,
 } satisfies PluginHudRendererRegistration;
 
+export const shipLockerHudRenderer = {
+  id: shipLockerHudId,
+  Icon: ShipLockerHudIcon,
+  Component: ShipLockerHudContent,
+} satisfies PluginHudRendererRegistration;
+
 export const shipHudRenderers = [
   shipActionsHudRenderer,
   shipHudRenderer,
   shipCrewAssignmentHudRenderer,
   shipCrewListHudRenderer,
+  shipLockerHudRenderer,
 ] as const;

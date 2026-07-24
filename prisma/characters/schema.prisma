@@ -97,3 +97,33 @@ model CharacterPosting {
   @@index([status])
   @@index([location])
 }
+
+model ShipLockerItem {
+  id                  String   @id @default(cuid())
+  shipId              String
+  catalogItemId       String
+  purchasePrice       Int
+  purchasedAtTurn     Int
+  purchasedAtLocation String
+  purchaserCrewId     String
+  acquiredAt          DateTime @default(now())
+
+  @@index([shipId])
+  @@index([shipId, catalogItemId])
+}
+
+model EquipmentAvailabilityAttempt {
+  id              String   @id @default(cuid())
+  shipId          String
+  purchaserCrewId String
+  catalogItemId   String
+  worldLocation   String
+  attemptedTurn   Int
+  succeeded       Boolean
+  priceMultiplier Int
+  rawRoll         Int
+  totalModifier   Int
+  createdAt       DateTime @default(now())
+
+  @@index([shipId, purchaserCrewId, catalogItemId, worldLocation, attemptedTurn])
+}

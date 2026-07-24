@@ -10,7 +10,7 @@ import { FloatingPluginHud } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import { AnimatedCombatantFallback, AnimatedCombatantModel } from "@/plugins/characterCombat/AnimatedCombatantModel";
 import { AnimatedCombatantPlacement } from "@/plugins/characterCombat/AnimatedCombatantPlacement";
-import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalDraftPlaytest, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalDraftPlaytest, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, turnTacticalCharacter, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalDeploymentHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
+import { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalExtinguishFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalSatchelPlacement, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, equipTacticalDeploymentItem, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalDraftPlaytest, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalDraftPlaytest, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, turnTacticalCharacter, unequipTacticalDeploymentItem, updateTacticalActionHud, updateTacticalCharacterHud, updateTacticalCharacterInformationHud, updateTacticalDeploymentHud, updateTacticalEventsHud } from "@/plugins/characterCombat/slice";
 import { updateTacticalEnemyHud, updateTacticalScenarioHud } from "@/plugins/characterCombat/slice";
 import { attemptTacticalConsoleCheck } from "@/plugins/characterCombat/slice";
 import { recordTacticalExploration } from "@/plugins/characterCombat/slice";
@@ -713,6 +713,17 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const transformedAllies = tacticalMap.scenario.combatants.filter((unit) => unit.side === "player" && unit.id.endsWith(":combatant"));
   const crewDeploymentComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => (tacticalMap.deployedCharacterIds ?? []).includes(id));
   const selectedCrewDeployed = Boolean(activeCombatant && (tacticalMap.deployedCharacterIds ?? []).includes(activeCombatant.id));
+  const deploymentLoadouts = tacticalMap.deploymentLoadoutByCharacterId ?? {};
+  const assignedLockerItemIds = new Set(Object.values(deploymentLoadouts).flatMap((loadout) => [
+    ...(loadout.weaponLockerItemId ? [loadout.weaponLockerItemId] : []),
+    ...(loadout.armorLockerItemId ? [loadout.armorLockerItemId] : []),
+  ]));
+  const selectedDeploymentLoadout = activeCombatant ? deploymentLoadouts[activeCombatant.id] ?? {} : {};
+  const lockerItems = ship?.locker ?? [];
+  const equippedWeaponItem = lockerItems.find((item) => item.id === selectedDeploymentLoadout.weaponLockerItemId) ?? null;
+  const equippedArmorItem = lockerItems.find((item) => item.id === selectedDeploymentLoadout.armorLockerItemId) ?? null;
+  const availableLockerWeapons = lockerItems.filter((item) => item.kind === "weapon" && !assignedLockerItemIds.has(item.id));
+  const availableLockerArmor = lockerItems.filter((item) => item.kind === "armor" && !assignedLockerItemIds.has(item.id));
   const playerPhaseComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => tacticalMap.actedCharacterIds.includes(id) || (tacticalMap.actionPointsByCharacterId[id] ?? 0) === 0);
   const tacticalTerrain = useMemo(() => activeTacticalTerrainObjects(tacticalMap.scenario, tacticalMap.doorOpenById, tacticalMap.destroyedTerrainObjectIds), [tacticalMap.destroyedTerrainObjectIds, tacticalMap.doorOpenById, tacticalMap.scenario]);
   const blockedCells = useMemo(() => tacticalTerrainBlockedCells(tacticalTerrain), [tacticalTerrain]);
@@ -960,6 +971,30 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
           <div className="font-bold uppercase tracking-wider text-emerald-100">Pregame crew state</div>
           {!activeCombatant ? <div className="text-(--hud-text-dim)">Select a crew member in the Characters HUD.</div> : <>
             <div className="font-bold text-cyan-100">{activeCombatant.name}</div>
+            <div className="grid grid-cols-[4rem_1fr_auto] items-center gap-1 border-t border-(--hud-border) pt-2">
+              <span className="uppercase text-(--hud-text-dim)">Weapon</span>
+              <span className={equippedWeaponItem ? "font-bold text-cyan-100" : "text-(--hud-text-dim)"}>{equippedWeaponItem?.name ?? "Unarmed"}</span>
+              <button type="button" disabled={!equippedWeaponItem} onClick={() => dispatch(unequipTacticalDeploymentItem({ characterId: activeCombatant.id, kind: "weapon" }))} className="border border-(--hud-border) px-1 py-0.5 text-[7px] uppercase text-(--hud-text-dim) disabled:opacity-30">Unequip</button>
+              <span className="uppercase text-(--hud-text-dim)">Armor</span>
+              <span className={equippedArmorItem ? "font-bold text-cyan-100" : "text-(--hud-text-dim)"}>{equippedArmorItem?.name ?? "No Armor"}</span>
+              <button type="button" disabled={!equippedArmorItem} onClick={() => dispatch(unequipTacticalDeploymentItem({ characterId: activeCombatant.id, kind: "armor" }))} className="border border-(--hud-border) px-1 py-0.5 text-[7px] uppercase text-(--hud-text-dim) disabled:opacity-30">Unequip</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="min-w-0">
+                <div className="mb-1 font-bold uppercase tracking-wider text-(--hud-text-dim)">Locker weapons</div>
+                <div className="flex max-h-24 flex-col gap-1 overflow-y-auto pr-1">
+                  {availableLockerWeapons.map((item) => <button key={item.id} type="button" onClick={() => dispatch(equipTacticalDeploymentItem({ characterId: activeCombatant.id, lockerItemId: item.id, catalogItemId: item.catalogItemId }))} className="border border-cyan-500/60 px-1 py-1 text-left text-[7px] text-cyan-100 hover:border-cyan-200">{item.name}</button>)}
+                  {availableLockerWeapons.length === 0 && <span className="text-[7px] text-(--hud-text-dim)">No weapons available</span>}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="mb-1 font-bold uppercase tracking-wider text-(--hud-text-dim)">Locker armor</div>
+                <div className="flex max-h-24 flex-col gap-1 overflow-y-auto pr-1">
+                  {availableLockerArmor.map((item) => <button key={item.id} type="button" onClick={() => dispatch(equipTacticalDeploymentItem({ characterId: activeCombatant.id, lockerItemId: item.id, catalogItemId: item.catalogItemId }))} className="border border-cyan-500/60 px-1 py-1 text-left text-[7px] text-cyan-100 hover:border-cyan-200">{item.name}</button>)}
+                  {availableLockerArmor.length === 0 && <span className="text-[7px] text-(--hud-text-dim)">No armor available</span>}
+                </div>
+              </div>
+            </div>
             {!selectedCrewDeployed ? <div className="border border-amber-300/60 p-2 text-amber-100">Place this crew member on a green deployment square before setting facing or stance.</div> : <>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                 <span className="text-(--hud-text-dim)">Facing</span><span className="font-bold capitalize text-yellow-100">{activeCombatant.facing}</span>

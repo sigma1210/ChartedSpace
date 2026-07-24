@@ -32,6 +32,18 @@ export interface CargoManifestLot {
   profitLoss: number | null;
 }
 
+export interface ShipLockerItem {
+  id: string;
+  catalogItemId: string;
+  name: string;
+  kind: "weapon" | "armor";
+  purchasePrice: number;
+  purchasedAtTurn: number;
+  purchasedAtLocation: string;
+  purchaserCrewId: string;
+  acquiredAt: string;
+}
+
 export interface ShipSummary {
   id: string;
   name: string;
@@ -50,6 +62,7 @@ export interface ShipSummary {
   jumpArrivesTurn: number | null;
   crew: CrewMember[];
   cargo: CargoManifestLot[];
+  locker?: ShipLockerItem[];
 }
 
 export interface ShipPluginState {

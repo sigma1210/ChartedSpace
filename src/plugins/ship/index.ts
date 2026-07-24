@@ -24,6 +24,7 @@ export {
   shipActionsHudMetadata,
   shipCrewAssignmentHudMetadata,
   shipCrewListHudMetadata,
+  shipLockerHudMetadata,
   shipHudMetadata,
   shipHudMetadataList,
 } from "./hudMetadata";
@@ -31,6 +32,7 @@ export {
   shipActionsHudId,
   shipCrewAssignmentHudId,
   shipCrewListHudId,
+  shipLockerHudId,
   shipHudId,
   shipPluginId,
   shipPluginStateKey,
@@ -61,6 +63,7 @@ export {
   selectShipColor,
   selectShipCrew,
   selectShipLocation,
+  selectShipLocker,
   selectShipPluginJumpRating,
   selectShipPluginState,
   selectShipStatus,
@@ -75,5 +78,6 @@ export {
   type CargoManifestLot,
   type CrewMember,
   type ShipSummary,
+  type ShipLockerItem,
   type WorldCoordinateToken,
 } from "./actions";

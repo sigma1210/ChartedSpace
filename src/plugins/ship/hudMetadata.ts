@@ -3,6 +3,7 @@ import {
   shipCrewAssignmentHudId,
   shipCrewListHudId,
   shipHudId,
+  shipLockerHudId,
   shipPluginId,
 } from "./metadata";
 
@@ -66,9 +67,24 @@ export const shipCrewListHudMetadata = {
   },
 } as const;
 
+export const shipLockerHudMetadata = {
+  id: shipLockerHudId,
+  pluginId: shipPluginId,
+  title: "Ship Locker",
+  openTitle: "Open ship locker",
+  visibleTitle: "Ship locker visible",
+  showInHudControls: false,
+  defaultLayout: {
+    visible: false,
+    pinned: true,
+    offset: { x: 0.34, y: 0.02 },
+  },
+} as const;
+
 export const shipHudMetadataList = [
   shipActionsHudMetadata,
   shipHudMetadata,
   shipCrewAssignmentHudMetadata,
   shipCrewListHudMetadata,
+  shipLockerHudMetadata,
 ] as const;

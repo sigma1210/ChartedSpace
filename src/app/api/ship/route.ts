@@ -5,6 +5,8 @@ import shipTypes from "@/data/classic/ships.json";
 import { calculateWorldPairSalePrice } from "@/lib/trade";
 import type { CharacterAvatar } from "@/lib/characters/avatar";
 import type { CharacterSheet } from "@/lib/characters/types";
+import { characterPrisma } from "@/plugins/characters/server/characterPrisma";
+import { equipmentCatalogById } from "@/plugins/equipmentCatalog/catalog";
 
 const UWP_SELECT = {
   size:          true,
@@ -102,6 +104,10 @@ export const GET = async () => {
     if (!ship) return NextResponse.json({ ship: null });
 
     const parsed = parseLocation(ship.currentLocation);
+    const locker = await characterPrisma.shipLockerItem.findMany({
+      where: { shipId: ship.id },
+      orderBy: { acquiredAt: "asc" },
+    });
     const charactersById = await loadCrewCharacters(
       dbUser.id,
       ship.crew.flatMap(c => c.characterId ? [c.characterId] : []),
@@ -190,6 +196,20 @@ export const GET = async () => {
             salePricePerTon,
             saleProceeds,
             profitLoss,
+          };
+        }),
+        locker: locker.map((lockerItem) => {
+          const catalogItem = equipmentCatalogById.get(lockerItem.catalogItemId);
+          return {
+            id: lockerItem.id,
+            catalogItemId: lockerItem.catalogItemId,
+            name: catalogItem?.name ?? lockerItem.catalogItemId,
+            kind: catalogItem?.kind ?? "weapon",
+            purchasePrice: lockerItem.purchasePrice,
+            purchasedAtTurn: lockerItem.purchasedAtTurn,
+            purchasedAtLocation: lockerItem.purchasedAtLocation,
+            purchaserCrewId: lockerItem.purchaserCrewId,
+            acquiredAt: lockerItem.acquiredAt.toISOString(),
           };
         }),
       },

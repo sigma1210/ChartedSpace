@@ -8,5 +8,6 @@ export {
   type CargoManifestLot,
   type CrewMember,
   type ShipSummary,
+  type ShipLockerItem,
   type WorldCoordinateToken,
 } from "./shipPluginSlice";

@@ -2,6 +2,7 @@ import { charactersPlugin } from "./characters";
 import { characterCombatPlugin } from "./characterCombat";
 import { demographicsPlugin } from "./demographics";
 import { economyPlugin } from "./economy";
+import { equipmentCatalogPlugin } from "./equipmentCatalog";
 import { expenseScenarioPlugin } from "./expenseScenario";
 import { maydayPlugin } from "./mayday";
 import { navigationPlugin } from "./navigation";
@@ -14,6 +15,7 @@ export const registeredPluginManifests = [
   charactersPlugin,
   demographicsPlugin,
   economyPlugin,
+  equipmentCatalogPlugin,
   expenseScenarioPlugin,
   maydayPlugin,
   navigationPlugin,

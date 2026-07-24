@@ -21,6 +21,7 @@ export const selectActiveShip = (state: RootState) => state.plugins.shipPlugin.s
 export const selectShipStatus = (state: RootState) => state.plugins.shipPlugin.status;
 export const selectShipCrew = (state: RootState) => state.plugins.shipPlugin.ship?.crew ?? [];
 export const selectShipCargo = (state: RootState) => state.plugins.shipPlugin.ship?.cargo ?? [];
+export const selectShipLocker = (state: RootState) => state.plugins.shipPlugin.ship?.locker ?? [];
 export const selectShipColor = (state: RootState) =>
   state.plugins.shipPlugin.shipColor ?? DEFAULT_SHIP_COLOR;
 export const selectIsShipDocked = (state: RootState) =>

@@ -2,6 +2,7 @@ import { characterHudRenderers } from "./characters/hudRenderer";
 import { characterCombatHudRenderer } from "./characterCombat/hudRenderer";
 import { demographicsHudRenderer } from "./demographics/hudRenderer";
 import { economyLedgerHudRenderer } from "./economy/hudRenderer";
+import { equipmentCatalogHudRenderer } from "./equipmentCatalog/hudRenderer";
 import { expenseScenarioHudRenderer } from "./expenseScenario/hudRenderer";
 import { maydayActionsHudRenderer } from "./mayday/hudRenderer";
 import { navigationHudRenderer } from "./navigation/hudRenderer";
@@ -14,6 +15,7 @@ export const registeredPluginHudRenderers = [
   ...characterHudRenderers,
   demographicsHudRenderer,
   economyLedgerHudRenderer,
+  equipmentCatalogHudRenderer,
   expenseScenarioHudRenderer,
   maydayActionsHudRenderer,
   navigationHudRenderer,

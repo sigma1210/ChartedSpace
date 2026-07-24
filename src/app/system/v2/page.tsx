@@ -3,6 +3,7 @@ import CharacterGenerationModal from "@/plugins/characters/CharacterGenerationMo
 import CharacterCombatModal from "@/plugins/characterCombat/CharacterCombatModal";
 import MaydayModal from "@/plugins/mayday/MaydayModal";
 import ShipCrewAssignmentModal from "@/plugins/ship/ShipCrewAssignmentModal";
+import EquipmentCatalogModal from "@/plugins/equipmentCatalog/EquipmentCatalogModal";
 import SystemV2PageClient from "./SystemV2PageClient";
 
 const SystemV2Page = () => (
@@ -12,6 +13,7 @@ const SystemV2Page = () => (
     <CharacterGenerationModal />
     <CharacterCombatModal />
     <ShipCrewAssignmentModal />
+    <EquipmentCatalogModal />
     <MaydayModal />
   </>
 );
