@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "dont-mess-around-with-jim",
+  "scenarioId": "dont-mess-around-with-jim",
+  "operations": [
+    {
+      "id": "console-1x1-1-operation-1",
+      "consolePlacementId": "console-1x1-1",
+      "label": "Hack ATM",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "console-1x1-1-operation-1-check-1",
+          "skill": "computer",
+          "difficulty": "difficult",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      }
+    },
+    {
+      "id": "interactive-human-1-operation-1",
+      "consolePlacementId": "interactive-human-1",
+      "label": "Mess around with Jim",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "interactive-human-1-operation-1-check-1",
+          "skill": "Persuade",
+          "difficulty": "very-difficult",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      },
+      "failureTransformation": "enemy"
+    }
+  ]
+}

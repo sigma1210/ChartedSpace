@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "bwampson-and-son",
+  "scenarioId": "bwampson-and-son",
+  "operations": [
+    {
+      "id": "interactive-human-1-operation-1",
+      "consolePlacementId": "interactive-human-1",
+      "label": "Bribe Fred",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "interactive-human-1-operation-1-check-1",
+          "skill": "Bribery",
+          "difficulty": "easy",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      }
+    },
+    {
+      "id": "interactive-human-2-operation-1",
+      "consolePlacementId": "interactive-human-2",
+      "label": "Interact with Lamont",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "interactive-human-2-operation-1-check-1",
+          "skill": "Admin",
+          "difficulty": "difficult",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      }
+    }
+  ]
+}

@@ -491,7 +491,7 @@ const MapCombatant = ({ combatant, mapWidth, mapHeight, elevation, movement, sel
       <meshBasicMaterial color={targeted ? "#ff1f1f" : selected ? "#facc15" : accent} transparent opacity={targetable || selected || targeted ? 1 : 0.72} />
     </mesh>}
     <Suspense fallback={<AnimatedCombatantFallback color={accent} />}>
-      <AnimatedCombatantModel animation={moving ? movement?.mode ?? "walk" : "idle"} facing={visualFacing} pose={combatant.woundState === "dead" ? "stunned" : null} />
+      <AnimatedCombatantModel animation={moving ? movement?.mode ?? "walk" : "idle"} facing={visualFacing} pose={combatant.woundState === "dead" ? "stunned" : null} modelPath={combatant.modelPath} />
     </Suspense>
     <Html center position={[0, 1.25, 0]} style={{ pointerEvents: "none" }}>
       <div className={`whitespace-nowrap border px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${selected || targeted ? "border-yellow-300 bg-yellow-950/95 text-yellow-100" : enemy ? "border-red-500/70 bg-slate-950/90 text-red-100" : "border-cyan-500/70 bg-slate-950/90 text-cyan-100"}`}>{combatant.name}</div>
@@ -649,6 +649,12 @@ const TacticalCharacterButton = ({ character, actionPoints, selected, disabled, 
   </button>;
 };
 
+const TacticalAllyButton = ({ combatant, actionPoints, selected, onSelect }: { combatant: Combatant; actionPoints: number; selected: boolean; onSelect: () => void }) => <button type="button" disabled={actionPoints < 1} onClick={onSelect} aria-label={`Select ally ${combatant.name}, ${actionPoints} AP`} aria-pressed={selected} className={`group relative flex h-16 w-16 shrink-0 flex-col items-center justify-end border p-1 transition-colors ${selected ? "border-yellow-200 bg-yellow-300/20 text-yellow-50" : "border-emerald-500/70 bg-emerald-950/70 text-emerald-100 hover:border-emerald-200"} disabled:cursor-not-allowed disabled:grayscale disabled:opacity-45`}>
+  <span className="absolute right-0.5 top-0.5 border border-emerald-400/60 bg-emerald-950 px-1 text-[7px] text-emerald-100">{actionPoints} AP</span>
+  <span className="mb-1 flex h-10 w-10 items-center justify-center rounded-sm border border-emerald-600/60 bg-black/50 text-sm font-bold uppercase">{combatant.name.slice(0, 1)}</span>
+  <span className="w-full truncate text-center text-[7px] font-bold leading-none">{combatant.name}</span>
+</button>;
+
 const TacticalEnemyStatusCard = ({ combatant, state, sight, selected, onSelect }: { combatant: Combatant; state: string; sight: "target" | "los" | "no-los"; selected: boolean; onSelect: () => void }) => {
   const [failedPortraitPath, setFailedPortraitPath] = useState<string | null>(null);
   const wound = `${combatant.woundState}${(combatant.seriousWounds ?? 0) > 0 ? ` · serious ${combatant.seriousWounds}/2` : ""}`;
@@ -689,7 +695,6 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const visibleEnemySightings = useMemo(() => visibleEnemies.map((enemy) => ({ id: enemy.id, position: { ...enemy.position } })), [visibleEnemies]);
   const selectedTacticalCharacterId = tacticalScenarioStatus === "setup" ? tacticalMap.deploymentCharacterId : tacticalMap.activeCharacterId;
   const activeCombatant = tacticalMap.scenario.combatants.find((unit) => unit.id === selectedTacticalCharacterId && unit.side === "player") ?? null;
-  const selectedCrewMember = activeCombatant ? characters.find((character) => character.id === (activeCombatant.sourceCharacterId ?? activeCombatant.id)) ?? null : null;
   const selectedPosition = activeCombatant?.position ?? null;
   const selectedLighting = selectedPosition ? tacticalLightingLevelAt(tacticalMap.scenario, selectedPosition) : null;
   const selectedActionPoints = activeCombatant ? tacticalMap.actionPointsByCharacterId[activeCombatant.id] ?? 0 : 0;
@@ -699,6 +704,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const draggedCombatant = activeCombatant ? tacticalMap.scenario.combatants.find((unit) => unit.id === tacticalMap.draggingCombatantByCarrierId[activeCombatant.id]) ?? null : null;
   const draggableAllies = activeCombatant && !draggedCombatant ? tacticalMap.scenario.combatants.filter((unit) => unit.side === activeCombatant.side && unit.defeated && unit.woundState !== "dead" && Math.abs(unit.position.x - activeCombatant.position.x) + Math.abs(unit.position.y - activeCombatant.position.y) === 1 && !Object.values(tacticalMap.draggingCombatantByCarrierId).includes(unit.id)) : [];
   const livingPlayerIds = tacticalMap.scenario.combatants.filter((unit) => unit.side === "player" && !unit.defeated).map((unit) => unit.id);
+  const transformedAllies = tacticalMap.scenario.combatants.filter((unit) => unit.side === "player" && unit.id.endsWith(":combatant"));
   const crewDeploymentComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => (tacticalMap.deployedCharacterIds ?? []).includes(id));
   const playerPhaseComplete = livingPlayerIds.length > 0 && livingPlayerIds.every((id) => tacticalMap.actedCharacterIds.includes(id) || (tacticalMap.actionPointsByCharacterId[id] ?? 0) === 0);
   const tacticalTerrain = useMemo(() => activeTacticalTerrainObjects(tacticalMap.scenario, tacticalMap.doorOpenById, tacticalMap.destroyedTerrainObjectIds), [tacticalMap.destroyedTerrainObjectIds, tacticalMap.doorOpenById, tacticalMap.scenario]);
@@ -721,7 +727,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const selectedConsoleOperations = selectedTerrain?.kind === "terminal"
     ? (tacticalMap.scenario.consoleVictory?.operations ?? []).filter((operation) => `${operation.consolePlacementId}:terminal` === selectedTerrain.id)
     : [];
-  const availableConsoleOperations = selectedConsoleOperations.filter((operation) => consoleOperationAvailable(operation, tacticalMap.completedConsoleOperationIds ?? []));
+  const availableConsoleOperations = selectedConsoleOperations.filter((operation) => !(tacticalMap.resolvedConsoleOperationIds ?? []).includes(operation.id) && consoleOperationAvailable(operation, tacticalMap.completedConsoleOperationIds ?? []));
   const selectedWeapon = activeCombatant?.weapon ?? null;
   const selectedAmmunition = activeCombatant ? tacticalMap.ammunitionByCharacterId[activeCombatant.id] ?? 0 : 0;
   const coveringFireAmmunition = selectedWeapon?.burstSize ?? (selectedWeapon?.automatic ? 3 : 1);
@@ -885,6 +891,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
       <FloatingPluginHud title="Characters" layout={tacticalMap.characterHudLayout} onLayoutChange={(layout) => dispatch(updateTacticalCharacterHud(layout))} className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
         <nav aria-label="Tactical character roster" className="flex max-w-[75vw] gap-1 p-1">
           {characters.map((character) => <TacticalCharacterButton key={character.id} character={character} actionPoints={tacticalMap.actionPointsByCharacterId[character.id] ?? 0} selected={activeCombatant?.id === character.id} disabled={tacticalScenarioStatus !== "setup" && (tacticalMap.actionPointsByCharacterId[character.id] ?? 0) < 1} setup={tacticalScenarioStatus === "setup"} onSelect={() => { dispatch(tacticalScenarioStatus === "setup" ? selectTacticalDeploymentCharacter(character.id) : activateTacticalCharacter(character.id)); dispatch(setSelectedProfileCharacter(character.id)); }} />)}
+          {transformedAllies.map((ally) => <TacticalAllyButton key={ally.id} combatant={ally} actionPoints={tacticalMap.actionPointsByCharacterId[ally.id] ?? 0} selected={activeCombatant?.id === ally.id} onSelect={() => { dispatch(activateTacticalCharacter(ally.id)); dispatch(setSelectedProfileCharacter(null)); }} />)}
           {status === "loaded" && shipStatus === "loaded" && characters.length === 0 && <span className="px-3 py-4 text-(--hud-text-dim)">No assigned character crew</span>}
         </nav>
       </FloatingPluginHud>
@@ -962,8 +969,8 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
             {rangedTargets.map((target) => <button key={target.id} type="button" onClick={() => completeCoveringFireSnap(true, target.id)} className="h-7 w-full border border-red-300 px-2 text-[8px] font-bold uppercase tracking-wider text-red-100">Snap Shot {target.name} · 3 AP · 1 ammo</button>)}
             {rangedTargets.length === 0 && <div className="text-(--hud-text-dim)">No legal snap-shot target.</div>}
             <button type="button" onClick={() => completeCoveringFireSnap(false)} className="h-7 w-full border border-(--hud-border) px-2 text-[8px] font-bold uppercase tracking-wider text-(--hud-text-dim)">Decline</button>
-          </div> : selectedCrewMember && selectedPosition ? <>
-            <div className="font-bold uppercase tracking-wider text-cyan-100">{selectedCrewMember.name}</div>
+          </div> : activeCombatant && selectedPosition ? <>
+            <div className="font-bold uppercase tracking-wider text-cyan-100">{activeCombatant.name}</div>
             <div className="text-(--hud-text-dim)">Grid position <span className="text-(--hud-text)">{selectedPosition.x}, {selectedPosition.y}</span> · <span className="text-emerald-200">{selectedActionPoints} AP</span> · <span className={selectedProne ? "text-amber-200" : "text-(--hud-text-dim)"}>{selectedProne ? "Prone" : "Standing"}</span></div>
             {selectedWeapon?.ammunitionProfiles && selectedWeapon.ammunitionProfiles.length > 1 && <div className="space-y-1 border border-cyan-300/50 p-1">
               <div className="font-bold uppercase tracking-wider text-cyan-100">{selectedWeapon.name} ammunition</div>

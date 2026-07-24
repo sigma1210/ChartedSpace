@@ -26,6 +26,7 @@ import deploymentZone9x9DefinitionJson from "./terrainDefinitions/deployment-zon
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
 import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType } from "./types";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
+import type { TacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
 
 export type TacticalDeploymentEdge = "north" | "east" | "south" | "west";
 type BoundarySide = TacticalDeploymentEdge;
@@ -51,6 +52,7 @@ export interface TacticalTerrainDefinitionFile {
     completesScenario?: boolean;
     visualKind?: "console" | "human";
     modelPath?: string;
+    combatProfile?: TacticalInteractiveHumanCombatProfile;
   } | {
     id: string;
     kind: "hatch";
@@ -73,7 +75,7 @@ export interface TacticalTerrainPlacement {
   origin: GridPoint;
   rotation: TacticalRotation;
   terrainSettings?: { filled?: boolean };
-  objectSettings?: Record<string, { terminalKind?: TacticalTerminalKind; label?: string; facing?: TacticalRotation; operational?: boolean; completesScenario?: boolean }>;
+  objectSettings?: Record<string, { terminalKind?: TacticalTerminalKind; label?: string; facing?: TacticalRotation; operational?: boolean; completesScenario?: boolean; combatProfile?: TacticalInteractiveHumanCombatProfile }>;
 }
 
 export type TacticalEnemyType = "gang-member" | "gang-leader";

@@ -4,6 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import { resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, type TacticalScenarioDefinitionFile } from "../tacticalScenarioDefinitions";
 import { validateTacticalConsoleVictoryDefinition, type TacticalConsoleVictoryDefinitionFile } from "../tacticalConsoleVictory";
+import { tacticalHumanArmorIds, tacticalHumanWeaponIds } from "../tacticalInteractiveHuman";
 
 export const DEFAULT_TACTICAL_SCENARIO_ID = "default-tactical-control-room";
 export const tacticalScenarioDirectory = path.join(process.cwd(), "src", "plugins", "characterCombat", "scenarioDefinitions");
@@ -17,6 +18,17 @@ const terminalSettingsSchema = z.object({
   facing: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]).optional(),
   operational: z.boolean().optional(),
   completesScenario: z.boolean().optional(),
+  combatProfile: z.object({
+    weaponId: z.enum(tacticalHumanWeaponIds),
+    weaponSkill: z.number().int(),
+    armorId: z.enum(tacticalHumanArmorIds),
+    meleeWeaponName: z.string().min(1),
+    meleePenetration: z.number().int(),
+    meleeRating: z.number().int(),
+    moraleFactor: z.number().int(),
+    leadershipRating: z.number().int(),
+    skills: z.array(z.object({ name: z.string().min(1), level: z.number().int() }).strict()),
+  }).strict().optional(),
 }).strict();
 const placementSchema = z.object({
   id: z.string().min(1),
@@ -69,6 +81,8 @@ const consoleOperationSchema = z.object({
     z.object({ type: z.literal("unlock"), operationIds: z.array(z.string().min(1)) }).strict(),
     z.object({ type: z.literal("victory") }).strict(),
   ]),
+  successTransformation: z.enum(["ally", "enemy"]).optional(),
+  failureTransformation: z.enum(["ally", "enemy"]).optional(),
 }).strict();
 const consoleVictorySchema = z.object({
   schemaVersion: z.literal(1),
@@ -153,7 +167,7 @@ export const parseTacticalConsoleVictoryFile = (value: unknown, scenario: Tactic
   }
   const definition = parsed.data as TacticalConsoleVictoryDefinitionFile;
   try {
-    validateTacticalConsoleVictoryDefinition(definition, scenario.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id));
+    validateTacticalConsoleVictoryDefinition(definition, scenario.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id), scenario.terrainPlacements.filter((placement) => placement.terrainDefinitionId === "interactive-human").map((placement) => placement.id));
   } catch (error) {
     throw new TacticalScenarioFileError(error instanceof Error ? error.message : "The console-victory definition is invalid.", 400, "invalid-console-victory");
   }
@@ -231,7 +245,7 @@ export const loadTacticalScenarioBundle = async (id: string, scenarioDirectory =
         result: index === 0 ? { type: "victory" } : { type: "unlock", operationIds: [] },
       })),
     };
-    validateTacticalConsoleVictoryDefinition(consoleVictory, consoles.map((placement) => placement.id));
+    validateTacticalConsoleVictoryDefinition(consoleVictory, consoles.map((placement) => placement.id), scenario.terrainPlacements.filter((placement) => placement.terrainDefinitionId === "interactive-human").map((placement) => placement.id));
   }
   return { scenario, consoleVictory };
 };

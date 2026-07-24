@@ -11,6 +11,7 @@ import { armoryLoadouts } from "./equipment";
 import { buildDefaultTacticalScenario, defaultTacticalLighting } from "./defaultTacticalScenario";
 import type { TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
 import { consoleOperationAvailable, travellerTaskTarget, type TacticalConsoleVictoryDefinitionFile } from "./tacticalConsoleVictory";
+import { buildTransformedInteractiveHuman, defaultTacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
 
 const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const highEnergyWeaponReady = (state: CharacterCombatState, unit: CombatScenario["combatants"][number]) => !unit.weapon.highEnergy
@@ -104,6 +105,31 @@ const advanceTacticalPlayerActivation = (map: TacticalMapState) => {
   if (map.scenarioStatus !== "active") { map.activeCharacterId = null; return; }
   const remaining = tacticalPlayerIds(map).filter((id) => !map.actedCharacterIds.includes(id) && (map.actionPointsByCharacterId[id] ?? 0) > 0 && !tacticalCombatant(map, id)?.defeated);
   map.activeCharacterId = remaining[0] ?? null;
+};
+const transformTacticalInteractiveHuman = (map: TacticalMapState, terminal: TacticalTerminal, allegiance: "ally" | "enemy") => {
+  const combatantId = terminal.id.endsWith(":terminal") ? `${terminal.id.slice(0, -":terminal".length)}:combatant` : `${terminal.id}:combatant`;
+  if (map.scenario.combatants.some((unit) => unit.id === combatantId)) return;
+  const combatant = buildTransformedInteractiveHuman({
+    id: combatantId,
+    name: terminal.label,
+    side: allegiance === "ally" ? "player" : "enemy",
+    position: terminal.position,
+    modelPath: terminal.modelPath,
+    profile: terminal.combatProfile ?? defaultTacticalInteractiveHumanCombatProfile,
+  });
+  combatant.elevationLevel = map.scenario.elevationLevelByCell?.[pointKey(terminal.position)] ?? 0;
+  map.scenario.terrainObjects = (map.scenario.terrainObjects ?? []).filter((object) => object.id !== terminal.id);
+  map.scenario.objects = map.scenario.objects.filter((object) => object.id !== terminal.id);
+  map.scenario.combatants.push(combatant);
+  map.selectedTerrainObjectId = null;
+  map.terminalActiveById[terminal.id] = true;
+  map.actionPointsByCharacterId[combatant.id] = allegiance === "ally" ? 0 : 6;
+  map.ammunitionByCharacterId[combatant.id] = combatant.weapon.magazineSize ?? 12;
+  const preparedAmmunition = prepareTacticalAmmunition(map.scenario)[combatant.id];
+  if (preparedAmmunition) map.ammunitionByCombatantAndKind[combatant.id] = preparedAmmunition;
+  if (allegiance === "ally" && !map.actedCharacterIds.includes(combatant.id)) map.actedCharacterIds.push(combatant.id);
+  map.visibleHostileIdsAtPhaseStartByCombatantId = tacticalVisibilitySnapshot(map.scenario);
+  map.events.unshift(`${terminal.label} became ${allegiance === "ally" ? "an ally" : "an enemy"} and may act in the next ${allegiance === "ally" ? "player" : "enemy"} phase`);
 };
 const resolveTacticalPendingDoorCommands = (map: TacticalMapState) => {
   Object.entries(map.pendingDoorCommandsById).forEach(([doorId, command]) => {
@@ -402,6 +428,7 @@ const freshTacticalMap = (entries: readonly TacticalCrewInput[], loadoutIds: rea
     pendingCoveringFireSnapIds: [],
     terminalActiveById: {},
     completedConsoleOperationIds: [],
+    resolvedConsoleOperationIds: [],
     consoleOperationProgressById: {},
     terrainDamageById: {},
     destroyedTerrainObjectIds: [],
@@ -1161,8 +1188,9 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     const operation = definition?.operations.find((candidate) => candidate.id === action.payload.operationId);
     if (!map || map.scenarioStatus !== "active" || !characterId || !character || terminal?.kind !== "terminal" || !operation) return;
     map.completedConsoleOperationIds ??= [];
+    map.resolvedConsoleOperationIds ??= [];
     map.consoleOperationProgressById ??= {};
-    if (`${operation.consolePlacementId}:terminal` !== terminal.id || !terminal.operational || !consoleOperationAvailable(operation, map.completedConsoleOperationIds)) return;
+    if (`${operation.consolePlacementId}:terminal` !== terminal.id || !terminal.operational || map.resolvedConsoleOperationIds.includes(operation.id) || !consoleOperationAvailable(operation, map.completedConsoleOperationIds)) return;
     const adjacent = distanceBetween(terminal.position, character.position) === 1;
     const progress = map.consoleOperationProgressById[operation.id] ?? { completedCheckIds: [], nextCheckModifier: null };
     const check = operation.checks.find((candidate) => !progress.completedCheckIds.includes(candidate.id));
@@ -1180,9 +1208,21 @@ const slice = createSlice({ name: "characterCombat", initialState: initialCharac
     map.consoleOperationProgressById[operation.id] = nextProgress;
     map.actionPointsByCharacterId[characterId] -= check.apCost;
     map.events.unshift(`${character.name} attempted ${operation.label} — ${check.skill} ${check.difficulty} ${target}+ · raw 2d6 ${raw} · skill ${skillLevel >= 0 ? "+" : ""}${skillLevel}${carriedModifier ? ` · carried ${carriedModifier >= 0 ? "+" : ""}${carriedModifier}` : ""} · total ${total}/${target}: ${passed ? "passed" : "failed"}`);
+    if (!passed && operation.failureTransformation) {
+      if (!map.resolvedConsoleOperationIds.includes(operation.id)) map.resolvedConsoleOperationIds.push(operation.id);
+      map.events.unshift(`${operation.label} resolved after the failed check`);
+      transformTacticalInteractiveHuman(map, terminal, operation.failureTransformation);
+      if ((map.actionPointsByCharacterId[characterId] ?? 0) <= 0) {
+        if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
+        advanceTacticalPlayerActivation(map);
+      }
+      return;
+    }
     if (passed && nextProgress.completedCheckIds.length === operation.checks.length) {
       if (!map.completedConsoleOperationIds.includes(operation.id)) map.completedConsoleOperationIds.push(operation.id);
+      if (!map.resolvedConsoleOperationIds.includes(operation.id)) map.resolvedConsoleOperationIds.push(operation.id);
       map.events.unshift(`${operation.label} completed`);
+      if (operation.successTransformation) transformTacticalInteractiveHuman(map, terminal, operation.successTransformation);
       if (operation.result.type === "victory") {
         map.terminalActiveById[terminal.id] = true;
         concludeTacticalScenario(map, "victory", `Victory — ${character.name} completed ${operation.label}`);

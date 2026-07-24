@@ -1,6 +1,7 @@
 import reducer, { attemptTacticalConsoleCheck, deployTacticalCharacter, initializeTacticalDraftPlaytest, resetTacticalDraftPlaytest, selectTacticalDeploymentCharacter, selectTacticalTerrainObject, startTacticalScenario } from "../slice";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "../tacticalScenarioDefinitions";
-import { consoleOperationAvailable, type TacticalConsoleVictoryDefinitionFile } from "../tacticalConsoleVictory";
+import { consoleOperationAvailable, validateTacticalConsoleVictoryDefinition, type TacticalConsoleVictoryDefinitionFile } from "../tacticalConsoleVictory";
+import { defaultTacticalInteractiveHumanCombatProfile } from "../tacticalInteractiveHuman";
 
 const chainedDefinition: TacticalConsoleVictoryDefinitionFile = {
   schemaVersion: 1,
@@ -61,6 +62,14 @@ describe("tactical console victory", () => {
     expect(consoleOperationAvailable(allOperation, ["a", "b"])).toBe(true);
   });
 
+  it("allows independent transformation outcomes only on interactive humans", () => {
+    const transformed = { ...chainedDefinition, operations: [{ ...chainedDefinition.operations[0], successTransformation: "ally" as const, failureTransformation: "enemy" as const, result: { type: "victory" as const } }] };
+    expect(() => validateTacticalConsoleVictoryDefinition(transformed, ["control-room-alpha"], [])).toThrow("can transform only an interactive-human placement");
+    expect(() => validateTacticalConsoleVictoryDefinition({ ...transformed, operations: [{ ...transformed.operations[0], successTransformation: undefined }] }, ["control-room-alpha"], ["control-room-alpha"])).not.toThrow();
+    expect(() => validateTacticalConsoleVictoryDefinition({ ...transformed, operations: [{ ...transformed.operations[0], failureTransformation: undefined }] }, ["control-room-alpha"], ["control-room-alpha"])).not.toThrow();
+    expect(() => validateTacticalConsoleVictoryDefinition(transformed, ["control-room-alpha"], ["control-room-alpha"])).not.toThrow();
+  });
+
   it("retains passed checks, permits retries, consumes a carried modifier once, and unlocks victory", () => {
     let state = startedConsoleState();
     state = reducer(state, attemptTacticalConsoleCheck({ operationId: "gain-access", dice: { first: 3, second: 3 } }));
@@ -95,7 +104,7 @@ describe("tactical console victory", () => {
       terrainDefinitionId: "interactive-human",
       origin: { x: 10, y: 10 },
       rotation: 0,
-      objectSettings: { terminal: { label: "Mara Venn" } },
+      objectSettings: { terminal: { label: "Mara Venn", combatProfile: { ...defaultTacticalInteractiveHumanCombatProfile, weaponId: "autopistol", weaponSkill: 2, armorId: "flakVest" } } },
     }];
     const interactionDefinition: TacticalConsoleVictoryDefinitionFile = {
       schemaVersion: 1,
@@ -107,6 +116,8 @@ describe("tactical console victory", () => {
         label: "Persuade Mara Venn",
         prerequisites: { mode: "all", operationIds: [] },
         checks: [{ id: "persuade", skill: "Persuade", difficulty: "average", apCost: 2 }],
+        successTransformation: "ally",
+        failureTransformation: "enemy",
         result: { type: "victory" },
       }],
     };
@@ -131,6 +142,52 @@ describe("tactical console victory", () => {
 
     expect(state.tacticalMap?.scenarioStatus).toBe("victory");
     expect(state.tacticalMap?.terminalActiveById["informant:terminal"]).toBe(true);
+    expect(state.tacticalMap?.scenario.terrainObjects?.some((object) => object.id === "informant:terminal")).toBe(false);
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "informant:combatant")).toMatchObject({ name: "Mara Venn", side: "player", modelPath: "/models/character-combat/female.glb", weapon: { name: "Autopistol" }, weaponSkill: 2, armorName: "Flak Vest" });
+    expect(state.tacticalMap?.actionPointsByCharacterId["informant:combatant"]).toBe(0);
+    expect(state.tacticalMap?.actedCharacterIds).toContain("informant:combatant");
     expect(state.tacticalMap?.events.some((event) => event.includes("Persuade") && event.includes("raw 2d6 8"))).toBe(true);
+  });
+
+  it("transforms an interactive human into an enemy on a failed configured check", () => {
+    const scenario = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    scenario.terrainPlacements = [{
+      id: "informant",
+      terrainDefinitionId: "interactive-human",
+      origin: { x: 10, y: 10 },
+      rotation: 0,
+      objectSettings: { terminal: { label: "Mara Venn", combatProfile: { ...defaultTacticalInteractiveHumanCombatProfile, weaponId: "bodyPistol" } } },
+    }];
+    const interactionDefinition: TacticalConsoleVictoryDefinitionFile = {
+      schemaVersion: 1,
+      id: scenario.id,
+      scenarioId: scenario.id,
+      operations: [{
+        id: "persuade-informant",
+        consolePlacementId: "informant",
+        label: "Persuade Mara Venn",
+        prerequisites: { mode: "all", operationIds: [] },
+        checks: [{ id: "persuade", skill: "Persuade", difficulty: "average", apCost: 2 }],
+        successTransformation: "ally",
+        failureTransformation: "enemy",
+        result: { type: "victory" },
+      }],
+    };
+    let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: [{ id: "crew-1", name: "Envoy", weaponSkill: 0, skills: [{ name: "Persuade", level: 1 }] }], definition: scenario, consoleVictory: interactionDefinition }));
+    state = reducer(state, selectTacticalDeploymentCharacter("crew-1"));
+    state = reducer(state, deployTacticalCharacter({ x: 0, y: 42 }));
+    state = reducer(state, startTacticalScenario());
+    state = { ...state, tacticalMap: { ...state.tacticalMap!, activeCharacterId: "crew-1", scenario: { ...state.tacticalMap!.scenario, combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 10, y: 11 } } : unit) } } };
+    state = reducer(state, selectTacticalTerrainObject("informant:terminal"));
+    state = reducer(state, attemptTacticalConsoleCheck({ operationId: "persuade-informant", dice: { first: 1, second: 1 } }));
+
+    expect(state.tacticalMap?.scenarioStatus).toBe("active");
+    expect(state.tacticalMap?.completedConsoleOperationIds).not.toContain("persuade-informant");
+    expect(state.tacticalMap?.resolvedConsoleOperationIds).toContain("persuade-informant");
+    expect(state.tacticalMap?.scenario.terrainObjects?.some((object) => object.id === "informant:terminal")).toBe(false);
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "informant:combatant")).toMatchObject({ name: "Mara Venn", side: "enemy", weapon: { name: "Body Pistol" } });
+    expect(state.tacticalMap?.actionPointsByCharacterId["informant:combatant"]).toBe(6);
+    expect(state.tacticalMap?.processedEnemyPhaseCombatantIds).not.toContain("informant:combatant");
+    expect(state.tacticalMap?.events.some((event) => event.includes("became an enemy") && event.includes("next enemy phase"))).toBe(true);
   });
 });

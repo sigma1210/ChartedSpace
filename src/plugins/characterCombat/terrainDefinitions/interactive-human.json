@@ -18,7 +18,18 @@
       "targetable": false,
       "integrity": 1,
       "visualKind": "human",
-      "modelPath": "/models/character-combat/female.glb"
+      "modelPath": "/models/character-combat/female.glb",
+      "combatProfile": {
+        "weaponId": "bodyPistol",
+        "weaponSkill": 0,
+        "armorId": "clothing",
+        "meleeWeaponName": "Unarmed",
+        "meleePenetration": 0,
+        "meleeRating": 0,
+        "moraleFactor": 7,
+        "leadershipRating": 0,
+        "skills": []
+      }
     }
   ],
   "lightSources": []

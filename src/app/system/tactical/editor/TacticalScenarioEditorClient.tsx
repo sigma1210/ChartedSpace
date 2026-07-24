@@ -11,6 +11,7 @@ import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, res
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition, TRAVELLER_TASK_DIFFICULTIES, validateTacticalConsoleVictoryDefinition, type TacticalConsoleOperation, type TacticalConsoleVictoryDefinitionFile, type TravellerTaskDifficulty } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { randomTacticalEnemyAvatarPath, tacticalEnemyPalette } from "@/plugins/characterCombat/tacticalEnemyDefinitions";
 import type { TacticalTerminalKind } from "@/plugins/characterCombat/tacticalTerrain";
+import { defaultTacticalInteractiveHumanCombatProfile, tacticalHumanArmorOptions, tacticalHumanWeaponOptions, validateTacticalInteractiveHumanCombatProfile, type TacticalInteractiveHumanCombatProfile, type TacticalHumanArmorId, type TacticalHumanWeaponId } from "@/plugins/characterCombat/tacticalInteractiveHuman";
 import { createAppStore, store, type AppStore } from "@/store";
 
 const freshDefaultDraft = () => cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
@@ -39,6 +40,7 @@ const FIRE_TOOL_ID = "scenario-fire";
 const IRIS_VALVE_ID = "iris-valve";
 const INTERACTION_SKILLS = ["Bribery", "Carouse", "Diplomat", "Medic", "Leadership", "Streetwise", "Persuade", "Investigate", "Deception"] as const;
 const cellKey = (point: { x: number; y: number }) => `${point.x}:${point.y}`;
+const gridPoint = (point: { x: number; y: number }) => ({ x: point.x, y: point.y });
 type EditorMapPoint = { x: number; y: number; edgeRotation?: TacticalTerrainPlacement["rotation"] };
 const placementRotations = (terrainDefinitionId: string, edgeRotation?: TacticalTerrainPlacement["rotation"]): TacticalTerrainPlacement["rotation"][] => terrainDefinitionId === IRIS_VALVE_ID && edgeRotation !== undefined
   ? [edgeRotation]
@@ -332,6 +334,7 @@ const TacticalScenarioEditorClient = () => {
   const resolutionError = useMemo(() => {
     try {
       const terrain = resolveTacticalScenarioTerrain(draft);
+      terrain.terrainObjects.filter((object) => object.kind === "terminal" && object.visualKind === "human").forEach((human) => validateTacticalInteractiveHumanCombatProfile(human.kind === "terminal" ? human.combatProfile ?? defaultTacticalInteractiveHumanCombatProfile : defaultTacticalInteractiveHumanCombatProfile));
       if (terrain.deploymentCells.length < 2) throw new Error("Define a crew deployment edge or place a Deployment Zone 9x9 before saving or playtesting.");
       const enemyIds = new Set<string>();
       const enemyCells = new Set<string>();
@@ -346,7 +349,7 @@ const TacticalScenarioEditorClient = () => {
         enemyIds.add(enemy.id);
         enemyCells.add(position);
       });
-      if (consoleVictory.operations.length > 0) validateTacticalConsoleVictoryDefinition(consoleVictory, draft.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id));
+      if (consoleVictory.operations.length > 0) validateTacticalConsoleVictoryDefinition(consoleVictory, draft.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id), draft.terrainPlacements.filter((placement) => placement.terrainDefinitionId === "interactive-human").map((placement) => placement.id));
       return null;
     } catch (error) {
       return error instanceof Error ? error.message : "The draft could not be resolved.";
@@ -406,7 +409,7 @@ const TacticalScenarioEditorClient = () => {
         setPlacementError(`A fire already exists at ${cellKey(origin)}.`);
         return;
       }
-      setDraft({ ...draft, fireCells: [...draft.fireCells, { ...origin }] });
+      setDraft({ ...draft, fireCells: [...draft.fireCells, gridPoint(origin)] });
       setPlacementError(null);
       return;
     }
@@ -454,7 +457,7 @@ const TacticalScenarioEditorClient = () => {
     let id = `${enemyKind}-${suffix}`;
     while ((draft.enemyPlacements ?? []).some((enemy) => enemy.id === id)) { suffix += 1; id = `${enemyKind}-${suffix}`; }
     const label = tacticalEnemyPalette.find((enemy) => enemy.id === enemyKind)?.label ?? "Enemy";
-    const enemy: TacticalEnemyPlacement = { id, type: enemyKind, name: `${label} ${suffix}`, position: { ...position }, avatarPath: randomTacticalEnemyAvatarPath() };
+    const enemy: TacticalEnemyPlacement = { id, type: enemyKind, name: `${label} ${suffix}`, position: gridPoint(position), avatarPath: randomTacticalEnemyAvatarPath() };
     setDraft({ ...draft, enemyPlacements: [...(draft.enemyPlacements ?? []), enemy] });
     setSelectedPlacementId(null);
     setSelectedEnemyId(id);
@@ -467,7 +470,7 @@ const TacticalScenarioEditorClient = () => {
     if (!enemy || cellKey(enemy.position) === cellKey(position)) return;
     const error = enemyPositionError(position, id);
     if (error) { setPlacementError(error); return; }
-    setDraft({ ...draft, enemyPlacements: (draft.enemyPlacements ?? []).map((item) => item.id === id ? { ...item, position } : item) });
+    setDraft({ ...draft, enemyPlacements: (draft.enemyPlacements ?? []).map((item) => item.id === id ? { ...item, position: gridPoint(position) } : item) });
     setPlacementError(null);
   };
   const selectedPlacement = draft.terrainPlacements.find((placement) => placement.id === selectedPlacementId) ?? null;
@@ -509,6 +512,7 @@ const TacticalScenarioEditorClient = () => {
       criticalSuccessNextCheckModifier: 2,
       criticalFailureNextCheckModifier: -2,
       result: victoryExists ? { type: "unlock", operationIds: [] } : { type: "victory" },
+      ...(selectedIsInteractiveHuman ? { successTransformation: "ally" as const, failureTransformation: "enemy" as const } : {}),
     };
     setConsoleVictory((current) => ({ ...current, operations: [...current.operations, operation] }));
     setSelectedOperationId(id);
@@ -523,7 +527,7 @@ const TacticalScenarioEditorClient = () => {
     setSelectedOperationId(null);
   };
   const selectedIsLiquidHydrogen = selectedPlacement?.terrainDefinitionId.startsWith("liquid-hydrogen-") ?? false;
-  const updateSelectedTerminal = (settings: { label?: string; terminalKind?: TacticalTerminalKind; operational?: boolean; completesScenario?: boolean }) => {
+  const updateSelectedTerminal = (settings: { label?: string; terminalKind?: TacticalTerminalKind; operational?: boolean; completesScenario?: boolean; combatProfile?: TacticalInteractiveHumanCombatProfile }) => {
     if (!selectedPlacement || !selectedHasTerminal) return;
     updatePlacements(draft.terrainPlacements.map((placement) => placement.id === selectedPlacement.id ? {
       ...placement,
@@ -533,6 +537,8 @@ const TacticalScenarioEditorClient = () => {
       },
     } : placement));
   };
+  const selectedHumanCombatProfile = selectedPlacement?.objectSettings?.terminal?.combatProfile ?? defaultTacticalInteractiveHumanCombatProfile;
+  const updateSelectedHumanCombatProfile = (settings: Partial<TacticalInteractiveHumanCombatProfile>) => updateSelectedTerminal({ combatProfile: { ...selectedHumanCombatProfile, skills: selectedHumanCombatProfile.skills.map((skill) => ({ ...skill })), ...settings } });
   const rotateSelectedPlacement = () => {
     if (!selectedPlacement) return;
     const rotation = ((selectedPlacement.rotation + 90) % 360) as TacticalTerrainPlacement["rotation"];
@@ -628,7 +634,7 @@ const TacticalScenarioEditorClient = () => {
       const loaded = cloneTacticalScenarioDefinition(body.definition);
       const loadedConsoleVictory = cloneTacticalConsoleVictoryDefinition(body.consoleVictory);
       resolveTacticalScenarioTerrain(loaded);
-      validateTacticalConsoleVictoryDefinition(loadedConsoleVictory, loaded.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id));
+      validateTacticalConsoleVictoryDefinition(loadedConsoleVictory, loaded.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id), loaded.terrainPlacements.filter((placement) => placement.terrainDefinitionId === "interactive-human").map((placement) => placement.id));
       const summary = availableScenarios.find((scenario) => scenario.id === loaded.id) ?? { id: loaded.id, title: loaded.title, isDefault: loaded.id === defaultTacticalScenarioDefinition.id };
       setDraft(loaded);
       setBaseline(cloneTacticalScenarioDefinition(loaded));
@@ -648,10 +654,16 @@ const TacticalScenarioEditorClient = () => {
     setFileBusy(true);
     setFileMessage(null);
     try {
+      const definition = {
+        ...draft,
+        enemyPlacements: (draft.enemyPlacements ?? []).map((enemy) => ({ ...enemy, position: gridPoint(enemy.position) })),
+        fireCells: draft.fireCells.map(gridPoint),
+        smokeCells: draft.smokeCells.map(gridPoint),
+      };
       const response = await fetch("/api/tactical/scenarios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: saveAsName, definition: draft, consoleVictory }),
+        body: JSON.stringify({ name: saveAsName, definition, consoleVictory }),
       });
       const body = await response.json() as { scenario?: ScenarioSummary; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile; error?: string };
       if (!response.ok || !body.scenario || !body.definition || !body.consoleVictory) throw new Error(body.error ?? "Could not save the scenario.");
@@ -821,6 +833,44 @@ const TacticalScenarioEditorClient = () => {
                 </label>
               </div>
 
+              {selectedIsInteractiveHuman && <details className="mb-3 border border-purple-500/60" open>
+                <summary className="cursor-pointer px-2 py-1.5 font-bold text-purple-200">Combat profile after transformation</summary>
+                <div className="grid grid-cols-2 gap-2 border-t border-purple-500/40 p-2">
+                  <label className="font-bold text-purple-200">Weapon
+                    <select value={selectedHumanCombatProfile.weaponId} onChange={(event) => updateSelectedHumanCombatProfile({ weaponId: event.target.value as TacticalHumanWeaponId })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[8px] normal-case text-slate-100">{tacticalHumanWeaponOptions.map((weapon) => <option key={weapon.id} value={weapon.id}>{weapon.label}</option>)}</select>
+                  </label>
+                  <label className="font-bold text-purple-200">Weapon skill
+                    <input type="number" value={selectedHumanCombatProfile.weaponSkill} onChange={(event) => updateSelectedHumanCombatProfile({ weaponSkill: Number.parseInt(event.target.value, 10) || 0 })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[9px] text-slate-100" />
+                  </label>
+                  <label className="font-bold text-purple-200">Armor
+                    <select value={selectedHumanCombatProfile.armorId} onChange={(event) => updateSelectedHumanCombatProfile({ armorId: event.target.value as TacticalHumanArmorId })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[8px] normal-case text-slate-100">{tacticalHumanArmorOptions.map((armor) => <option key={armor.id} value={armor.id}>{armor.label}</option>)}</select>
+                  </label>
+                  <label className="font-bold text-purple-200">Melee weapon
+                    <input value={selectedHumanCombatProfile.meleeWeaponName} onChange={(event) => updateSelectedHumanCombatProfile({ meleeWeaponName: event.target.value })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[9px] normal-case text-slate-100" />
+                  </label>
+                  <label className="font-bold text-purple-200">Melee penetration
+                    <input type="number" value={selectedHumanCombatProfile.meleePenetration} onChange={(event) => updateSelectedHumanCombatProfile({ meleePenetration: Number.parseInt(event.target.value, 10) || 0 })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[9px] text-slate-100" />
+                  </label>
+                  <label className="font-bold text-purple-200">Melee rating
+                    <input type="number" value={selectedHumanCombatProfile.meleeRating} onChange={(event) => updateSelectedHumanCombatProfile({ meleeRating: Number.parseInt(event.target.value, 10) || 0 })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[9px] text-slate-100" />
+                  </label>
+                  <label className="font-bold text-purple-200">Morale
+                    <input type="number" value={selectedHumanCombatProfile.moraleFactor} onChange={(event) => updateSelectedHumanCombatProfile({ moraleFactor: Number.parseInt(event.target.value, 10) || 0 })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[9px] text-slate-100" />
+                  </label>
+                  <label className="font-bold text-purple-200">Leadership
+                    <input type="number" value={selectedHumanCombatProfile.leadershipRating} onChange={(event) => updateSelectedHumanCombatProfile({ leadershipRating: Number.parseInt(event.target.value, 10) || 0 })} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[9px] text-slate-100" />
+                  </label>
+                  <div className="col-span-2 border-t border-purple-500/40 pt-2">
+                    <div className="mb-1 flex items-center justify-between"><span className="font-bold text-purple-200">Skills</span><button type="button" onClick={() => updateSelectedHumanCombatProfile({ skills: [...selectedHumanCombatProfile.skills, { name: "Skill", level: 0 }] })} className="border border-emerald-600 px-2 py-1 text-emerald-100">Add skill</button></div>
+                    {selectedHumanCombatProfile.skills.map((skill, index) => <div key={`${index}:${skill.name}`} className="mb-1 grid grid-cols-[1fr_3rem_auto] gap-1">
+                      <input aria-label={`Combat skill ${index + 1}`} value={skill.name} onChange={(event) => updateSelectedHumanCombatProfile({ skills: selectedHumanCombatProfile.skills.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) })} className="h-7 border border-(--hud-border) bg-slate-950 px-1 text-[9px] normal-case text-slate-100" />
+                      <input aria-label={`Combat skill level ${index + 1}`} type="number" value={skill.level} onChange={(event) => updateSelectedHumanCombatProfile({ skills: selectedHumanCombatProfile.skills.map((item, itemIndex) => itemIndex === index ? { ...item, level: Number.parseInt(event.target.value, 10) || 0 } : item) })} className="h-7 border border-(--hud-border) bg-slate-950 px-1 text-[9px] text-slate-100" />
+                      <button type="button" onClick={() => updateSelectedHumanCombatProfile({ skills: selectedHumanCombatProfile.skills.filter((_, itemIndex) => itemIndex !== index) })} className="border border-red-600 px-1 text-red-200">Remove</button>
+                    </div>)}
+                  </div>
+                </div>
+              </details>}
+
               <div className="border-t border-(--hud-border) pt-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
@@ -861,6 +911,15 @@ const TacticalScenarioEditorClient = () => {
                     </div>
                   </div>)}
                   <button type="button" onClick={() => updateConsoleOperation(selectedOperation.id, (operation) => { const suffix = operation.checks.length + 1; return { ...operation, checks: [...operation.checks, { id: `${operation.id}-check-${suffix}`, skill: selectedIsInteractiveHuman ? "Persuade" : "Security", difficulty: "average", apCost: 6 }] }; })} className="mb-2 w-full border border-emerald-600 py-1.5 text-emerald-100">Add task check</button>
+                  {selectedIsInteractiveHuman && <div className="mb-2 grid grid-cols-2 gap-2 border border-purple-500/60 p-2">
+                    <label className="font-bold text-purple-200">Success becomes
+                      <select value={selectedOperation.successTransformation ?? "none"} onChange={(event) => updateConsoleOperation(selectedOperation.id, (operation) => ({ ...operation, successTransformation: event.target.value === "none" ? undefined : event.target.value as "ally" | "enemy" }))} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[8px] text-slate-100"><option value="none">No transformation</option><option value="ally">Ally</option><option value="enemy">Enemy</option></select>
+                    </label>
+                    <label className="font-bold text-purple-200">Failure becomes
+                      <select value={selectedOperation.failureTransformation ?? "none"} onChange={(event) => updateConsoleOperation(selectedOperation.id, (operation) => ({ ...operation, failureTransformation: event.target.value === "none" ? undefined : event.target.value as "ally" | "enemy" }))} className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-1 text-[8px] text-slate-100"><option value="none">No transformation</option><option value="ally">Ally</option><option value="enemy">Enemy</option></select>
+                    </label>
+                    <div className="col-span-2 normal-case text-(--hud-text-dim)">A transformation resolves this interaction permanently. The new combatant waits for its side’s next phase.</div>
+                  </div>}
                   <label className="mb-2 block font-bold text-amber-200">When all checks succeed
                     <select value={selectedOperation.result.type} onChange={(event) => { const victory = event.target.value === "victory"; setConsoleVictory((current) => ({ ...current, operations: current.operations.map((operation) => operation.id === selectedOperation.id ? { ...operation, result: victory ? { type: "victory" } : { type: "unlock", operationIds: [] } } : victory ? { ...operation, prerequisites: { ...operation.prerequisites, operationIds: operation.prerequisites.operationIds.filter((id) => id !== selectedOperation.id) } } : operation) })); }} className="mt-1 h-8 w-full border border-(--hud-border) bg-slate-950 px-2 text-[9px] text-slate-100"><option value="victory">Win the scenario</option><option value="unlock">Unlock other tasks</option></select>
                   </label>

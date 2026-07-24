@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "id": "dont-mess-around-with-jim",
+  "consoleVictoryDefinitionId": "dont-mess-around-with-jim",
+  "title": "Hack The Terminal",
+  "briefing": "Star Town got its Hustlers and when the bad folks all get togther at night \nYou know they all call big Jim boss\nJust because....",
+  "objective": "Hack the ATM. Dont Mess around with Jim.",
+  "map": {
+    "width": 24,
+    "height": 24
+  },
+  "terrainPlacements": [
+    {
+      "id": "console-1x1-1",
+      "terrainDefinitionId": "console-1x1",
+      "origin": {
+        "x": 11,
+        "y": 7
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "ATM"
+        }
+      }
+    },
+    {
+      "id": "interactive-human-1",
+      "terrainDefinitionId": "interactive-human",
+      "origin": {
+        "x": 11,
+        "y": 10
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Big Jim Walker",
+          "combatProfile": {
+            "weaponId": "noRangedWeapon",
+            "weaponSkill": 0,
+            "armorId": "clothing",
+            "meleeWeaponName": "Cudgel",
+            "meleePenetration": 4,
+            "meleeRating": 4,
+            "moraleFactor": 6,
+            "leadershipRating": 0,
+            "skills": []
+          }
+        }
+      }
+    }
+  ],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [
+    {
+      "id": "gang-member-1",
+      "type": "gang-member",
+      "name": "Gang Member 1",
+      "position": {
+        "x": 7,
+        "y": 10
+      },
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-green-v1.png"
+    },
+    {
+      "id": "gang-member-2",
+      "type": "gang-member",
+      "name": "Gang Member 2",
+      "position": {
+        "x": 9,
+        "y": 11
+      },
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-3",
+      "type": "gang-member",
+      "name": "Gang Member 3",
+      "position": {
+        "x": 13,
+        "y": 11
+      },
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-4",
+      "type": "gang-member",
+      "name": "Gang Member 4",
+      "position": {
+        "x": 15,
+        "y": 10
+      },
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-5",
+      "type": "gang-member",
+      "name": "Gang Member 5",
+      "position": {
+        "x": 14,
+        "y": 7
+      },
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v2.png"
+    },
+    {
+      "id": "gang-member-6",
+      "type": "gang-member",
+      "name": "Gang Member 6",
+      "position": {
+        "x": 8,
+        "y": 7
+      },
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
+    }
+  ],
+  "fireCells": [],
+  "smokeCells": []
+}

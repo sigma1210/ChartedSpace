@@ -28,6 +28,8 @@ export interface TacticalConsoleOperation {
   criticalSuccessNextCheckModifier?: number;
   criticalFailureNextCheckModifier?: number;
   result: { type: "unlock"; operationIds: string[] } | { type: "victory" };
+  successTransformation?: "ally" | "enemy";
+  failureTransformation?: "ally" | "enemy";
 }
 
 export interface TacticalConsoleVictoryDefinitionFile {
@@ -41,10 +43,11 @@ export const defaultTacticalConsoleVictoryDefinition = defaultConsoleVictoryJson
 export const cloneTacticalConsoleVictoryDefinition = (definition: TacticalConsoleVictoryDefinitionFile): TacticalConsoleVictoryDefinitionFile => JSON.parse(JSON.stringify(definition)) as TacticalConsoleVictoryDefinitionFile;
 export const travellerTaskTarget = (difficulty: TravellerTaskDifficulty) => TRAVELLER_TASK_DIFFICULTIES.find((entry) => entry.id === difficulty)?.target ?? 8;
 
-export const validateTacticalConsoleVictoryDefinition = (definition: TacticalConsoleVictoryDefinitionFile, consolePlacementIds: string[]) => {
+export const validateTacticalConsoleVictoryDefinition = (definition: TacticalConsoleVictoryDefinitionFile, consolePlacementIds: string[], interactiveHumanPlacementIds: string[] = []) => {
   const errors: string[] = [];
   if (definition.schemaVersion !== 1) errors.push(`Unsupported console-victory schema version: ${definition.schemaVersion}.`);
   const placements = new Set(consolePlacementIds);
+  const interactiveHumans = new Set(interactiveHumanPlacementIds);
   const operationIds = new Set<string>();
   const checkIds = new Set<string>();
   if (definition.operations.length === 0) errors.push("At least one console operation is required.");
@@ -53,6 +56,9 @@ export const validateTacticalConsoleVictoryDefinition = (definition: TacticalCon
     else if (operationIds.has(operation.id)) errors.push(`Duplicate console operation ID: ${operation.id}.`);
     operationIds.add(operation.id);
     if (!placements.has(operation.consolePlacementId)) errors.push(`Operation ${operation.id} references missing console placement ${operation.consolePlacementId}.`);
+    const hasSuccessTransformation = operation.successTransformation !== undefined;
+    const hasFailureTransformation = operation.failureTransformation !== undefined;
+    if ((hasSuccessTransformation || hasFailureTransformation) && !interactiveHumans.has(operation.consolePlacementId)) errors.push(`Operation ${operation.id} can transform only an interactive-human placement.`);
     if (operation.checks.length === 0) errors.push(`Operation ${operation.id} requires at least one task check.`);
     operation.checks.forEach((check) => {
       if (!check.id.trim() || checkIds.has(check.id)) errors.push(`Task check IDs must be unique: ${check.id || "(empty)"}.`);

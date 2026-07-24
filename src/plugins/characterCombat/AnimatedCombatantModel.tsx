@@ -43,7 +43,9 @@ export const AnimatedCombatantModel = ({ animation, facing, pose = null, frozen 
   const model = useMemo(() => clone(scene), [scene]);
   const { actions, mixer } = useAnimations(animations, group);
   const invalidate = useThree((state) => state.invalidate);
-  const clipName = animation === "run" ? "Run" : animation === "walk" ? "Walk" : modelPath === FEMALE_MODEL_PATH ? "Rifle_Idle" : "Idle";
+  const clipName = modelPath === FEMALE_MODEL_PATH
+    ? animation === "run" ? "Standard_Run" : animation === "walk" ? "Walking" : "Rifle_Idle"
+    : animation === "run" ? "Run" : animation === "walk" ? "Walk" : "Idle";
   const poseBones = useMemo(() => Object.fromEntries(posedBoneNames.map((name) => [name, model.getObjectByName(name)])) as Record<string, Object3D | undefined>, [model]);
   const currentPoseOffsets = useRef(Object.fromEntries(posedBoneNames.map((name) => [name, new Quaternion()])) as Record<string, Quaternion>);
 

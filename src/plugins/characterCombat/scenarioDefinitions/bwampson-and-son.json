@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "id": "bwampson-and-son",
+  "consoleVictoryDefinitionId": "bwampson-and-son",
+  "title": "Bwapson and Son",
+  "briefing": "",
+  "objective": "Secure the Security Terminal.",
+  "map": {
+    "width": 24,
+    "height": 24
+  },
+  "terrainPlacements": [
+    {
+      "id": "interactive-human-1",
+      "terrainDefinitionId": "interactive-human",
+      "origin": {
+        "x": 6,
+        "y": 9
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Fred"
+        }
+      }
+    },
+    {
+      "id": "interactive-human-2",
+      "terrainDefinitionId": "interactive-human",
+      "origin": {
+        "x": 18,
+        "y": 9
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Lamont"
+        }
+      }
+    },
+    {
+      "id": "close-machinery-2x2-1",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 15,
+        "y": 7
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-2x2-2",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 20,
+        "y": 8
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-2x2-3",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 8,
+        "y": 7
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-2x2-4",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 5,
+        "y": 4
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-2x2-5",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 3,
+        "y": 9
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-2x2-6",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 11,
+        "y": 6
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-2x2-7",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 17,
+        "y": 4
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-2x2-8",
+      "terrainDefinitionId": "close-machinery-2x2",
+      "origin": {
+        "x": 21,
+        "y": 5
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-3x3-1",
+      "terrainDefinitionId": "close-machinery-3x3",
+      "origin": {
+        "x": 11,
+        "y": 2
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-3x3-2",
+      "terrainDefinitionId": "close-machinery-3x3",
+      "origin": {
+        "x": 1,
+        "y": 12
+      },
+      "rotation": 0
+    },
+    {
+      "id": "close-machinery-3x3-3",
+      "terrainDefinitionId": "close-machinery-3x3",
+      "origin": {
+        "x": 20,
+        "y": 11
+      },
+      "rotation": 0
+    }
+  ],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [],
+  "fireCells": [],
+  "smokeCells": []
+}

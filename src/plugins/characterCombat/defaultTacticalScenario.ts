@@ -4,6 +4,7 @@ import { defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tact
 import type { CombatScenario, TacticalLightingPreset } from "./types";
 import { defaultTacticalConsoleVictoryDefinition, validateTacticalConsoleVictoryDefinition, type TacticalConsoleVictoryDefinitionFile } from "./tacticalConsoleVictory";
 import { buildTacticalEnemyCombatant } from "./tacticalEnemyDefinitions";
+import { defaultTacticalInteractiveHumanCombatProfile, validateTacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
 
 export const defaultTacticalLighting = (preset: TacticalLightingPreset) => {
   return {
@@ -13,9 +14,10 @@ export const defaultTacticalLighting = (preset: TacticalLightingPreset) => {
 
 export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPreset, definition: TacticalScenarioDefinitionFile = defaultTacticalScenarioDefinition, consoleVictory?: TacticalConsoleVictoryDefinitionFile): CombatScenario => {
   const terrain = resolveTacticalScenarioTerrain(definition);
+  terrain.terrainObjects.filter((object) => object.kind === "terminal" && object.visualKind === "human").forEach((human) => validateTacticalInteractiveHumanCombatProfile(human.kind === "terminal" ? human.combatProfile ?? defaultTacticalInteractiveHumanCombatProfile : defaultTacticalInteractiveHumanCombatProfile));
   const consolePlacementIds = definition.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id);
   const resolvedConsoleVictory = consoleVictory ?? (consolePlacementIds.includes("control-room-alpha") ? defaultTacticalConsoleVictoryDefinition : undefined);
-  if (resolvedConsoleVictory) validateTacticalConsoleVictoryDefinition(resolvedConsoleVictory, consolePlacementIds);
+  if (resolvedConsoleVictory) validateTacticalConsoleVictoryDefinition(resolvedConsoleVictory, consolePlacementIds, definition.terrainPlacements.filter((placement) => placement.terrainDefinitionId === "interactive-human").map((placement) => placement.id));
   const enemies = (definition.enemyPlacements ?? []).map(buildTacticalEnemyCombatant);
   const unavailableDeploymentCells = new Set([
     ...terrain.objects.map((object) => `${object.position.x}:${object.position.y}`),
