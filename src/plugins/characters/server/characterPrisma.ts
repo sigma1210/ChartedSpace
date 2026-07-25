@@ -16,8 +16,12 @@ const createCharacterPrismaClient = () => {
   return new PrismaClient({ adapter });
 };
 
+const cachedCharacterPrisma = globalForCharacterPrisma.characterPrisma;
+
 export const characterPrisma =
-  globalForCharacterPrisma.characterPrisma ?? createCharacterPrismaClient();
+  cachedCharacterPrisma && typeof cachedCharacterPrisma.shipLockerItem?.findMany === "function"
+    ? cachedCharacterPrisma
+    : createCharacterPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForCharacterPrisma.characterPrisma = characterPrisma;
