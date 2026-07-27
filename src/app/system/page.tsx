@@ -6,11 +6,13 @@ import ShipCrewAssignmentModal from "@/plugins/ship/ShipCrewAssignmentModal";
 import EquipmentCatalogModal from "@/plugins/equipmentCatalog/EquipmentCatalogModal";
 import BillyBobsCatalogModal from "@/plugins/equipmentCatalog/BillyBobsCatalogModal";
 import StarshipSupplyCatalogModal from "@/plugins/equipmentCatalog/StarshipSupplyCatalogModal";
+import CharacterStartLifecycle from "./CharacterStartLifecycle";
 import SystemPageClient from "./SystemPageClient";
 
 const SystemPage = () => {
   return (
     <>
+      <CharacterStartLifecycle />
       <SystemPageClient />
       <SystemDetailModal />
       <CharacterGenerationModal />
