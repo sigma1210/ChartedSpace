@@ -4,6 +4,8 @@ import CharacterCombatModal from "@/plugins/characterCombat/CharacterCombatModal
 import MaydayModal from "@/plugins/mayday/MaydayModal";
 import ShipCrewAssignmentModal from "@/plugins/ship/ShipCrewAssignmentModal";
 import EquipmentCatalogModal from "@/plugins/equipmentCatalog/EquipmentCatalogModal";
+import BillyBobsCatalogModal from "@/plugins/equipmentCatalog/BillyBobsCatalogModal";
+import StarshipSupplyCatalogModal from "@/plugins/equipmentCatalog/StarshipSupplyCatalogModal";
 import SystemPageClient from "./SystemPageClient";
 
 const SystemPage = () => {
@@ -15,6 +17,8 @@ const SystemPage = () => {
       <CharacterCombatModal />
       <ShipCrewAssignmentModal />
       <EquipmentCatalogModal />
+      <BillyBobsCatalogModal />
+      <StarshipSupplyCatalogModal />
       <MaydayModal />
     </>
   );

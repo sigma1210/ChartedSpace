@@ -1,0 +1,72 @@
+[
+  {
+    "id": "weapon-body-pistol",
+    "name": "Body Pistol",
+    "visualDescription": "A compact, lightweight pistol with a short squared barrel and a low-profile angular body. The casing is predominantly muted olive green and tan composite with worn dark metal edges, shallow layered panels, narrow vents, and three small red diagonal markings near the top. It has a simple exposed trigger, a slim dark hammer assembly, and a short forward-raked grip covered in textured green material. The weapon has very little projecting hardware and an intentionally discreet, easily concealed silhouette."
+  },
+  {
+    "id": "weapon-holdout-pistol",
+    "name": "Holdout Pistol",
+    "visualDescription": "An extremely compact concealed pistol derived from the body-pistol design, with a very short squared barrel, a flat slab-sided receiver, and minimal external controls. Its close-fitting shell is made from muted olive and tan composite panels with dark seams, lightly worn edges, tiny ventilation cuts, and restrained red identification marks. The narrow textured green grip is short enough to remain unobtrusive, while the trigger guard and hammer sit nearly flush with the weapon's compact outline."
+  },
+  {
+    "id": "weapon-autopistol",
+    "name": "Autopistol",
+    "visualDescription": "A chunky futuristic semiautomatic pistol with a long rectangular silver-gray upper housing, beveled armor panels, and dark mechanical seams. The front half incorporates a large open under-barrel frame and a row of five narrow blue illuminated vents along the side. A compact black optical unit sits on the top rail beside small orange-red accents. The grip angles sharply backward and is wrapped in black ribbed material with blue inset stripes, ending in a squared dark magazine base."
+  },
+  {
+    "id": "weapon-shotgun",
+    "name": "Shotgun",
+    "visualDescription": "A rugged pump-action shotgun combining traditional wood furniture with industrial metalwork. It has a long dark steel barrel above a parallel tubular magazine, a blocky silver and olive receiver with a rounded reinforced rear housing, and an exposed trigger beneath the action. The pump is a broad reddish-brown wooden fore-end with visible grain. Instead of a shoulder stock, the weapon ends in a curved wooden pistol grip with a black butt cap, giving it a compact utilitarian profile."
+  },
+  {
+    "id": "weapon-smg",
+    "name": "Submachine Gun",
+    "visualDescription": "A compact black and gunmetal submachine gun with a dense mechanical construction. The short barrel ends in a small multi-port muzzle device and is surrounded by a perforated cylindrical heat shroud. The receiver has rows of circular cooling holes, raised rails, recessed fasteners, and subtle worn steel highlights. A curved dark magazine projects downward ahead of a separate vertical pistol grip. The rear terminates in a narrow skeletonized folding stock with a small rectangular shoulder pad."
+  },
+  {
+    "id": "weapon-laser-rifle",
+    "name": "Laser Rifle",
+    "visualDescription": "A long high-energy rifle built around a dark metallic rectangular receiver and an extended precision barrel assembly. The central body has black and silver layered panels, exposed orange energy components, a compact top-mounted sight, and a vertical pistol grip. Multiple slender rails and tubes run forward into a narrow barrel with blue-cyan edge accents and a divided muzzle. Two heavy insulated cables descend from the receiver and connect to a separate black backpack power unit covered in coils, conduits, blue glowing elements, and circular gold hardware."
+  },
+  {
+    "id": "weapon-gauss-rifle",
+    "name": "Gauss Rifle",
+    "visualDescription": "A compact bullpup-style electromagnetic rifle with a long, low black and dark-gray chassis. The squared receiver extends behind the grip into a short boxy stock, while a narrow layered barrel and upper rail project forward. A raised translucent red housing on top encloses silver coil-like components. The lower frame forms a large angular thumbhole outlined in red, accompanied by a forward vertical grip and a second sharply angled grip. Small warning labels, recessed bolts, vents, and red indicator details break up the matte armored surfaces."
+  },
+  {
+    "id": "weapon-plasma-gun",
+    "name": "Plasma Gun",
+    "visualDescription": "A heavy human-portable plasma weapon with a long rectangular industrial body made from blackened steel and dark gunmetal armor plates. The thick squared barrel housing contains layered rails, vents, exposed mechanical channels, and a bright cyan rectangular energy chamber set into the side. A red insulated cable runs along the upper assembly. The weapon has a rear pistol grip, a second angled forward grip, a compact top sight, and a short blocky rear section, giving it the appearance of a dense, powerful energy projector rather than a conventional rifle."
+  },
+  {
+    "id": "weapon-fusion-gun",
+    "name": "Fusion Gun",
+    "visualDescription": "A bulky human-portable fusion weapon with a thick cylindrical forward assembly enclosed by tan, bronze, and black armored shells. Its body is packed with overlapping mechanical modules, dark cooling channels, small blue and red indicator lights, exposed fasteners, and a compact top-mounted sight. A sharply angular open-frame stock extends behind the receiver, while a folding support grip projects beneath the front. Two heavy flexible black cables loop downward from the underside, reinforcing the weapon's complex high-energy power system."
+  },
+  {
+    "id": "weapon-4cm-ram",
+    "name": "4cm RAM",
+    "visualDescription": "A heavy rocket-assisted grenade launcher made from dark gunmetal with muted blue-gray panels and thin red identification bands. It has a thick short barrel, a cylindrical upper receiver, a small top-mounted optical sight, and an enormous round drum magazine suspended below the action. A black pistol grip sits behind the drum. The rear is an open rectangular skeleton stock with elongated cutouts and a compact shoulder plate, creating a sturdy military silhouette built around the oversized ammunition cylinder."
+  },
+  {
+    "id": "weapon-light-assault-gun",
+    "name": "Light Assault Gun",
+    "visualDescription": "A long squad-support rifle with an olive-drab rectangular receiver and an extended dark steel barrel. The slim barrel ends in a squared muzzle block and emerges from a long black ribbed forward housing. The central body has a perforated cooling panel, blocky armor sections, a top-mounted telescopic sight, a small carry fixture, and a folding bipod beneath the front. A short pistol grip projects below the receiver, while the rear forms a broad angular olive stock capped with a thick black shoulder pad."
+  },
+  {
+    "id": "armor-flak-vest",
+    "name": "Flak Vest",
+    "visualDescription": "A sleeveless olive-drab ballistic vest with a high padded collar and a thick, slightly bulky torso. The front closes with a dark central zipper and is divided into overlapping reinforced fabric panels. Large rectangular utility pockets cover the lower front, with additional smaller pockets and straps across the chest and sides. The shoulders are broad and padded, the arm openings are deeply cut, and dark edging reinforces the seams. The fabric has a matte, rugged, military texture with subtle creases and wear."
+  },
+  {
+    "id": "armor-combat-armor",
+    "name": "Combat Armor",
+    "visualDescription": "A complete sealed combat suit built from glossy black layered armor over pale gray flexible under-sleeves. The helmet has a smooth red-orange full-face visor beneath a dark armored crown and neck seal. Broad segmented shoulder plates connect to heavy forearm guards and black gauntlets. Silver-gray geometric braces cross the black chest and abdomen, surrounding mechanical fittings, hoses, and a compact utility belt. Articulated hip, thigh, knee, shin, and boot armor completes the suit, with small red markings and muted blue-gray panels throughout."
+  },
+  {
+    "id": "armor-battle-dress",
+    "name": "Battle Dress",
+    "visualDescription": "A massive powered armor suit clad in overlapping silver and gunmetal plates over a black ribbed mechanical understructure. The enclosed helmet has a large faceted dark-green transparent visor, a heavy angular jaw guard, and a rectangular sensor module mounted beside the head. Wide pointed shoulder pauldrons frame a layered armored chest with a small red triangular marking. Bulky articulated forearms, gauntlets, thighs, knee guards, shin plates, and reinforced boots give the suit a powerful silhouette. A large rectangular equipment pack rises behind the shoulders."
+  }
+]
