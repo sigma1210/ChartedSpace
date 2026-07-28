@@ -20,7 +20,7 @@ import {
   TACTICAL_DOOR_HEIGHT,
   TACTICAL_WALL_CENTER_Y,
   TACTICAL_WALL_HEIGHT,
-  tacticalRaisedSurfaceHeightAt,
+  tacticalStairPlatformPlacement,
   tacticalVisualHeightAt,
 } from "./tacticalSceneGeometry";
 
@@ -131,45 +131,47 @@ const TacticalElevationTerrain = ({
       );
     })}
     {(scenario.elevationAccessCells ?? []).map((point) => {
-      const baseHeight = tacticalRaisedSurfaceHeightAt(scenario, point);
-      const elevatedNeighbor = [
-        { x: point.x + 1, y: point.y },
-        { x: point.x - 1, y: point.y },
-        { x: point.x, y: point.y + 1 },
-        { x: point.x, y: point.y - 1 },
-      ].find((candidate) => tacticalRaisedSurfaceHeightAt(scenario, candidate) > baseHeight);
-      if (!elevatedNeighbor) return null;
-      const dx = elevatedNeighbor.x - point.x;
-      const dz = elevatedNeighbor.y - point.y;
-      const riseHeight = tacticalRaisedSurfaceHeightAt(scenario, elevatedNeighbor) - baseHeight;
+      const platform = tacticalStairPlatformPlacement(scenario, point);
+      if (!platform) return null;
       return (
         <group
           key={`stairs:${pointKey(point)}`}
           position={[
             point.x + 0.5 - scenario.width / 2,
-            baseHeight,
+            platform.baseHeight,
             point.y + 0.5 - scenario.height / 2,
           ]}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectCell(point);
+          }}
         >
-          {Array.from({ length: 4 }, (_, index) => {
-            const stepHeight = riseHeight * (index + 1) / 4;
-            const offset = -0.375 + index * 0.25;
-            return (
-              <mesh
-                key={index}
-                position={[dx * offset, stepHeight / 2, dz * offset]}
-                receiveShadow
-                castShadow
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelectCell(point);
-                }}
-              >
-                <boxGeometry args={dx === 0 ? [0.86, stepHeight, 0.24] : [0.24, stepHeight, 0.86]} />
-                <meshStandardMaterial color="#cbd5e1" roughness={0.72} />
-              </mesh>
-            );
-          })}
+          <mesh
+            position={[0, platform.height / 2, 0]}
+            receiveShadow
+            castShadow
+          >
+            <boxGeometry
+              args={[0.94, platform.height, 0.94]}
+            />
+            <meshStandardMaterial
+              color="#64748b"
+              roughness={0.72}
+              metalness={0.22}
+            />
+          </mesh>
+          <mesh
+            position={[0, platform.height + 0.003, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            receiveShadow
+          >
+            <planeGeometry args={[0.88, 0.88]} />
+            <meshStandardMaterial
+              color="#263b46"
+              roughness={0.9}
+              metalness={0.08}
+            />
+          </mesh>
         </group>
       );
     })}

@@ -8,7 +8,7 @@ import type {
   PlannedMove,
 } from "@/plugins/characterCombat/types";
 import {
-  TACTICAL_WALL_HEIGHT,
+  tacticalMovementVisualHeightAt,
   tacticalVisualHeightAt,
 } from "./tacticalSceneGeometry";
 
@@ -31,11 +31,12 @@ export const tacticalMovementPerimeterPositions = (
     toX: number,
     toY: number,
   ) => {
-    const elevation = (
-      cell.elevationLevel !== undefined
-        ? cell.elevationLevel * TACTICAL_WALL_HEIGHT
-        : tacticalVisualHeightAt(scenario, cell)
-    ) + 0.045;
+    const elevation =
+      tacticalMovementVisualHeightAt(
+        scenario,
+        cell,
+        cell.elevationLevel,
+      ) + 0.045;
     values.push(
       fromX - scenario.width / 2,
       elevation,
@@ -111,11 +112,7 @@ const MovementPath = ({
     level?: number,
   ): [number, number, number] => [
     point.x + 0.5 - scenario.width / 2,
-    (
-      level !== undefined
-        ? level * TACTICAL_WALL_HEIGHT
-        : tacticalVisualHeightAt(scenario, point)
-    ) + 0.075,
+    tacticalMovementVisualHeightAt(scenario, point, level) + 0.075,
     point.y + 0.5 - scenario.height / 2,
   ];
 

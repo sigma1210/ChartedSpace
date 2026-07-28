@@ -58,4 +58,19 @@ describe("tactical movement preview", () => {
     expect(preview.candidateMoves.size).toBe(0);
     expect(preview.legalMoves.size).toBe(0);
   });
+
+  it("allows an elevation-access stair square as a destination", () => {
+    const { enemy, map, player } = movementMap();
+    enemy.position = { x: 4, y: 4 };
+    map.scenario.terrainByCell = { "3:1": "elevated" };
+    map.scenario.elevationLevelByCell = { "3:1": 1 };
+    map.scenario.elevationAccessCells = [{ x: 2, y: 1 }];
+
+    const preview = buildTacticalMovementPreview(map, player);
+
+    expect(preview.legalMoves.get("2:1")).toMatchObject({
+      destination: { x: 2, y: 1 },
+      finalElevationLevel: 0,
+    });
+  });
 });
