@@ -48,6 +48,10 @@ const facingVector = (facing: NonNullable<TacticalEnemyPlacement["facing"]> | Ta
 };
 const facingName = (facing: NonNullable<TacticalEnemyPlacement["facing"]> | TacticalTerrainPlacement["rotation"]) => ["North", "East", "South", "West"][facingRotation(facing) / 90] ?? "North";
 type EditorMapPoint = { x: number; y: number; edgeRotation?: TacticalTerrainPlacement["rotation"] };
+export const tacticalEditorMarkerInteractionEnabled = (
+  placementKind: string | null,
+  enemyKind: TacticalEnemyType | null,
+) => placementKind === null && enemyKind === null;
 const placementRotations = (terrainDefinitionId: string, edgeRotation?: TacticalTerrainPlacement["rotation"]): TacticalTerrainPlacement["rotation"][] => terrainDefinitionId === IRIS_VALVE_ID && edgeRotation !== undefined
   ? [edgeRotation]
   : terrainDefinitionId.startsWith("bridge-") || terrainDefinitionId === IRIS_VALVE_ID ? [0, 90, 180, 270] : [0];
@@ -250,8 +254,8 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       const raised = placement.terrainDefinitionId.startsWith("raised-area");
       return <rect key={`placement-control:${placement.id}`} x={placement.origin.x} y={placement.origin.y} width={size.width} height={size.height}
         fill={selected ? "#22d3ee" : "transparent"} fillOpacity={selected ? 0.16 : 0} stroke={selected ? "#fef08a" : raised ? "#67e8f9" : "transparent"} strokeOpacity={selected ? 1 : 0.72} strokeWidth={selected ? "0.24" : "0.12"}
-        className="cursor-move" onPointerDown={(event) => {
-          if (placementKind) return;
+        className={tacticalEditorMarkerInteractionEnabled(placementKind, enemyKind) ? "cursor-move" : undefined} onPointerDown={(event) => {
+          if (!tacticalEditorMarkerInteractionEnabled(placementKind, enemyKind)) return;
           event.stopPropagation();
           const point = mapPoint(event);
           if (!point) return;
@@ -264,8 +268,8 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     {definition.fireCells.map((cell) => {
       const selected = selectedFire && cellKey(selectedFire) === cellKey(cell);
       return <circle key={`fire:${cell.x}:${cell.y}`} cx={cell.x + 0.5} cy={cell.y + 0.5} r="0.32" fill="#f97316" stroke={selected ? "#fef08a" : "#fed7aa"} strokeWidth={selected ? "0.18" : "0.08"}
-        className={placementKind ? undefined : "cursor-pointer"} onPointerDown={(event) => {
-          if (placementKind) return;
+        className={tacticalEditorMarkerInteractionEnabled(placementKind, enemyKind) ? "cursor-pointer" : undefined} onPointerDown={(event) => {
+          if (!tacticalEditorMarkerInteractionEnabled(placementKind, enemyKind)) return;
           event.stopPropagation();
           selectPlacement(null);
           selectEnemy(null);

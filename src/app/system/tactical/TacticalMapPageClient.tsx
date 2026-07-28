@@ -25,7 +25,8 @@ import { TacticalEventsHud } from "./TacticalEventsHud";
 import { TacticalHudLayer } from "./TacticalHudLayer";
 import { TacticalMapLifecycle } from "./TacticalMapLifecycle";
 import { DEFAULT_TACTICAL_SCENARIO_HUD_LAYOUT, TacticalScenarioHud } from "./TacticalScenarioHud";
-import { DEFAULT_TACTICAL_MAP, TacticalScene } from "./TacticalScene";
+import { TacticalScene } from "./TacticalScene";
+import { DEFAULT_TACTICAL_MAP } from "./tacticalMapDefaults";
 
 const safeCanvasEvents: NonNullable<ComponentProps<typeof Canvas>["events"]> = (store) => {
   const manager = createCanvasEvents(store);

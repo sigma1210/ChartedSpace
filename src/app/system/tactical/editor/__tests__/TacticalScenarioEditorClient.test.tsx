@@ -2,7 +2,10 @@
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { fireEvent, render, screen } from "@testing-library/react";
-import TacticalScenarioEditorClient, { removeConsolePlacementOperations } from "../TacticalScenarioEditorClient";
+import TacticalScenarioEditorClient, {
+  removeConsolePlacementOperations,
+  tacticalEditorMarkerInteractionEnabled,
+} from "../TacticalScenarioEditorClient";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "@/plugins/characterCombat/tacticalConsoleVictory";
 
 jest.mock("../../TacticalMapPageClient", () => ({ __esModule: true, default: () => null }));
@@ -50,6 +53,13 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain("Crew deployment edges");
     expect(markup).not.toContain("<title>");
     expect(markup).toContain('aria-label="Gang Member 1 · facing North"');
+  });
+
+  it("lets enemy-tool clicks pass through raised terrain and fire markers", () => {
+    expect(tacticalEditorMarkerInteractionEnabled(null, "gang-member")).toBe(false);
+    expect(tacticalEditorMarkerInteractionEnabled(null, "gang-leader")).toBe(false);
+    expect(tacticalEditorMarkerInteractionEnabled("raised-area", null)).toBe(false);
+    expect(tacticalEditorMarkerInteractionEnabled(null, null)).toBe(true);
   });
 
   it("offers file loading and non-overwriting Save As controls", () => {

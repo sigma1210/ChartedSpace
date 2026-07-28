@@ -1,32 +1,36 @@
 "use client";
 
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Group } from "three";
 import type { CombatantFacing } from "./AnimatedCombatantModel";
+import {
+  shouldStartCombatantMovement,
+  type VisualCombatantMovement,
+} from "./combatantMovementAnimation";
 
-interface VisualMovement {
-  sequence: number;
-  path: [number, number, number][];
-  mode: "walk" | "run";
-}
-
-export const AnimatedCombatantPlacement = ({ position, rotation, finalFacing, movement, onClick, children }: {
+export const AnimatedCombatantPlacement = ({ position, rotation, finalFacing, movement, onClick, onMovementComplete, children }: {
   position: [number, number, number];
   rotation: [number, number, number];
   finalFacing: CombatantFacing;
-  movement?: VisualMovement;
+  movement?: VisualCombatantMovement;
   onClick: (event: { stopPropagation: () => void }) => void;
+  onMovementComplete?: (sequence: number) => void;
   children: (moving: boolean, facing: CombatantFacing) => ReactNode;
 }) => {
   const group = useRef<Group>(null);
-  const lastSequence = useRef(movement?.sequence ?? 0);
-  const active = useRef<{ movement: VisualMovement; segment: number; progress: number } | null>(null);
+  const lastSequence = useRef<number | null>(null);
+  const active = useRef<{
+    movement: VisualCombatantMovement;
+    segment: number;
+    progress: number;
+  } | null>(null);
   const [moving, setMoving] = useState(false);
   const [visualFacing, setVisualFacing] = useState<CombatantFacing>(finalFacing);
+  const invalidate = useThree((state) => state.invalidate);
 
   useEffect(() => {
-    if (!movement || movement.sequence === lastSequence.current || movement.path.length < 2) return;
+    if (!movement || !shouldStartCombatantMovement(lastSequence.current, movement)) return;
     lastSequence.current = movement.sequence;
     active.current = { movement, segment: 0, progress: 0 };
     group.current?.position.set(...movement.path[0]);
@@ -34,7 +38,8 @@ export const AnimatedCombatantPlacement = ({ position, rotation, finalFacing, mo
     const first = movement.path[0];
     setVisualFacing(next[0] > first[0] ? "east" : next[0] < first[0] ? "west" : next[2] > first[2] ? "south" : "north");
     setMoving(true);
-  }, [movement]);
+    invalidate();
+  }, [invalidate, movement]);
 
   useFrame((_, delta) => {
     const current = active.current;
@@ -51,6 +56,7 @@ export const AnimatedCombatantPlacement = ({ position, rotation, finalFacing, mo
       from[1] + (to[1] - from[1]) * amount,
       from[2] + (to[2] - from[2]) * amount,
     );
+    invalidate();
     if (amount < 1) return;
     current.segment += 1;
     current.progress = 0;
@@ -59,10 +65,12 @@ export const AnimatedCombatantPlacement = ({ position, rotation, finalFacing, mo
       setVisualFacing(next[0] > to[0] ? "east" : next[0] < to[0] ? "west" : next[2] > to[2] ? "south" : "north");
       return;
     }
+    const completedSequence = current.movement.sequence;
     active.current = null;
     target.position.set(...position);
     setVisualFacing(finalFacing);
     setMoving(false);
+    onMovementComplete?.(completedSequence);
   });
 
   return <group ref={group} position={position} rotation={rotation} onClick={(event) => { if (!moving) onClick(event); }}>
