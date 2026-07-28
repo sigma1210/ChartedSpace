@@ -466,7 +466,7 @@
         {
           "id": "wall-door-3",
           "kind": "sliding-door",
-          "position": 0.16666666666666666
+          "position": 0.5
         }
       ]
     },
@@ -594,7 +594,7 @@
         {
           "id": "wall-door-2",
           "kind": "sliding-door",
-          "position": 0.16666666666666666
+          "position": 0.5
         }
       ]
     },
@@ -737,6 +737,39 @@
       "to": {
         "x": 14,
         "y": 21
+      }
+    },
+    {
+      "id": "drawn-wall-41",
+      "from": {
+        "x": 12,
+        "y": 18
+      },
+      "to": {
+        "x": 7,
+        "y": 18
+      }
+    },
+    {
+      "id": "drawn-wall-42",
+      "from": {
+        "x": 7,
+        "y": 18
+      },
+      "to": {
+        "x": 7,
+        "y": 14
+      }
+    },
+    {
+      "id": "drawn-wall-43",
+      "from": {
+        "x": 12,
+        "y": 14
+      },
+      "to": {
+        "x": 7,
+        "y": 14
       }
     }
   ],

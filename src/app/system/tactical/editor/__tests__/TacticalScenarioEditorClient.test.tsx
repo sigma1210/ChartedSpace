@@ -101,6 +101,22 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.getByTestId("wall-portal-wall-door-1")).toBeTruthy();
     expect(screen.getByText("Selected portal")).toBeTruthy();
     expect(screen.getByText("Door on drawn-wall-1")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    const doorBeforeMove = screen.getByTestId("wall-portal-wall-door-1");
+    const doorStartBeforeMove = Number(doorBeforeMove.getAttribute("x1"));
+    fireEvent.pointerDown(doorBeforeMove, { clientX: 12, clientY: 12.5, pointerId: 9 });
+    fireEvent.pointerMove(preview, { clientX: 18, clientY: 18, pointerId: 9 });
+    fireEvent.pointerUp(preview, { clientX: 18, clientY: 18, pointerId: 9 });
+    const movedDoorStart = Number(screen.getByTestId("wall-portal-wall-door-1").getAttribute("x1"));
+    expect(movedDoorStart).toBeGreaterThan(doorStartBeforeMove);
+
+    fireEvent.pointerDown(screen.getByTestId("wall-portal-wall-door-1"), { clientX: 18, clientY: 18, pointerId: 10 });
+    fireEvent.pointerMove(preview, { clientX: 18, clientY: 0, pointerId: 10 });
+    fireEvent.pointerUp(preview, { clientX: 18, clientY: 0, pointerId: 10 });
+    expect(Number(screen.getByTestId("wall-portal-wall-door-1").getAttribute("x1"))).toBeCloseTo(movedDoorStart);
+    expect(screen.getByText("Keep the portal on an open one-square position on its wall.")).toBeTruthy();
+
     fireEvent.click(screen.getByRole("button", { name: "Delete portal" }));
     expect(screen.queryByTestId("wall-portal-wall-door-1")).toBeNull();
     expect(screen.getByTestId("drawn-wall-drawn-wall-1")).toBeTruthy();
@@ -108,16 +124,16 @@ describe("TacticalScenarioEditorClient", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
     const irisBeforeMove = Number(screen.getByTestId("wall-portal-wall-iris-valve-1").querySelector("circle")?.getAttribute("cx"));
-    fireEvent.pointerDown(screen.getByTestId("drawn-wall-drawn-wall-1"), { clientX: 15, clientY: 15, pointerId: 9 });
-    fireEvent.pointerMove(preview, { clientX: 18, clientY: 17, pointerId: 9 });
+    fireEvent.pointerDown(screen.getByTestId("drawn-wall-drawn-wall-1"), { clientX: 15, clientY: 15, pointerId: 11 });
+    fireEvent.pointerMove(preview, { clientX: 18, clientY: 17, pointerId: 11 });
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("x1")).toBe("13");
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("y1")).toBe("13");
     expect(Number(screen.getByTestId("wall-portal-wall-iris-valve-1").querySelector("circle")?.getAttribute("cx"))).toBeCloseTo(irisBeforeMove + 3);
-    fireEvent.pointerUp(preview, { clientX: 18, clientY: 17, pointerId: 9 });
+    fireEvent.pointerUp(preview, { clientX: 18, clientY: 17, pointerId: 11 });
 
-    fireEvent.pointerDown(screen.getByTestId("drawn-wall-drawn-wall-1"), { clientX: 18, clientY: 17, pointerId: 10 });
-    fireEvent.pointerMove(preview, { clientX: 0, clientY: 0, pointerId: 10 });
-    fireEvent.pointerUp(preview, { clientX: 0, clientY: 0, pointerId: 10 });
+    fireEvent.pointerDown(screen.getByTestId("drawn-wall-drawn-wall-1"), { clientX: 18, clientY: 17, pointerId: 12 });
+    fireEvent.pointerMove(preview, { clientX: 0, clientY: 0, pointerId: 12 });
+    fireEvent.pointerUp(preview, { clientX: 0, clientY: 0, pointerId: 12 });
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("x1")).toBe("13");
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("y1")).toBe("13");
     expect(screen.getByText("Deleting this wall also removes 1 attached portal.")).toBeTruthy();

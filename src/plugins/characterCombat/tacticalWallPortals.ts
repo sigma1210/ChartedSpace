@@ -75,3 +75,21 @@ export const tacticalWallPortalPlacementCandidate = (
     distanceFromWall: nearest.distanceFromWall,
   };
 };
+
+export const tacticalWallPortalRepositionCandidate = (
+  walls: readonly TacticalDrawnWall[],
+  wallId: string,
+  portalId: string,
+  point: GridPoint,
+  maximumDistance = 0.75,
+) => {
+  const wall = walls.find((candidate) => candidate.id === wallId);
+  const portal = wall?.portals?.find((candidate) => candidate.id === portalId);
+  if (!wall || !portal) return null;
+  return tacticalWallPortalPlacementCandidate(
+    [{ ...wall, portals: (wall.portals ?? []).filter((candidate) => candidate.id !== portalId) }],
+    point,
+    portal.kind,
+    maximumDistance,
+  );
+};

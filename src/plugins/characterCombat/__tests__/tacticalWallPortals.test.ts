@@ -1,4 +1,4 @@
-import { tacticalWallPortalPlacementCandidate } from "../tacticalWallPortals";
+import { tacticalWallPortalPlacementCandidate, tacticalWallPortalRepositionCandidate } from "../tacticalWallPortals";
 
 describe("tactical wall portal placement", () => {
   it("snaps to the nearest one-unit slot on an angled wall", () => {
@@ -37,5 +37,24 @@ describe("tactical wall portal placement", () => {
       { x: 2, y: 3 },
       "sliding-door",
     )).toBeNull();
+  });
+
+  it("repositions a portal on its parent wall while ignoring its current slot", () => {
+    const walls = [{
+      id: "wall-1",
+      from: { x: 0, y: 0 },
+      to: { x: 4, y: 0 },
+      portals: [
+        { id: "door-1", kind: "sliding-door" as const, position: 0.125 },
+        { id: "iris-1", kind: "iris-valve" as const, position: 0.625 },
+      ],
+    }];
+
+    expect(tacticalWallPortalRepositionCandidate(walls, "wall-1", "door-1", { x: 1.6, y: 0.1 })).toMatchObject({
+      wallId: "wall-1",
+      position: 0.375,
+      available: true,
+    });
+    expect(tacticalWallPortalRepositionCandidate(walls, "wall-1", "door-1", { x: 2.5, y: 2 })).toBeNull();
   });
 });

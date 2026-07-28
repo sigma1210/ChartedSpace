@@ -13,7 +13,7 @@ import { randomTacticalEnemyAvatarPath, tacticalEnemyPalette } from "@/plugins/c
 import type { TacticalTerminalKind } from "@/plugins/characterCombat/tacticalTerrain";
 import { defaultTacticalInteractiveHumanCombatProfile, tacticalHumanArmorOptions, tacticalHumanWeaponOptions, validateTacticalInteractiveHumanCombatProfile, type TacticalInteractiveHumanCombatProfile, type TacticalHumanArmorId, type TacticalHumanWeaponId } from "@/plugins/characterCombat/tacticalInteractiveHuman";
 import { buildDefaultTacticalScenario } from "@/plugins/characterCombat/defaultTacticalScenario";
-import { tacticalWallPortalPlacementCandidate, type TacticalWallPortalKind } from "@/plugins/characterCombat/tacticalWallPortals";
+import { tacticalWallPortalPlacementCandidate, tacticalWallPortalRepositionCandidate, type TacticalWallPortalKind } from "@/plugins/characterCombat/tacticalWallPortals";
 import { createAppStore, store, type AppStore } from "@/store";
 
 const freshDefaultDraft = () => cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
@@ -66,6 +66,11 @@ type WallMoveDrag = {
   start: { x: number; y: number };
   original: { from: { x: number; y: number }; to: { x: number; y: number } };
 };
+type WallPortalDrag = {
+  wallId: string;
+  portalId: string;
+  originalPosition: number;
+};
 export const tacticalEditorMarkerInteractionEnabled = (
   placementKind: string | null,
   enemyKind: TacticalEnemyType | null,
@@ -103,7 +108,7 @@ const placementCandidates = (terrainDefinitionId: string, anchor: EditorMapPoint
   });
 };
 
-const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, selectedWallId, selectedPortalId, selectedFire, placementKind, enemyKind, placementHover, enemyHover, portalHover, wallDraft, dragWallEndpoint, dragWallMove, dragPlacement, dragEnemy, selectPlacement, selectEnemy, selectWall, selectPortal, selectFire, hoverPlacement, hoverEnemy, hoverPortal, beginWall, updateWall, finishWall, cancelWall, placeWallPortal, beginWallEndpointDrag, resizeWallEndpoint, finishWallEndpointDrag, cancelWallEndpointDrag, beginWallMove, moveWall, finishWallMove, cancelWallMove, beginDrag, beginEnemyDrag, endDrag, placeTerrain, placeEnemy, moveTerrain, moveEnemy }: {
+const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, selectedWallId, selectedPortalId, selectedFire, placementKind, enemyKind, placementHover, enemyHover, portalHover, wallDraft, dragWallEndpoint, dragWallMove, dragWallPortal, dragPlacement, dragEnemy, selectPlacement, selectEnemy, selectWall, selectPortal, selectFire, hoverPlacement, hoverEnemy, hoverPortal, beginWall, updateWall, finishWall, cancelWall, placeWallPortal, beginWallEndpointDrag, resizeWallEndpoint, finishWallEndpointDrag, cancelWallEndpointDrag, beginWallMove, moveWall, finishWallMove, cancelWallMove, beginWallPortalDrag, moveWallPortal, finishWallPortalDrag, cancelWallPortalDrag, beginDrag, beginEnemyDrag, endDrag, placeTerrain, placeEnemy, moveTerrain, moveEnemy }: {
   definition: TacticalScenarioDefinitionFile;
   selectedPlacementId: string | null;
   selectedEnemyId: string | null;
@@ -118,6 +123,7 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   wallDraft: { from: { x: number; y: number }; to: { x: number; y: number } } | null;
   dragWallEndpoint: WallEndpointDrag | null;
   dragWallMove: WallMoveDrag | null;
+  dragWallPortal: WallPortalDrag | null;
   dragPlacement: { id: string; offset: { x: number; y: number } } | null;
   dragEnemy: { id: string; offset: { x: number; y: number } } | null;
   selectPlacement: (id: string | null) => void;
@@ -141,6 +147,10 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   moveWall: (point: { x: number; y: number }) => void;
   finishWallMove: () => void;
   cancelWallMove: () => void;
+  beginWallPortalDrag: (id: string) => void;
+  moveWallPortal: (point: { x: number; y: number }) => void;
+  finishWallPortalDrag: () => void;
+  cancelWallPortalDrag: () => void;
   beginDrag: (drag: { id: string; offset: { x: number; y: number } }) => void;
   beginEnemyDrag: (drag: { id: string; offset: { x: number; y: number } }) => void;
   endDrag: () => void;
@@ -276,6 +286,11 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       }
     }}
     onPointerMove={(event) => {
+      if (dragWallPortal) {
+        const local = localMapPoint(event);
+        if (local) moveWallPortal({ x: local.x, y: local.y });
+        return;
+      }
       if (dragWallMove) {
         const vertex = mapVertex(event);
         if (vertex) moveWall(vertex);
@@ -303,6 +318,12 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       else if (enemyKind) hoverEnemy(point);
       else if (placementKind) hoverPlacement(point);
     }} onPointerLeave={() => { hoverPlacement(null); hoverEnemy(null); hoverPortal(null); }} onPointerUp={(event) => {
+      if (dragWallPortal) {
+        const local = localMapPoint(event);
+        if (local) moveWallPortal({ x: local.x, y: local.y });
+        finishWallPortalDrag();
+        return;
+      }
       if (dragWallMove) {
         const vertex = mapVertex(event);
         if (vertex) moveWall(vertex);
@@ -322,7 +343,7 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         return;
       }
       endDrag();
-    }} onPointerCancel={() => { cancelWallMove(); cancelWallEndpointDrag(); cancelWall(); endDrag(); }}>
+    }} onPointerCancel={() => { cancelWallPortalDrag(); cancelWallMove(); cancelWallEndpointDrag(); cancelWall(); endDrag(); }}>
     <defs>
       <pattern id="draft-grid" width="1" height="1" patternUnits="userSpaceOnUse">
         <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#29434d" strokeWidth="0.04" />
@@ -388,25 +409,29 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         />)}
       </g>;
     })}
-    {terrain.doors.filter((door) => door.portalType !== "iris-valve").map((door) => <line key={door.id} data-testid={drawnPortalIds.has(door.id) ? `wall-portal-${door.id}` : undefined} x1={door.from.x} y1={door.from.y} x2={door.to.x} y2={door.to.y} stroke={door.id === selectedPortalId ? "#fef08a" : "#fbbf24"} strokeWidth={door.id === selectedPortalId ? "0.46" : "0.32"} className={drawnPortalIds.has(door.id) && !placementKind && !enemyKind ? "cursor-pointer" : undefined} onPointerDown={(event) => {
+    {terrain.doors.filter((door) => door.portalType !== "iris-valve").map((door) => <line key={door.id} data-testid={drawnPortalIds.has(door.id) ? `wall-portal-${door.id}` : undefined} x1={door.from.x} y1={door.from.y} x2={door.to.x} y2={door.to.y} stroke={door.id === selectedPortalId ? "#fef08a" : "#fbbf24"} strokeWidth={door.id === selectedPortalId ? "0.46" : "0.32"} className={drawnPortalIds.has(door.id) && !placementKind && !enemyKind ? "cursor-move" : undefined} onPointerDown={(event) => {
       if (!drawnPortalIds.has(door.id) || placementKind || enemyKind) return;
       event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
       selectPlacement(null);
       selectEnemy(null);
       selectWall(null);
       selectFire(null);
       selectPortal(door.id);
+      beginWallPortalDrag(door.id);
     }} />)}
     {terrain.doors.filter((door) => door.portalType === "iris-valve").map((door) => {
       const center = { x: (door.from.x + door.to.x) / 2, y: (door.from.y + door.to.y) / 2 };
-      return <g key={door.id} data-testid={drawnPortalIds.has(door.id) ? `wall-portal-${door.id}` : undefined} className={drawnPortalIds.has(door.id) && !placementKind && !enemyKind ? "cursor-pointer" : undefined} onPointerDown={(event) => {
+      return <g key={door.id} data-testid={drawnPortalIds.has(door.id) ? `wall-portal-${door.id}` : undefined} className={drawnPortalIds.has(door.id) && !placementKind && !enemyKind ? "cursor-move" : undefined} onPointerDown={(event) => {
         if (!drawnPortalIds.has(door.id) || placementKind || enemyKind) return;
         event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
         selectPlacement(null);
         selectEnemy(null);
         selectWall(null);
         selectFire(null);
         selectPortal(door.id);
+        beginWallPortalDrag(door.id);
       }}>
         <circle cx={center.x} cy={center.y} r="0.3" fill="#334155" stroke={door.id === selectedPortalId ? "#fef08a" : "#fbbf24"} strokeWidth={door.id === selectedPortalId ? "0.16" : "0.1"} />
         {[0, 60, 120].map((angle) => <line key={angle} x1={center.x - 0.25 * Math.cos(angle * Math.PI / 180)} y1={center.y - 0.25 * Math.sin(angle * Math.PI / 180)} x2={center.x + 0.25 * Math.cos(angle * Math.PI / 180)} y2={center.y + 0.25 * Math.sin(angle * Math.PI / 180)} stroke="#94a3b8" strokeWidth="0.035" />)}
@@ -528,6 +553,7 @@ const TacticalScenarioEditorClient = () => {
   const [wallDraft, setWallDraft] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
   const [dragWallEndpoint, setDragWallEndpoint] = useState<WallEndpointDrag | null>(null);
   const [dragWallMove, setDragWallMove] = useState<WallMoveDrag | null>(null);
+  const [dragWallPortal, setDragWallPortal] = useState<WallPortalDrag | null>(null);
   const [dragPlacement, setDragPlacement] = useState<{ id: string; offset: { x: number; y: number } } | null>(null);
   const [dragEnemy, setDragEnemy] = useState<{ id: string; offset: { x: number; y: number } } | null>(null);
   const [placementError, setPlacementError] = useState<string | null>(null);
@@ -806,6 +832,68 @@ const TacticalScenarioEditorClient = () => {
         : wall),
     }));
     setDragWallMove(null);
+    setPlacementError(null);
+  };
+  const beginWallPortalDrag = (portalId: string) => {
+    const wall = (draft.drawnWalls ?? []).find((candidate) => (candidate.portals ?? []).some((portal) => portal.id === portalId));
+    const portal = wall?.portals?.find((candidate) => candidate.id === portalId);
+    if (!wall || !portal) return;
+    setSelectedWallId(null);
+    setSelectedPortalId(portalId);
+    setDragWallPortal({ wallId: wall.id, portalId, originalPosition: portal.position });
+    setPlacementError(null);
+  };
+  const moveWallPortal = (point: { x: number; y: number }) => {
+    if (!dragWallPortal) return;
+    const placement = tacticalWallPortalRepositionCandidate(
+      draft.drawnWalls ?? [],
+      dragWallPortal.wallId,
+      dragWallPortal.portalId,
+      point,
+    );
+    if (!placement || !placement.available) {
+      setPlacementError("Keep the portal on an open one-square position on its wall.");
+      return;
+    }
+    const wall = (draft.drawnWalls ?? []).find((candidate) => candidate.id === dragWallPortal.wallId);
+    const portal = wall?.portals?.find((candidate) => candidate.id === dragWallPortal.portalId);
+    if (!portal || Math.abs(portal.position - placement.position) < 1e-9) {
+      setPlacementError(null);
+      return;
+    }
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnWalls: (draft.drawnWalls ?? []).map((candidateWall) => candidateWall.id === dragWallPortal.wallId
+        ? {
+          ...candidateWall,
+          portals: (candidateWall.portals ?? []).map((candidatePortal) => candidatePortal.id === dragWallPortal.portalId
+            ? { ...candidatePortal, position: placement.position }
+            : candidatePortal),
+        }
+        : candidateWall),
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That portal position is not valid.");
+    }
+  };
+  const cancelWallPortalDrag = () => {
+    if (!dragWallPortal) return;
+    setDraft((current) => ({
+      ...current,
+      drawnWalls: (current.drawnWalls ?? []).map((wall) => wall.id === dragWallPortal.wallId
+        ? {
+          ...wall,
+          portals: (wall.portals ?? []).map((portal) => portal.id === dragWallPortal.portalId
+            ? { ...portal, position: dragWallPortal.originalPosition }
+            : portal),
+        }
+        : wall),
+    }));
+    setDragWallPortal(null);
     setPlacementError(null);
   };
   const placeTerrain = (origin: EditorMapPoint) => {
@@ -1109,6 +1197,7 @@ const TacticalScenarioEditorClient = () => {
     setWallDraft(null);
     setDragWallEndpoint(null);
     setDragWallMove(null);
+    setDragWallPortal(null);
     setDragPlacement(null);
     setDragEnemy(null);
     setPlacementError(null);
@@ -1347,7 +1436,7 @@ const TacticalScenarioEditorClient = () => {
         }} className="p-5">
           <div className="absolute left-7 top-7 z-10 border border-cyan-700 bg-slate-950/90 px-3 py-2 text-[9px] uppercase tracking-wider text-cyan-100">Draft preview · {draft.map.width}×{draft.map.height}</div>
           <div className="h-full w-full overflow-hidden border border-cyan-900 bg-black shadow-[0_0_30px_rgba(8,145,178,0.12)]">
-            <DraftPreview definition={draft} selectedPlacementId={selectedPlacementId} selectedEnemyId={selectedEnemyId} selectedWallId={selectedWallId} selectedPortalId={selectedPortalId} selectedFire={selectedFire} placementKind={placementKind} enemyKind={enemyKind} placementHover={placementHover} enemyHover={enemyHover} portalHover={portalHover} wallDraft={wallDraft} dragWallEndpoint={dragWallEndpoint} dragWallMove={dragWallMove} dragPlacement={dragPlacement} dragEnemy={dragEnemy} selectPlacement={selectTerrainPlacement} selectEnemy={selectEnemy} selectWall={(id) => { setSelectedWallId(id); if (id) setSelectedPortalId(null); }} selectPortal={setSelectedPortalId} selectFire={setSelectedFire} hoverPlacement={setPlacementHover} hoverEnemy={setEnemyHover} hoverPortal={setPortalHover} beginWall={beginWall} updateWall={updateWall} finishWall={finishWall} cancelWall={() => setWallDraft(null)} placeWallPortal={placeWallPortal} beginWallEndpointDrag={beginWallEndpointDrag} resizeWallEndpoint={resizeWallEndpoint} finishWallEndpointDrag={() => setDragWallEndpoint(null)} cancelWallEndpointDrag={cancelWallEndpointDrag} beginWallMove={beginWallMove} moveWall={moveWall} finishWallMove={() => setDragWallMove(null)} cancelWallMove={cancelWallMove} beginDrag={setDragPlacement} beginEnemyDrag={setDragEnemy} endDrag={() => { setDragPlacement(null); setDragEnemy(null); }} placeTerrain={placeTerrain} placeEnemy={placeEnemy} moveTerrain={moveTerrain} moveEnemy={moveEnemy} />
+            <DraftPreview definition={draft} selectedPlacementId={selectedPlacementId} selectedEnemyId={selectedEnemyId} selectedWallId={selectedWallId} selectedPortalId={selectedPortalId} selectedFire={selectedFire} placementKind={placementKind} enemyKind={enemyKind} placementHover={placementHover} enemyHover={enemyHover} portalHover={portalHover} wallDraft={wallDraft} dragWallEndpoint={dragWallEndpoint} dragWallMove={dragWallMove} dragWallPortal={dragWallPortal} dragPlacement={dragPlacement} dragEnemy={dragEnemy} selectPlacement={selectTerrainPlacement} selectEnemy={selectEnemy} selectWall={(id) => { setSelectedWallId(id); if (id) setSelectedPortalId(null); }} selectPortal={setSelectedPortalId} selectFire={setSelectedFire} hoverPlacement={setPlacementHover} hoverEnemy={setEnemyHover} hoverPortal={setPortalHover} beginWall={beginWall} updateWall={updateWall} finishWall={finishWall} cancelWall={() => setWallDraft(null)} placeWallPortal={placeWallPortal} beginWallEndpointDrag={beginWallEndpointDrag} resizeWallEndpoint={resizeWallEndpoint} finishWallEndpointDrag={() => setDragWallEndpoint(null)} cancelWallEndpointDrag={cancelWallEndpointDrag} beginWallMove={beginWallMove} moveWall={moveWall} finishWallMove={() => setDragWallMove(null)} cancelWallMove={cancelWallMove} beginWallPortalDrag={beginWallPortalDrag} moveWallPortal={moveWallPortal} finishWallPortalDrag={() => setDragWallPortal(null)} cancelWallPortalDrag={cancelWallPortalDrag} beginDrag={setDragPlacement} beginEnemyDrag={setDragEnemy} endDrag={() => { setDragPlacement(null); setDragEnemy(null); }} placeTerrain={placeTerrain} placeEnemy={placeEnemy} moveTerrain={moveTerrain} moveEnemy={moveEnemy} />
           </div>
           <TacticalNavigationHud layout={navigationLayout} mode="editor" onLayoutChange={setNavigationLayout} />
           <FloatingPluginHud title="Terrain Palette" layout={terrainPaletteLayout} onLayoutChange={setTerrainPaletteLayout} className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
