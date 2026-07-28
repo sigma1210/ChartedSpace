@@ -11,8 +11,7 @@ export type ModalType =
   | "equipmentCatalog"
   | "billyBobsCatalog"
   | "starshipSupplyCatalog"
-  | "mayday"
-  | "characterCombat";
+  | "mayday";
 
 export type MapView = "galaxy" | "sector" | "subsector";
 

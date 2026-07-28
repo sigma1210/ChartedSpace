@@ -875,8 +875,8 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
         <div className="mt-1 text-[9px] uppercase tracking-wider text-slate-500">Drag to rotate · Right-drag to pan · Wheel to zoom</div>
       </div>
       {draftPlaytest
-        ? <button type="button" onClick={draftPlaytest.onExit} className="absolute right-4 top-14 z-40 border border-amber-300/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-100 hover:bg-amber-950">Return to editor</button>
-        : <><Link href="/system" className="absolute right-4 top-14 z-40 border border-cyan-400/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 hover:bg-cyan-950">System view</Link><Link href="/system/tactical/editor" className="absolute right-4 top-24 z-40 border border-amber-300/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-100 hover:bg-amber-950">Scenario editor</Link></>}
+        ? <button type="button" onClick={draftPlaytest.onExit} className="absolute right-4 top-14 z-50 border border-amber-300/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-100 hover:bg-amber-950">Return to editor</button>
+        : <><Link href="/system" className="absolute right-4 top-14 z-50 border border-cyan-400/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 hover:bg-cyan-950">System view</Link><Link href="/system/tactical/editor" className="absolute right-4 top-24 z-50 border border-amber-300/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-100 hover:bg-amber-950">Scenario editor</Link></>}
       <FloatingPluginHud title="Scenario" layout={scenarioHudLayout} onLayoutChange={(layout) => dispatch(updateTacticalScenarioHud(layout))} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
         <div className="flex flex-col gap-2 normal-case tracking-normal">
           <div className="flex items-center justify-between gap-3 uppercase tracking-wider">

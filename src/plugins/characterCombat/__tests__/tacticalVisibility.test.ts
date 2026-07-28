@@ -1,6 +1,6 @@
 import { tacticalCrewVisibilityMask, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightReaches, tacticalLightSources, tacticalRangedEnemies, tacticalVisibilityAssessment } from "../geometry";
 import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
-import reducer, { confirmTacticalAttack, initializeTacticalMap, selectTacticalAttackMode, selectTacticalAttackTarget } from "../slice";
+import reducer, { confirmTacticalAttack, deployTacticalCharacter, equipTacticalDeploymentItem, initializeTacticalMapSetup, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, startTacticalScenario } from "../slice";
 import type { CharacterCombatState, CombatScenario, Combatant } from "../types";
 
 const weapon: Combatant["weapon"] = {
@@ -257,7 +257,14 @@ describe("AHL tactical visibility", () => {
   });
 
   it("applies the tactical darkness modifier during attack resolution", () => {
-    let state = reducer(undefined, initializeTacticalMap([{ id: "crew-1", weaponSkill: 0 }, { id: "crew-2", weaponSkill: 0 }]));
+    let state = reducer(undefined, initializeTacticalMapSetup([{ id: "crew-1", weaponSkill: 0 }, { id: "crew-2", weaponSkill: 0 }]));
+    state = reducer(state, selectTacticalLightingPreset("exterior-dark"));
+    state = reducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "test-lag", catalogItemId: "weapon-light-assault-gun" }));
+    state = reducer(state, equipTacticalDeploymentItem({ characterId: "crew-2", lockerItemId: "test-smg", catalogItemId: "weapon-smg" }));
+    state = reducer(state, deployTacticalCharacter({ x: 0, y: 42 }));
+    state = reducer(state, selectTacticalDeploymentCharacter("crew-2"));
+    state = reducer(state, deployTacticalCharacter({ x: 1, y: 42 }));
+    state = reducer(state, startTacticalScenario());
     state = {
       ...state,
       tacticalMap: {

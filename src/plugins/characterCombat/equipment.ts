@@ -1,4 +1,4 @@
-import type { ArmoryLoadoutId, CombatScenario, WeaponProfile } from "./types";
+import type { WeaponProfile } from "./types";
 
 export const characterCombatWeapons = {
   noRangedWeapon: { name: "No Ranged Weapon", effectiveRange: 0, longRange: 0, extremeRange: 0, penetration: 0, automatic: false, magazineSize: 0 },
@@ -36,36 +36,3 @@ export const characterCombatArmor = {
   battleDress: { name: "Battle Dress", value: 8 },
 } as const;
 
-export const armoryLoadouts: Record<ArmoryLoadoutId, { id: ArmoryLoadoutId; label: string; weapon: WeaponProfile; armor: { name: string; value: number } }> = {
-  scout: { id: "scout", label: "Scout", weapon: characterCombatWeapons.laserRifle, armor: characterCombatArmor.flakVest },
-  breacher: { id: "breacher", label: "Breacher", weapon: characterCombatWeapons.shotgun, armor: characterCombatArmor.combatArmor },
-  assault: { id: "assault", label: "Assault", weapon: characterCombatWeapons.smg, armor: characterCombatArmor.combatArmor },
-  heavy: { id: "heavy", label: "Heavy", weapon: characterCombatWeapons.gaussRifle, armor: characterCombatArmor.battleDress },
-  plasma: { id: "plasma", label: "Plasma", weapon: characterCombatWeapons.plasmaGun, armor: characterCombatArmor.combatArmor },
-  fusion: { id: "fusion", label: "Fusion", weapon: characterCombatWeapons.fusionGun, armor: characterCombatArmor.combatArmor },
-  "action-ram": { id: "action-ram", label: "RAM", weapon: characterCombatWeapons.actionRam, armor: characterCombatArmor.combatArmor },
-  lag: { id: "lag", label: "LAG", weapon: characterCombatWeapons.lightAssaultGun, armor: characterCombatArmor.combatArmor },
-};
-
-export const applyArmoryLoadouts = (scenario: CombatScenario, loadoutIds: ArmoryLoadoutId[]) => {
-  const players = scenario.combatants.filter((unit) => unit.side === "player");
-  players.slice(0, Math.min(5, loadoutIds.length)).forEach((unit, index) => {
-    const loadout = armoryLoadouts[loadoutIds[index]];
-    unit.weapon = { ...loadout.weapon };
-    unit.armor = loadout.armor.value;
-    unit.armorName = loadout.armor.name;
-  });
-  if (scenario.id === "suppress-strongpoint") {
-    players[0].smokeGrenades = 1;
-    players[2].smokeGrenades = 1;
-    players[3].stunGrenades = 1;
-    const enemies = scenario.combatants.filter((unit) => unit.side === "enemy");
-    enemies[1].smokeGrenades = 1;
-    enemies[3].smokeGrenades = 1;
-  }
-  if (scenario.id === "capture-commander") {
-    players[2].stunGrenades = 1;
-    players[3].stunGrenades = 1;
-  }
-  return scenario;
-};

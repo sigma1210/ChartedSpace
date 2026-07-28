@@ -1,7 +1,19 @@
-import type { CombatScenario, Combatant, WeaponRangeBand } from "./types";
+import type { CombatScenario, Combatant, GridPoint, WeaponRangeBand } from "./types";
 import { equipmentVisualFor } from "./equipmentPresentation";
 import { snapShotTarget } from "./combatResolution";
-import { coverProtection } from "./geometry";
+import { coverProtection, inFieldOfFire } from "./geometry";
+
+export const distanceBetween = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+const facings = ["north", "east", "south", "west"] as const;
+
+export const facingTowardFieldOfFire = (unit: Combatant, target: GridPoint) => facings
+  .map((facing) => {
+    const difference = Math.abs(facings.indexOf(facing) - facings.indexOf(unit.facing));
+    return { facing, turns: Math.min(difference, facings.length - difference) };
+  })
+  .filter(({ facing }) => inFieldOfFire({ position: unit.position, facing }, target))
+  .sort((a, b) => a.turns - b.turns || facings.indexOf(a.facing) - facings.indexOf(b.facing))[0] ?? null;
 
 export const shouldImproveEnemyRange = (enemy: Combatant, rangeBand: WeaponRangeBand) => {
   const category = equipmentVisualFor(enemy).weaponCategory;

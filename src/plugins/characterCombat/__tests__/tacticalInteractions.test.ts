@@ -1,23 +1,47 @@
-import characterCombatReducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, equipTacticalDeploymentItem, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMap, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setArmoryLoadout, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, unequipTacticalDeploymentItem } from "../slice";
+import characterCombatReducer, { activateTacticalCharacter, aimTacticalAttack, beginTacticalCoveringFire, beginTacticalDragging, beginTacticalGrenadeTargeting, beginTacticalSatchelPlacement, beginTacticalSmokeGrenadeTargeting, braceTacticalWeapon, cancelTacticalAttack, cancelTacticalCoveringFire, cancelTacticalGrenadeTargeting, cancelTacticalMelee, cancelTacticalTreatment, confirmTacticalAttack, confirmTacticalCoveringFire, confirmTacticalExtinguishFire, confirmTacticalGrenade, confirmTacticalMelee, confirmTacticalMove, confirmTacticalSatchelPlacement, confirmTacticalTreatment, defuseTacticalSatchelCharge, deployTacticalCharacter, detonateTacticalSatchelCharge, equipTacticalDeploymentItem, finishTacticalActivation, fireAtTacticalTerrain, initializeTacticalMapSetup, interactWithTacticalTerrain, previewTacticalCoveringFire, previewTacticalEnemyEntry, previewTacticalExtinguishFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, previewTacticalTreatment, rallyTacticalCharacter, releaseTacticalDraggedCombatant, reloadTacticalWeapon, resetTacticalScenario, resolveTacticalAdjacencyReaction, resolveTacticalCoveringFireSnap, rotateTacticalDeploymentCharacter, runTacticalEnemyPhase, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, selectTacticalTerrainObject, selectTacticalWeaponAmmunition, setTacticalDeploymentPosture, setTacticalMovementMode, setTacticalTerrainLights, startTacticalScenario, toggleTacticalPosture, unequipTacticalDeploymentItem } from "../slice";
 import { recordTacticalExploration } from "../slice";
 import { recordTacticalEnemySightings } from "../slice";
 import { initializeTacticalDraftPlaytest, resetTacticalDraftPlaytest } from "../slice";
 import { attemptTacticalConsoleCheck } from "../slice";
-import { collateralBlastCells, grenadeBlastCells, hasLineOfSight, meleeEnemies, pointKey, rangedEnemies, tacticalLightingLevelAt } from "../geometry";
+import { collateralBlastCells, grenadeBlastCells, hasLineOfSight, meleeEnemies, pointKey, tacticalLightingLevelAt, tacticalRangedEnemies } from "../geometry";
 import type { CharacterCombatState } from "../types";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "../tacticalScenarioDefinitions";
 import { characterCombatArmor, characterCombatWeapons } from "../equipment";
 
+const tacticalTestInitializationType = "characterCombatTests/initializeActiveTacticalMap";
+const tacticalTestLoadoutCatalogItems = {
+  scout: { weapon: "weapon-laser-rifle", armor: "armor-flak-vest" },
+  breacher: { weapon: "weapon-shotgun", armor: "armor-combat-armor" },
+  assault: { weapon: "weapon-smg", armor: "armor-combat-armor" },
+  heavy: { weapon: "weapon-gauss-rifle", armor: "armor-battle-dress" },
+  plasma: { weapon: "weapon-plasma-gun", armor: "armor-combat-armor" },
+  fusion: { weapon: "weapon-fusion-gun", armor: "armor-combat-armor" },
+  "action-ram": { weapon: "weapon-4cm-ram", armor: "armor-combat-armor" },
+  lag: { weapon: "weapon-light-assault-gun", armor: "armor-combat-armor" },
+} as const;
+type TacticalTestLoadoutId = keyof typeof tacticalTestLoadoutCatalogItems;
+const initializeActiveTacticalTestMap = (
+  crew: Parameters<typeof initializeTacticalMapSetup>[0],
+  loadoutIds: readonly TacticalTestLoadoutId[] = ["lag", "assault"],
+) => ({ type: tacticalTestInitializationType, payload: { crew, loadoutIds } } as const);
+
 const reducer: typeof characterCombatReducer = (state, action) => {
-  const next = characterCombatReducer(state, action);
-  const initializesLegacyMechanicsFixture = initializeTacticalMap.match(action)
+  const initializesActiveTacticalTestMap = action.type === tacticalTestInitializationType;
+  const tacticalTestInitialization = initializesActiveTacticalTestMap
+    ? action as ReturnType<typeof initializeActiveTacticalTestMap>
+    : null;
+  const reducerAction = tacticalTestInitialization
+    ? initializeTacticalMapSetup(tacticalTestInitialization.payload.crew)
+    : action;
+  const next = characterCombatReducer(state, reducerAction);
+  const initializesLegacyMechanicsFixture = initializesActiveTacticalTestMap
     || initializeTacticalMapSetup.match(action)
     || initializeTacticalDraftPlaytest.match(action)
     || resetTacticalScenario.match(action)
     || resetTacticalDraftPlaytest.match(action);
   if (!initializesLegacyMechanicsFixture || !next.tacticalMap) return next;
   const legacyPositions: Record<string, { x: number; y: number }> = { "crew-1": { x: 48, y: 34 }, "crew-2": { x: 51, y: 34 } };
-  return {
+  const fixture = {
     ...next,
     tacticalMap: {
       ...next.tacticalMap,
@@ -35,10 +59,20 @@ const reducer: typeof characterCombatReducer = (state, action) => {
       deployedCharacterIds: next.tacticalMap.scenario.combatants.filter((unit) => unit.side === "player").map((unit) => unit.id),
     },
   };
+  if (!initializesActiveTacticalTestMap) return fixture;
+
+  let configured = characterCombatReducer(fixture, selectTacticalLightingPreset("exterior-dark"));
+  const loadoutIds = tacticalTestInitialization!.payload.loadoutIds;
+  configured.tacticalMap!.scenario.combatants.filter((unit) => unit.side === "player").forEach((unit, index) => {
+    const items = tacticalTestLoadoutCatalogItems[loadoutIds[index] ?? (index === 0 ? "lag" : "assault")];
+    configured = characterCombatReducer(configured, equipTacticalDeploymentItem({ characterId: unit.id, lockerItemId: `test-weapon-${unit.id}`, catalogItemId: items.weapon }));
+    configured = characterCombatReducer(configured, equipTacticalDeploymentItem({ characterId: unit.id, lockerItemId: `test-armor-${unit.id}`, catalogItemId: items.armor }));
+  });
+  return characterCombatReducer(configured, startTacticalScenario());
 };
 
 const stateWithCrewAt = (position: { x: number; y: number }, doorOpenById: Record<string, boolean> = {}): CharacterCombatState => {
-  const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+  const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
   return {
     ...initialized,
     tacticalMap: {
@@ -111,6 +145,9 @@ describe("tactical terrain interactions", () => {
     state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "locker-weapon-1", catalogItemId: "weapon-autopistol" }));
     state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "locker-armor-1", catalogItemId: "armor-flak-vest" }));
     expect(crew()[0]).toMatchObject({ weapon: characterCombatWeapons.autopistol, armorName: "Flak Vest", armor: 4 });
+    state = characterCombatReducer(state, unequipTacticalDeploymentItem({ characterId: "crew-1", kind: "armor" }));
+    expect(crew()[0]).toMatchObject({ armorName: "No Armor", armor: 0 });
+    state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "locker-armor-1", catalogItemId: "armor-flak-vest" }));
 
     state = characterCombatReducer(state, equipTacticalDeploymentItem({ characterId: "crew-2", lockerItemId: "locker-weapon-1", catalogItemId: "weapon-autopistol" }));
     expect(crew()[0].weapon.name).toBe("No Ranged Weapon");
@@ -173,7 +210,7 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")).toMatchObject({ facing: "north", posture: "prone" });
   });
   it("resets the complete tactical scenario while preserving HUD placement", () => {
-    const initialized = reducer(undefined, initializeTacticalMap([
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap([
       { id: "crew-1", weaponSkill: 2 },
       { id: "crew-2", weaponSkill: 1 },
     ]));
@@ -437,7 +474,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("does not create movement animations for enemies that remain outside crew LOS", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, finishTacticalActivation());
     state = reducer(state, finishTacticalActivation());
     state = reducer(state, runTacticalEnemyPhase({
@@ -457,7 +494,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("clears selected terrain when the active character changes", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
     state = reducer(state, activateTacticalCharacter("crew-2"));
     expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
@@ -591,7 +628,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("gives both tactical test characters one smoke grenade", () => {
-    const state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const players = state.tacticalMap!.scenario.combatants.filter((unit) => unit.side === "player");
 
     expect(players.map((unit) => unit.smokeGrenades)).toEqual([1, 1]);
@@ -637,7 +674,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("clears tactical smoke after three turns and restores it on scenario reset", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const smokeCell = { x: 48, y: 37 };
     const ready: CharacterCombatState = {
       ...initialized,
@@ -674,7 +711,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("extinguishes adjacent tactical fire for three AP and clears the resulting smoke next turn", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const fire = { x: 48, y: 35 };
     expect(state.tacticalMap?.scenario.fireCells).toContainEqual(fire);
     expect(tacticalLightingLevelAt(state.tacticalMap!.scenario, { x: 49, y: 35 })).toBe("illuminated");
@@ -706,7 +743,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("rejects distant tactical fire and restores the default fire on reset", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, previewTacticalExtinguishFire({ x: 60, y: 44 }));
     state = reducer(state, confirmTacticalExtinguishFire());
     expect(state.tacticalMap?.plannedExtinguishFire).toBeNull();
@@ -720,7 +757,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("requires explicit satchel-charge possession and spends the entire activation to emplace one", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     expect(initialized.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.breachingCharges).toBe(1);
     expect(initialized.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-2")?.breachingCharges ?? 0).toBe(0);
 
@@ -794,7 +831,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("prematurely detonates a primed satchel that receives collateral damage with penetration 2 or greater", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, beginTacticalSatchelPlacement());
     state = reducer(state, confirmTacticalSatchelPlacement());
     expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
@@ -830,6 +867,37 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap).toMatchObject({ plannedTreatmentTargetId: null, movementMode: "walk" });
     expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "crew-1")?.medkits).toBe(1);
     expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+  });
+
+  it("rejects non-adjacent treatment and dragging a dead ally", () => {
+    const initialized = stateWithCrewAt({ x: 47, y: 39 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 45, y: 39 }, woundState: "light" as const } : unit),
+        },
+      },
+    };
+
+    state = reducer(state, previewTacticalTreatment("crew-2"));
+    expect(state.tacticalMap?.plannedTreatmentTargetId).toBeNull();
+
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" ? { ...unit, position: { x: 46, y: 39 }, woundState: "dead" as const, defeated: true, health: 0 } : unit),
+        },
+      },
+    };
+    state = reducer(state, beginTacticalDragging("crew-2"));
+
+    expect(state.tacticalMap?.draggingCombatantByCarrierId).toEqual({});
   });
 
   it("treats an adjacent light wound for 6 AP and one medkit", () => {
@@ -979,7 +1047,7 @@ describe("tactical terrain interactions", () => {
       },
     };
 
-    expect(rangedEnemies(state.tacticalMap!.scenario, "crew-1").map((unit) => unit.id)).toContain("enemy-1");
+    expect(tacticalRangedEnemies(state.tacticalMap!.scenario, "crew-1").map((unit) => unit.id)).toContain("enemy-1");
     expect(meleeEnemies(state.tacticalMap!.scenario, "crew-1").map((unit) => unit.id)).toContain("enemy-1");
 
     state = reducer(state, selectTacticalAttackTarget("enemy-1"));
@@ -1003,7 +1071,7 @@ describe("tactical terrain interactions", () => {
           : unit),
     };
 
-    expect(rangedEnemies(scenario, "crew-1").map((unit) => unit.id)).not.toContain("enemy-1");
+    expect(tacticalRangedEnemies(scenario, "crew-1").map((unit) => unit.id)).not.toContain("enemy-1");
     expect(meleeEnemies(scenario, "crew-1").map((unit) => unit.id)).toContain("enemy-1");
   });
 
@@ -1038,6 +1106,36 @@ describe("tactical terrain interactions", () => {
       expect.stringContaining("crew-1 → Security Guard"),
       expect.stringContaining("Security Guard → crew-1"),
     ]));
+  });
+
+  it("applies an AHL stun as a temporary light wound without incapacitation", () => {
+    const initialized = stateWithCrewAt({ x: 10, y: 10 });
+    let state: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 }, facing: "east" as const, meleeRating: 0, armor: 0, armorName: "Clothing" }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 11, y: 10 }, facing: "west" as const, meleeRating: 0, armor: 0, armorName: "Clothing" }
+              : unit.id === "enemy-2"
+                ? { ...unit, defeated: true, health: 0 }
+                : unit),
+        },
+      },
+    };
+
+    state = reducer(state, previewTacticalMelee("enemy-1"));
+    state = reducer(state, confirmTacticalMelee({ attackRoll: 4, responseRoll: 1 }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")).toMatchObject({ woundState: "light", defeated: false });
+    expect(state.tacticalMap?.ahlMeleeStunUntilTurnById["enemy-1"]).toBe(2);
+    expect(state.tacticalMap?.pendingCasualtyMoraleChecks).toEqual([]);
   });
 
   it("previews and resolves an AHL melee dive after the enemy defensive snap", () => {
@@ -1215,7 +1313,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("lets the default LAG select a visible covering-fire square and rejects a square behind the control-room wall", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, beginTacticalCoveringFire());
 
     state = reducer(state, previewTacticalCoveringFire({ x: 47, y: 41 }));
@@ -1226,7 +1324,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("fires a committed tactical covering-fire lane when an enemy occupies its danger space", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1259,7 +1357,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("clears an untriggered tactical covering-fire area at the end of the enemy phase", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const lane = { attackerId: "crew-1", target: { x: 48, y: 35 }, cells: [{ x: 48, y: 35 }] };
     const ready: CharacterCombatState = {
       ...initialized,
@@ -1284,7 +1382,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("offers the covering-fire shooter a retained snap shot before beginning the next turn", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1324,7 +1422,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("allows the covering-fire shooter to decline the retained snap shot", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1346,7 +1444,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("stops an enemy before a covering-fire danger space after a failed exposure check", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1384,7 +1482,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("allows covering fire to trigger after a passed exposure check", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1423,8 +1521,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("resolves automatic fire for 6 AP and 3 ammunition with the existing two-hit danger-space limit", () => {
-    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
-    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"], ["assault", "breacher"]));
     const enemyTemplate = state.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-2")!;
     state = {
       ...state,
@@ -1460,8 +1557,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("uses automatic fire to suppress a tactical target without causing a wound", () => {
-    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
-    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"], ["assault", "breacher"]));
     state = {
       ...state,
       tacticalMap: {
@@ -1485,8 +1581,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("spends tactical suppressive-fire AP and ammunition when suppression fails", () => {
-    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
-    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"], ["assault", "breacher"]));
     state = {
       ...state,
       tacticalMap: {
@@ -1508,8 +1603,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("does not spend resources trying to suppress an already suppressed tactical target", () => {
-    let state = reducer(undefined, setArmoryLoadout({ index: 0, loadoutId: "assault" }));
-    state = reducer(state, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"], ["assault", "breacher"]));
     state = {
       ...state,
       tacticalMap: {
@@ -1531,7 +1625,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("rallies a suppressed tactical crew member for 3 AP and preserves the activation", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const suppressed: CharacterCombatState = {
       ...initialized,
       tacticalMap: { ...initialized.tacticalMap!, suppressedCombatantIds: ["crew-1"], plannedDestination: { x: 48, y: 35 } },
@@ -1547,7 +1641,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("ends the activation when Rally spends the crew member's last 3 AP", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const suppressed: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1565,8 +1659,29 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.activeCharacterId).toBe("crew-2");
   });
 
+  it("does not rally an unsuppressed character or one with fewer than 3 AP", () => {
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
+
+    const unsuppressed = reducer(initialized, rallyTacticalCharacter());
+    expect(unsuppressed.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
+    expect(unsuppressed.tacticalMap?.events).toEqual(initialized.tacticalMap?.events);
+
+    const insufficient: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        suppressedCombatantIds: ["crew-1"],
+        actionPointsByCharacterId: { ...initialized.tacticalMap!.actionPointsByCharacterId, "crew-1": 2 },
+      },
+    };
+    const unchanged = reducer(insufficient, rallyTacticalCharacter());
+
+    expect(unchanged.tacticalMap?.suppressedCombatantIds).toContain("crew-1");
+    expect(unchanged.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(2);
+  });
+
   it("evades exactly one legal square for 6 AP and ends the activation", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, setTacticalMovementMode("evade"));
     state = reducer(state, previewTacticalMove({ x: 48, y: 35 }));
     state = reducer(state, confirmTacticalMove(undefined));
@@ -1694,7 +1809,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("applies a passed player leader result to a later friendly moving-adjacent check", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     let state: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1722,7 +1837,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("subtracts a failed player leader result and clears results on the next turn", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     let state: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1799,7 +1914,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("uses an enemy's remaining 3 AP for a snap instead of a 6-AP attack", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1828,8 +1943,8 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.events.some((event) => event.includes("Security Guard aimed fired"))).toBe(false);
   });
 
-  it("resolves melee instead of holding position when an enemy is adjacent to crew", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+  it("uses a snap shot against adjacent crew when the enemy has a ranged weapon", () => {
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1842,7 +1957,7 @@ describe("tactical terrain interactions", () => {
           combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
             ? { ...unit, position: { x: 10, y: 10 } }
             : unit.id === "enemy-1"
-              ? { ...unit, position: { x: 11, y: 10 } }
+              ? { ...unit, position: { x: 11, y: 10 }, facing: "west" as const }
               : { ...unit, defeated: true, health: 0 }),
         },
         activeCharacterId: null,
@@ -1853,8 +1968,38 @@ describe("tactical terrain interactions", () => {
 
     const state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
 
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Security Guard snap fired at crew-1")]));
+    expect(state.tacticalMap?.events.some((event) => event.includes("AHL melee exchange resolved simultaneously"))).toBe(false);
+  });
+
+  it("uses melee against adjacent crew when the enemy is unarmed", () => {
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 10, y: 10 } }
+            : unit.id === "enemy-1"
+              ? { ...unit, position: { x: 11, y: 10 }, facing: "west" as const, weapon: { ...characterCombatWeapons.noRangedWeapon } }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        ammunitionByCharacterId: { ...initialized.tacticalMap!.ammunitionByCharacterId, "enemy-1": 0 },
+        actionPointsByCharacterId: { ...initialized.tacticalMap!.actionPointsByCharacterId, "crew-1": 0, "crew-2": 0, "enemy-1": 6, "enemy-2": 0 },
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: { "enemy-1": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } } }));
+
     expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("AHL melee exchange resolved simultaneously: Security Guard and crew-1")]));
-    expect(state.tacticalMap?.events.some((event) => event.includes("Security Guard held position"))).toBe(false);
+    expect(state.tacticalMap?.events.some((event) => event.includes("snap fired"))).toBe(false);
   });
 
   it("braces a prone tactical crew member for 2 AP and adds +1 ranged accuracy", () => {
@@ -1886,7 +2031,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("rejects tactical bracing while standing or suppressed and clears it on standing", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, braceTacticalWeapon());
     expect(state.tacticalMap?.bracedCombatantIds).toEqual([]);
 
@@ -1927,7 +2072,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("rejects an Evade destination more than one square away", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, setTacticalMovementMode("evade"));
     state = reducer(state, previewTacticalMove({ x: 48, y: 36 }));
     state = reducer(state, confirmTacticalMove(undefined));
@@ -1959,7 +2104,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("applies the tactical Evade −2 to enemy ranged fire and expires it before the next activation", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -1992,7 +2137,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("does not select an enemy blocked by the closed control-room wall", () => {
-    const state = reducer(reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"])), selectTacticalAttackTarget("enemy-1"));
+    const state = reducer(reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"])), selectTacticalAttackTarget("enemy-1"));
     expect(state.tacticalMap?.plannedAttackTargetId).toBeNull();
   });
 
@@ -2172,8 +2317,8 @@ describe("tactical terrain interactions", () => {
     expect(movedAdjacent.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(6);
   });
 
-  it("uses the selected armory weapon, ammunition, and existing door breach threshold", () => {
-    let state: CharacterCombatState = { ...stateWithCrewAt({ x: 48, y: 34 }), extendedArmoryLoadoutIds: ["lag", "breacher"], tacticalMap: { ...stateWithCrewAt({ x: 48, y: 34 }).tacticalMap!, terrainDamageById: { "control-room-alpha:north:door:4": 4 }, ammunitionByCharacterId: { "crew-1": 4, "crew-2": 6 } } };
+  it("uses the equipped tactical weapon, ammunition, and existing door breach threshold", () => {
+    let state: CharacterCombatState = { ...stateWithCrewAt({ x: 48, y: 34 }), tacticalMap: { ...stateWithCrewAt({ x: 48, y: 34 }).tacticalMap!, terrainDamageById: { "control-room-alpha:north:door:4": 4 }, ammunitionByCharacterId: { "crew-1": 4, "crew-2": 6 } } };
     state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:door:4"));
     state = reducer(state, fireAtTacticalTerrain({ hitDice: { first: 6, second: 6 } }));
     expect(state.tacticalMap?.terrainDamageById["control-room-alpha:north:door:4"]).toBe(6);
@@ -2185,7 +2330,7 @@ describe("tactical terrain interactions", () => {
 
   it("breaches only the selected one-unit wall segment at 25 structural damage", () => {
     const base = stateWithCrewAt({ x: 48, y: 34 });
-    let state: CharacterCombatState = { ...base, extendedArmoryLoadoutIds: ["lag", "breacher"], tacticalMap: { ...base.tacticalMap!, terrainDamageById: { "control-room-alpha:north:wall:3": 24 }, ammunitionByCharacterId: { "crew-1": 4, "crew-2": 6 } } };
+    let state: CharacterCombatState = { ...base, tacticalMap: { ...base.tacticalMap!, terrainDamageById: { "control-room-alpha:north:wall:3": 24 }, ammunitionByCharacterId: { "crew-1": 4, "crew-2": 6 } } };
     state = reducer(state, selectTacticalTerrainObject("control-room-alpha:north:wall:3"));
     state = reducer(state, fireAtTacticalTerrain({ hitDice: { first: 6, second: 6 } }));
     expect(state.tacticalMap?.destroyedTerrainObjectIds).toEqual(["control-room-alpha:north:wall:3"]);
@@ -2193,7 +2338,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("waits for an explicit end turn after every living crew activation is complete", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = reducer(state, finishTacticalActivation());
     state = reducer(state, finishTacticalActivation());
 
@@ -2208,7 +2353,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("runs enemy fire with the existing wound rules, then refreshes living crew for the next turn", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -2246,7 +2391,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("moves default-scenario enemies toward the crew when the control-room wall blocks fire", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -2271,7 +2416,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("opens a route door through mutable scenario state after read-only route calculation", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const doorId = "control-room-alpha:north:door:4";
     const ready: CharacterCombatState = {
       ...initialized,
@@ -2300,7 +2445,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("stops enemy movement before adjacency and snap fires after a failed morale check", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const enemyTemplate = initialized.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-1")!;
     const ready: CharacterCombatState = {
       ...initialized,
@@ -2340,7 +2485,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("pauses enemy movement for an eligible stationary crew defensive snap shot", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -2388,7 +2533,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("does not offer an adjacency reaction to crew who moved", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -2421,7 +2566,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("recovers a cowering player at phase start with same-square leadership and no AP cost", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -2452,7 +2597,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("queues friendly-casualty morale for a surviving witness with line of sight", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = {
       ...state,
       tacticalMap: {
@@ -2482,8 +2627,39 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.pendingCasualtyMoraleChecks).toContainEqual(expect.objectContaining({ witnessId: "enemy-2", casualtyId: "enemy-1" }));
   });
 
+  it("does not queue friendly-casualty morale without line of sight to the casualty", () => {
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
+    state = {
+      ...state,
+      tacticalMap: {
+        ...state.tacticalMap!,
+        scenario: {
+          ...state.tacticalMap!.scenario,
+          walls: [{ id: "casualty-screen", from: { x: 9, y: 11 }, to: { x: 11, y: 11 } }],
+          doors: [],
+          objects: [],
+          combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 8, y: 10 }, facing: "east" as const }
+            : unit.id === "crew-2"
+              ? { ...unit, defeated: true, health: 0 }
+              : unit.id === "enemy-1"
+                ? { ...unit, position: { x: 10, y: 10 } }
+                : { ...unit, position: { x: 10, y: 12 } }),
+        },
+        activeCharacterId: "crew-1",
+        actionPointsByCharacterId: { "crew-1": 6, "crew-2": 0 },
+      },
+    };
+    state = reducer(state, selectTacticalAttackTarget("enemy-1"));
+    state = reducer(state, selectTacticalAttackMode("aimed"));
+    state = reducer(state, confirmTacticalAttack({ hitDice: { first: 6, second: 6 }, woundDice: { first: 6, second: 6 } }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-1")?.defeated).toBe(true);
+    expect(state.tacticalMap?.pendingCasualtyMoraleChecks).not.toContainEqual(expect.objectContaining({ witnessId: "enemy-2", casualtyId: "enemy-1" }));
+  });
+
   it("queues unexpected-fire morale when the target did not see the attacker at phase start", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = {
       ...state,
       tacticalMap: {
@@ -2515,7 +2691,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("does not queue unexpected-fire morale when the attacker was visible at phase start", () => {
-    let state = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    let state = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     state = {
       ...state,
       tacticalMap: {
@@ -2544,7 +2720,7 @@ describe("tactical terrain interactions", () => {
   });
 
   it("sends a failed unexpected-fire target into the existing panic flight", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -2580,8 +2756,36 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("Control Room Officer unexpected-fire morale from crew-1: 12/7: panicked")]));
   });
 
+  it("clears a successful unexpected-fire morale check without causing panic", () => {
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2" || unit.id === "enemy-1" ? { ...unit, defeated: true, health: 0 } : unit),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        pendingUnexpectedFireMoraleChecks: [{ combatantId: "enemy-2", attackerId: "crew-1", occurrence: 1 }],
+        unexpectedFireMoraleOccurrence: 1,
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      unexpectedFireMoraleRolls: { "enemy-2": { "crew-1": { first: 1, second: 1 } } },
+    }));
+
+    expect(state.tacticalMap?.pendingUnexpectedFireMoraleChecks).toEqual([]);
+    expect(state.tacticalMap?.panickedCombatantIds).not.toContain("enemy-2");
+    expect(state.tacticalMap?.coweringCombatantIds).not.toContain("enemy-2");
+  });
+
   it("forces a failed casualty witness to flee to complete cover and cower", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -2624,8 +2828,77 @@ describe("tactical terrain interactions", () => {
     ]));
   });
 
+  it("clears a successful casualty morale check without causing panic", () => {
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-2"
+            ? { ...unit, defeated: true, health: 0 }
+            : unit.id === "enemy-1"
+              ? { ...unit, defeated: true, health: 0, woundState: "dead" as const }
+              : unit),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        pendingCasualtyMoraleChecks: [{ witnessId: "enemy-2", casualtyId: "enemy-1", occurrence: 1 }],
+        casualtyMoraleOccurrence: 1,
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+      casualtyMoraleRolls: { "enemy-2": { "enemy-1": { first: 1, second: 1 } } },
+    }));
+
+    expect(state.tacticalMap?.pendingCasualtyMoraleChecks).toEqual([]);
+    expect(state.tacticalMap?.panickedCombatantIds).not.toContain("enemy-2");
+    expect(state.tacticalMap?.coweringCombatantIds).not.toContain("enemy-2");
+  });
+
+  it("moves a panicked combatant already in complete cover directly into cowering", () => {
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
+    const originalPosition = { x: 5, y: 2 };
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          width: 8,
+          height: 6,
+          walls: [{ id: "existing-complete-cover", from: { x: 4, y: 1 }, to: { x: 4, y: 4 } }],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 1, y: 2 } }
+            : unit.id === "enemy-2"
+              ? { ...unit, position: originalPosition }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0 },
+        panickedCombatantIds: ["enemy-2"],
+      },
+    };
+
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+    }));
+
+    expect(state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-2")?.position).toEqual(originalPosition);
+    expect(state.tacticalMap?.panickedCombatantIds).not.toContain("enemy-2");
+    expect(state.tacticalMap?.coweringCombatantIds).toContain("enemy-2");
+    expect(state.tacticalMap?.movementAnimationByCharacterId["enemy-2"]).toBeUndefined();
+  });
+
   it("keeps a failed cowering enemy from acting during its phase", () => {
-    const initialized = reducer(undefined, initializeTacticalMap(["crew-1", "crew-2"]));
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const enemy = initialized.tacticalMap!.scenario.combatants.find((unit) => unit.id === "enemy-1")!;
     const ready: CharacterCombatState = {
       ...initialized,
