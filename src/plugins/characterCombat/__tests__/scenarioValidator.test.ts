@@ -22,7 +22,13 @@ describe("character combat scenario validator", () => {
     expect(validateCombatScenario(scenario)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "door-covered", message: expect.stringContaining(door.id) })]));
   });
 
-  it("detects unreachable objectives and disconnected deck sections", () => {
+  it("accepts a non-zero diagonal wall segment", () => {
+    const scenario = buildDefaultTacticalScenario();
+    scenario.walls.push({ id: "diagonal-wall", from: { x: 1, y: 1 }, to: { x: 5, y: 4 } });
+    expect(validateCombatScenario(scenario).map((error) => error.code)).not.toContain("invalid-segment");
+  });
+
+  it("detects unreachable objectives without rejecting intentional sealed deck sections", () => {
     const source = buildDefaultTacticalScenario();
     const scenario = {
       ...source,
@@ -36,6 +42,22 @@ describe("character combat scenario validator", () => {
     };
     const codes = validateCombatScenario(scenario).map((error) => error.code);
     expect(codes).toContain("objective-unreachable");
-    expect(codes).toContain("disconnected-deck");
+    expect(codes).not.toContain("disconnected-deck");
+  });
+
+  it("allows a wall to divide otherwise empty playable deck areas", () => {
+    const source = buildDefaultTacticalScenario();
+    const scenario = {
+      ...source,
+      width: 3,
+      height: 2,
+      walls: [{ id: "deck-divider", from: { x: 1, y: 0 }, to: { x: 1, y: 2 } }],
+      doors: [],
+      objects: [],
+      combatants: [{ ...source.combatants[0], position: { x: 0, y: 0 } }],
+      deploymentCells: undefined,
+    };
+
+    expect(validateCombatScenario(scenario)).toEqual([]);
   });
 });

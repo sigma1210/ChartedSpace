@@ -24,7 +24,8 @@ import liquidHydrogen4x4DefinitionJson from "./terrainDefinitions/liquid-hydroge
 import interactiveHumanDefinitionJson from "./terrainDefinitions/interactive-human.json";
 import deploymentZone9x9DefinitionJson from "./terrainDefinitions/deployment-zone-9x9.json";
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
-import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType } from "./types";
+import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
+import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
 import type { TacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
 
@@ -88,6 +89,14 @@ export interface TacticalEnemyPlacement {
   avatarPath: string;
 }
 
+export interface TacticalDrawnWall extends WallSegment {
+  portals?: {
+    id: string;
+    kind: "sliding-door" | "iris-valve";
+    position: number;
+  }[];
+}
+
 export interface TacticalScenarioDefinitionFile {
   schemaVersion: 1;
   id: string;
@@ -97,6 +106,7 @@ export interface TacticalScenarioDefinitionFile {
   objective: string;
   map: { width: number; height: number; backgroundImage?: string };
   terrainPlacements: TacticalTerrainPlacement[];
+  drawnWalls?: TacticalDrawnWall[];
   deploymentEdges?: TacticalDeploymentEdge[];
   enemyPlacements?: TacticalEnemyPlacement[];
   fireCells: GridPoint[];
@@ -311,6 +321,36 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const placementIds = new Set<string>();
   const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
   const validCell = (point: GridPoint) => point.x >= 0 && point.y >= 0 && point.x < scenario.map.width && point.y < scenario.map.height;
+  const validVertex = (point: GridPoint) => point.x >= 0 && point.y >= 0 && point.x <= scenario.map.width && point.y <= scenario.map.height;
+  const drawnWallIds = new Set<string>();
+  const drawnObjectIds = new Set<string>();
+  const drawnWallSegments = new Set<string>();
+  (scenario.drawnWalls ?? []).forEach((wall) => {
+    if (!wall.id.trim()) throw new Error("A drawn wall requires an ID.");
+    if (drawnWallIds.has(wall.id)) throw new Error(`Duplicate drawn wall ID: ${wall.id}.`);
+    if (drawnObjectIds.has(wall.id)) throw new Error(`Duplicate drawn terrain ID: ${wall.id}.`);
+    drawnObjectIds.add(wall.id);
+    if (!validVertex(wall.from) || !validVertex(wall.to)) throw new Error(`Drawn wall ${wall.id} extends outside the map.`);
+    if (wall.from.x === wall.to.x && wall.from.y === wall.to.y) throw new Error(`Drawn wall ${wall.id} must have different endpoints.`);
+    const length = Math.hypot(wall.to.x - wall.from.x, wall.to.y - wall.from.y);
+    let previousPortalEnd = 0;
+    [...(wall.portals ?? [])].sort((first, second) => first.position - second.position).forEach((portal) => {
+      if (!portal.id.trim()) throw new Error(`A portal on drawn wall ${wall.id} requires an ID.`);
+      if (drawnObjectIds.has(portal.id)) throw new Error(`Duplicate drawn terrain ID: ${portal.id}.`);
+      if (!Number.isFinite(portal.position) || portal.position < 0 || portal.position > 1) throw new Error(`Portal ${portal.id} must have a position between 0 and 1.`);
+      const center = portal.position * length;
+      const start = center - 0.5;
+      const end = center + 0.5;
+      if (start < -1e-9 || end > length + 1e-9) throw new Error(`Portal ${portal.id} must fit entirely within drawn wall ${wall.id}.`);
+      if (start < previousPortalEnd - 1e-9) throw new Error(`Portal ${portal.id} overlaps another portal on drawn wall ${wall.id}.`);
+      previousPortalEnd = end;
+      drawnObjectIds.add(portal.id);
+    });
+    const key = tacticalWallSegmentKey(wall);
+    if (drawnWallSegments.has(key)) throw new Error(`Duplicate drawn wall segment: ${wall.id}.`);
+    drawnWallIds.add(wall.id);
+    drawnWallSegments.add(key);
+  });
   const fireCellKeys = new Set<string>();
   scenario.fireCells.forEach((point) => {
     if (!validCell(point)) throw new Error(`Scenario fire extends outside the map at ${pointKey(point)}.`);
@@ -539,7 +579,77 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     if (existing.kind === "door" && existing.portalType === "iris-valve" && object.kind === "wall") return;
     if (existing.kind !== object.kind) throw new Error(`Tactical terrain boundary conflict between ${existing.id} and ${object.id}.`);
   });
-  const mergedTerrainObjects = [...mergedNonBoundaryObjects, ...boundaryByEdge.values()];
+  const generatedTerrainObjects = [...mergedNonBoundaryObjects, ...boundaryByEdge.values()];
+  const generatedIds = new Set(generatedTerrainObjects.map((object) => object.id));
+  drawnObjectIds.forEach((id) => {
+    if (generatedIds.has(id)) throw new Error(`Drawn terrain ID ${id} conflicts with generated terrain.`);
+  });
+  const drawnWallObjects = (scenario.drawnWalls ?? []).flatMap((wall): TacticalTerrainObject[] => {
+    const portals = [...(wall.portals ?? [])].sort((first, second) => first.position - second.position);
+    if (portals.length === 0) return [{
+      id: wall.id,
+      kind: "wall",
+      edge: { from: { ...wall.from }, to: { ...wall.to } },
+      blocking: true,
+      targetable: true,
+      integrity: 3,
+    }];
+    const dx = wall.to.x - wall.from.x;
+    const dy = wall.to.y - wall.from.y;
+    const length = Math.hypot(dx, dy);
+    const pointAt = (distance: number) => ({
+      x: wall.from.x + dx * distance / length,
+      y: wall.from.y + dy * distance / length,
+    });
+    const resolved: TacticalTerrainObject[] = [];
+    let cursor = 0;
+    let section = 1;
+    portals.forEach((portal) => {
+      const center = portal.position * length;
+      const portalStart = center - 0.5;
+      const portalEnd = center + 0.5;
+      if (portalStart > cursor + 1e-9) {
+        resolved.push({
+          id: `${wall.id}:section:${section}`,
+          kind: "wall",
+          edge: { from: pointAt(cursor), to: pointAt(portalStart) },
+          blocking: true,
+          targetable: true,
+          integrity: 3,
+        });
+        section += 1;
+      }
+      const edge = { from: pointAt(portalStart), to: pointAt(portalEnd) };
+      const separates = tacticalCellsSeparatedBySegment(edge);
+      if (!validCell(separates.first) || !validCell(separates.second)) {
+        throw new Error(`Portal ${portal.id} must connect two valid map cells.`);
+      }
+      resolved.push({
+        id: portal.id,
+        kind: "door",
+        edge,
+        separates,
+        blocking: true,
+        targetable: true,
+        integrity: 2,
+        open: false,
+        portalType: portal.kind,
+      });
+      cursor = portalEnd;
+    });
+    if (cursor < length - 1e-9) {
+      resolved.push({
+        id: `${wall.id}:section:${section}`,
+        kind: "wall",
+        edge: { from: pointAt(cursor), to: { ...wall.to } },
+        blocking: true,
+        targetable: true,
+        integrity: 3,
+      });
+    }
+    return resolved;
+  });
+  const mergedTerrainObjects = [...generatedTerrainObjects, ...drawnWallObjects];
   mergedTerrainObjects.forEach((object) => {
     if (object.kind === "wall") walls.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to } });
     else if (object.kind === "door") doors.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to }, open: object.open, portalType: object.portalType ?? "sliding-door" });

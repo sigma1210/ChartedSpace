@@ -29,6 +29,12 @@ describe("tactical scenario files", () => {
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     draft.title = "Cargo Deck Assault";
     draft.enemyPlacements![0].facing = "east";
+    draft.drawnWalls = [{
+      id: "diagonal-bulkhead",
+      from: { x: 2, y: 2 },
+      to: { x: 7, y: 5 },
+      portals: [{ id: "diagonal-door", kind: "sliding-door", position: 0.5 }],
+    }];
 
     const saved = await saveTacticalScenarioAs("Cargo Deck Assault", draft, directory);
     const loaded = await loadTacticalScenarioFile("cargo-deck-assault", directory);
@@ -37,6 +43,7 @@ describe("tactical scenario files", () => {
     expect(saved.id).toBe("cargo-deck-assault");
     expect(loaded).toEqual(saved);
     expect(loaded.enemyPlacements?.[0].facing).toBe("east");
+    expect(loaded.drawnWalls).toEqual(draft.drawnWalls);
     expect(source).toContain('\n  "schemaVersion": 1,');
     expect(await listTacticalScenarioFiles(directory)).toEqual([
       { id: "cargo-deck-assault", title: "Cargo Deck Assault", isDefault: false },

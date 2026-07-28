@@ -1,4 +1,5 @@
 import type { Combatant, CombatScenario, GridPoint, TacticalLightSource } from "./types";
+import { tacticalCellsSeparatedBySegment, tacticalWallBlockedMovementEdgeKeys } from "./tacticalSegmentGeometry";
 
 export type TacticalRotation = 0 | 90 | 180 | 270;
 export type TacticalTerminalKind = "generic" | "navigation" | "engineering" | "security" | "communications";
@@ -16,12 +17,11 @@ export interface TacticalTerminalDefinition {
 interface TacticalTerrainBase { id: string; blocking: boolean; targetable: boolean }
 interface TacticalBoundary extends TacticalTerrainBase {
   edge: { from: GridPoint; to: GridPoint };
-  separates: { first: GridPoint; second: GridPoint };
   integrity: number;
 }
 
 export interface TacticalWallSegment extends TacticalBoundary { kind: "wall" }
-export interface TacticalDoor extends TacticalBoundary { kind: "door"; open: boolean; portalType?: "sliding-door" | "iris-valve" }
+export interface TacticalDoor extends TacticalBoundary { kind: "door"; separates: { first: GridPoint; second: GridPoint }; open: boolean; portalType?: "sliding-door" | "iris-valve" }
 export interface TacticalHatch extends TacticalTerrainBase {
   kind: "hatch";
   position: GridPoint;
@@ -104,7 +104,12 @@ export const createControlRoom = ({ id, origin, rotation = 0, terminal }: Contro
 const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 export const tacticalMovementEdgeKey = (first: GridPoint, second: GridPoint) => [pointKey(first), pointKey(second)].sort().join("|");
 export const tacticalTerrainBlockedCells = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalTerminal => object.kind === "terminal" && object.blocking).map((object) => pointKey(object.position)));
-export const tacticalTerrainBlockedEdges = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalWallSegment | TacticalDoor => (object.kind === "wall" || object.kind === "door") && object.blocking && (object.kind !== "door" || !object.open)).map((object) => tacticalMovementEdgeKey(object.separates.first, object.separates.second)));
+export const tacticalTerrainBlockedEdges = (objects: TacticalTerrainObject[]) => new Set(objects.flatMap((object) => {
+  if (!object.blocking) return [];
+  if (object.kind === "wall") return [...tacticalWallBlockedMovementEdgeKeys(object.edge)];
+  if (object.kind === "door" && !object.open) return [...tacticalWallBlockedMovementEdgeKeys(object.edge)];
+  return [];
+}));
 
 const cellsSeparatedBy = (from: GridPoint, to: GridPoint) => from.x === to.x
   ? { first: { x: from.x - 1, y: Math.min(from.y, to.y) }, second: { x: from.x, y: Math.min(from.y, to.y) } }
@@ -115,7 +120,6 @@ export const tacticalTerrainObjectsForScenario = (scenario: CombatScenario): Tac
     id: wall.id,
     kind: "wall",
     edge: { from: { ...wall.from }, to: { ...wall.to } },
-    separates: cellsSeparatedBy(wall.from, wall.to),
     blocking: true,
     targetable: true,
     integrity: 3,
@@ -124,7 +128,7 @@ export const tacticalTerrainObjectsForScenario = (scenario: CombatScenario): Tac
     id: door.id,
     kind: "door",
     edge: { from: { ...door.from }, to: { ...door.to } },
-    separates: cellsSeparatedBy(door.from, door.to),
+    separates: tacticalCellsSeparatedBySegment(door),
     blocking: true,
     targetable: true,
     integrity: 2,
@@ -153,8 +157,17 @@ export interface TacticalWallVisualRun { edge: { from: GridPoint; to: GridPoint 
 
 export const tacticalWallVisualRuns = (objects: TacticalTerrainObject[]): TacticalWallVisualRun[] => {
   const groups = new Map<string, { id: string; start: number; end: number; fixed: number; horizontal: boolean }[]>();
+  const runs: TacticalWallVisualRun[] = [];
   objects.filter((object): object is TacticalWallSegment => object.kind === "wall").forEach((wall) => {
     const horizontal = wall.edge.from.y === wall.edge.to.y;
+    const vertical = wall.edge.from.x === wall.edge.to.x;
+    if (!horizontal && !vertical) {
+      runs.push({
+        edge: { from: { ...wall.edge.from }, to: { ...wall.edge.to } },
+        segmentIds: [wall.id],
+      });
+      return;
+    }
     const fixed = horizontal ? wall.edge.from.y : wall.edge.from.x;
     const start = Math.min(horizontal ? wall.edge.from.x : wall.edge.from.y, horizontal ? wall.edge.to.x : wall.edge.to.y);
     const end = Math.max(horizontal ? wall.edge.from.x : wall.edge.from.y, horizontal ? wall.edge.to.x : wall.edge.to.y);
@@ -162,7 +175,6 @@ export const tacticalWallVisualRuns = (objects: TacticalTerrainObject[]): Tactic
     groups.set(key, [...groups.get(key) ?? [], { id: wall.id, start, end, fixed, horizontal }]);
   });
 
-  const runs: TacticalWallVisualRun[] = [];
   groups.forEach((segments) => {
     segments.sort((a, b) => a.start - b.start);
     segments.forEach((segment) => {
@@ -184,6 +196,7 @@ export const tacticalWallVisualRuns = (objects: TacticalTerrainObject[]): Tactic
 export const tacticalWallCornerPoints = (objects: TacticalTerrainObject[]) => {
   const connections = new Map<string, { point: GridPoint; orientations: Set<"horizontal" | "vertical"> }>();
   objects.filter((object): object is TacticalWallSegment | TacticalDoor => object.kind === "wall" || object.kind === "door").forEach((boundary) => {
+    if (boundary.edge.from.x !== boundary.edge.to.x && boundary.edge.from.y !== boundary.edge.to.y) return;
     const orientation = boundary.edge.from.y === boundary.edge.to.y ? "horizontal" : "vertical";
     for (const point of [boundary.edge.from, boundary.edge.to]) {
       const key = pointKey(point);

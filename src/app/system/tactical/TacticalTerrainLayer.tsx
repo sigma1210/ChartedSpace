@@ -433,7 +433,6 @@ const TacticalTerrainPiece = ({
 
   const dx = object.edge.to.x - object.edge.from.x;
   const dy = object.edge.to.y - object.edge.from.y;
-  const horizontal = dy === 0;
   const position: [number, number, number] = [
     (object.edge.from.x + object.edge.to.x) / 2 - mapWidth / 2,
     object.kind === "wall" ? TACTICAL_WALL_CENTER_Y : TACTICAL_DOOR_CENTER_Y,
@@ -447,16 +446,17 @@ const TacticalTerrainPiece = ({
     });
   };
   if (object.kind === "wall") {
+    const wallLength = Math.hypot(dx, dy);
     return (
-      <mesh position={position} onClick={selectEdge}>
-        <boxGeometry args={horizontal ? [Math.abs(dx), TACTICAL_WALL_HEIGHT, 0.22] : [0.22, TACTICAL_WALL_HEIGHT, Math.abs(dy)]} />
+      <mesh position={position} rotation={[0, -Math.atan2(dy, dx), 0]} onClick={selectEdge}>
+        <boxGeometry args={[wallLength, TACTICAL_WALL_HEIGHT, 0.22]} />
         <meshBasicMaterial color={selected ? "#facc15" : "#f97316"} transparent opacity={selected ? 0.55 : damage > 0 ? 0.4 : 0} depthWrite={false} />
       </mesh>
     );
   }
   if (object.portalType === "iris-valve") {
     return (
-      <group position={position} rotation={[0, horizontal ? 0 : Math.PI / 2, 0]} onClick={selectEdge}>
+      <group position={position} rotation={[0, -Math.atan2(dy, dx), 0]} onClick={selectEdge}>
         <mesh position={[0, 0, -0.11]} castShadow receiveShadow>
           <extrudeGeometry args={[IRIS_WALL_SHAPE, IRIS_WALL_EXTRUSION]} />
           <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.22} />
@@ -483,16 +483,17 @@ const TacticalTerrainPiece = ({
     );
   }
   const openScale = object.open ? 0.18 : 1;
-  const doorLength = horizontal ? Math.abs(dx) : Math.abs(dy);
+  const doorLength = Math.hypot(dx, dy);
   const retractionOffset = object.open ? -doorLength * (1 - openScale) / 2 : 0;
+  const direction = doorLength > 0 ? { x: dx / doorLength, y: dy / doorLength } : { x: 0, y: 0 };
   const doorPosition: [number, number, number] = [
-    position[0] + (horizontal ? retractionOffset : 0),
+    position[0] + direction.x * retractionOffset,
     position[1],
-    position[2] + (horizontal ? 0 : retractionOffset),
+    position[2] + direction.y * retractionOffset,
   ];
   return (
-    <mesh position={doorPosition} scale={horizontal ? [openScale, 1, 1] : [1, 1, openScale]} castShadow receiveShadow onClick={selectEdge}>
-      <boxGeometry args={horizontal ? [Math.abs(dx), TACTICAL_DOOR_HEIGHT, 0.2] : [0.2, TACTICAL_DOOR_HEIGHT, Math.abs(dy)]} />
+    <mesh position={doorPosition} rotation={[0, -Math.atan2(dy, dx), 0]} scale={[openScale, 1, 1]} castShadow receiveShadow onClick={selectEdge}>
+      <boxGeometry args={[doorLength, TACTICAL_DOOR_HEIGHT, 0.2]} />
       <meshStandardMaterial color={selected ? "#facc15" : object.open ? "#22c55e" : "#0e7490"} roughness={0.62} metalness={0.32} />
     </mesh>
   );
@@ -509,15 +510,15 @@ const TacticalWallRun = ({
 }) => {
   const dx = run.edge.to.x - run.edge.from.x;
   const dy = run.edge.to.y - run.edge.from.y;
-  const horizontal = dy === 0;
+  const wallLength = Math.hypot(dx, dy);
   const position: [number, number, number] = [
     (run.edge.from.x + run.edge.to.x) / 2 - mapWidth / 2,
     TACTICAL_WALL_CENTER_Y,
     (run.edge.from.y + run.edge.to.y) / 2 - mapHeight / 2,
   ];
   return (
-    <mesh position={position} castShadow receiveShadow>
-      <boxGeometry args={horizontal ? [Math.abs(dx), TACTICAL_WALL_HEIGHT, 0.22] : [0.22, TACTICAL_WALL_HEIGHT, Math.abs(dy)]} />
+    <mesh position={position} rotation={[0, -Math.atan2(dy, dx), 0]} castShadow receiveShadow>
+      <boxGeometry args={[wallLength, TACTICAL_WALL_HEIGHT, 0.22]} />
       <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.22} />
     </mesh>
   );

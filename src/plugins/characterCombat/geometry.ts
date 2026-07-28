@@ -1,6 +1,7 @@
 import type { CombatScenario, Combatant, DoorSegment, GridPoint, LightingLevel, PlannedMove, TacticalLightSource, WallSegment } from "./types";
 import { distanceInSquares, snapShotTarget } from "./combatResolution";
 import { tacticalMovementEdgeKey } from "./tacticalTerrain";
+import { tacticalCellsSeparatedBySegment, tacticalMovementStepCrossesWall } from "./tacticalSegmentGeometry";
 
 export const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 export const activeOccupantCounts = (combatants: readonly Pick<Combatant, "id" | "position" | "defeated">[], excludedCombatantId?: string) => {
@@ -38,24 +39,11 @@ const closeMachineryCellKeys = (scenario: Pick<CombatScenario, "terrainByCell" |
 ]);
 const isCloseMachineryCell = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, point: GridPoint) => scenario.terrainByCell?.[pointKey(point)] === "close-machinery"
   || (scenario.closeMachineryCells ?? []).some((cell) => samePoint(cell, point));
-const between = (value: number, a: number, b: number) => value >= Math.min(a, b) && value < Math.max(a, b);
-
-const wallBlocksStep = (from: GridPoint, to: GridPoint, segment: WallSegment) => {
-  if (from.x !== to.x) {
-    const boundaryX = Math.max(from.x, to.x);
-    return segment.from.x === segment.to.x && segment.from.x === boundaryX && between(from.y, segment.from.y, segment.to.y);
-  }
-  const boundaryY = Math.max(from.y, to.y);
-  return segment.from.y === segment.to.y && segment.from.y === boundaryY && between(from.x, segment.from.x, segment.to.x);
-};
+const wallBlocksStep = tacticalMovementStepCrossesWall;
 
 const doorAdjacentCells = (door: DoorSegment): GridPoint[] => {
-  if (door.from.x === door.to.x) {
-    const y = Math.min(door.from.y, door.to.y);
-    return [{ x: door.from.x - 1, y }, { x: door.from.x, y }];
-  }
-  const x = Math.min(door.from.x, door.to.x);
-  return [{ x, y: door.from.y - 1 }, { x, y: door.from.y }];
+  const separated = tacticalCellsSeparatedBySegment(door);
+  return [separated.first, separated.second];
 };
 
 const blockedCells = (scenario: CombatScenario, movingId: string) => new Set([
@@ -92,13 +80,13 @@ const validStep = (scenario: CombatScenario, movingId: string, from: GridPoint, 
     const corners = [{ x: to.x, y: from.y }, { x: from.x, y: to.y }];
     if (corners.some((corner) => blockedCells(scenario, movingId).has(pointKey(corner)) || terrainHeightAt(scenario, corner) !== terrainHeightAt(scenario, from))) return false;
     const edges = [[from, corners[0]], [from, corners[1]], [corners[0], to], [corners[1], to]] as const;
-    if (edges.some(([start, end]) => scenario.walls.some((wall) => wallBlocksStep(start, end, wall)) || scenario.doors.some((door) => wallBlocksStep(start, end, door)))) return false;
+    if (edges.some(([start, end]) => scenario.walls.some((wall) => wallBlocksStep(start, end, wall)) || scenario.doors.some((door) => !door.open && wallBlocksStep(start, end, door)))) return false;
   }
   const changesElevation = terrainHeightAt(scenario, from) !== terrainHeightAt(scenario, to);
   if (changesElevation && !(scenario.elevationAccessCells ?? []).some((point) => samePoint(point, from) || samePoint(point, to))) return false;
   if (!allowOccupiedDestination && blockedCells(scenario, movingId).has(pointKey(to))) return false;
-  if (!diagonal && scenario.walls.some((segment) => wallBlocksStep(from, to, segment))) return false;
-  if (!diagonal && scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door))) return false;
+  if (scenario.walls.some((segment) => wallBlocksStep(from, to, segment))) return false;
+  if (scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door))) return false;
   return true;
 };
 
@@ -340,6 +328,8 @@ export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: Gr
   const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
   const closeMachinery = closeMachineryCellKeys(scenario);
   if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
+  if (scenario.walls.some((wall) => wallBlocksStep(from, to, wall))
+    || scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door))) return false;
   const highestEndpoint = Math.max(terrainHeightAt(scenario, from), terrainHeightAt(scenario, to));
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -417,20 +407,15 @@ export const tacticalLightingLevelAt = (scenario: CombatScenario, point: GridPoi
 const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
   const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
   const closeMachinery = closeMachineryCellKeys(scenario);
-  const blockedEdges = new Set<string>();
-  const addBlockedSegment = (segment: WallSegment) => {
-    if (segment.from.x === segment.to.x) {
-      for (let y = Math.min(segment.from.y, segment.to.y); y < Math.max(segment.from.y, segment.to.y); y += 1) blockedEdges.add(tacticalMovementEdgeKey({ x: segment.from.x - 1, y }, { x: segment.from.x, y }));
-      return;
-    }
-    for (let x = Math.min(segment.from.x, segment.to.x); x < Math.max(segment.from.x, segment.to.x); x += 1) blockedEdges.add(tacticalMovementEdgeKey({ x, y: segment.from.y - 1 }, { x, y: segment.from.y }));
-  };
-  scenario.walls.forEach(addBlockedSegment);
-  scenario.doors.filter((door) => !door.open).forEach(addBlockedSegment);
-  const edgeClear = (from: GridPoint, to: GridPoint) => !blockedEdges.has(tacticalMovementEdgeKey(from, to));
+  const blockingSegments: WallSegment[] = [
+    ...scenario.walls,
+    ...scenario.doors.filter((door) => !door.open),
+  ];
+  const edgeClear = (from: GridPoint, to: GridPoint) => !blockingSegments.some((segment) => wallBlocksStep(from, to, segment));
 
   return (from: GridPoint, to: GridPoint) => {
     if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
+    if (blockingSegments.some((segment) => wallBlocksStep(from, to, segment))) return false;
     const highestEndpoint = Math.max(terrainHeightAt(scenario, from), terrainHeightAt(scenario, to));
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -716,6 +701,7 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
       if (destinationLevels.length === 0) continue;
       const diagonal = current.point.x !== destination.x && current.point.y !== destination.y;
       const crossingEdges = diagonal ? [
+        tacticalMovementEdgeKey(current.point, destination),
         tacticalMovementEdgeKey(current.point, { x: destination.x, y: current.point.y }),
         tacticalMovementEdgeKey(current.point, { x: current.point.x, y: destination.y }),
         tacticalMovementEdgeKey({ x: destination.x, y: current.point.y }, destination),
@@ -762,6 +748,7 @@ export const sidestepAndBackstepMoves = ({ width, height, origin, facing, allowa
     if (activeOccupants >= 4 || cost > allowance) continue;
     const diagonal = origin.x !== destination.x && origin.y !== destination.y;
     const crossingEdges = diagonal ? [
+      tacticalMovementEdgeKey(origin, destination),
       tacticalMovementEdgeKey(origin, { x: destination.x, y: origin.y }),
       tacticalMovementEdgeKey(origin, { x: origin.x, y: destination.y }),
       tacticalMovementEdgeKey({ x: destination.x, y: origin.y }, destination),

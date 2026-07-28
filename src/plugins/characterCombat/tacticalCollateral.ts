@@ -1,6 +1,7 @@
 import { escalateWoundState, woundStateForTotal, type DicePair } from "./combatResolution";
 import { collateralBlastCells, hasLineOfSight } from "./geometry";
 import { tacticalTerrainObjectsForScenario, type TacticalTerrainObject } from "./tacticalTerrain";
+import { tacticalCellsAlongWall } from "./tacticalSegmentGeometry";
 import type { CombatScenario, GridPoint, TacticalMapState } from "./types";
 import { applyTacticalWound } from "./tacticalWounds";
 
@@ -29,8 +30,11 @@ export const resolveTacticalSatchelCharge = (map: TacticalMapState, chargeId: st
 
   tacticalTerrainObjectsForScenario(map.scenario).forEach((object) => {
     if ((object.kind !== "wall" && object.kind !== "door") || map.destroyedTerrainObjectIds.includes(object.id)) return;
-    const distance = Math.min(tacticalSquareDistance(charge.position, object.separates.first), tacticalSquareDistance(charge.position, object.separates.second));
-    if (distance > 2 || (distance > 0 && ![object.separates.first, object.separates.second].some((point) => hasLineOfSight(map.scenario, charge.position, point)))) return;
+    const adjacentCells = object.kind === "door"
+      ? [object.separates.first, object.separates.second]
+      : tacticalCellsAlongWall(object.edge);
+    const distance = Math.min(...adjacentCells.map((point) => tacticalSquareDistance(charge.position, point)));
+    if (distance > 2 || (distance > 0 && !adjacentCells.some((point) => hasLineOfSight(map.scenario, charge.position, point)))) return;
     const damage = Math.max(0, Math.floor(30 / (2 ** distance)) + tacticalStructurePenetrationModifier(object));
     if (damage === 0) return;
     map.terrainDamageById[object.id] = (map.terrainDamageById[object.id] ?? 0) + damage;

@@ -1,23 +1,17 @@
 import type { CombatScenario, DoorSegment, GridPoint, WallSegment } from "./types";
+import { tacticalCellsSeparatedBySegment, tacticalMovementStepCrossesWall, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
 
 export interface ScenarioValidationError { code: string; message: string }
 
 const key = (point: GridPoint) => `${point.x}:${point.y}`;
 const inCellBounds = (scenario: CombatScenario, point: GridPoint) => point.x >= 0 && point.y >= 0 && point.x < scenario.width && point.y < scenario.height;
 const inVertexBounds = (scenario: CombatScenario, point: GridPoint) => point.x >= 0 && point.y >= 0 && point.x <= scenario.width && point.y <= scenario.height;
-const between = (value: number, a: number, b: number) => value >= Math.min(a, b) && value < Math.max(a, b);
-const wallBlocksStep = (from: GridPoint, to: GridPoint, segment: WallSegment) => {
-  if (from.x !== to.x) return segment.from.x === segment.to.x && segment.from.x === Math.max(from.x, to.x) && between(from.y, segment.from.y, segment.to.y);
-  return segment.from.y === segment.to.y && segment.from.y === Math.max(from.y, to.y) && between(from.x, segment.from.x, segment.to.x);
+const wallBlocksStep = tacticalMovementStepCrossesWall;
+const validSegment = (segment: WallSegment) => segment.from.x !== segment.to.x || segment.from.y !== segment.to.y;
+const doorCells = (door: DoorSegment): GridPoint[] => {
+  const separated = tacticalCellsSeparatedBySegment(door);
+  return [separated.first, separated.second];
 };
-const normalizedSegment = (segment: WallSegment) => segment.from.x === segment.to.x
-  ? `v:${segment.from.x}:${Math.min(segment.from.y, segment.to.y)}:${Math.max(segment.from.y, segment.to.y)}`
-  : `h:${segment.from.y}:${Math.min(segment.from.x, segment.to.x)}:${Math.max(segment.from.x, segment.to.x)}`;
-const validSegment = (segment: WallSegment) => (segment.from.x === segment.to.x || segment.from.y === segment.to.y)
-  && (segment.from.x !== segment.to.x || segment.from.y !== segment.to.y);
-const doorCells = (door: DoorSegment): GridPoint[] => door.from.x === door.to.x
-  ? [{ x: door.from.x - 1, y: Math.min(door.from.y, door.to.y) }, { x: door.from.x, y: Math.min(door.from.y, door.to.y) }]
-  : [{ x: Math.min(door.from.x, door.to.x), y: door.from.y - 1 }, { x: Math.min(door.from.x, door.to.x), y: door.from.y }];
 
 export const validateCombatScenario = (scenario: CombatScenario): ScenarioValidationError[] => {
   const errors: ScenarioValidationError[] = [];
@@ -30,11 +24,11 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
 
   const segments = [...scenario.walls, ...scenario.doors];
   segments.forEach((segment) => {
-    if (!validSegment(segment)) add("invalid-segment", `${segment.id} must be a non-zero orthogonal segment.`);
+    if (!validSegment(segment)) add("invalid-segment", `${segment.id} must be a non-zero segment.`);
     if (!inVertexBounds(scenario, segment.from) || !inVertexBounds(scenario, segment.to)) add("segment-bounds", `${segment.id} extends outside the ${scenario.width}×${scenario.height} deck.`);
   });
   const seenWalls = new Set<string>();
-  scenario.walls.forEach((wall) => { const segment = normalizedSegment(wall); if (seenWalls.has(segment)) add("duplicate-wall", `Duplicate wall segment: ${wall.id}.`); seenWalls.add(segment); });
+  scenario.walls.forEach((wall) => { const segment = tacticalWallSegmentKey(wall); if (seenWalls.has(segment)) add("duplicate-wall", `Duplicate wall segment: ${wall.id}.`); seenWalls.add(segment); });
 
   scenario.doors.forEach((door) => {
     const cells = doorCells(door);
@@ -102,8 +96,6 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
   (scenario.contestedObjectiveIds ?? []).forEach((objectiveId) => {
     if (!scenario.objects.some((object) => object.id === objectiveId && object.kind !== "cover" && object.kind !== "control")) add("contested-objective", `Contested objective ${objectiveId} must reference an actionable objective.`);
   });
-  const disconnected = [...walkable].filter((cell) => !reachable.has(cell));
-  if (start && disconnected.length > 0) add("disconnected-deck", `${disconnected.length} walkable deck cells are disconnected; first: ${disconnected[0]}.`);
   return errors;
 };
 

@@ -59,6 +59,16 @@ const scenarioSchema = z.object({
     backgroundImage: z.string().min(1).optional(),
   }).strict(),
   terrainPlacements: z.array(placementSchema),
+  drawnWalls: z.array(z.object({
+    id: z.string().min(1),
+    from: gridPointSchema,
+    to: gridPointSchema,
+    portals: z.array(z.object({
+      id: z.string().min(1),
+      kind: z.enum(["sliding-door", "iris-valve"]),
+      position: z.number().min(0).max(1),
+    }).strict()).optional(),
+  }).strict()).optional(),
   deploymentEdges: z.array(z.enum(["north", "east", "south", "west"])).default(["south"]),
   enemyPlacements: z.array(enemyPlacementSchema).default([]),
   fireCells: z.array(gridPointSchema),

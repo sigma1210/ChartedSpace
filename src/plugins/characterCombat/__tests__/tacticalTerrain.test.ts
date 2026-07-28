@@ -735,4 +735,72 @@ describe("tactical Control Room", () => {
     ]));
     expect(tacticalWallCornerPoints(room.objects)).toHaveLength(4);
   });
+
+  it("resolves and renders an independently drawn diagonal wall", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnWalls = [{ id: "diagonal-bulkhead", from: { x: 2, y: 2 }, to: { x: 7, y: 5 } }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const wall = terrain.terrainObjects.find((object) => object.id === "diagonal-bulkhead");
+    const run = tacticalWallVisualRuns(terrain.terrainObjects).find((candidate) => candidate.segmentIds.includes("diagonal-bulkhead"));
+
+    expect(terrain.walls).toContainEqual(definition.drawnWalls[0]);
+    expect(wall).toMatchObject({
+      kind: "wall",
+      edge: { from: { x: 2, y: 2 }, to: { x: 7, y: 5 } },
+      blocking: true,
+      targetable: true,
+    });
+    expect(run?.edge).toEqual({ from: { x: 2, y: 2 }, to: { x: 7, y: 5 } });
+  });
+
+  it("blocks movement and sight lines that cross a diagonal wall", () => {
+    const scenario = buildDefaultTacticalScenario();
+    scenario.walls = [{ id: "diagonal-bulkhead", from: { x: 1, y: 0 }, to: { x: 3, y: 2 } }];
+    scenario.terrainObjects = undefined;
+    scenario.objects = [];
+    scenario.doors = [];
+    scenario.closeMachineryCells = [];
+    scenario.terrainByCell = {};
+    scenario.elevationLevelByCell = {};
+    const blockedEdges = tacticalTerrainBlockedEdges(resolveTacticalScenarioTerrain({
+      ...cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition),
+      terrainPlacements: [],
+      drawnWalls: scenario.walls,
+    }).terrainObjects);
+    const moves = reachableOpenMapMovement({
+      width: scenario.width,
+      height: scenario.height,
+      origin: { x: 1, y: 1 },
+      facing: "north",
+      allowance: 6,
+      trotting: false,
+      blockedEdges,
+    });
+
+    expect(moves.has("2:0")).toBe(false);
+    expect(hasLineOfSight(scenario, { x: 1, y: 1 }, { x: 2, y: 0 })).toBe(false);
+  });
+
+  it("resolves a one-unit portal into a diagonal wall while preserving solid sections", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnWalls = [{
+      id: "portal-wall",
+      from: { x: 10, y: 10 },
+      to: { x: 18, y: 14 },
+      portals: [{ id: "portal-wall-iris", kind: "iris-valve", position: 0.5 }],
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const portal = terrain.doors.find((door) => door.id === "portal-wall-iris");
+    const solidSections = terrain.walls.filter((wall) => wall.id.startsWith("portal-wall:section:"));
+    const portalLength = portal ? Math.hypot(portal.to.x - portal.from.x, portal.to.y - portal.from.y) : 0;
+    const solidLength = solidSections.reduce((total, wall) => total + Math.hypot(wall.to.x - wall.from.x, wall.to.y - wall.from.y), 0);
+
+    expect(portal).toMatchObject({ open: false, portalType: "iris-valve" });
+    expect(portalLength).toBeCloseTo(1);
+    expect(solidSections).toHaveLength(2);
+    expect(solidLength + portalLength).toBeCloseTo(Math.hypot(8, 4));
+    expect(buildDefaultTacticalScenario(undefined, definition).doors).toContainEqual(portal);
+  });
 });
