@@ -67,6 +67,7 @@ export const updateTacticalCharacterInformationHud = slice.actions.updateTactica
 export const updateTacticalDeploymentHud = slice.actions.updateTacticalDeploymentHud;
 export const updateTacticalEventsHud = slice.actions.updateTacticalEventsHud;
 export const updateTacticalScenarioHud = slice.actions.updateTacticalScenarioHud;
+export const updateTacticalNavigationHud = slice.actions.updateTacticalNavigationHud;
 export const updateTacticalEnemyHud = slice.actions.updateTacticalEnemyHud;
 export const selectTacticalAttackTarget = slice.actions.selectTacticalAttackTarget;
 export const selectTacticalAttackMode = slice.actions.selectTacticalAttackMode;

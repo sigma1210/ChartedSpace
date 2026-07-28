@@ -23,4 +23,7 @@ export const tacticalHudReducers = {
   updateTacticalScenarioHud: (state: CharacterCombatState, action: PayloadAction<CharacterCombatHudLayout>) => {
     if (state.tacticalMap) state.tacticalMap.scenarioHudLayout = action.payload;
   },
+  updateTacticalNavigationHud: (state: CharacterCombatState, action: PayloadAction<CharacterCombatHudLayout>) => {
+    if (state.tacticalMap) state.tacticalMap.navigationHudLayout = action.payload;
+  },
 };

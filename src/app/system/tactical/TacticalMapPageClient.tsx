@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { Canvas, events as createCanvasEvents } from "@react-three/fiber";
 import { useMemo, type ComponentProps } from "react";
-import { selectTacticalTerrainObject } from "@/plugins/characterCombat/slice";
+import { selectTacticalTerrainObject, updateTacticalNavigationHud } from "@/plugins/characterCombat/slice";
+import { DEFAULT_TACTICAL_NAVIGATION_HUD_LAYOUT } from "@/plugins/characterCombat/tacticalHudDefaults";
 import { pointKey, tacticalCrewVisibilityMask } from "@/plugins/characterCombat/geometry";
 import { buildTacticalMovementPreview } from "@/plugins/characterCombat/tacticalMovementPreview";
 import type { TacticalScenarioDefinitionFile } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
@@ -24,6 +24,7 @@ import { TacticalEnemyRosterHud } from "./TacticalEnemyRosterHud";
 import { TacticalEventsHud } from "./TacticalEventsHud";
 import { TacticalHudLayer } from "./TacticalHudLayer";
 import { TacticalMapLifecycle } from "./TacticalMapLifecycle";
+import { TacticalNavigationHud } from "./TacticalNavigationHud";
 import { DEFAULT_TACTICAL_SCENARIO_HUD_LAYOUT, TacticalScenarioHud } from "./TacticalScenarioHud";
 import { TacticalScene } from "./TacticalScene";
 import { DEFAULT_TACTICAL_MAP } from "./tacticalMapDefaults";
@@ -50,6 +51,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const tacticalScenarioStatus = tacticalMap.scenarioStatus ?? "active";
   const scenarioHudLayout = tacticalMap.scenarioHudLayout ?? DEFAULT_TACTICAL_SCENARIO_HUD_LAYOUT;
   const deploymentHudLayout = tacticalMap.deploymentHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 190 } };
+  const navigationHudLayout = tacticalMap.navigationHudLayout ?? DEFAULT_TACTICAL_NAVIGATION_HUD_LAYOUT;
   const crewVisibility = useMemo(() => tacticalCrewVisibilityMask(tacticalMap.scenario), [tacticalMap.scenario]);
   const exploredCells = useMemo(() => new Set(tacticalMap.exploredCellKeys ?? []), [tacticalMap.exploredCellKeys]);
   const visibleCellKeys = useMemo(() => [...crewVisibility.keys()], [crewVisibility]);
@@ -75,7 +77,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
       selectedProfileCharacterId={selected?.id ?? null}
       draftPlaytest={draftPlaytest}
     />
-    <TacticalHudLayer tacticalMap={tacticalMap} scenarioHudLayout={scenarioHudLayout} deploymentHudLayout={deploymentHudLayout}>
+    <TacticalHudLayer tacticalMap={tacticalMap} scenarioHudLayout={scenarioHudLayout} deploymentHudLayout={deploymentHudLayout} navigationHudLayout={navigationHudLayout}>
       <Canvas events={safeCanvasEvents} shadows="basic" frameloop="demand" dpr={[1, 1.5]} onPointerMissed={() => { dispatch(setSelectedProfileCharacter(null)); dispatch(selectTacticalTerrainObject(null)); }}>
         <TacticalScene crewVisibility={crewVisibility} exploredCells={exploredCells} lastKnownEnemyPositions={tacticalMap.lastKnownEnemyPositions ?? {}} reachableMoves={movementPreview.legalMoves} visibleEnemyIds={visibleEnemyIds} />
       </Canvas>
@@ -84,9 +86,12 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
         <div className="mt-1 text-[10px] text-slate-400">Turn {tacticalMap.turn} · {tacticalMap.scenario.width}×{tacticalMap.scenario.height} implicit grid · {characters.length}/2 crew members</div>
         <div className="mt-1 text-[9px] uppercase tracking-wider text-slate-500">Drag to rotate · Right-drag to pan · Wheel to zoom</div>
       </div>
-      {draftPlaytest
-        ? <button type="button" onClick={draftPlaytest.onExit} className="absolute right-4 top-14 z-50 border border-amber-300/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-100 hover:bg-amber-950">Return to editor</button>
-        : <><Link href="/system" className="absolute right-4 top-14 z-50 border border-cyan-400/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-cyan-100 hover:bg-cyan-950">System view</Link><Link href="/system/tactical/editor" className="absolute right-4 top-24 z-50 border border-amber-300/70 bg-slate-950/90 px-3 py-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-100 hover:bg-amber-950">Scenario editor</Link></>}
+      <TacticalNavigationHud
+        layout={navigationHudLayout}
+        mode={draftPlaytest ? "playtest" : "tactical"}
+        onLayoutChange={(layout) => dispatch(updateTacticalNavigationHud(layout))}
+        onReturnToEditor={draftPlaytest?.onExit}
+      />
       <TacticalScenarioHud tacticalMap={tacticalMap} layout={scenarioHudLayout} />
       <TacticalCharacterRosterHud
         tacticalMap={tacticalMap}

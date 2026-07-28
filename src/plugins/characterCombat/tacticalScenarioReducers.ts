@@ -5,6 +5,7 @@ import { pointKey } from "./geometry";
 import { prepareTacticalAmmunition } from "./tacticalAmmunition";
 import type { TacticalConsoleVictoryDefinitionFile } from "./tacticalConsoleVictory";
 import { tacticalVisibilitySnapshot } from "./tacticalObservation";
+import { DEFAULT_TACTICAL_NAVIGATION_HUD_LAYOUT } from "./tacticalHudDefaults";
 import type { TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
 import { tacticalCombatant, tacticalPlayerIds } from "./tacticalStateHelpers";
 import type {
@@ -31,6 +32,7 @@ type TacticalHudLayouts = Pick<
   | "eventsHudLayout"
   | "scenarioHudLayout"
   | "deploymentHudLayout"
+  | "navigationHudLayout"
 >;
 
 type FreshTacticalMapOptions = {
@@ -140,6 +142,7 @@ export const freshTacticalMap = (
       pinned: false,
       position: { x: 320, y: 190 },
     },
+    navigationHudLayout: layouts?.navigationHudLayout ?? DEFAULT_TACTICAL_NAVIGATION_HUD_LAYOUT,
     movementMode: "walk",
     plannedDestination: null,
     plannedEnemyEntryTargetId: null,
@@ -214,6 +217,7 @@ const tacticalHudLayouts = (map: TacticalMapState): TacticalHudLayouts => ({
   characterInformationHudLayout: map.characterInformationHudLayout,
   eventsHudLayout: map.eventsHudLayout,
   scenarioHudLayout: map.scenarioHudLayout,
+  navigationHudLayout: map.navigationHudLayout ?? DEFAULT_TACTICAL_NAVIGATION_HUD_LAYOUT,
 });
 
 const tacticalCrewFromMap = (map: TacticalMapState): TacticalCrewInput[] => (

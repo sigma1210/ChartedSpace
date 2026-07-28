@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Provider } from "react-redux";
 import { FloatingPluginHud, type FloatingPluginHudLayout } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import TacticalMapPageClient from "../TacticalMapPageClient";
+import { TacticalNavigationHud } from "../TacticalNavigationHud";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalDeploymentEdge, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalScenarioDefinitionFile, type TacticalTerrainPlacement } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition, TRAVELLER_TASK_DIFFICULTIES, validateTacticalConsoleVictoryDefinition, type TacticalConsoleOperation, type TacticalConsoleVictoryDefinitionFile, type TravellerTaskDifficulty } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { randomTacticalEnemyAvatarPath, tacticalEnemyPalette } from "@/plugins/characterCombat/tacticalEnemyDefinitions";
@@ -332,6 +332,7 @@ const TacticalScenarioEditorClient = () => {
   const [enemyPaletteLayout, setEnemyPaletteLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 24, y: 310 } });
   const [consoleEditorLayout, setConsoleEditorLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 280, y: 64 } });
   const [enemyEditorLayout, setEnemyEditorLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 280, y: 310 } });
+  const [navigationLayout, setNavigationLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 720, y: 24 } });
   const dirty = !definitionsMatch(draft, baseline) || JSON.stringify(consoleVictory) !== JSON.stringify(consoleVictoryBaseline);
   const refreshScenarioList = useCallback(async () => {
     const scenarios = await fetchScenarioList();
@@ -754,7 +755,6 @@ const TacticalScenarioEditorClient = () => {
       </div>
       <div className="flex items-center gap-2">
         <span className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${dirty ? "border-amber-400 text-amber-200" : "border-slate-600 text-slate-400"}`}>{dirty ? "Unsaved draft" : "Unchanged"}</span>
-        <Link href="/system/tactical" className="border border-cyan-500 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-cyan-100 hover:bg-cyan-950">Return to tactical map</Link>
       </div>
     </header>
     <div className="grid min-h-0 flex-1 grid-cols-[21rem_1fr]">
@@ -852,16 +852,19 @@ const TacticalScenarioEditorClient = () => {
           ...(enemyPaletteLayout.visible ? [] : [{ id: "enemy-palette", title: "Enemy Palette" }]),
           ...(selectedHasTerminal && !consoleEditorLayout.visible ? [{ id: "console-editor", title: selectedIsInteractiveHuman ? "Human Interaction Editor" : "Console Editor" }] : []),
           ...(selectedEnemy && !enemyEditorLayout.visible ? [{ id: "enemy-editor", title: "Enemy Editor" }] : []),
+          ...(navigationLayout.visible ? [] : [{ id: "navigation", title: "Navigation" }]),
         ]} onRestoreHud={(id) => {
           if (id === "console-editor") setConsoleEditorLayout((current) => ({ ...current, visible: true }));
           else if (id === "enemy-editor") setEnemyEditorLayout((current) => ({ ...current, visible: true }));
           else if (id === "enemy-palette") setEnemyPaletteLayout((current) => ({ ...current, visible: true }));
+          else if (id === "navigation") setNavigationLayout((current) => ({ ...current, visible: true }));
           else setTerrainPaletteLayout((current) => ({ ...current, visible: true }));
         }} className="p-5">
           <div className="absolute left-7 top-7 z-10 border border-cyan-700 bg-slate-950/90 px-3 py-2 text-[9px] uppercase tracking-wider text-cyan-100">Draft preview · {draft.map.width}×{draft.map.height}</div>
           <div className="h-full w-full overflow-hidden border border-cyan-900 bg-black shadow-[0_0_30px_rgba(8,145,178,0.12)]">
             <DraftPreview definition={draft} selectedPlacementId={selectedPlacementId} selectedEnemyId={selectedEnemyId} selectedFire={selectedFire} placementKind={placementKind} enemyKind={enemyKind} placementHover={placementHover} enemyHover={enemyHover} dragPlacement={dragPlacement} dragEnemy={dragEnemy} selectPlacement={selectTerrainPlacement} selectEnemy={selectEnemy} selectFire={setSelectedFire} hoverPlacement={setPlacementHover} hoverEnemy={setEnemyHover} beginDrag={setDragPlacement} beginEnemyDrag={setDragEnemy} endDrag={() => { setDragPlacement(null); setDragEnemy(null); }} placeTerrain={placeTerrain} placeEnemy={placeEnemy} moveTerrain={moveTerrain} moveEnemy={moveEnemy} />
           </div>
+          <TacticalNavigationHud layout={navigationLayout} mode="editor" onLayoutChange={setNavigationLayout} />
           <FloatingPluginHud title="Terrain Palette" layout={terrainPaletteLayout} onLayoutChange={setTerrainPaletteLayout} className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
             <div aria-label="Terrain options" className="grid max-h-[65vh] grid-cols-2 gap-1.5 overflow-y-auto overscroll-contain py-1 pr-1">
               <button type="button" aria-pressed={placementKind === null && enemyKind === null} onClick={() => { setPlacementKind(null); setEnemyKind(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === null && enemyKind === null ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-(--hud-border) text-(--hud-text) hover:border-(--hud-accent)"}`}>Pointer</button>

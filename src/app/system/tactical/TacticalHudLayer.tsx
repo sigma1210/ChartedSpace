@@ -7,6 +7,7 @@ import {
   updateTacticalDeploymentHud,
   updateTacticalEnemyHud,
   updateTacticalEventsHud,
+  updateTacticalNavigationHud,
   updateTacticalScenarioHud,
 } from "@/plugins/characterCombat/slice";
 import type {
@@ -19,11 +20,13 @@ export const TacticalHudLayer = ({
   tacticalMap,
   scenarioHudLayout,
   deploymentHudLayout,
+  navigationHudLayout,
   children,
 }: {
   tacticalMap: TacticalMapState;
   scenarioHudLayout: CharacterCombatHudLayout;
   deploymentHudLayout: CharacterCombatHudLayout;
+  navigationHudLayout: CharacterCombatHudLayout;
   children: ReactNode;
 }) => {
   const dispatch = useAppDispatch();
@@ -36,6 +39,7 @@ export const TacticalHudLayer = ({
     ...(!tacticalMap.characterInformationHudLayout.visible ? [{ id: "character-information", title: "Selected Character" }] : []),
     ...(!tacticalMap.eventsHudLayout.visible ? [{ id: "events", title: "Events" }] : []),
     ...(!scenarioHudLayout.visible ? [{ id: "scenario", title: "Scenario" }] : []),
+    ...(!navigationHudLayout.visible ? [{ id: "navigation", title: "Navigation" }] : []),
   ];
 
   return (
@@ -57,6 +61,8 @@ export const TacticalHudLayer = ({
           dispatch(updateTacticalEventsHud({ ...tacticalMap.eventsHudLayout, visible: true }));
         } else if (id === "scenario") {
           dispatch(updateTacticalScenarioHud({ ...scenarioHudLayout, visible: true }));
+        } else if (id === "navigation") {
+          dispatch(updateTacticalNavigationHud({ ...navigationHudLayout, visible: true }));
         } else {
           dispatch(updateTacticalCharacterHud({ ...tacticalMap.characterHudLayout, visible: true }));
         }

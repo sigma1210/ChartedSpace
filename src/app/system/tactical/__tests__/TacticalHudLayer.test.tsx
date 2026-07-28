@@ -9,6 +9,7 @@ import {
   updateTacticalDeploymentHud,
   updateTacticalEnemyHud,
   updateTacticalEventsHud,
+  updateTacticalNavigationHud,
   updateTacticalScenarioHud,
 } from "@/plugins/characterCombat/slice";
 import { freshTacticalMap } from "@/plugins/characterCombat/tacticalScenarioReducers";
@@ -63,7 +64,12 @@ describe("TacticalHudLayer", () => {
       pinned: true,
       position: { x: 90, y: 100 },
     };
-    return { tacticalMap, scenarioHudLayout, deploymentHudLayout };
+    const navigationHudLayout = {
+      visible: false,
+      pinned: true,
+      position: { x: 110, y: 120 },
+    };
+    return { tacticalMap, scenarioHudLayout, deploymentHudLayout, navigationHudLayout };
   };
 
   it.each([
@@ -73,13 +79,15 @@ describe("TacticalHudLayer", () => {
     ["Selected Character", updateTacticalCharacterInformationHud.type],
     ["Events", updateTacticalEventsHud.type],
     ["Scenario", updateTacticalScenarioHud.type],
+    ["Navigation", updateTacticalNavigationHud.type],
   ])("restores the %s HUD with its saved layout", (title, actionType) => {
-    const { tacticalMap, scenarioHudLayout, deploymentHudLayout } = hiddenActiveMap();
+    const { tacticalMap, scenarioHudLayout, deploymentHudLayout, navigationHudLayout } = hiddenActiveMap();
     render(
       <TacticalHudLayer
         tacticalMap={tacticalMap}
         scenarioHudLayout={scenarioHudLayout}
         deploymentHudLayout={deploymentHudLayout}
+        navigationHudLayout={navigationHudLayout}
       >
         <div>HUD content</div>
       </TacticalHudLayer>,
@@ -96,7 +104,7 @@ describe("TacticalHudLayer", () => {
   });
 
   it("registers Deployment instead of Current Action during setup", () => {
-    const { tacticalMap, scenarioHudLayout, deploymentHudLayout } = hiddenActiveMap();
+    const { tacticalMap, scenarioHudLayout, deploymentHudLayout, navigationHudLayout } = hiddenActiveMap();
     tacticalMap.scenarioStatus = "setup";
 
     render(
@@ -104,6 +112,7 @@ describe("TacticalHudLayer", () => {
         tacticalMap={tacticalMap}
         scenarioHudLayout={scenarioHudLayout}
         deploymentHudLayout={deploymentHudLayout}
+        navigationHudLayout={navigationHudLayout}
       >
         <div>HUD content</div>
       </TacticalHudLayer>,
@@ -118,12 +127,13 @@ describe("TacticalHudLayer", () => {
   });
 
   it("renders its composed tactical HUD children", () => {
-    const { tacticalMap, scenarioHudLayout, deploymentHudLayout } = hiddenActiveMap();
+    const { tacticalMap, scenarioHudLayout, deploymentHudLayout, navigationHudLayout } = hiddenActiveMap();
     render(
       <TacticalHudLayer
         tacticalMap={tacticalMap}
         scenarioHudLayout={scenarioHudLayout}
         deploymentHudLayout={deploymentHudLayout}
+        navigationHudLayout={navigationHudLayout}
       >
         <div>HUD content</div>
       </TacticalHudLayer>,

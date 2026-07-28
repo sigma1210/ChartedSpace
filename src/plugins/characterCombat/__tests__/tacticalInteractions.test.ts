@@ -220,6 +220,7 @@ describe("tactical terrain interactions", () => {
     const characterInformationHudLayout = { visible: true, pinned: false, position: { x: 420, y: 90 } };
     const eventsHudLayout = { visible: false, pinned: true, position: { x: 700, y: 90 } };
     const scenarioHudLayout = { visible: false, pinned: true, position: { x: 500, y: 180 } };
+    const navigationHudLayout = { visible: false, pinned: true, position: { x: 900, y: 60 } };
     const changed: CharacterCombatState = {
       ...initialized,
       tacticalMap: {
@@ -241,6 +242,7 @@ describe("tactical terrain interactions", () => {
         characterInformationHudLayout,
         eventsHudLayout,
         scenarioHudLayout,
+        navigationHudLayout,
         movementMode: "trot",
         plannedDestination: { x: 62, y: 44 },
         plannedMeleeTargetId: "enemy-1",
@@ -286,6 +288,7 @@ describe("tactical terrain interactions", () => {
       characterInformationHudLayout,
       eventsHudLayout,
       scenarioHudLayout,
+      navigationHudLayout,
       movementMode: "walk",
       plannedDestination: null,
       plannedMeleeTargetId: null,

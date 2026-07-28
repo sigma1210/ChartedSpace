@@ -6,6 +6,7 @@ import characterCombatReducer, {
   updateTacticalDeploymentHud,
   updateTacticalEnemyHud,
   updateTacticalEventsHud,
+  updateTacticalNavigationHud,
   updateTacticalScenarioHud,
 } from "../slice";
 import type { CharacterCombatHudLayout } from "../types";
@@ -26,6 +27,7 @@ describe("tactical HUD reducers", () => {
       characterInformationHudLayout: layout(50),
       eventsHudLayout: layout(60),
       scenarioHudLayout: layout(70),
+      navigationHudLayout: layout(80),
     };
     let state = characterCombatReducer(undefined, initializeTacticalMapSetup(["crew-1"]));
 
@@ -36,6 +38,7 @@ describe("tactical HUD reducers", () => {
     state = characterCombatReducer(state, updateTacticalCharacterInformationHud(layouts.characterInformationHudLayout));
     state = characterCombatReducer(state, updateTacticalEventsHud(layouts.eventsHudLayout));
     state = characterCombatReducer(state, updateTacticalScenarioHud(layouts.scenarioHudLayout));
+    state = characterCombatReducer(state, updateTacticalNavigationHud(layouts.navigationHudLayout));
 
     expect(state.tacticalMap).toMatchObject(layouts);
   });
@@ -49,6 +52,7 @@ describe("tactical HUD reducers", () => {
       updateTacticalCharacterInformationHud,
       updateTacticalEventsHud,
       updateTacticalScenarioHud,
+      updateTacticalNavigationHud,
     ];
 
     expect(actionCreators.map((actionCreator) => actionCreator.type)).toEqual([
@@ -59,6 +63,7 @@ describe("tactical HUD reducers", () => {
       "characterCombat/updateTacticalCharacterInformationHud",
       "characterCombat/updateTacticalEventsHud",
       "characterCombat/updateTacticalScenarioHud",
+      "characterCombat/updateTacticalNavigationHud",
     ]);
     actionCreators.forEach((actionCreator) => {
       expect(characterCombatReducer(undefined, actionCreator(layout(5)))).toEqual({});

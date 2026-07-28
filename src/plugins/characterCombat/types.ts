@@ -42,6 +42,7 @@ export interface TacticalMapState { deploymentLoadoutByCharacterId?: Record<stri
 export interface TacticalMapState { exploredCellKeys?: string[] }
 export interface TacticalMapState { lastKnownEnemyPositions?: Record<string, GridPoint> }
 export interface TacticalMapState { scenarioHudLayout?: CharacterCombatHudLayout }
+export interface TacticalMapState { navigationHudLayout?: CharacterCombatHudLayout }
 export interface TacticalMapState { coweringCombatantIds?: string[] }
 export interface TacticalMapState { panickedCombatantIds?: string[]; pendingCasualtyMoraleChecks?: { witnessId: string; casualtyId: string; occurrence: number }[]; casualtyMoraleOccurrence?: number }
 export interface TacticalMapState { visibleHostileIdsAtPhaseStartByCombatantId?: Record<string, string[]>; pendingUnexpectedFireMoraleChecks?: { combatantId: string; attackerId: string; occurrence: number }[]; unexpectedFireMoraleOccurrence?: number }
