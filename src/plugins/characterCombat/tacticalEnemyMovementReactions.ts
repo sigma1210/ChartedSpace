@@ -7,6 +7,7 @@ import type { TacticalEnemyMovementPlan } from "./tacticalEnemyMovement";
 import { tacticalHitRollEvent } from "./tacticalFire";
 import { queueTacticalUnexpectedFireMoraleCheck } from "./tacticalMorale";
 import { recordTacticalMovementAnimation, recordTacticalObservedEvent } from "./tacticalObservation";
+import type { TacticalAdjacencyReactionRolls } from "./tacticalRolls";
 import { tacticalCombatant } from "./tacticalStateHelpers";
 import type { TacticalEnemyPhaseRolls } from "./tacticalTurnLifecycle";
 import type { CharacterCombatState, CombatScenario, Combatant, GridPoint, TacticalMapState } from "./types";
@@ -139,7 +140,7 @@ export const resolveTacticalEnemyMovementReactions = (
 export const tacticalEnemyMovementReactionReducers = {
   resolveTacticalAdjacencyReaction: (
     state: CharacterCombatState,
-    action: PayloadAction<{ fire: boolean; hitDice: DicePair; woundDice: DicePair }>,
+    action: PayloadAction<TacticalAdjacencyReactionRolls>,
   ) => {
     const map = state.tacticalMap;
     const pending = map?.pendingAdjacencyReaction;

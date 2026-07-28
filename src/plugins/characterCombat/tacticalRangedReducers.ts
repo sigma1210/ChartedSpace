@@ -1,9 +1,10 @@
 import type { PayloadAction } from "@reduxjs/toolkit";
-import { automaticFireModifierForRange, resolveSnapShot, snapShotTarget, type DicePair } from "./combatResolution";
+import { automaticFireModifierForRange, resolveSnapShot, snapShotTarget } from "./combatResolution";
 import { automaticFireSecondaryTargets, collateralBlastCells, coverProtection, pointKey, tacticalRangedEnemies, tacticalVisibilityAssessment } from "./geometry";
 import { applyAmmunitionProfile, reloadTacticalAmmunition, setTacticalAmmunition, spendTacticalAmmunition } from "./tacticalAmmunition";
-import { applyTacticalWeaponCollateral, type TacticalCollateralRolls } from "./tacticalCollateral";
+import { applyTacticalWeaponCollateral } from "./tacticalCollateral";
 import { queueTacticalUnexpectedFireMoraleCheck } from "./tacticalMorale";
+import type { TacticalRangedAttackPayload } from "./tacticalRolls";
 import { tacticalHitRollEvent } from "./tacticalFire";
 import { advanceTacticalPlayerActivation, tacticalCombatant } from "./tacticalStateHelpers";
 import type { CharacterCombatState, WeaponAmmunitionKind } from "./types";
@@ -82,7 +83,7 @@ export const tacticalRangedReducers = {
     if (!map.actedCharacterIds.includes(id)) map.actedCharacterIds.push(id);
     advanceTacticalPlayerActivation(map);
   },
-  confirmTacticalAttack: (state: CharacterCombatState, action: PayloadAction<{ hitDice: DicePair; woundDice: DicePair; secondaryRolls?: Record<string, { hitDice: DicePair; woundDice: DicePair }>; collateralRolls?: TacticalCollateralRolls }>) => {
+  confirmTacticalAttack: (state: CharacterCombatState, action: PayloadAction<TacticalRangedAttackPayload>) => {
     const map = state.tacticalMap;
     const attacker = map ? tacticalCombatant(map, map.activeCharacterId) : null;
     const target = map ? tacticalCombatant(map, map.plannedAttackTargetId) : null;

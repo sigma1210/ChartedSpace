@@ -7,7 +7,6 @@ export type AhlMeleeEffect = "none" | "stun" | "light" | "unconscious" | "dead";
 export interface AhlMeleeResult { roll: number; modifiedRoll: number; differential: number; tableDifferential: -6 | -4 | -2 | 0 | 1 | 3 | 5 | 7 | 9; armorColumnShift: number; effect: AhlMeleeEffect }
 export interface AhlMoraleResult { roll: number; baseMorale: number; lightWoundModifier: 0 | -1; leadershipModifier: number; modifiedMorale: number; passed: boolean }
 
-export const rollDicePair = (): DicePair => ({ first: Math.floor(Math.random() * 6) + 1, second: Math.floor(Math.random() * 6) + 1 });
 export const resolveAhlMoraleCheck = (combatant: { moraleFactor: number; woundState: WoundState }, dice: DicePair, leadershipModifier = 0): AhlMoraleResult => {
   const roll = dice.first + dice.second;
   const lightWoundModifier = combatant.woundState === "light" ? -1 : 0;

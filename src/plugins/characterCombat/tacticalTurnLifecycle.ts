@@ -6,6 +6,7 @@ import { resolveTacticalPendingDoorCommands } from "./tacticalDoors";
 import { tacticalHitRollEvent } from "./tacticalFire";
 import { queueTacticalUnexpectedFireMoraleCheck, resolveTacticalCasualtyMoraleChecks, resolveTacticalCoweringRecovery, resolveTacticalPanicFlight, resolveTacticalUnexpectedFireMoraleChecks } from "./tacticalMorale";
 import { tacticalVisibilitySnapshot } from "./tacticalObservation";
+import type { TacticalCoveringFireSnapRolls } from "./tacticalRolls";
 import { advanceTacticalPlayerActivation, tacticalCombatant, tacticalPlayerIds } from "./tacticalStateHelpers";
 import type { CharacterCombatState, TacticalMapState } from "./types";
 import { applyTacticalWound } from "./tacticalWounds";
@@ -116,7 +117,7 @@ export const tacticalTurnLifecycleReducers = {
     map.selectedTerrainObjectId = null;
     advanceTacticalPlayerActivation(map);
   },
-  resolveTacticalCoveringFireSnap: (state: CharacterCombatState, action: PayloadAction<{ fire: boolean; targetId?: string; hitDice: DicePair; woundDice: DicePair; phaseRolls: TacticalEnemyPhaseRolls }>) => {
+  resolveTacticalCoveringFireSnap: (state: CharacterCombatState, action: PayloadAction<TacticalCoveringFireSnapRolls>) => {
     const map = state.tacticalMap;
     const shooterId = map?.pendingCoveringFireSnapIds[0];
     const shooter = map ? tacticalCombatant(map, shooterId) : null;

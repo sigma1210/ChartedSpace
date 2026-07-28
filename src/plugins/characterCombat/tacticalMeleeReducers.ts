@@ -1,6 +1,7 @@
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { resolveAhlMelee } from "./combatResolution";
 import { meleeEnemies, pointKey, reachableOpenMapMovement } from "./geometry";
+import type { TacticalMeleeExchangeRolls } from "./tacticalRolls";
 import { advanceTacticalPlayerActivation, tacticalCombatant } from "./tacticalStateHelpers";
 import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges } from "./tacticalTerrain";
 import type { CharacterCombatState } from "./types";
@@ -51,7 +52,7 @@ export const tacticalMeleeReducers = {
     map.plannedMeleeTargetId = null;
     map.movementMode = "walk";
   },
-  confirmTacticalMelee: (state: CharacterCombatState, action: PayloadAction<{ attackRoll: number; responseRoll: number }>) => {
+  confirmTacticalMelee: (state: CharacterCombatState, action: PayloadAction<TacticalMeleeExchangeRolls>) => {
     const map = state.tacticalMap;
     const attackerId = map?.activeCharacterId;
     const targetId = map?.plannedMeleeTargetId;

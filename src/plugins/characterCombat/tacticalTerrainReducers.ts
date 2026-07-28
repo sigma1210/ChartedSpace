@@ -1,5 +1,5 @@
 import type { Draft, PayloadAction } from "@reduxjs/toolkit";
-import { weaponPenetrationForRange, type DicePair } from "./combatResolution";
+import { weaponPenetrationForRange } from "./combatResolution";
 import { distanceBetween } from "./enemyTactics";
 import { pointKey } from "./geometry";
 import { prepareTacticalAmmunition, spendTacticalAmmunition } from "./tacticalAmmunition";
@@ -12,6 +12,7 @@ import {
   travellerTaskTarget,
 } from "./tacticalConsoleVictory";
 import { irisValveAcrossPressureDifferential, tacticalTerrainObject } from "./tacticalDoors";
+import type { TacticalConsoleCheckRolls, TacticalStructuralFireRolls } from "./tacticalRolls";
 import { randomTacticalEnemyAvatarPath } from "./tacticalEnemyDefinitions";
 import {
   buildTransformedInteractiveHuman,
@@ -149,7 +150,7 @@ export const tacticalTerrainReducers = {
   },
   attemptTacticalConsoleCheck: (
     state: Draft<CharacterCombatState>,
-    action: PayloadAction<{ operationId: string; dice: DicePair }>,
+    action: PayloadAction<TacticalConsoleCheckRolls>,
   ) => {
     const map = state.tacticalMap;
     const characterId = map?.activeCharacterId;
@@ -240,7 +241,7 @@ export const tacticalTerrainReducers = {
   },
   fireAtTacticalTerrain: (
     state: Draft<CharacterCombatState>,
-    action: PayloadAction<{ hitDice: DicePair }>,
+    action: PayloadAction<TacticalStructuralFireRolls>,
   ) => {
     const map = state.tacticalMap;
     const characterId = map?.activeCharacterId;

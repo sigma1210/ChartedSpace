@@ -1,7 +1,8 @@
 import type { PayloadAction } from "@reduxjs/toolkit";
-import { escalateWoundState, woundStateForTotal, type DicePair } from "./combatResolution";
+import { escalateWoundState, woundStateForTotal } from "./combatResolution";
 import { collateralBlastCells, grenadeBlastCells, grenadeLandingPoint, grenadeThrowCoverModifier, grenadeThrowRangeModifier, pointKey, validGrenadeTargets } from "./geometry";
-import { collateralCheckPasses, detonateTacticalSatchelsReceivingCollateral, resolveTacticalSatchelCharge, type TacticalCollateralRolls } from "./tacticalCollateral";
+import { collateralCheckPasses, detonateTacticalSatchelsReceivingCollateral, resolveTacticalSatchelCharge } from "./tacticalCollateral";
+import type { TacticalGrenadePayload, TacticalSatchelDetonationRolls } from "./tacticalRolls";
 import { advanceTacticalPlayerActivation, tacticalCombatant } from "./tacticalStateHelpers";
 import type { CharacterCombatState, GridPoint } from "./types";
 import { applyTacticalWound } from "./tacticalWounds";
@@ -64,7 +65,7 @@ export const tacticalExplosivesReducers = {
     map.plannedGrenadeTarget = null;
     map.movementMode = "walk";
   },
-  confirmTacticalGrenade: (state: CharacterCombatState, action: PayloadAction<{ rollsByCombatantId: Record<string, DicePair>; throwDice: DicePair; scatterDice: DicePair; occupiedSquareRolls?: Record<string, number>; collateralRolls: TacticalCollateralRolls }>) => {
+  confirmTacticalGrenade: (state: CharacterCombatState, action: PayloadAction<TacticalGrenadePayload>) => {
     const map = state.tacticalMap;
     const attackerId = map?.activeCharacterId;
     const center = map?.plannedGrenadeTarget;
@@ -206,7 +207,7 @@ export const tacticalExplosivesReducers = {
     state.tacticalMap.satchelPlacementPending = false;
     state.tacticalMap.movementMode = "walk";
   },
-  detonateTacticalSatchelCharge: (state: CharacterCombatState, action: PayloadAction<{ chargeId: string; rollsByCombatantId: TacticalCollateralRolls }>) => {
+  detonateTacticalSatchelCharge: (state: CharacterCombatState, action: PayloadAction<TacticalSatchelDetonationRolls>) => {
     const map = state.tacticalMap;
     const characterId = map?.activeCharacterId;
     const character = map ? tacticalCombatant(map, characterId) : null;
