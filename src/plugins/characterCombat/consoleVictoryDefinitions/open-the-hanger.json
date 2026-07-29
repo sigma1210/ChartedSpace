@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "open-the-hanger",
+  "scenarioId": "open-the-hanger",
+  "operations": [
+    {
+      "id": "console-1x1-1-operation-1",
+      "consolePlacementId": "console-1x1-1",
+      "label": "Open Hanger door",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "console-1x1-1-operation-1-check-1",
+          "skill": "Computer",
+          "difficulty": "average",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      }
+    }
+  ]
+}

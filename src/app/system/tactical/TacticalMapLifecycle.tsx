@@ -3,7 +3,6 @@ import {
   initializeTacticalDraftPlaytest,
   initializeTacticalMapSetup,
   recordTacticalEnemySightings,
-  recordTacticalExploration,
 } from "@/plugins/characterCombat/slice";
 import type { TacticalConsoleVictoryDefinitionFile } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import type { TacticalScenarioDefinitionFile } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
@@ -21,8 +20,7 @@ type TacticalMapLifecycleProps = {
   characterStatus: LoadStatus;
   shipStatus: LoadStatus;
   characters: CharacterSummary[];
-  exploredCells: ReadonlySet<string>;
-  visibleCellKeys: string[];
+  visibleEnemyPointKeys: string[];
   visibleEnemySightings: Array<{
     id: string;
     position: { x: number; y: number };
@@ -39,8 +37,7 @@ export const TacticalMapLifecycle = ({
   characterStatus,
   shipStatus,
   characters,
-  exploredCells,
-  visibleCellKeys,
+  visibleEnemyPointKeys,
   visibleEnemySightings,
   activeCombatant,
   selectedProfileCharacterId,
@@ -53,16 +50,11 @@ export const TacticalMapLifecycle = ({
   }, [characterStatus, dispatch]);
 
   useEffect(() => {
-    const newlyExplored = visibleCellKeys.filter((key) => !exploredCells.has(key));
-    if (newlyExplored.length > 0) dispatch(recordTacticalExploration(newlyExplored));
-  }, [dispatch, exploredCells, visibleCellKeys]);
-
-  useEffect(() => {
     dispatch(recordTacticalEnemySightings({
-      visibleCellKeys,
+      visibleCellKeys: visibleEnemyPointKeys,
       enemies: visibleEnemySightings,
     }));
-  }, [dispatch, visibleCellKeys, visibleEnemySightings]);
+  }, [dispatch, visibleEnemyPointKeys, visibleEnemySightings]);
 
   useEffect(() => {
     if (characterStatus !== "loaded" || shipStatus !== "loaded") return;

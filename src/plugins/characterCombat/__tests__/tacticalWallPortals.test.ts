@@ -39,6 +39,14 @@ describe("tactical wall portal placement", () => {
     )).toBeNull();
   });
 
+  it("does not offer portal positions on curved walls", () => {
+    expect(tacticalWallPortalPlacementCandidate(
+      [{ id: "curve", from: { x: 0, y: 0 }, control: { x: 2.5, y: 4 }, to: { x: 5, y: 0 } }],
+      { x: 2.5, y: 0.1 },
+      "sliding-door",
+    )).toBeNull();
+  });
+
   it("repositions a portal on its parent wall while ignoring its current slot", () => {
     const walls = [{
       id: "wall-1",

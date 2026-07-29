@@ -1,4 +1,4 @@
-import type { CombatScenario, Combatant, DoorSegment, GridPoint, LightingLevel, PlannedMove, TacticalLightSource, WallSegment } from "./types";
+import type { CombatScenario, Combatant, DoorSegment, GridPoint, PlannedMove, TacticalLightSource, WallSegment } from "./types";
 import { distanceInSquares, snapShotTarget } from "./combatResolution";
 import { tacticalMovementEdgeKey } from "./tacticalTerrain";
 import { tacticalCellsSeparatedBySegment, tacticalMovementStepCrossesWall } from "./tacticalSegmentGeometry";
@@ -445,45 +445,31 @@ const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
   };
 };
 
-export const tacticalCrewVisibilityMask = (scenario: CombatScenario) => {
-  const mask = new Map<string, LightingLevel>();
-  const observers = scenario.combatants.filter((unit) => unit.side === "player" && !unit.defeated && !unit.surrendered);
+export const tacticalCrewVisiblePointKeys = (
+  scenario: CombatScenario,
+  points: readonly GridPoint[],
+) => {
+  const visible = new Set<string>();
+  const observers = scenario.combatants.filter(
+    (unit) => unit.side === "player" && !unit.defeated && !unit.surrendered,
+  );
+  if (observers.length === 0 || points.length === 0) return visible;
+
   const lineOfSight = preparedTacticalLineOfSight(scenario);
-  const interior = new Set((scenario.interiorCells ?? []).map(pointKey));
-  const flares = new Set((scenario.flareCells ?? []).map(pointKey));
-  const exteriorLightThroughDoor = new Set<string>();
-  if (scenario.exteriorLighting === "illuminated") scenario.doors.filter((door) => door.open).forEach((door) => {
-    const [first, second] = doorAdjacentCells(door);
-    const firstInside = interior.has(pointKey(first));
-    const secondInside = interior.has(pointKey(second));
-    if (firstInside !== secondInside) exteriorLightThroughDoor.add(pointKey(firstInside ? first : second));
-  });
-  const sourceLit = new Set<string>();
-  tacticalLightSources(scenario).forEach((source) => {
-    for (let x = Math.max(0, source.position.x - source.range); x <= Math.min(scenario.width - 1, source.position.x + source.range); x += 1) {
-      for (let y = Math.max(0, source.position.y - source.range); y <= Math.min(scenario.height - 1, source.position.y + source.range); y += 1) {
-        const point = { x, y };
-        if (tacticalLightReaches(scenario, source, point)) sourceLit.add(pointKey(point));
-      }
+  const uniquePoints = new Map(points.map((point) => [pointKey(point), point]));
+  uniquePoints.forEach((point, key) => {
+    if (
+      observers.some(
+        (observer) =>
+          samePoint(observer.position, point) ||
+          lineOfSight(observer.position, point),
+      )
+    ) {
+      visible.add(key);
     }
   });
-  const lightingAt = (point: GridPoint): LightingLevel => {
-    const key = pointKey(point);
-    if (sourceLit.has(key) || flares.has(key) || exteriorLightThroughDoor.has(key)) return "illuminated";
-    if (interior.has(key)) return "dark";
-    return scenario.exteriorLighting ?? scenario.lightingByCell?.[key] ?? scenario.defaultLighting ?? "illuminated";
-  };
-  for (const observer of observers) {
-    for (let x = 0; x < scenario.width; x += 1) {
-      for (let y = 0; y < scenario.height; y += 1) {
-        const point = { x, y };
-        if (mask.has(pointKey(point))) continue;
-        if (!samePoint(observer.position, point) && !lineOfSight(observer.position, point)) continue;
-        mask.set(pointKey(point), lightingAt(point));
-      }
-    }
-  }
-  return mask;
+
+  return visible;
 };
 
 export const tacticalVisibilityAssessment = (scenario: CombatScenario, observer: Combatant, target: Combatant) => {

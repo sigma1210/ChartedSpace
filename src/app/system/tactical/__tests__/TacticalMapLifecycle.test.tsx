@@ -5,7 +5,6 @@ import {
   initializeTacticalDraftPlaytest,
   initializeTacticalMapSetup,
   recordTacticalEnemySightings,
-  recordTacticalExploration,
 } from "@/plugins/characterCombat/slice";
 import { defaultTacticalConsoleVictoryDefinition } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { defaultTacticalScenarioDefinition } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
@@ -46,8 +45,7 @@ const defaultProps = {
   characterStatus: "loaded" as const,
   shipStatus: "loaded" as const,
   characters: [character],
-  exploredCells: new Set<string>(),
-  visibleCellKeys: [] as string[],
+  visibleEnemyPointKeys: [] as string[],
   visibleEnemySightings: [],
   activeCombatant: null,
   selectedProfileCharacterId: null,
@@ -94,7 +92,7 @@ describe("TacticalMapLifecycle", () => {
     );
   });
 
-  it("records only newly visible cells and current enemy sightings", () => {
+  it("records current enemy sightings and directly checked enemy points", () => {
     const visibleEnemySightings = [{
       id: "enemy-1",
       position: { x: 4, y: 5 },
@@ -102,23 +100,16 @@ describe("TacticalMapLifecycle", () => {
     render(
       <TacticalMapLifecycle
         {...defaultProps}
-        exploredCells={new Set(["1,1"])}
-        visibleCellKeys={["1,1", "2,2"]}
+        visibleEnemyPointKeys={["1:1", "2:2"]}
         visibleEnemySightings={visibleEnemySightings}
       />,
     );
 
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: recordTacticalExploration.type,
-        payload: ["2,2"],
-      }),
-    );
-    expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
         type: recordTacticalEnemySightings.type,
         payload: {
-          visibleCellKeys: ["1,1", "2,2"],
+          visibleCellKeys: ["1:1", "2:2"],
           enemies: visibleEnemySightings,
         },
       }),

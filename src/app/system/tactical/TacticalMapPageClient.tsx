@@ -4,7 +4,7 @@ import { Canvas, events as createCanvasEvents } from "@react-three/fiber";
 import { useMemo, type ComponentProps } from "react";
 import { selectTacticalTerrainObject, updateTacticalNavigationHud } from "@/plugins/characterCombat/slice";
 import { DEFAULT_TACTICAL_NAVIGATION_HUD_LAYOUT } from "@/plugins/characterCombat/tacticalHudDefaults";
-import { pointKey, tacticalCrewVisibilityMask } from "@/plugins/characterCombat/geometry";
+import { pointKey, tacticalCrewVisiblePointKeys } from "@/plugins/characterCombat/geometry";
 import { buildTacticalMovementPreview } from "@/plugins/characterCombat/tacticalMovementPreview";
 import type { TacticalScenarioDefinitionFile } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import type { TacticalConsoleVictoryDefinitionFile } from "@/plugins/characterCombat/tacticalConsoleVictory";
@@ -35,6 +35,11 @@ const safeCanvasEvents: NonNullable<ComponentProps<typeof Canvas>["events"]> = (
   return { ...manager, connect: (target) => { if (target) connect?.(target); } };
 };
 
+const EMPTY_LAST_KNOWN_ENEMY_POSITIONS: Record<
+  string,
+  { x: number; y: number }
+> = {};
+
 const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition: TacticalScenarioDefinitionFile; consoleVictory: TacticalConsoleVictoryDefinitionFile; onExit: () => void } }) => {
   const dispatch = useAppDispatch();
   const status = useAppSelector(selectCharactersStatus);
@@ -52,12 +57,29 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   const scenarioHudLayout = tacticalMap.scenarioHudLayout ?? DEFAULT_TACTICAL_SCENARIO_HUD_LAYOUT;
   const deploymentHudLayout = tacticalMap.deploymentHudLayout ?? { visible: true, pinned: false, position: { x: 16, y: 190 } };
   const navigationHudLayout = tacticalMap.navigationHudLayout ?? DEFAULT_TACTICAL_NAVIGATION_HUD_LAYOUT;
-  const crewVisibility = useMemo(() => tacticalCrewVisibilityMask(tacticalMap.scenario), [tacticalMap.scenario]);
-  const exploredCells = useMemo(() => new Set(tacticalMap.exploredCellKeys ?? []), [tacticalMap.exploredCellKeys]);
-  const visibleCellKeys = useMemo(() => [...crewVisibility.keys()], [crewVisibility]);
+  const lastKnownEnemyPositions = tacticalMap.lastKnownEnemyPositions ?? EMPTY_LAST_KNOWN_ENEMY_POSITIONS;
   const enemies = useMemo(() => tacticalMap.scenario.combatants.filter((unit) => unit.side === "enemy"), [tacticalMap.scenario.combatants]);
-  const visibleEnemies = useMemo(() => enemies.filter((enemy) => crewVisibility.has(pointKey(enemy.position))), [crewVisibility, enemies]);
+  const enemyVisibilityPoints = useMemo(
+    () => enemies.flatMap((enemy) => [
+      enemy.position,
+      ...(tacticalMap.movementAnimationByCharacterId[enemy.id]?.path ?? []),
+    ]).concat(Object.values(lastKnownEnemyPositions)),
+    [enemies, lastKnownEnemyPositions, tacticalMap.movementAnimationByCharacterId],
+  );
+  const visibleEnemyPointKeys = useMemo(
+    () => tacticalScenarioStatus === "setup"
+      ? new Set<string>()
+      : tacticalCrewVisiblePointKeys(tacticalMap.scenario, enemyVisibilityPoints),
+    [enemyVisibilityPoints, tacticalMap.scenario, tacticalScenarioStatus],
+  );
+  const visibleEnemies = useMemo(
+    () => tacticalScenarioStatus === "setup"
+      ? []
+      : enemies.filter((enemy) => visibleEnemyPointKeys.has(pointKey(enemy.position))),
+    [enemies, tacticalScenarioStatus, visibleEnemyPointKeys],
+  );
   const visibleEnemyIds = useMemo(() => new Set(visibleEnemies.map((enemy) => enemy.id)), [visibleEnemies]);
+  const visibleEnemyPointKeyList = useMemo(() => [...visibleEnemyPointKeys], [visibleEnemyPointKeys]);
   const visibleEnemySightings = useMemo(() => visibleEnemies.map((enemy) => ({ id: enemy.id, position: { ...enemy.position } })), [visibleEnemies]);
   const selectedTacticalCharacterId = tacticalScenarioStatus === "setup" ? tacticalMap.deploymentCharacterId : tacticalMap.activeCharacterId;
   const activeCombatant = tacticalMap.scenario.combatants.find((unit) => unit.id === selectedTacticalCharacterId && unit.side === "player") ?? null;
@@ -70,8 +92,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
       characterStatus={status}
       shipStatus={shipStatus}
       characters={characters}
-      exploredCells={exploredCells}
-      visibleCellKeys={visibleCellKeys}
+      visibleEnemyPointKeys={visibleEnemyPointKeyList}
       visibleEnemySightings={visibleEnemySightings}
       activeCombatant={activeCombatant}
       selectedProfileCharacterId={selected?.id ?? null}
@@ -79,7 +100,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
     />
     <TacticalHudLayer tacticalMap={tacticalMap} scenarioHudLayout={scenarioHudLayout} deploymentHudLayout={deploymentHudLayout} navigationHudLayout={navigationHudLayout}>
       <Canvas events={safeCanvasEvents} shadows="basic" frameloop="demand" dpr={[1, 1.5]} onPointerMissed={() => { dispatch(setSelectedProfileCharacter(null)); dispatch(selectTacticalTerrainObject(null)); }}>
-        <TacticalScene crewVisibility={crewVisibility} exploredCells={exploredCells} lastKnownEnemyPositions={tacticalMap.lastKnownEnemyPositions ?? {}} reachableMoves={movementPreview.legalMoves} visibleEnemyIds={visibleEnemyIds} />
+        <TacticalScene visibleEnemyPointKeys={visibleEnemyPointKeys} lastKnownEnemyPositions={lastKnownEnemyPositions} reachableMoves={movementPreview.legalMoves} visibleEnemyIds={visibleEnemyIds} />
       </Canvas>
       <div className="pointer-events-none absolute left-4 top-4 border border-cyan-500/50 bg-slate-950/90 px-3 py-2 font-mono text-cyan-100 shadow-lg">
         <div className="text-xs font-bold uppercase tracking-[0.22em]">Tactical Map</div>

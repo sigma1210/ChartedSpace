@@ -26,6 +26,7 @@ import deploymentZone9x9DefinitionJson from "./terrainDefinitions/deployment-zon
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
 import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
 import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
+import { tacticalQuadraticBezierWallSegments } from "./tacticalBezierWalls";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
 import type { TacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
 
@@ -90,11 +91,24 @@ export interface TacticalEnemyPlacement {
 }
 
 export interface TacticalDrawnWall extends WallSegment {
+  control?: GridPoint;
   portals?: {
     id: string;
     kind: "sliding-door" | "iris-valve";
     position: number;
   }[];
+}
+
+export interface TacticalScenarioTracingTemplate {
+  imagePath: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
+  visible: boolean;
+  lockAspectRatio: boolean;
 }
 
 export interface TacticalScenarioDefinitionFile {
@@ -105,6 +119,7 @@ export interface TacticalScenarioDefinitionFile {
   briefing: string;
   objective: string;
   map: { width: number; height: number; backgroundImage?: string };
+  tracingTemplate?: TacticalScenarioTracingTemplate;
   terrainPlacements: TacticalTerrainPlacement[];
   drawnWalls?: TacticalDrawnWall[];
   deploymentEdges?: TacticalDeploymentEdge[];
@@ -330,8 +345,15 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     if (drawnWallIds.has(wall.id)) throw new Error(`Duplicate drawn wall ID: ${wall.id}.`);
     if (drawnObjectIds.has(wall.id)) throw new Error(`Duplicate drawn terrain ID: ${wall.id}.`);
     drawnObjectIds.add(wall.id);
-    if (!validVertex(wall.from) || !validVertex(wall.to)) throw new Error(`Drawn wall ${wall.id} extends outside the map.`);
+    if (!validVertex(wall.from) || !validVertex(wall.to) || (wall.control && !validVertex(wall.control))) throw new Error(`Drawn wall ${wall.id} extends outside the map.`);
     if (wall.from.x === wall.to.x && wall.from.y === wall.to.y) throw new Error(`Drawn wall ${wall.id} must have different endpoints.`);
+    if (wall.control && (wall.portals?.length ?? 0) > 0) throw new Error(`Curved drawn wall ${wall.id} cannot contain portals.`);
+    if (wall.control) {
+      tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).forEach((segment) => {
+        if (drawnObjectIds.has(segment.id)) throw new Error(`Duplicate drawn terrain ID: ${segment.id}.`);
+        drawnObjectIds.add(segment.id);
+      });
+    }
     const length = Math.hypot(wall.to.x - wall.from.x, wall.to.y - wall.from.y);
     let previousPortalEnd = 0;
     [...(wall.portals ?? [])].sort((first, second) => first.position - second.position).forEach((portal) => {
@@ -346,7 +368,9 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       previousPortalEnd = end;
       drawnObjectIds.add(portal.id);
     });
-    const key = tacticalWallSegmentKey(wall);
+    const key = wall.control
+      ? `${tacticalWallSegmentKey(wall)}:control:${wall.control.x}:${wall.control.y}`
+      : tacticalWallSegmentKey(wall);
     if (drawnWallSegments.has(key)) throw new Error(`Duplicate drawn wall segment: ${wall.id}.`);
     drawnWallIds.add(wall.id);
     drawnWallSegments.add(key);
@@ -586,6 +610,14 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   });
   const drawnWallObjects = (scenario.drawnWalls ?? []).flatMap((wall): TacticalTerrainObject[] => {
     const portals = [...(wall.portals ?? [])].sort((first, second) => first.position - second.position);
+    if (wall.control) return tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).map((segment) => ({
+      id: segment.id,
+      kind: "wall",
+      edge: { from: { ...segment.from }, to: { ...segment.to } },
+      blocking: true,
+      targetable: true,
+      integrity: 3,
+    }));
     if (portals.length === 0) return [{
       id: wall.id,
       kind: "wall",

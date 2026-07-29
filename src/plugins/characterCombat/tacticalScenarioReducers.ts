@@ -307,6 +307,14 @@ export const tacticalScenarioReducers = {
     sightings.forEach((position, id) => {
       lastKnown[id] = { ...position };
     });
+    const previousEntries = Object.entries(map.lastKnownEnemyPositions ?? {});
+    const nextEntries = Object.entries(lastKnown);
+    const unchanged = previousEntries.length === nextEntries.length
+      && nextEntries.every(([id, position]) => {
+        const previous = map.lastKnownEnemyPositions?.[id];
+        return previous?.x === position.x && previous.y === position.y;
+      });
+    if (unchanged) return;
     map.lastKnownEnemyPositions = lastKnown;
   },
   startTacticalScenario: (state: Draft<CharacterCombatState>) => {

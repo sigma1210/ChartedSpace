@@ -1,5 +1,5 @@
 import { Html } from "@react-three/drei";
-import { Suspense, useMemo } from "react";
+import { memo, Suspense, useMemo } from "react";
 import { Path, Shape } from "three";
 import {
   AnimatedCombatantFallback,
@@ -23,6 +23,7 @@ import {
   tacticalStairPlatformPlacement,
   tacticalVisualHeightAt,
 } from "./tacticalSceneGeometry";
+import { tacticalDeploymentAreaScenarioEqual } from "./tacticalStaticLayerMemo";
 
 const IRIS_WALL_SHAPE = (() => {
   const wallBottom = -TACTICAL_DOOR_CENTER_Y;
@@ -260,13 +261,14 @@ const TacticalBridges = ({
   </>
 );
 
-const DeploymentArea = ({
+const DeploymentArea = memo(function DeploymentArea({
   scenario,
   onSelectCell,
 }: {
   scenario: CombatScenario;
   onSelectCell: (point: { x: number; y: number }) => void;
-}) => (
+}) {
+  return (
   <>
     {(scenario.deploymentCells ?? []).map((cell) => (
       <mesh
@@ -287,7 +289,10 @@ const DeploymentArea = ({
       </mesh>
     ))}
   </>
-);
+  );
+}, (previous, next) =>
+  previous.onSelectCell === next.onSelectCell
+  && tacticalDeploymentAreaScenarioEqual(previous.scenario, next.scenario));
 
 const LiquidHydrogenAreas = ({ scenario }: { scenario: CombatScenario }) => (
   <>
@@ -528,11 +533,13 @@ export const TacticalTerrainLayer = ({
   section,
   tacticalMap,
   onSelectCell,
+  onSelectDeploymentCell,
   onSelectTerrain,
 }: {
   section: "base" | "structures";
   tacticalMap: TacticalMapState;
   onSelectCell: (point: { x: number; y: number }) => void;
+  onSelectDeploymentCell: (point: { x: number; y: number }) => void;
   onSelectTerrain: (
     object: TacticalTerrainObject,
     point: { x: number; y: number },
@@ -563,7 +570,10 @@ export const TacticalTerrainLayer = ({
         <TacticalBridges scenario={scenario} onSelectCell={onSelectCell} />
         <TacticalCloseMachineryTerrain scenario={scenario} onSelectCell={onSelectCell} />
         {tacticalMap.scenarioStatus === "setup" && (
-          <DeploymentArea scenario={scenario} onSelectCell={onSelectCell} />
+          <DeploymentArea
+            scenario={scenario}
+            onSelectCell={onSelectDeploymentCell}
+          />
         )}
       </>
     );

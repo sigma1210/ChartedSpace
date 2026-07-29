@@ -12,6 +12,7 @@ export const tacticalConsoleVictoryDirectory = path.join(process.cwd(), "src", "
 
 const scenarioIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const gridPointSchema = z.object({ x: z.number().int(), y: z.number().int() }).strict();
+const finitePointSchema = z.object({ x: z.number().finite(), y: z.number().finite() }).strict();
 const terminalSettingsSchema = z.object({
   terminalKind: z.enum(["generic", "navigation", "engineering", "security", "communications"]).optional(),
   label: z.string().optional(),
@@ -46,6 +47,21 @@ const enemyPlacementSchema = z.object({
   facing: z.enum(["north", "east", "south", "west"]).default("north"),
   avatarPath: z.string().startsWith("/generated/avatars/pool/").endsWith(".png"),
 }).strict();
+const tracingTemplateImagePathSchema = z.string()
+  .startsWith("/")
+  .refine((value) => !value.includes(".."), "Template image paths cannot contain parent-directory segments.")
+  .refine((value) => /\.(?:png|jpe?g|webp)$/i.test(value), "Template images must be PNG, JPEG, or WebP files.");
+const tracingTemplateSchema = z.object({
+  imagePath: tracingTemplateImagePathSchema,
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().positive(),
+  height: z.number().finite().positive(),
+  rotation: z.number().finite(),
+  opacity: z.number().finite().min(0).max(1),
+  visible: z.boolean(),
+  lockAspectRatio: z.boolean(),
+}).strict();
 const scenarioSchema = z.object({
   schemaVersion: z.literal(1),
   id: z.string().regex(scenarioIdPattern),
@@ -58,17 +74,23 @@ const scenarioSchema = z.object({
     height: z.number().int().positive(),
     backgroundImage: z.string().min(1).optional(),
   }).strict(),
+  tracingTemplate: tracingTemplateSchema.optional(),
   terrainPlacements: z.array(placementSchema),
   drawnWalls: z.array(z.object({
     id: z.string().min(1),
     from: gridPointSchema,
     to: gridPointSchema,
+    control: finitePointSchema.optional(),
     portals: z.array(z.object({
       id: z.string().min(1),
       kind: z.enum(["sliding-door", "iris-valve"]),
       position: z.number().min(0).max(1),
     }).strict()).optional(),
-  }).strict()).optional(),
+  }).strict().superRefine((wall, context) => {
+    if (wall.control && (wall.portals?.length ?? 0) > 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["portals"], message: "Curved walls cannot contain portals." });
+    }
+  })).optional(),
   deploymentEdges: z.array(z.enum(["north", "east", "south", "west"])).default(["south"]),
   enemyPlacements: z.array(enemyPlacementSchema).default([]),
   fireCells: z.array(gridPointSchema),

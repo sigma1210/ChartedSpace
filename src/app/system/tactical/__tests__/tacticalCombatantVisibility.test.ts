@@ -3,6 +3,35 @@ import type { TacticalMapState } from "@/plugins/characterCombat/types";
 import { tacticalVisibleCombatants } from "../tacticalCombatantVisibility";
 
 describe("tactical combatant visibility", () => {
+  it("keeps enemies hidden during setup even when the board is visible", () => {
+    const scenario = buildDefaultTacticalScenario("exterior-dark");
+    const player = scenario.combatants.find(
+      (combatant) => combatant.side === "player",
+    )!;
+    const enemy = scenario.combatants.find(
+      (combatant) => combatant.side === "enemy",
+    )!;
+    const tacticalMap = {
+      scenario: {
+        ...scenario,
+        combatants: [player, enemy],
+      },
+      scenarioStatus: "setup",
+      deployedCharacterIds: [player.id],
+      movementAnimationByCharacterId: {},
+    } as TacticalMapState;
+
+    expect(
+      tacticalVisibleCombatants(
+        tacticalMap,
+        new Set<string>([
+          `${player.position.x}:${player.position.y}`,
+          `${enemy.position.x}:${enemy.position.y}`,
+        ]),
+      ),
+    ).toEqual([player]);
+  });
+
   it("keeps an enemy renderable while its observed movement path animates", () => {
     const scenario = buildDefaultTacticalScenario("exterior-dark");
     const enemy = scenario.combatants.find(
@@ -33,7 +62,7 @@ describe("tactical combatant visibility", () => {
     expect(
       tacticalVisibleCombatants(
         tacticalMap,
-        new Map<string, unknown>([["2:2", true]]),
+        new Set<string>(["2:2"]),
       ),
     ).toEqual([hiddenEnemy]);
   });
@@ -55,7 +84,7 @@ describe("tactical combatant visibility", () => {
     expect(
       tacticalVisibleCombatants(
         tacticalMap,
-        new Map<string, unknown>([["2:2", true]]),
+        new Set<string>(["2:2"]),
       ),
     ).toEqual([]);
   });
@@ -87,7 +116,7 @@ describe("tactical combatant visibility", () => {
     expect(
       tacticalVisibleCombatants(
         tacticalMap,
-        new Map<string, unknown>([["2:2", true]]),
+        new Set<string>(["2:2"]),
         { [enemy.id]: movement },
       ),
     ).toEqual([]);

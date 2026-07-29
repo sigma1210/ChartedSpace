@@ -1,4 +1,4 @@
-import { tacticalCrewVisibilityMask, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightReaches, tacticalLightSources, tacticalRangedEnemies, tacticalVisibilityAssessment } from "../geometry";
+import { tacticalCrewVisiblePointKeys, tacticalLightingLevelAt, tacticalLightPatchVisibleAt, tacticalLightReaches, tacticalLightSources, tacticalRangedEnemies, tacticalVisibilityAssessment } from "../geometry";
 import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
 import reducer, { confirmTacticalAttack, deployTacticalCharacter, equipTacticalDeploymentItem, initializeTacticalMapSetup, selectTacticalAttackMode, selectTacticalAttackTarget, selectTacticalDeploymentCharacter, selectTacticalLightingPreset, startTacticalScenario } from "../slice";
 import type { CharacterCombatState, CombatScenario, Combatant } from "../types";
@@ -47,43 +47,52 @@ const scenarioWith = (observer: Combatant, target: Combatant, overrides: Partial
 });
 
 describe("AHL tactical visibility", () => {
-  it("builds a crew visibility mask from living crew LOS and records effective lighting", () => {
+  it("checks crew visibility only at requested points", () => {
     const observer = combatant("observer", { x: 1, y: 1 });
-    const target = combatant("target", { x: 5, y: 1 });
-    const scenario = scenarioWith(observer, target, {
-      width: 7,
-      height: 4,
-      exteriorLighting: "dark",
-      lightingByCell: undefined,
-      lightSources: [{ id: "test-light", position: { x: 2, y: 1 }, range: 1 }],
-      walls: [{ id: "visibility-wall", from: { x: 4, y: 0 }, to: { x: 4, y: 4 } }],
-    });
+    const scenario = scenarioWith(
+      observer,
+      combatant("target", { x: 5, y: 1 }),
+      {
+        walls: [
+          {
+            id: "visibility-wall",
+            from: { x: 4, y: 0 },
+            to: { x: 4, y: 4 },
+          },
+        ],
+      },
+    );
 
-    const mask = tacticalCrewVisibilityMask(scenario);
-    expect(mask.get("0:1")).toBe("dark");
-    expect(mask.get("1:1")).toBe("illuminated");
-    expect(mask.get("2:1")).toBe("illuminated");
-    expect(mask.has("5:1")).toBe(false);
+    expect(
+      tacticalCrewVisiblePointKeys(scenario, [
+        { x: 3, y: 1 },
+        { x: 5, y: 1 },
+      ]),
+    ).toEqual(new Set(["3:1"]));
   });
 
-  it("updates the crew visibility mask when a door opens", () => {
-    const observer = combatant("observer", { x: 1, y: 1 });
-    const target = combatant("target", { x: 4, y: 1 });
-    const scenario = scenarioWith(observer, target, {
-      width: 6,
-      height: 3,
-      doors: [{ id: "visibility-door", from: { x: 3, y: 0 }, to: { x: 3, y: 3 }, open: false }],
+  it("does not detect requested points for defeated or surrendered crew", () => {
+    const target = { x: 3, y: 1 };
+    const defeated = combatant("observer", { x: 1, y: 1 }, {
+      defeated: true,
+      woundState: "dead",
+    });
+    const surrendered = combatant("observer", { x: 1, y: 1 }, {
+      surrendered: true,
     });
 
-    expect(tacticalCrewVisibilityMask(scenario).has("4:1")).toBe(false);
-    scenario.doors[0].open = true;
-    expect(tacticalCrewVisibilityMask(scenario).has("4:1")).toBe(true);
-  });
-
-  it("does not give defeated crew members visibility", () => {
-    const observer = combatant("observer", { x: 1, y: 1 }, { defeated: true, woundState: "dead" });
-    const target = combatant("target", { x: 3, y: 1 });
-    expect(tacticalCrewVisibilityMask(scenarioWith(observer, target)).size).toBe(0);
+    expect(
+      tacticalCrewVisiblePointKeys(
+        scenarioWith(defeated, combatant("target", target)),
+        [target],
+      ),
+    ).toEqual(new Set());
+    expect(
+      tacticalCrewVisiblePointKeys(
+        scenarioWith(surrendered, combatant("target", target)),
+        [target],
+      ),
+    ).toEqual(new Set());
   });
 
   it("lets control-room light escape only through an open door", () => {

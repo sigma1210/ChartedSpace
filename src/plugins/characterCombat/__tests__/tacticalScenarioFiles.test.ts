@@ -34,7 +34,23 @@ describe("tactical scenario files", () => {
       from: { x: 2, y: 2 },
       to: { x: 7, y: 5 },
       portals: [{ id: "diagonal-door", kind: "sliding-door", position: 0.5 }],
+    }, {
+      id: "curved-bulkhead",
+      from: { x: 12, y: 4 },
+      control: { x: 15.25, y: 9.5 },
+      to: { x: 20, y: 4 },
     }];
+    draft.tracingTemplate = {
+      imagePath: "/images/tactical/landing-pad/map.jpg",
+      x: 1.5,
+      y: -2,
+      width: 24,
+      height: 16,
+      rotation: 7.5,
+      opacity: 0.4,
+      visible: true,
+      lockAspectRatio: true,
+    };
 
     const saved = await saveTacticalScenarioAs("Cargo Deck Assault", draft, directory);
     const loaded = await loadTacticalScenarioFile("cargo-deck-assault", directory);
@@ -44,6 +60,7 @@ describe("tactical scenario files", () => {
     expect(loaded).toEqual(saved);
     expect(loaded.enemyPlacements?.[0].facing).toBe("east");
     expect(loaded.drawnWalls).toEqual(draft.drawnWalls);
+    expect(loaded.tracingTemplate).toEqual(draft.tracingTemplate);
     expect(source).toContain('\n  "schemaVersion": 1,');
     expect(await listTacticalScenarioFiles(directory)).toEqual([
       { id: "cargo-deck-assault", title: "Cargo Deck Assault", isDefault: false },
@@ -139,6 +156,58 @@ describe("tactical scenario files", () => {
     await expect(loadTacticalScenarioFile("invalid-fire", directory)).rejects.toMatchObject({
       code: "scenario-not-found",
       status: 404,
+    });
+  });
+
+  it("rejects unsafe or invalid tracing-template settings", async () => {
+    const unsafePath = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    unsafePath.tracingTemplate = {
+      imagePath: "/images/tactical/../private/map.jpg",
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 12,
+      rotation: 0,
+      opacity: 0.5,
+      visible: true,
+      lockAspectRatio: true,
+    };
+    await expect(saveTacticalScenarioAs("Unsafe Template", unsafePath, directory)).rejects.toMatchObject({
+      code: "invalid-scenario",
+      status: 400,
+    });
+
+    const invalidTransform = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    invalidTransform.tracingTemplate = {
+      imagePath: "/images/tactical/landing-pad/map.jpg",
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 12,
+      rotation: 0,
+      opacity: 1.1,
+      visible: true,
+      lockAspectRatio: false,
+    };
+    await expect(saveTacticalScenarioAs("Invalid Template Transform", invalidTransform, directory)).rejects.toMatchObject({
+      code: "invalid-scenario",
+      status: 400,
+    });
+  });
+
+  it("rejects portals on curved walls", async () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.drawnWalls = [{
+      id: "curved-portal-wall",
+      from: { x: 2, y: 2 },
+      control: { x: 5.5, y: 7.25 },
+      to: { x: 9, y: 2 },
+      portals: [{ id: "unsupported-door", kind: "sliding-door", position: 0.5 }],
+    }];
+
+    await expect(saveTacticalScenarioAs("Curved Portal Wall", draft, directory)).rejects.toMatchObject({
+      code: "invalid-scenario",
+      status: 400,
     });
   });
 

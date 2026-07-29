@@ -26,7 +26,7 @@ type WorldMovement = {
 
 type TacticalCombatantLayerProps = {
   tacticalMap: TacticalMapState;
-  crewVisibility: ReadonlyMap<string, unknown>;
+  visibleEnemyPointKeys: ReadonlySet<string>;
   selectedCombatantId: string | null;
   validTargetIds: ReadonlySet<string>;
   validMeleeTargetIds: ReadonlySet<string>;
@@ -150,7 +150,7 @@ const MapCombatant = ({
 
 export const TacticalCombatantLayer = ({
   tacticalMap,
-  crewVisibility,
+  visibleEnemyPointKeys,
   selectedCombatantId,
   validTargetIds,
   validMeleeTargetIds,
@@ -166,7 +166,7 @@ export const TacticalCombatantLayer = ({
     <>
       {tacticalVisibleCombatants(
         tacticalMap,
-        crewVisibility,
+        visibleEnemyPointKeys,
         completedMovements,
       ).map(
         (combatant) => {

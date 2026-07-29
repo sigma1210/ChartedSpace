@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "laundry-day",
+  "scenarioId": "laundry-day",
+  "operations": [
+    {
+      "id": "console-1x1-1-operation-1",
+      "consolePlacementId": "console-1x1-1",
+      "label": "Empty Washer",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "console-1x1-1-operation-1-check-1",
+          "skill": "Steward",
+          "difficulty": "simple",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "unlock",
+        "operationIds": []
+      }
+    },
+    {
+      "id": "console-1x1-2-operation-1",
+      "consolePlacementId": "console-1x1-2",
+      "label": "Fill Dryer",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "console-1x1-2-operation-1-check-1",
+          "skill": "Steward",
+          "difficulty": "simple",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      }
+    }
+  ]
+}

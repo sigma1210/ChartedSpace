@@ -1,9 +1,11 @@
 /** @jest-environment jsdom */
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import TacticalScenarioEditorClient, {
+  fitTacticalTracingTemplate,
   removeConsolePlacementOperations,
+  resizeTacticalTracingTemplate,
   tacticalEditorMarkerInteractionEnabled,
 } from "../TacticalScenarioEditorClient";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "@/plugins/characterCombat/tacticalConsoleVictory";
@@ -41,10 +43,12 @@ describe("TacticalScenarioEditorClient", () => {
 
     expect(markup).toContain("Terrain Palette");
     expect(markup).toContain("Enemy Palette");
+    expect(markup).toContain("Tracing Template");
     expect(markup).toContain(">Gang Member</span>");
     expect(markup).toContain(">Gang Leader</span>");
     expect(markup).toContain(">Fire</button>");
     expect(markup).toContain(">Wall</button>");
+    expect(markup).toContain(">Curved Wall</button>");
     expect(markup).toContain(">Door</button>");
     expect(markup).toContain(">Wall Iris Valve</button>");
     expect(markup).toContain(">Legacy Iris Valve</button>");
@@ -57,6 +61,138 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain("Crew deployment edges");
     expect(markup).not.toContain("<title>");
     expect(markup).toContain('aria-label="Gang Member 1 · facing North"');
+  });
+
+  it("fits tracing templates inside the grid while preserving their aspect ratio", () => {
+    expect(fitTacticalTracingTemplate(
+      "/images/tactical/deck.png",
+      { width: 1000, height: 500 },
+      { width: 40, height: 40 },
+    )).toEqual({
+      imagePath: "/images/tactical/deck.png",
+      x: 0,
+      y: 10,
+      width: 40,
+      height: 20,
+      rotation: 0,
+      opacity: 0.45,
+      visible: true,
+      lockAspectRatio: true,
+    });
+  });
+
+  it("resizes a tracing template from a corner and preserves the opposite corner", () => {
+    expect(resizeTacticalTracingTemplate({
+      imagePath: "/images/tactical/deck.png",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 5,
+      rotation: 0,
+      opacity: 0.5,
+      visible: true,
+      lockAspectRatio: true,
+    }, "se", { x: 20, y: 10 })).toMatchObject({
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 10,
+    });
+
+    const rotatedResize = resizeTacticalTracingTemplate({
+      imagePath: "/images/tactical/deck.png",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 5,
+      rotation: 90,
+      opacity: 0.5,
+      visible: true,
+      lockAspectRatio: false,
+    }, "se", { x: -2.5, y: 17.5 });
+    expect(rotatedResize.x).toBeCloseTo(-7.5);
+    expect(rotatedResize.y).toBeCloseTo(2.5);
+    expect(rotatedResize.width).toBeCloseTo(20);
+    expect(rotatedResize.height).toBeCloseTo(10);
+  });
+
+  it("selects, fits, hides, and removes a tracing template", async () => {
+    const OriginalImage = window.Image;
+    class MockImage {
+      naturalWidth = 1200;
+      naturalHeight = 800;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    Object.defineProperty(window, "Image", { configurable: true, writable: true, value: MockImage });
+    global.fetch = jest.fn((input) => {
+      const url = String(input);
+      if (url === "/api/tactical/templates") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ templates: [{ id: "built-in:landing-pad", label: "Landing Pad", imagePath: "/images/tactical/landing-pad/map.jpg", source: "built-in" }] }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ scenarios: [] }) } as Response);
+    }) as typeof fetch;
+
+    try {
+      render(<TacticalScenarioEditorClient />);
+      const templateSelect = await screen.findByLabelText("Template image");
+      await screen.findByRole("option", { name: "Landing Pad" });
+      fireEvent.change(templateSelect, { target: { value: "/images/tactical/landing-pad/map.jpg" } });
+
+      await waitFor(() => expect(screen.getByTestId("tracing-template-image")).toBeTruthy());
+      const templateImage = screen.getByTestId("tracing-template-image");
+      expect(templateImage.getAttribute("x")).toBe("0");
+      expect(templateImage.getAttribute("y")).toBe("0");
+      expect(templateImage.getAttribute("width")).toBe("72");
+      expect(templateImage.getAttribute("height")).toBe("48");
+      expect(templateImage.getAttribute("opacity")).toBe("0.45");
+
+      fireEvent.click(screen.getByRole("button", { name: "Adjust on map" }));
+      expect(screen.getByTestId("tracing-template-controls")).toBeTruthy();
+      expect(screen.getByTestId("tracing-template-rotation-handle")).toBeTruthy();
+
+      fireEvent.change(screen.getByLabelText("Template rotation"), { target: { value: "15" } });
+      expect(screen.getByTestId("tracing-template-image").getAttribute("transform")).toContain("rotate(15 ");
+      fireEvent.change(screen.getByLabelText("Template width"), { target: { value: "36" } });
+      expect(screen.getByTestId("tracing-template-image").getAttribute("width")).toBe("36");
+      expect(screen.getByTestId("tracing-template-image").getAttribute("height")).toBe("24");
+      fireEvent.click(screen.getByLabelText("Lock ratio"));
+      fireEvent.change(screen.getByLabelText("Template height"), { target: { value: "12" } });
+      expect(screen.getByTestId("tracing-template-image").getAttribute("width")).toBe("36");
+      expect(screen.getByTestId("tracing-template-image").getAttribute("height")).toBe("12");
+
+      const moveArea = screen.getByTestId("tracing-template-move-area");
+      fireEvent.pointerDown(moveArea, { clientX: 10, clientY: 10, pointerId: 30 });
+      fireEvent.pointerMove(screen.getByLabelText("Scenario draft map preview"), { clientX: 12, clientY: 13, pointerId: 30 });
+      fireEvent.pointerUp(screen.getByLabelText("Scenario draft map preview"), { clientX: 12, clientY: 13, pointerId: 30 });
+      expect(screen.getByTestId("tracing-template-image").getAttribute("x")).toBe("2");
+      expect(screen.getByTestId("tracing-template-image").getAttribute("y")).toBe("3");
+
+      const rotationHandle = screen.getByTestId("tracing-template-rotation-handle");
+      fireEvent.pointerDown(rotationHandle, {
+        clientX: Number(rotationHandle.getAttribute("cx")),
+        clientY: Number(rotationHandle.getAttribute("cy")),
+        pointerId: 31,
+      });
+      fireEvent.pointerMove(screen.getByLabelText("Scenario draft map preview"), { clientX: 30, clientY: 9, pointerId: 31 });
+      fireEvent.pointerUp(screen.getByLabelText("Scenario draft map preview"), { clientX: 30, clientY: 9, pointerId: 31 });
+      expect(screen.getByTestId("tracing-template-image").getAttribute("transform")).toContain("rotate(90 ");
+
+      fireEvent.click(screen.getByLabelText("Visible"));
+      expect(screen.queryByTestId("tracing-template-image")).toBeNull();
+      fireEvent.click(screen.getByLabelText("Visible"));
+      expect(screen.getByTestId("tracing-template-image")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      expect(screen.queryByTestId("tracing-template-image")).toBeNull();
+    } finally {
+      Object.defineProperty(window, "Image", { configurable: true, writable: true, value: OriginalImage });
+    }
   });
 
   it("draws a diagonal wall between snapped grid vertices and selects it", () => {
@@ -141,6 +277,42 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.queryByTestId("drawn-wall-drawn-wall-1")).toBeNull();
     expect(screen.queryByTestId("wall-portal-wall-iris-valve-1")).toBeNull();
+  });
+
+  it("draws, reshapes, moves, resizes, and deletes a curved wall", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Curved Wall" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.pointerDown(preview, { clientX: 5.2, clientY: 6.1, pointerId: 40 });
+    fireEvent.pointerMove(preview, { clientX: 15.3, clientY: 6.2, pointerId: 40 });
+    fireEvent.pointerUp(preview, { clientX: 15.3, clientY: 6.2, pointerId: 40 });
+
+    const curve = screen.getByTestId("drawn-wall-drawn-wall-1");
+    expect(curve.tagName.toLowerCase()).toBe("path");
+    expect(curve.getAttribute("d")).toBe("M 5 6 Q 10 6 15 6");
+    const control = screen.getByTestId("wall-drawn-wall-1-control-handle");
+    expect(control.getAttribute("cx")).toBe("10");
+    expect(control.getAttribute("cy")).toBe("6");
+
+    fireEvent.pointerDown(control, { clientX: 10, clientY: 6, pointerId: 41 });
+    fireEvent.pointerMove(preview, { clientX: 10.5, clientY: 12.25, pointerId: 41 });
+    fireEvent.pointerUp(preview, { clientX: 10.5, clientY: 12.25, pointerId: 41 });
+    expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("d")).toBe("M 5 6 Q 10.5 12.25 15 6");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.pointerDown(screen.getByTestId("drawn-wall-drawn-wall-1"), { clientX: 10, clientY: 9, pointerId: 42 });
+    fireEvent.pointerMove(preview, { clientX: 12, clientY: 10, pointerId: 42 });
+    fireEvent.pointerUp(preview, { clientX: 12, clientY: 10, pointerId: 42 });
+    expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("d")).toBe("M 7 7 Q 12.5 13.25 17 7");
+
+    fireEvent.pointerDown(screen.getByTestId("wall-drawn-wall-1-to-handle"), { clientX: 17, clientY: 7, pointerId: 43 });
+    fireEvent.pointerMove(preview, { clientX: 20.2, clientY: 8.7, pointerId: 43 });
+    fireEvent.pointerUp(preview, { clientX: 20.2, clientY: 8.7, pointerId: 43 });
+    expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("d")).toBe("M 7 7 Q 12.5 13.25 20 9");
+
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(screen.queryByTestId("drawn-wall-drawn-wall-1")).toBeNull();
   });
 
   it("lets enemy-tool clicks pass through raised terrain and fire markers", () => {

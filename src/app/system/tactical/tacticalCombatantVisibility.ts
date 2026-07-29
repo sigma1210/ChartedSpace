@@ -6,7 +6,7 @@ import type {
 
 export const tacticalVisibleCombatants = (
   tacticalMap: TacticalMapState,
-  crewVisibility: ReadonlyMap<string, unknown>,
+  visibleEnemyPointKeys: ReadonlySet<string>,
   completedMovements: Readonly<
     Record<string, CombatantMovementAnimation | undefined>
   > = {},
@@ -19,15 +19,17 @@ export const tacticalVisibleCombatants = (
       );
     }
 
+    if (tacticalMap.scenarioStatus === "setup") return false;
+
     const movement =
       tacticalMap.movementAnimationByCharacterId[combatant.id];
     return (
-      crewVisibility.has(pointKey(combatant.position)) ||
+      visibleEnemyPointKeys.has(pointKey(combatant.position)) ||
       Boolean(
         movement &&
           completedMovements[combatant.id] !== movement &&
           movement.path.some((point) =>
-            crewVisibility.has(pointKey(point)),
+            visibleEnemyPointKeys.has(pointKey(point)),
           ),
       )
     );

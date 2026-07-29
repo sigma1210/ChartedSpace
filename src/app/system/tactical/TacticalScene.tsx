@@ -1,6 +1,7 @@
 "use client";
 
 import { OrbitControls, OrthographicCamera } from "@react-three/drei";
+import { useCallback } from "react";
 import { activateTacticalCharacter, deployTacticalCharacter, previewTacticalCoveringFire, previewTacticalGrenadeTarget, previewTacticalMelee, previewTacticalMeleeDive, previewTacticalMove, selectTacticalAttackTarget, selectTacticalTerrainObject } from "@/plugins/characterCombat/slice";
 import { pointKey } from "@/plugins/characterCombat/geometry";
 import type { Combatant, PlannedMove } from "@/plugins/characterCombat/types";
@@ -18,7 +19,7 @@ import { DEFAULT_TACTICAL_MAP } from "./tacticalMapDefaults";
 import { resolveTacticalCombatantSelection } from "./tacticalSceneInteractions";
 import { useTacticalSceneState } from "./useTacticalSceneState";
 
-export const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPositions, reachableMoves, visibleEnemyIds }: { crewVisibility: ReadonlyMap<string, unknown>; exploredCells: ReadonlySet<string>; lastKnownEnemyPositions: Record<string, { x: number; y: number }>; reachableMoves: ReadonlyMap<string, PlannedMove>; visibleEnemyIds: ReadonlySet<string> }) => {
+export const TacticalScene = ({ visibleEnemyPointKeys, lastKnownEnemyPositions, reachableMoves, visibleEnemyIds }: { visibleEnemyPointKeys: ReadonlySet<string>; lastKnownEnemyPositions: Record<string, { x: number; y: number }>; reachableMoves: ReadonlyMap<string, PlannedMove>; visibleEnemyIds: ReadonlySet<string> }) => {
   const dispatch = useAppDispatch();
   const tacticalMap = useAppSelector((state) => state.plugins.characterCombat.tacticalMap) ?? DEFAULT_TACTICAL_MAP;
   const {
@@ -37,6 +38,12 @@ export const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPos
     validMeleeTargetIds,
     validTargetIds,
   } = useTacticalSceneState({ tacticalMap, reachableMoves });
+  const selectDeploymentCell = useCallback(
+    (point: { x: number; y: number }) => {
+      dispatch(deployTacticalCharacter(point));
+    },
+    [dispatch],
+  );
   const selectMapCell = (point: { x: number; y: number }) => tacticalMap.scenarioStatus === "setup"
     ? dispatch(deployTacticalCharacter(point))
     : tacticalMap.coveringFireTargeting ? dispatch(previewTacticalCoveringFire(point))
@@ -96,12 +103,11 @@ export const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPos
       section="base"
       tacticalMap={tacticalMap}
       onSelectCell={selectMapCell}
+      onSelectDeploymentCell={selectDeploymentCell}
       onSelectTerrain={selectTerrain}
     />
     <TacticalVisibilityLayer
       scenario={tacticalMap.scenario}
-      visible={crewVisibility}
-      explored={exploredCells}
       lastKnownEnemyPositions={lastKnownEnemyPositions}
       visibleEnemyIds={visibleEnemyIds}
     />
@@ -125,6 +131,7 @@ export const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPos
       section="structures"
       tacticalMap={tacticalMap}
       onSelectCell={selectMapCell}
+      onSelectDeploymentCell={selectDeploymentCell}
       onSelectTerrain={selectTerrain}
     />
     <TacticalMovementPathLayer
@@ -136,7 +143,7 @@ export const TacticalScene = ({ crewVisibility, exploredCells, lastKnownEnemyPos
     />
     <TacticalCombatantLayer
       tacticalMap={tacticalMap}
-      crewVisibility={crewVisibility}
+      visibleEnemyPointKeys={visibleEnemyPointKeys}
       selectedCombatantId={selected?.id ?? null}
       validTargetIds={validTargetIds}
       validMeleeTargetIds={validMeleeTargetIds}

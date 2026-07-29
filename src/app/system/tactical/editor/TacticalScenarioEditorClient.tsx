@@ -7,7 +7,7 @@ import { FloatingPluginHud, type FloatingPluginHudLayout } from "@/components/hu
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import TacticalMapPageClient from "../TacticalMapPageClient";
 import { TacticalNavigationHud } from "../TacticalNavigationHud";
-import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalDeploymentEdge, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalScenarioDefinitionFile, type TacticalTerrainPlacement } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalDeploymentEdge, type TacticalDrawnWall, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalScenarioDefinitionFile, type TacticalScenarioTracingTemplate, type TacticalTerrainPlacement } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition, TRAVELLER_TASK_DIFFICULTIES, validateTacticalConsoleVictoryDefinition, type TacticalConsoleOperation, type TacticalConsoleVictoryDefinitionFile, type TravellerTaskDifficulty } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { randomTacticalEnemyAvatarPath, tacticalEnemyPalette } from "@/plugins/characterCombat/tacticalEnemyDefinitions";
 import type { TacticalTerminalKind } from "@/plugins/characterCombat/tacticalTerrain";
@@ -32,6 +32,7 @@ export const removeConsolePlacementOperations = (definition: TacticalConsoleVict
   };
 };
 type ScenarioSummary = { id: string; title: string; isDefault: boolean };
+type TacticalTemplateAsset = { id: string; label: string; imagePath: string; source: "built-in" | "uploaded" };
 const fetchScenarioList = async () => {
   const response = await fetch("/api/tactical/scenarios", { cache: "no-store" });
   const body = await response.json() as { scenarios?: ScenarioSummary[]; error?: string };
@@ -40,6 +41,7 @@ const fetchScenarioList = async () => {
 };
 const FIRE_TOOL_ID = "scenario-fire";
 const WALL_TOOL_ID = "scenario-wall";
+const CURVED_WALL_TOOL_ID = "scenario-curved-wall";
 const DOOR_TOOL_ID = "scenario-wall-door";
 const WALL_IRIS_TOOL_ID = "scenario-wall-iris-valve";
 const IRIS_VALVE_ID = "iris-valve";
@@ -48,6 +50,92 @@ const wallPortalKindForTool = (tool: string | null): TacticalWallPortalKind | nu
 const INTERACTION_SKILLS = ["Bribery", "Carouse", "Diplomat", "Medic", "Leadership", "Streetwise", "Persuade", "Investigate", "Deception"] as const;
 const cellKey = (point: { x: number; y: number }) => `${point.x}:${point.y}`;
 const gridPoint = (point: { x: number; y: number }) => ({ x: point.x, y: point.y });
+export const fitTacticalTracingTemplate = (
+  imagePath: string,
+  naturalSize: { width: number; height: number },
+  mapSize: { width: number; height: number },
+): TacticalScenarioTracingTemplate => {
+  const validNaturalSize = naturalSize.width > 0 && naturalSize.height > 0;
+  const naturalWidth = validNaturalSize ? naturalSize.width : mapSize.width;
+  const naturalHeight = validNaturalSize ? naturalSize.height : mapSize.height;
+  const scale = Math.min(mapSize.width / naturalWidth, mapSize.height / naturalHeight);
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
+  return {
+    imagePath,
+    x: (mapSize.width - width) / 2,
+    y: (mapSize.height - height) / 2,
+    width,
+    height,
+    rotation: 0,
+    opacity: 0.45,
+    visible: true,
+    lockAspectRatio: true,
+  };
+};
+type TracingTemplateCorner = "nw" | "ne" | "se" | "sw";
+type TracingTemplateTransformDrag =
+  | { kind: "move"; start: { x: number; y: number }; original: TacticalScenarioTracingTemplate }
+  | { kind: "resize"; corner: TracingTemplateCorner; original: TacticalScenarioTracingTemplate }
+  | { kind: "rotate"; center: { x: number; y: number }; startAngle: number; original: TacticalScenarioTracingTemplate };
+const tracingTemplateRotation = (template: TacticalScenarioTracingTemplate) => template.rotation * Math.PI / 180;
+const tracingTemplateCenter = (template: TacticalScenarioTracingTemplate) => ({
+  x: template.x + template.width / 2,
+  y: template.y + template.height / 2,
+});
+const rotateOffset = (offset: { x: number; y: number }, radians: number) => ({
+  x: offset.x * Math.cos(radians) - offset.y * Math.sin(radians),
+  y: offset.x * Math.sin(radians) + offset.y * Math.cos(radians),
+});
+const tracingTemplateHandlePoint = (template: TacticalScenarioTracingTemplate, corner: TracingTemplateCorner) => {
+  const center = tracingTemplateCenter(template);
+  const signs = {
+    nw: { x: -1, y: -1 },
+    ne: { x: 1, y: -1 },
+    se: { x: 1, y: 1 },
+    sw: { x: -1, y: 1 },
+  }[corner];
+  const offset = rotateOffset({ x: signs.x * template.width / 2, y: signs.y * template.height / 2 }, tracingTemplateRotation(template));
+  return { x: center.x + offset.x, y: center.y + offset.y };
+};
+export const resizeTacticalTracingTemplate = (
+  original: TacticalScenarioTracingTemplate,
+  corner: TracingTemplateCorner,
+  point: { x: number; y: number },
+): TacticalScenarioTracingTemplate => {
+  const signs = {
+    nw: { x: -1, y: -1 },
+    ne: { x: 1, y: -1 },
+    se: { x: 1, y: 1 },
+    sw: { x: -1, y: 1 },
+  }[corner];
+  const opposite = ({ nw: "se", ne: "sw", se: "nw", sw: "ne" } as const)[corner];
+  const anchor = tracingTemplateHandlePoint(original, opposite);
+  const radians = tracingTemplateRotation(original);
+  const widthAxis = { x: Math.cos(radians), y: Math.sin(radians) };
+  const heightAxis = { x: -Math.sin(radians), y: Math.cos(radians) };
+  const delta = { x: point.x - anchor.x, y: point.y - anchor.y };
+  let width = Math.max(0.25, signs.x * (delta.x * widthAxis.x + delta.y * widthAxis.y));
+  let height = Math.max(0.25, signs.y * (delta.x * heightAxis.x + delta.y * heightAxis.y));
+  if (original.lockAspectRatio) {
+    const aspectRatio = original.width / original.height;
+    const widthChange = Math.abs(width - original.width) / original.width;
+    const heightChange = Math.abs(height - original.height) / original.height;
+    if (widthChange >= heightChange) height = width / aspectRatio;
+    else width = height * aspectRatio;
+  }
+  const center = {
+    x: anchor.x + signs.x * widthAxis.x * width / 2 + signs.y * heightAxis.x * height / 2,
+    y: anchor.y + signs.x * widthAxis.y * width / 2 + signs.y * heightAxis.y * height / 2,
+  };
+  return { ...original, x: center.x - width / 2, y: center.y - height / 2, width, height };
+};
+const loadImageDimensions = (imagePath: string) => new Promise<{ width: number; height: number }>((resolve, reject) => {
+  const image = new window.Image();
+  image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+  image.onerror = () => reject(new Error("The selected tracing template could not be loaded."));
+  image.src = imagePath;
+});
 const facingRotation = (facing: NonNullable<TacticalEnemyPlacement["facing"]> | TacticalTerrainPlacement["rotation"]) => typeof facing === "number" ? facing : ({ north: 0, east: 90, south: 180, west: 270 } as const)[facing];
 const facingVector = (facing: NonNullable<TacticalEnemyPlacement["facing"]> | TacticalTerrainPlacement["rotation"]) => {
   const radians = facingRotation(facing) * Math.PI / 180;
@@ -59,13 +147,14 @@ type WallEndpoint = "from" | "to";
 type WallEndpointDrag = {
   id: string;
   endpoint: WallEndpoint;
-  original: { from: { x: number; y: number }; to: { x: number; y: number } };
+  original: { from: { x: number; y: number }; to: { x: number; y: number }; control?: { x: number; y: number } };
 };
 type WallMoveDrag = {
   id: string;
   start: { x: number; y: number };
-  original: { from: { x: number; y: number }; to: { x: number; y: number } };
+  original: { from: { x: number; y: number }; to: { x: number; y: number }; control?: { x: number; y: number } };
 };
+type WallControlDrag = { id: string; original: { x: number; y: number } };
 type WallPortalDrag = {
   wallId: string;
   portalId: string;
@@ -108,7 +197,7 @@ const placementCandidates = (terrainDefinitionId: string, anchor: EditorMapPoint
   });
 };
 
-const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, selectedWallId, selectedPortalId, selectedFire, placementKind, enemyKind, placementHover, enemyHover, portalHover, wallDraft, dragWallEndpoint, dragWallMove, dragWallPortal, dragPlacement, dragEnemy, selectPlacement, selectEnemy, selectWall, selectPortal, selectFire, hoverPlacement, hoverEnemy, hoverPortal, beginWall, updateWall, finishWall, cancelWall, placeWallPortal, beginWallEndpointDrag, resizeWallEndpoint, finishWallEndpointDrag, cancelWallEndpointDrag, beginWallMove, moveWall, finishWallMove, cancelWallMove, beginWallPortalDrag, moveWallPortal, finishWallPortalDrag, cancelWallPortalDrag, beginDrag, beginEnemyDrag, endDrag, placeTerrain, placeEnemy, moveTerrain, moveEnemy }: {
+const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, selectedWallId, selectedPortalId, selectedFire, placementKind, enemyKind, placementHover, enemyHover, portalHover, wallDraft, dragWallEndpoint, dragWallMove, dragWallControl, dragWallPortal, dragTracingTemplate, tracingTemplateEditing, dragPlacement, dragEnemy, selectPlacement, selectEnemy, selectWall, selectPortal, selectFire, hoverPlacement, hoverEnemy, hoverPortal, beginWall, updateWall, finishWall, cancelWall, placeWallPortal, beginWallEndpointDrag, resizeWallEndpoint, finishWallEndpointDrag, cancelWallEndpointDrag, beginWallMove, moveWall, finishWallMove, cancelWallMove, beginWallControlDrag, reshapeWallControl, finishWallControlDrag, cancelWallControlDrag, beginWallPortalDrag, moveWallPortal, finishWallPortalDrag, cancelWallPortalDrag, beginTracingTemplateDrag, transformTracingTemplate, finishTracingTemplateDrag, cancelTracingTemplateDrag, beginDrag, beginEnemyDrag, endDrag, placeTerrain, placeEnemy, moveTerrain, moveEnemy }: {
   definition: TacticalScenarioDefinitionFile;
   selectedPlacementId: string | null;
   selectedEnemyId: string | null;
@@ -120,10 +209,13 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   placementHover: EditorMapPoint | null;
   enemyHover: { x: number; y: number } | null;
   portalHover: { x: number; y: number } | null;
-  wallDraft: { from: { x: number; y: number }; to: { x: number; y: number } } | null;
+  wallDraft: { from: { x: number; y: number }; to: { x: number; y: number }; curved: boolean } | null;
   dragWallEndpoint: WallEndpointDrag | null;
   dragWallMove: WallMoveDrag | null;
+  dragWallControl: WallControlDrag | null;
   dragWallPortal: WallPortalDrag | null;
+  dragTracingTemplate: TracingTemplateTransformDrag | null;
+  tracingTemplateEditing: boolean;
   dragPlacement: { id: string; offset: { x: number; y: number } } | null;
   dragEnemy: { id: string; offset: { x: number; y: number } } | null;
   selectPlacement: (id: string | null) => void;
@@ -147,10 +239,18 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   moveWall: (point: { x: number; y: number }) => void;
   finishWallMove: () => void;
   cancelWallMove: () => void;
+  beginWallControlDrag: (id: string) => void;
+  reshapeWallControl: (point: { x: number; y: number }) => void;
+  finishWallControlDrag: () => void;
+  cancelWallControlDrag: () => void;
   beginWallPortalDrag: (id: string) => void;
   moveWallPortal: (point: { x: number; y: number }) => void;
   finishWallPortalDrag: () => void;
   cancelWallPortalDrag: () => void;
+  beginTracingTemplateDrag: (kind: "move" | "rotate" | TracingTemplateCorner, point: { x: number; y: number }) => void;
+  transformTracingTemplate: (point: { x: number; y: number }) => void;
+  finishTracingTemplateDrag: () => void;
+  cancelTracingTemplateDrag: () => void;
   beginDrag: (drag: { id: string; offset: { x: number; y: number } }) => void;
   beginEnemyDrag: (drag: { id: string; offset: { x: number; y: number } }) => void;
   endDrag: () => void;
@@ -259,6 +359,19 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     return secondSize.width * secondSize.height - firstSize.width * firstSize.height;
   });
   const drawnPortalIds = new Set((definition.drawnWalls ?? []).flatMap((wall) => (wall.portals ?? []).map((portal) => portal.id)));
+  const templateCorners = definition.tracingTemplate
+    ? (["nw", "ne", "se", "sw"] as const).map((corner) => ({ corner, point: tracingTemplateHandlePoint(definition.tracingTemplate!, corner) }))
+    : [];
+  const templateTopCenter = definition.tracingTemplate ? (() => {
+    const center = tracingTemplateCenter(definition.tracingTemplate);
+    const offset = rotateOffset({ x: 0, y: -definition.tracingTemplate.height / 2 }, tracingTemplateRotation(definition.tracingTemplate));
+    return { x: center.x + offset.x, y: center.y + offset.y };
+  })() : null;
+  const templateRotationHandle = definition.tracingTemplate ? (() => {
+    const center = tracingTemplateCenter(definition.tracingTemplate);
+    const offset = rotateOffset({ x: 0, y: -definition.tracingTemplate.height / 2 - 1.5 }, tracingTemplateRotation(definition.tracingTemplate));
+    return { x: center.x + offset.x, y: center.y + offset.y };
+  })() : null;
   return <svg viewBox={`0 0 ${definition.map.width} ${definition.map.height}`} preserveAspectRatio="xMidYMid meet" className={`h-full w-full bg-[#050a12] ${placementKind || enemyKind ? "cursor-crosshair" : ""}`} aria-label="Scenario draft map preview"
     onPointerDown={(event) => {
       if (wallPortalKindForTool(placementKind)) {
@@ -266,7 +379,7 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         if (local) placeWallPortal({ x: local.x, y: local.y });
         return;
       }
-      if (placementKind === WALL_TOOL_ID) {
+      if (placementKind === WALL_TOOL_ID || placementKind === CURVED_WALL_TOOL_ID) {
         const vertex = mapVertex(event);
         if (!vertex) return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -286,6 +399,16 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       }
     }}
     onPointerMove={(event) => {
+      if (dragTracingTemplate) {
+        const local = localMapPoint(event);
+        if (local) transformTracingTemplate({ x: local.x, y: local.y });
+        return;
+      }
+      if (dragWallControl) {
+        const local = localMapPoint(event);
+        if (local) reshapeWallControl({ x: local.x, y: local.y });
+        return;
+      }
       if (dragWallPortal) {
         const local = localMapPoint(event);
         if (local) moveWallPortal({ x: local.x, y: local.y });
@@ -318,6 +441,18 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       else if (enemyKind) hoverEnemy(point);
       else if (placementKind) hoverPlacement(point);
     }} onPointerLeave={() => { hoverPlacement(null); hoverEnemy(null); hoverPortal(null); }} onPointerUp={(event) => {
+      if (dragTracingTemplate) {
+        const local = localMapPoint(event);
+        if (local) transformTracingTemplate({ x: local.x, y: local.y });
+        finishTracingTemplateDrag();
+        return;
+      }
+      if (dragWallControl) {
+        const local = localMapPoint(event);
+        if (local) reshapeWallControl({ x: local.x, y: local.y });
+        finishWallControlDrag();
+        return;
+      }
       if (dragWallPortal) {
         const local = localMapPoint(event);
         if (local) moveWallPortal({ x: local.x, y: local.y });
@@ -343,12 +478,24 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         return;
       }
       endDrag();
-    }} onPointerCancel={() => { cancelWallPortalDrag(); cancelWallMove(); cancelWallEndpointDrag(); cancelWall(); endDrag(); }}>
+    }} onPointerCancel={() => { cancelTracingTemplateDrag(); cancelWallControlDrag(); cancelWallPortalDrag(); cancelWallMove(); cancelWallEndpointDrag(); cancelWall(); endDrag(); }}>
     <defs>
       <pattern id="draft-grid" width="1" height="1" patternUnits="userSpaceOnUse">
         <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#29434d" strokeWidth="0.04" />
       </pattern>
     </defs>
+    {definition.tracingTemplate?.visible && <image
+      data-testid="tracing-template-image"
+      href={definition.tracingTemplate.imagePath}
+      x={definition.tracingTemplate.x}
+      y={definition.tracingTemplate.y}
+      width={definition.tracingTemplate.width}
+      height={definition.tracingTemplate.height}
+      opacity={definition.tracingTemplate.opacity}
+      preserveAspectRatio={definition.tracingTemplate.lockAspectRatio ? "xMidYMid meet" : "none"}
+      transform={`rotate(${definition.tracingTemplate.rotation} ${definition.tracingTemplate.x + definition.tracingTemplate.width / 2} ${definition.tracingTemplate.y + definition.tracingTemplate.height / 2})`}
+      pointerEvents="none"
+    />}
     <rect x="0" y="0" width={definition.map.width} height={definition.map.height} fill="url(#draft-grid)" />
     {terrain.deploymentCells.map((cell) => <rect key={`deployment:${cell.x}:${cell.y}`} x={cell.x + 0.05} y={cell.y + 0.05} width="0.9" height="0.9" fill="#22c55e" fillOpacity="0.18" stroke="#86efac" strokeWidth="0.04" pointerEvents="none" />)}
     {terrain.interiorCells.map((cell) => <rect key={`interior:${cell.x}:${cell.y}`} x={cell.x} y={cell.y} width="1" height="1" fill="#164e63" opacity="0.28" />)}
@@ -362,11 +509,32 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     {terrain.liquidHydrogenAreas.flatMap((area) => area.cells.map((cell) => <rect key={`liquid-hydrogen:${area.id}:${cell.x}:${cell.y}`} x={cell.x + 0.06} y={cell.y + 0.06} width="0.88" height="0.88" fill={area.filled ? "#67e8f9" : "#0f172a"} stroke={area.filled ? "#cffafe" : "#64748b"} strokeWidth="0.08" opacity={area.filled ? 0.7 : 0.85} />))}
     {terrain.bridges.flatMap((bridge) => bridge.cells.map((cell, index) => <rect key={`bridge:${bridge.id}:${index}`} x={cell.x + 0.08} y={cell.y + 0.08} width="0.84" height="0.84" fill="#7c3aed" stroke="#c4b5fd" strokeWidth="0.1" opacity="0.78" />))}
     {terrain.elevationAccessCells.map((cell) => <rect key={`stairs:${cell.x}:${cell.y}`} x={cell.x + 0.08} y={cell.y + 0.08} width="0.84" height="0.84" fill="#cbd5e1" stroke="#0891b2" strokeWidth="0.12" />)}
-    {terrain.walls.filter((wall) => !(definition.drawnWalls ?? []).some((drawnWall) => drawnWall.id === wall.id)).map((wall) => <line key={wall.id} x1={wall.from.x} y1={wall.from.y} x2={wall.to.x} y2={wall.to.y} stroke="#94a3b8" strokeWidth="0.22" />)}
+    {terrain.walls.filter((wall) => !(definition.drawnWalls ?? []).some((drawnWall) => drawnWall.id === wall.id || (drawnWall.control && wall.id.startsWith(`${drawnWall.id}:curve:`)))).map((wall) => <line key={wall.id} x1={wall.from.x} y1={wall.from.y} x2={wall.to.x} y2={wall.to.y} stroke="#94a3b8" strokeWidth="0.22" />)}
     {(definition.drawnWalls ?? []).map((wall) => {
       const selected = wall.id === selectedWallId;
+      const beginMove = (event: ReactPointerEvent<SVGElement>) => {
+        if (placementKind || enemyKind) return;
+        event.stopPropagation();
+        const vertex = mapVertex(event);
+        if (!vertex) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        selectPlacement(null);
+        selectEnemy(null);
+        selectPortal(null);
+        selectFire(null);
+        selectWall(wall.id);
+        beginWallMove(wall.id, vertex);
+      };
       return <g key={wall.id}>
-        <line
+        {wall.control ? <path
+          data-testid={`drawn-wall-${wall.id}`}
+          d={`M ${wall.from.x} ${wall.from.y} Q ${wall.control.x} ${wall.control.y} ${wall.to.x} ${wall.to.y}`}
+          fill="none"
+          stroke={selected ? "#fef08a" : "#94a3b8"}
+          strokeWidth={selected ? "0.34" : "0.22"}
+          className={placementKind || enemyKind ? undefined : "cursor-move"}
+          onPointerDown={beginMove}
+        /> : <line
           data-testid={`drawn-wall-${wall.id}`}
           x1={wall.from.x}
           y1={wall.from.y}
@@ -375,20 +543,29 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
           stroke={selected ? "#fef08a" : "#94a3b8"}
           strokeWidth={selected ? "0.34" : "0.22"}
           className={placementKind || enemyKind ? undefined : "cursor-move"}
-          onPointerDown={(event) => {
-            if (placementKind || enemyKind) return;
-            event.stopPropagation();
-            const vertex = mapVertex(event);
-            if (!vertex) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            selectPlacement(null);
-            selectEnemy(null);
-            selectPortal(null);
-            selectFire(null);
-            selectWall(wall.id);
-            beginWallMove(wall.id, vertex);
-          }}
-        />
+          onPointerDown={beginMove}
+        />}
+        {selected && wall.control && <g>
+          <line x1={wall.from.x} y1={wall.from.y} x2={wall.control.x} y2={wall.control.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
+          <line x1={wall.control.x} y1={wall.control.y} x2={wall.to.x} y2={wall.to.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
+          <circle
+            data-testid={`wall-${wall.id}-control-handle`}
+            aria-label="Reshape curved wall"
+            cx={wall.control.x}
+            cy={wall.control.y}
+            r="0.32"
+            fill="#7c3aed"
+            stroke="#ede9fe"
+            strokeWidth="0.1"
+            className="cursor-move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              beginWallControlDrag(wall.id);
+            }}
+          />
+        </g>}
         {selected && (["from", "to"] as const).map((endpoint) => <circle
           key={endpoint}
           data-testid={`wall-${wall.id}-${endpoint}-handle`}
@@ -466,7 +643,9 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       {portalPreview.kind === "iris-valve" && <circle cx={portalPreview.center.x} cy={portalPreview.center.y} r="0.3" fill="#334155" stroke={portalPreview.valid ? "#86efac" : "#f87171"} strokeWidth="0.12" />}
     </g>}
     {wallDraft && <g pointerEvents="none" data-testid="wall-draft-preview">
-      <line x1={wallDraft.from.x} y1={wallDraft.from.y} x2={wallDraft.to.x} y2={wallDraft.to.y} stroke="#fef08a" strokeWidth="0.3" strokeDasharray="0.35 0.2" />
+      {wallDraft.curved
+        ? <path d={`M ${wallDraft.from.x} ${wallDraft.from.y} Q ${(wallDraft.from.x + wallDraft.to.x) / 2} ${(wallDraft.from.y + wallDraft.to.y) / 2} ${wallDraft.to.x} ${wallDraft.to.y}`} fill="none" stroke="#fef08a" strokeWidth="0.3" strokeDasharray="0.35 0.2" />
+        : <line x1={wallDraft.from.x} y1={wallDraft.from.y} x2={wallDraft.to.x} y2={wallDraft.to.y} stroke="#fef08a" strokeWidth="0.3" strokeDasharray="0.35 0.2" />}
       <circle cx={wallDraft.from.x} cy={wallDraft.from.y} r="0.22" fill="#22d3ee" stroke="#cffafe" strokeWidth="0.08" />
       <circle cx={wallDraft.to.x} cy={wallDraft.to.y} r="0.22" fill="#f59e0b" stroke="#fef3c7" strokeWidth="0.08" />
     </g>}
@@ -524,6 +703,65 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         <circle cx={enemy.position.x + 0.5 + direction.x * 0.4} cy={enemy.position.y + 0.5 + direction.y * 0.4} r="0.08" fill="#fef08a" />
       </g>;
     })}
+    {tracingTemplateEditing && definition.tracingTemplate?.visible && !placementKind && !enemyKind && templateTopCenter && templateRotationHandle && <g data-testid="tracing-template-controls">
+      <polygon
+        data-testid="tracing-template-move-area"
+        points={templateCorners.map(({ point }) => `${point.x},${point.y}`).join(" ")}
+        fill="#22d3ee"
+        fillOpacity="0.04"
+        stroke="#67e8f9"
+        strokeWidth="0.16"
+        strokeDasharray="0.45 0.25"
+        className="cursor-move"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const point = localMapPoint(event);
+          if (!point) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          beginTracingTemplateDrag("move", { x: point.x, y: point.y });
+        }}
+      />
+      <line x1={templateTopCenter.x} y1={templateTopCenter.y} x2={templateRotationHandle.x} y2={templateRotationHandle.y} stroke="#67e8f9" strokeWidth="0.12" pointerEvents="none" />
+      <circle
+        data-testid="tracing-template-rotation-handle"
+        cx={templateRotationHandle.x}
+        cy={templateRotationHandle.y}
+        r="0.34"
+        fill="#a855f7"
+        stroke="#f3e8ff"
+        strokeWidth="0.1"
+        className="cursor-grab"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const point = localMapPoint(event);
+          if (!point) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          beginTracingTemplateDrag("rotate", { x: point.x, y: point.y });
+        }}
+      />
+      {templateCorners.map(({ corner, point }) => <circle
+        key={corner}
+        data-testid={`tracing-template-${corner}-handle`}
+        aria-label={`Resize tracing template from ${corner}`}
+        cx={point.x}
+        cy={point.y}
+        r="0.3"
+        fill="#0e7490"
+        stroke="#cffafe"
+        strokeWidth="0.1"
+        className="cursor-nwse-resize"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const local = localMapPoint(event);
+          if (!local) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          beginTracingTemplateDrag(corner, { x: local.x, y: local.y });
+        }}
+      />)}
+    </g>}
   </svg>;
 };
 
@@ -534,10 +772,13 @@ const TacticalScenarioEditorClient = () => {
   const [consoleVictoryBaseline, setConsoleVictoryBaseline] = useState<TacticalConsoleVictoryDefinitionFile>(freshDefaultConsoleVictory);
   const [currentScenario, setCurrentScenario] = useState<ScenarioSummary>({ id: defaultTacticalScenarioDefinition.id, title: defaultTacticalScenarioDefinition.title, isDefault: true });
   const [availableScenarios, setAvailableScenarios] = useState<ScenarioSummary[]>([]);
+  const [availableTemplates, setAvailableTemplates] = useState<TacticalTemplateAsset[]>([]);
   const [scenarioToLoad, setScenarioToLoad] = useState(defaultTacticalScenarioDefinition.id);
   const [saveAsName, setSaveAsName] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
   const [fileMessage, setFileMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateMessage, setTemplateMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [playtest, setPlaytest] = useState<{ definition: TacticalScenarioDefinitionFile; consoleVictory: TacticalConsoleVictoryDefinitionFile; sandbox: AppStore } | null>(null);
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null);
@@ -550,10 +791,13 @@ const TacticalScenarioEditorClient = () => {
   const [placementHover, setPlacementHover] = useState<EditorMapPoint | null>(null);
   const [enemyHover, setEnemyHover] = useState<{ x: number; y: number } | null>(null);
   const [portalHover, setPortalHover] = useState<{ x: number; y: number } | null>(null);
-  const [wallDraft, setWallDraft] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
+  const [wallDraft, setWallDraft] = useState<{ from: { x: number; y: number }; to: { x: number; y: number }; curved: boolean } | null>(null);
   const [dragWallEndpoint, setDragWallEndpoint] = useState<WallEndpointDrag | null>(null);
   const [dragWallMove, setDragWallMove] = useState<WallMoveDrag | null>(null);
+  const [dragWallControl, setDragWallControl] = useState<WallControlDrag | null>(null);
   const [dragWallPortal, setDragWallPortal] = useState<WallPortalDrag | null>(null);
+  const [dragTracingTemplate, setDragTracingTemplate] = useState<TracingTemplateTransformDrag | null>(null);
+  const [tracingTemplateEditing, setTracingTemplateEditing] = useState(false);
   const [dragPlacement, setDragPlacement] = useState<{ id: string; offset: { x: number; y: number } } | null>(null);
   const [dragEnemy, setDragEnemy] = useState<{ id: string; offset: { x: number; y: number } } | null>(null);
   const [placementError, setPlacementError] = useState<string | null>(null);
@@ -562,6 +806,7 @@ const TacticalScenarioEditorClient = () => {
   const [consoleEditorLayout, setConsoleEditorLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 280, y: 64 } });
   const [enemyEditorLayout, setEnemyEditorLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 280, y: 310 } });
   const [navigationLayout, setNavigationLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 720, y: 24 } });
+  const [tracingTemplateLayout, setTracingTemplateLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 720, y: 180 } });
   const dirty = !definitionsMatch(draft, baseline) || JSON.stringify(consoleVictory) !== JSON.stringify(consoleVictoryBaseline);
   const refreshScenarioList = useCallback(async () => {
     const scenarios = await fetchScenarioList();
@@ -579,6 +824,131 @@ const TacticalScenarioEditorClient = () => {
     });
     return () => { cancelled = true; };
   }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/tactical/templates", { cache: "no-store" }).then(async (response) => {
+      const body = await response.json() as { templates?: TacticalTemplateAsset[]; error?: string };
+      if (!response.ok || !body.templates) throw new Error(body.error ?? "Could not list tracing templates.");
+      if (!cancelled) setAvailableTemplates(body.templates);
+    }).catch((error) => {
+      if (!cancelled) setTemplateMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not list tracing templates." });
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const applyTracingTemplateImage = async (imagePath: string) => {
+    const naturalSize = await loadImageDimensions(imagePath);
+    setDraft((current) => ({
+      ...current,
+      tracingTemplate: fitTacticalTracingTemplate(imagePath, naturalSize, current.map),
+    }));
+  };
+  const selectTracingTemplate = async (imagePath: string) => {
+    if (!imagePath || templateBusy) return;
+    setTemplateBusy(true);
+    setTemplateMessage(null);
+    try {
+      await applyTracingTemplateImage(imagePath);
+      setTemplateMessage({ kind: "success", text: "Tracing template fitted to the map." });
+    } catch (error) {
+      setTemplateMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not load the tracing template." });
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+  const uploadTracingTemplate = async (file: File) => {
+    if (templateBusy) return;
+    setTemplateBusy(true);
+    setTemplateMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const response = await fetch("/api/tactical/templates", { method: "POST", body: formData });
+      const body = await response.json() as { template?: TacticalTemplateAsset; error?: string };
+      if (!response.ok || !body.template) throw new Error(body.error ?? "Could not upload the tracing template.");
+      setAvailableTemplates((current) => current.some((template) => template.id === body.template?.id) ? current : [...current, body.template!]);
+      await applyTracingTemplateImage(body.template.imagePath);
+      setTemplateMessage({ kind: "success", text: `${body.template.label} uploaded and fitted to the map.` });
+    } catch (error) {
+      setTemplateMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not upload the tracing template." });
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+  const updateTracingTemplate = (update: Partial<TacticalScenarioTracingTemplate>) => {
+    setDraft((current) => current.tracingTemplate
+      ? { ...current, tracingTemplate: { ...current.tracingTemplate, ...update } }
+      : current);
+  };
+  const updateTracingTemplateNumber = (field: "x" | "y" | "width" | "height" | "rotation", value: number) => {
+    if (!Number.isFinite(value) || ((field === "width" || field === "height") && value <= 0)) return;
+    setDraft((current) => {
+      const template = current.tracingTemplate;
+      if (!template) return current;
+      let tracingTemplate = { ...template, [field]: value };
+      if (template.lockAspectRatio && field === "width") tracingTemplate = { ...tracingTemplate, height: template.height * value / template.width };
+      if (template.lockAspectRatio && field === "height") tracingTemplate = { ...tracingTemplate, width: template.width * value / template.height };
+      return { ...current, tracingTemplate };
+    });
+  };
+  const resetTracingTemplateFit = async () => {
+    if (!draft.tracingTemplate || templateBusy) return;
+    setTemplateBusy(true);
+    setTemplateMessage(null);
+    try {
+      await applyTracingTemplateImage(draft.tracingTemplate.imagePath);
+      setTemplateMessage({ kind: "success", text: "Tracing template reset and fitted to the map." });
+    } catch (error) {
+      setTemplateMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not reset the tracing template." });
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+  const beginTracingTemplateDrag = (kind: "move" | "rotate" | TracingTemplateCorner, point: { x: number; y: number }) => {
+    const template = draft.tracingTemplate;
+    if (!template) return;
+    if (kind === "move") {
+      setDragTracingTemplate({ kind, start: point, original: { ...template } });
+    } else if (kind === "rotate") {
+      const center = tracingTemplateCenter(template);
+      setDragTracingTemplate({
+        kind,
+        center,
+        startAngle: Math.atan2(point.y - center.y, point.x - center.x),
+        original: { ...template },
+      });
+    } else {
+      setDragTracingTemplate({ kind: "resize", corner: kind, original: { ...template } });
+    }
+    setPlacementError(null);
+  };
+  const transformTracingTemplate = (point: { x: number; y: number }) => {
+    if (!dragTracingTemplate) return;
+    let tracingTemplate: TacticalScenarioTracingTemplate;
+    if (dragTracingTemplate.kind === "move") {
+      tracingTemplate = {
+        ...dragTracingTemplate.original,
+        x: dragTracingTemplate.original.x + point.x - dragTracingTemplate.start.x,
+        y: dragTracingTemplate.original.y + point.y - dragTracingTemplate.start.y,
+      };
+    } else if (dragTracingTemplate.kind === "resize") {
+      tracingTemplate = resizeTacticalTracingTemplate(dragTracingTemplate.original, dragTracingTemplate.corner, point);
+    } else {
+      const angle = Math.atan2(point.y - dragTracingTemplate.center.y, point.x - dragTracingTemplate.center.x);
+      const rotation = dragTracingTemplate.original.rotation + (angle - dragTracingTemplate.startAngle) * 180 / Math.PI;
+      tracingTemplate = {
+        ...dragTracingTemplate.original,
+        rotation: ((rotation + 180) % 360 + 360) % 360 - 180,
+      };
+    }
+    setDraft((current) => current.tracingTemplate ? { ...current, tracingTemplate } : current);
+  };
+  const cancelTracingTemplateDrag = () => {
+    if (!dragTracingTemplate) return;
+    setDraft((current) => current.tracingTemplate
+      ? { ...current, tracingTemplate: { ...dragTracingTemplate.original } }
+      : current);
+    setDragTracingTemplate(null);
+  };
   const resolutionError = useMemo(() => {
     try {
       const terrain = resolveTacticalScenarioTerrain(draft);
@@ -647,7 +1017,7 @@ const TacticalScenarioEditorClient = () => {
     updatePlacements(draft.terrainPlacements.map((item) => item.id === id ? { ...item, origin } : item));
   };
   const beginWall = (from: { x: number; y: number }) => {
-    setWallDraft({ from: gridPoint(from), to: gridPoint(from) });
+    setWallDraft({ from: gridPoint(from), to: gridPoint(from), curved: placementKind === CURVED_WALL_TOOL_ID });
     setSelectedPlacementId(null);
     setSelectedEnemyId(null);
     setSelectedWallId(null);
@@ -672,7 +1042,12 @@ const TacticalScenarioEditorClient = () => {
       suffix += 1;
       id = `drawn-wall-${suffix}`;
     }
-    const wall = { id, from, to: snappedTo };
+    const wall: TacticalDrawnWall = {
+      id,
+      from,
+      to: snappedTo,
+      ...(wallDraft.curved ? { control: { x: (from.x + snappedTo.x) / 2, y: (from.y + snappedTo.y) / 2 } } : {}),
+    };
     const candidate = { ...draft, drawnWalls: [...(draft.drawnWalls ?? []), wall] };
     try {
       resolveTacticalScenarioTerrain(candidate);
@@ -732,6 +1107,7 @@ const TacticalScenarioEditorClient = () => {
       original: {
         from: { ...wall.from },
         to: { ...wall.to },
+        ...(wall.control ? { control: { ...wall.control } } : {}),
       },
     });
     setPlacementError(null);
@@ -763,6 +1139,7 @@ const TacticalScenarioEditorClient = () => {
           ...wall,
           from: { ...dragWallEndpoint.original.from },
           to: { ...dragWallEndpoint.original.to },
+          ...(dragWallEndpoint.original.control ? { control: { ...dragWallEndpoint.original.control } } : {}),
         }
         : wall),
     }));
@@ -780,6 +1157,7 @@ const TacticalScenarioEditorClient = () => {
       original: {
         from: { ...wall.from },
         to: { ...wall.to },
+        ...(wall.control ? { control: { ...wall.control } } : {}),
       },
     });
     setPlacementError(null);
@@ -798,6 +1176,10 @@ const TacticalScenarioEditorClient = () => {
       x: dragWallMove.original.to.x + delta.x,
       y: dragWallMove.original.to.y + delta.y,
     };
+    const control = dragWallMove.original.control ? {
+      x: dragWallMove.original.control.x + delta.x,
+      y: dragWallMove.original.control.y + delta.y,
+    } : undefined;
     const currentWall = (draft.drawnWalls ?? []).find((wall) => wall.id === dragWallMove.id);
     if (!currentWall || (
       currentWall.from.x === from.x
@@ -808,7 +1190,7 @@ const TacticalScenarioEditorClient = () => {
     const candidate: TacticalScenarioDefinitionFile = {
       ...draft,
       drawnWalls: (draft.drawnWalls ?? []).map((wall) => wall.id === dragWallMove.id
-        ? { ...wall, from, to }
+        ? { ...wall, from, to, ...(control ? { control } : {}) }
         : wall),
     };
     try {
@@ -828,10 +1210,47 @@ const TacticalScenarioEditorClient = () => {
           ...wall,
           from: { ...dragWallMove.original.from },
           to: { ...dragWallMove.original.to },
+          ...(dragWallMove.original.control ? { control: { ...dragWallMove.original.control } } : {}),
         }
         : wall),
     }));
     setDragWallMove(null);
+    setPlacementError(null);
+  };
+  const beginWallControlDrag = (id: string) => {
+    const wall = (draft.drawnWalls ?? []).find((candidate) => candidate.id === id);
+    if (!wall?.control) return;
+    setSelectedWallId(id);
+    setDragWallControl({ id, original: { ...wall.control } });
+    setPlacementError(null);
+  };
+  const reshapeWallControl = (point: { x: number; y: number }) => {
+    if (!dragWallControl) return;
+    const wall = (draft.drawnWalls ?? []).find((candidate) => candidate.id === dragWallControl.id);
+    if (!wall?.control || (wall.control.x === point.x && wall.control.y === point.y)) return;
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnWalls: (draft.drawnWalls ?? []).map((candidateWall) => candidateWall.id === dragWallControl.id
+        ? { ...candidateWall, control: { x: point.x, y: point.y } }
+        : candidateWall),
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That curve position is not valid.");
+    }
+  };
+  const cancelWallControlDrag = () => {
+    if (!dragWallControl) return;
+    setDraft((current) => ({
+      ...current,
+      drawnWalls: (current.drawnWalls ?? []).map((wall) => wall.id === dragWallControl.id
+        ? { ...wall, control: { ...dragWallControl.original } }
+        : wall),
+    }));
+    setDragWallControl(null);
     setPlacementError(null);
   };
   const beginWallPortalDrag = (portalId: string) => {
@@ -1099,6 +1518,7 @@ const TacticalScenarioEditorClient = () => {
       setSelectedWallId(null);
       setDragWallEndpoint(null);
       setDragWallMove(null);
+      setDragWallControl(null);
       setPlacementError(null);
     } catch (error) {
       setPlacementError(error instanceof Error ? error.message : "That wall cannot be deleted.");
@@ -1149,6 +1569,7 @@ const TacticalScenarioEditorClient = () => {
           setSelectedWallId(null);
           setDragWallEndpoint(null);
           setDragWallMove(null);
+          setDragWallControl(null);
           setPlacementError(null);
         } catch (error) {
           setPlacementError(error instanceof Error ? error.message : "That wall cannot be deleted.");
@@ -1197,7 +1618,10 @@ const TacticalScenarioEditorClient = () => {
     setWallDraft(null);
     setDragWallEndpoint(null);
     setDragWallMove(null);
+    setDragWallControl(null);
     setDragWallPortal(null);
+    setDragTracingTemplate(null);
+    setTracingTemplateEditing(false);
     setDragPlacement(null);
     setDragEnemy(null);
     setPlacementError(null);
@@ -1427,23 +1851,117 @@ const TacticalScenarioEditorClient = () => {
           ...(selectedHasTerminal && !consoleEditorLayout.visible ? [{ id: "console-editor", title: selectedIsInteractiveHuman ? "Human Interaction Editor" : "Console Editor" }] : []),
           ...(selectedEnemy && !enemyEditorLayout.visible ? [{ id: "enemy-editor", title: "Enemy Editor" }] : []),
           ...(navigationLayout.visible ? [] : [{ id: "navigation", title: "Navigation" }]),
+          ...(tracingTemplateLayout.visible ? [] : [{ id: "tracing-template", title: "Tracing Template" }]),
         ]} onRestoreHud={(id) => {
           if (id === "console-editor") setConsoleEditorLayout((current) => ({ ...current, visible: true }));
           else if (id === "enemy-editor") setEnemyEditorLayout((current) => ({ ...current, visible: true }));
           else if (id === "enemy-palette") setEnemyPaletteLayout((current) => ({ ...current, visible: true }));
           else if (id === "navigation") setNavigationLayout((current) => ({ ...current, visible: true }));
+          else if (id === "tracing-template") setTracingTemplateLayout((current) => ({ ...current, visible: true }));
           else setTerrainPaletteLayout((current) => ({ ...current, visible: true }));
         }} className="p-5">
           <div className="absolute left-7 top-7 z-10 border border-cyan-700 bg-slate-950/90 px-3 py-2 text-[9px] uppercase tracking-wider text-cyan-100">Draft preview · {draft.map.width}×{draft.map.height}</div>
           <div className="h-full w-full overflow-hidden border border-cyan-900 bg-black shadow-[0_0_30px_rgba(8,145,178,0.12)]">
-            <DraftPreview definition={draft} selectedPlacementId={selectedPlacementId} selectedEnemyId={selectedEnemyId} selectedWallId={selectedWallId} selectedPortalId={selectedPortalId} selectedFire={selectedFire} placementKind={placementKind} enemyKind={enemyKind} placementHover={placementHover} enemyHover={enemyHover} portalHover={portalHover} wallDraft={wallDraft} dragWallEndpoint={dragWallEndpoint} dragWallMove={dragWallMove} dragWallPortal={dragWallPortal} dragPlacement={dragPlacement} dragEnemy={dragEnemy} selectPlacement={selectTerrainPlacement} selectEnemy={selectEnemy} selectWall={(id) => { setSelectedWallId(id); if (id) setSelectedPortalId(null); }} selectPortal={setSelectedPortalId} selectFire={setSelectedFire} hoverPlacement={setPlacementHover} hoverEnemy={setEnemyHover} hoverPortal={setPortalHover} beginWall={beginWall} updateWall={updateWall} finishWall={finishWall} cancelWall={() => setWallDraft(null)} placeWallPortal={placeWallPortal} beginWallEndpointDrag={beginWallEndpointDrag} resizeWallEndpoint={resizeWallEndpoint} finishWallEndpointDrag={() => setDragWallEndpoint(null)} cancelWallEndpointDrag={cancelWallEndpointDrag} beginWallMove={beginWallMove} moveWall={moveWall} finishWallMove={() => setDragWallMove(null)} cancelWallMove={cancelWallMove} beginWallPortalDrag={beginWallPortalDrag} moveWallPortal={moveWallPortal} finishWallPortalDrag={() => setDragWallPortal(null)} cancelWallPortalDrag={cancelWallPortalDrag} beginDrag={setDragPlacement} beginEnemyDrag={setDragEnemy} endDrag={() => { setDragPlacement(null); setDragEnemy(null); }} placeTerrain={placeTerrain} placeEnemy={placeEnemy} moveTerrain={moveTerrain} moveEnemy={moveEnemy} />
+            <DraftPreview definition={draft} selectedPlacementId={selectedPlacementId} selectedEnemyId={selectedEnemyId} selectedWallId={selectedWallId} selectedPortalId={selectedPortalId} selectedFire={selectedFire} placementKind={placementKind} enemyKind={enemyKind} placementHover={placementHover} enemyHover={enemyHover} portalHover={portalHover} wallDraft={wallDraft} dragWallEndpoint={dragWallEndpoint} dragWallMove={dragWallMove} dragWallControl={dragWallControl} dragWallPortal={dragWallPortal} dragTracingTemplate={dragTracingTemplate} tracingTemplateEditing={tracingTemplateEditing} dragPlacement={dragPlacement} dragEnemy={dragEnemy} selectPlacement={selectTerrainPlacement} selectEnemy={selectEnemy} selectWall={(id) => { setSelectedWallId(id); if (id) setSelectedPortalId(null); }} selectPortal={setSelectedPortalId} selectFire={setSelectedFire} hoverPlacement={setPlacementHover} hoverEnemy={setEnemyHover} hoverPortal={setPortalHover} beginWall={beginWall} updateWall={updateWall} finishWall={finishWall} cancelWall={() => setWallDraft(null)} placeWallPortal={placeWallPortal} beginWallEndpointDrag={beginWallEndpointDrag} resizeWallEndpoint={resizeWallEndpoint} finishWallEndpointDrag={() => setDragWallEndpoint(null)} cancelWallEndpointDrag={cancelWallEndpointDrag} beginWallMove={beginWallMove} moveWall={moveWall} finishWallMove={() => setDragWallMove(null)} cancelWallMove={cancelWallMove} beginWallControlDrag={beginWallControlDrag} reshapeWallControl={reshapeWallControl} finishWallControlDrag={() => setDragWallControl(null)} cancelWallControlDrag={cancelWallControlDrag} beginWallPortalDrag={beginWallPortalDrag} moveWallPortal={moveWallPortal} finishWallPortalDrag={() => setDragWallPortal(null)} cancelWallPortalDrag={cancelWallPortalDrag} beginTracingTemplateDrag={beginTracingTemplateDrag} transformTracingTemplate={transformTracingTemplate} finishTracingTemplateDrag={() => setDragTracingTemplate(null)} cancelTracingTemplateDrag={cancelTracingTemplateDrag} beginDrag={setDragPlacement} beginEnemyDrag={setDragEnemy} endDrag={() => { setDragPlacement(null); setDragEnemy(null); }} placeTerrain={placeTerrain} placeEnemy={placeEnemy} moveTerrain={moveTerrain} moveEnemy={moveEnemy} />
           </div>
           <TacticalNavigationHud layout={navigationLayout} mode="editor" onLayoutChange={setNavigationLayout} />
+          <FloatingPluginHud title="Tracing Template" layout={tracingTemplateLayout} onLayoutChange={setTracingTemplateLayout} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+            <div className="max-h-[70vh] overflow-y-auto py-1 pr-1">
+              <div className="mb-2 normal-case text-(--hud-text-dim)">Editor-only reference image rendered beneath the grid.</div>
+              <label className="mb-2 block font-bold text-cyan-200">Template image
+                <select
+                  aria-label="Template image"
+                  value={draft.tracingTemplate?.imagePath ?? ""}
+                  disabled={templateBusy}
+                  onChange={(event) => void selectTracingTemplate(event.target.value)}
+                  className="mt-1 h-8 w-full border border-(--hud-border) bg-slate-950 px-2 text-[9px] normal-case text-slate-100 disabled:opacity-40"
+                >
+                  <option value="">Choose an image</option>
+                  {draft.tracingTemplate && !availableTemplates.some((template) => template.imagePath === draft.tracingTemplate?.imagePath) && <option value={draft.tracingTemplate.imagePath}>Current template</option>}
+                  {availableTemplates.map((template) => <option key={template.id} value={template.imagePath}>{template.label}{template.source === "uploaded" ? " (uploaded)" : ""}</option>)}
+                </select>
+              </label>
+              <label className="mb-2 block border border-cyan-600 px-2 py-2 text-center font-bold text-cyan-100">
+                {templateBusy ? "Working…" : "Upload image"}
+                <input
+                  aria-label="Upload tracing template"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  disabled={templateBusy}
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void uploadTracingTemplate(file);
+                  }}
+                />
+              </label>
+              {draft.tracingTemplate && <>
+                <div className="mb-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={tracingTemplateEditing}
+                    disabled={!draft.tracingTemplate.visible}
+                    onClick={() => {
+                      setTracingTemplateEditing((current) => !current);
+                      setPlacementKind(null);
+                      setEnemyKind(null);
+                      setWallDraft(null);
+                      setPlacementHover(null);
+                      setEnemyHover(null);
+                    }}
+                    className={`h-8 border font-bold disabled:opacity-40 ${tracingTemplateEditing ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-cyan-600 text-cyan-100"}`}
+                  >
+                    {tracingTemplateEditing ? "Finish adjusting" : "Adjust on map"}
+                  </button>
+                  <button type="button" disabled={templateBusy} onClick={() => void resetTracingTemplateFit()} className="h-8 border border-amber-500 font-bold text-amber-100 disabled:opacity-40">Reset to fit</button>
+                </div>
+                <div className="mb-2 grid grid-cols-2 gap-2">
+                  {(["x", "y", "width", "height", "rotation"] as const).map((field) => <label key={field} className="font-bold text-cyan-200">{field}
+                    <input
+                      aria-label={`Template ${field}`}
+                      type="number"
+                      min={field === "width" || field === "height" ? 0.25 : undefined}
+                      step="0.1"
+                      value={Number(draft.tracingTemplate?.[field].toFixed(3))}
+                      onChange={(event) => updateTracingTemplateNumber(field, Number.parseFloat(event.target.value))}
+                      className="mt-1 h-7 w-full border border-(--hud-border) bg-slate-950 px-2 text-[9px] normal-case text-slate-100"
+                    />
+                  </label>)}
+                  <label className="flex items-end">
+                    <span className="flex h-7 w-full items-center gap-2 border border-(--hud-border) px-2 font-bold text-cyan-200">
+                      <input type="checkbox" checked={draft.tracingTemplate.lockAspectRatio} onChange={(event) => updateTracingTemplate({ lockAspectRatio: event.target.checked })} />
+                      Lock ratio
+                    </span>
+                  </label>
+                </div>
+                <label className="mb-2 block font-bold text-cyan-200">Opacity · {Math.round(draft.tracingTemplate.opacity * 100)}%
+                  <input aria-label="Template opacity" type="range" min="0" max="1" step="0.05" value={draft.tracingTemplate.opacity} onChange={(event) => updateTracingTemplate({ opacity: Number.parseFloat(event.target.value) })} className="mt-1 w-full" />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex h-8 items-center gap-2 border border-(--hud-border) px-2 font-bold text-cyan-200">
+                    <input
+                      type="checkbox"
+                      checked={draft.tracingTemplate.visible}
+                      onChange={(event) => {
+                        updateTracingTemplate({ visible: event.target.checked });
+                        if (!event.target.checked) setTracingTemplateEditing(false);
+                      }}
+                    />
+                    Visible
+                  </label>
+                  <button type="button" onClick={() => { setDraft((current) => ({ ...current, tracingTemplate: undefined })); setTracingTemplateEditing(false); }} className="h-8 border border-red-500 font-bold text-red-100">Remove</button>
+                </div>
+              </>}
+              {templateMessage && <div role="status" className={`mt-2 border p-2 normal-case ${templateMessage.kind === "error" ? "border-red-500/70 bg-red-950/60 text-red-100" : "border-emerald-500/70 bg-emerald-950/50 text-emerald-100"}`}>{templateMessage.text}</div>}
+            </div>
+          </FloatingPluginHud>
           <FloatingPluginHud title="Terrain Palette" layout={terrainPaletteLayout} onLayoutChange={setTerrainPaletteLayout} className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
             <div aria-label="Terrain options" className="grid max-h-[65vh] grid-cols-2 gap-1.5 overflow-y-auto overscroll-contain py-1 pr-1">
               <button type="button" aria-pressed={placementKind === null && enemyKind === null} onClick={() => { setPlacementKind(null); setEnemyKind(null); setWallDraft(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === null && enemyKind === null ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-(--hud-border) text-(--hud-text) hover:border-(--hud-accent)"}`}>Pointer</button>
               <button type="button" aria-pressed={placementKind === FIRE_TOOL_ID} onClick={() => { setPlacementKind(FIRE_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedFire(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === FIRE_TOOL_ID ? "border-orange-200 bg-orange-300/20 text-orange-50" : "border-(--hud-border) text-orange-200 hover:border-orange-300"}`}>Fire</button>
               <button type="button" aria-pressed={placementKind === WALL_TOOL_ID} onClick={() => { setPlacementKind(WALL_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedFire(null); setWallDraft(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === WALL_TOOL_ID ? "border-slate-100 bg-slate-300/20 text-white" : "border-(--hud-border) text-slate-200 hover:border-slate-100"}`}>Wall</button>
+              <button type="button" aria-pressed={placementKind === CURVED_WALL_TOOL_ID} onClick={() => { setPlacementKind(CURVED_WALL_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setWallDraft(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === CURVED_WALL_TOOL_ID ? "border-purple-200 bg-purple-300/20 text-purple-50" : "border-(--hud-border) text-purple-200 hover:border-purple-200"}`}>Curved Wall</button>
               <button type="button" aria-pressed={placementKind === DOOR_TOOL_ID} onClick={() => { setPlacementKind(DOOR_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setPortalHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === DOOR_TOOL_ID ? "border-emerald-200 bg-emerald-300/20 text-emerald-50" : "border-(--hud-border) text-emerald-200 hover:border-emerald-200"}`}>Door</button>
               <button type="button" aria-pressed={placementKind === WALL_IRIS_TOOL_ID} onClick={() => { setPlacementKind(WALL_IRIS_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setPortalHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === WALL_IRIS_TOOL_ID ? "border-amber-200 bg-amber-300/20 text-amber-50" : "border-(--hud-border) text-amber-200 hover:border-amber-200"}`}>Wall Iris Valve</button>
               {tacticalTerrainPalette.map((item) => <button type="button" aria-pressed={placementKind === item.id} key={item.id} onClick={() => { setPlacementKind(item.id); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedPortalId(null); setSelectedFire(null); setPlacementHover(null); setEnemyHover(null); setPortalHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === item.id ? "border-amber-200 bg-amber-300/20 text-amber-50" : "border-(--hud-border) text-(--hud-text) hover:border-(--hud-accent)"}`}>{item.id === IRIS_VALVE_ID ? "Legacy Iris Valve" : item.label}</button>)}

@@ -754,6 +754,39 @@ describe("tactical Control Room", () => {
     expect(run?.edge).toEqual({ from: { x: 2, y: 2 }, to: { x: 7, y: 5 } });
   });
 
+  it("resolves a quadratic Bezier wall into stable blocking segments", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnWalls = [{
+      id: "curved-bulkhead",
+      from: { x: 2, y: 2 },
+      control: { x: 6.25, y: 8.5 },
+      to: { x: 10, y: 2 },
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const curveObjects = terrain.terrainObjects.filter((object) => object.id.startsWith("curved-bulkhead:curve:"));
+    const curveWalls = terrain.walls.filter((wall) => wall.id.startsWith("curved-bulkhead:curve:"));
+
+    expect(curveObjects.length).toBeGreaterThan(1);
+    expect(curveWalls).toHaveLength(curveObjects.length);
+    expect(curveWalls[0].from).toEqual({ x: 2, y: 2 });
+    expect(curveWalls.at(-1)?.to).toEqual({ x: 10, y: 2 });
+    expect(curveObjects.every((object) => object.kind === "wall" && object.blocking)).toBe(true);
+    expect(tacticalTerrainBlockedEdges(curveObjects).size).toBeGreaterThan(0);
+  });
+
+  it("rejects curved walls whose control point leaves the playable map", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnWalls = [{
+      id: "outside-curve",
+      from: { x: 2, y: 2 },
+      control: { x: -0.25, y: 8 },
+      to: { x: 10, y: 2 },
+    }];
+
+    expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("Drawn wall outside-curve extends outside the map.");
+  });
+
   it("blocks movement and sight lines that cross a diagonal wall", () => {
     const scenario = buildDefaultTacticalScenario();
     scenario.walls = [{ id: "diagonal-bulkhead", from: { x: 1, y: 0 }, to: { x: 3, y: 2 } }];

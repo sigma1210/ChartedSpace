@@ -1,0 +1,1145 @@
+{
+  "schemaVersion": 1,
+  "id": "laundry-day",
+  "consoleVictoryDefinitionId": "laundry-day",
+  "title": "Laundry Day",
+  "briefing": "Move your laundry from the washer to the dryer",
+  "objective": "Empty Washer and fill Dryer",
+  "map": {
+    "width": 72,
+    "height": 48
+  },
+  "tracingTemplate": {
+    "imagePath": "/generated/tactical-templates/apartment1-05f334094f9d4364815b038a3744feba.png",
+    "x": 12,
+    "y": 12,
+    "width": 24,
+    "height": 24,
+    "rotation": 0,
+    "opacity": 0.35,
+    "visible": true,
+    "lockAspectRatio": true
+  },
+  "terrainPlacements": [
+    {
+      "id": "console-1x1-1",
+      "terrainDefinitionId": "console-1x1",
+      "origin": {
+        "x": 27,
+        "y": 27
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Washer"
+        }
+      }
+    },
+    {
+      "id": "console-1x1-2",
+      "terrainDefinitionId": "console-1x1",
+      "origin": {
+        "x": 27,
+        "y": 31
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Dryer"
+        }
+      }
+    }
+  ],
+  "drawnWalls": [
+    {
+      "id": "drawn-wall-1",
+      "from": {
+        "x": 14,
+        "y": 14
+      },
+      "to": {
+        "x": 14,
+        "y": 34
+      }
+    },
+    {
+      "id": "drawn-wall-2",
+      "from": {
+        "x": 34,
+        "y": 14
+      },
+      "to": {
+        "x": 14,
+        "y": 14
+      }
+    },
+    {
+      "id": "drawn-wall-3",
+      "from": {
+        "x": 34,
+        "y": 34
+      },
+      "to": {
+        "x": 34,
+        "y": 14
+      }
+    },
+    {
+      "id": "drawn-wall-4",
+      "from": {
+        "x": 14,
+        "y": 34
+      },
+      "to": {
+        "x": 34,
+        "y": 34
+      },
+      "portals": [
+        {
+          "id": "wall-door-18",
+          "kind": "sliding-door",
+          "position": 0.675
+        },
+        {
+          "id": "wall-door-19",
+          "kind": "sliding-door",
+          "position": 0.525
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-5",
+      "from": {
+        "x": 21,
+        "y": 25
+      },
+      "to": {
+        "x": 27,
+        "y": 25
+      },
+      "portals": [
+        {
+          "id": "wall-door-39",
+          "kind": "sliding-door",
+          "position": 0.75
+        },
+        {
+          "id": "wall-door-40",
+          "kind": "sliding-door",
+          "position": 0.08333333333333333
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-6",
+      "from": {
+        "x": 21,
+        "y": 21
+      },
+      "to": {
+        "x": 21,
+        "y": 25
+      }
+    },
+    {
+      "id": "drawn-wall-7",
+      "from": {
+        "x": 27,
+        "y": 21
+      },
+      "to": {
+        "x": 27,
+        "y": 25
+      }
+    },
+    {
+      "id": "drawn-wall-8",
+      "from": {
+        "x": 21,
+        "y": 21
+      },
+      "to": {
+        "x": 27,
+        "y": 21
+      }
+    },
+    {
+      "id": "drawn-wall-9",
+      "from": {
+        "x": 17,
+        "y": 27
+      },
+      "to": {
+        "x": 24,
+        "y": 27
+      },
+      "portals": [
+        {
+          "id": "wall-door-34",
+          "kind": "sliding-door",
+          "position": 0.5
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-10",
+      "from": {
+        "x": 24,
+        "y": 34
+      },
+      "to": {
+        "x": 24,
+        "y": 27
+      }
+    },
+    {
+      "id": "drawn-wall-11",
+      "from": {
+        "x": 17,
+        "y": 34
+      },
+      "to": {
+        "x": 17,
+        "y": 27
+      },
+      "portals": [
+        {
+          "id": "wall-door-38",
+          "kind": "sliding-door",
+          "position": 0.35714285714285715
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-12",
+      "from": {
+        "x": 20,
+        "y": 27
+      },
+      "to": {
+        "x": 20,
+        "y": 34
+      },
+      "portals": [
+        {
+          "id": "wall-door-35",
+          "kind": "sliding-door",
+          "position": 0.21428571428571427
+        },
+        {
+          "id": "wall-door-36",
+          "kind": "sliding-door",
+          "position": 0.5
+        },
+        {
+          "id": "wall-door-37",
+          "kind": "sliding-door",
+          "position": 0.6428571428571429
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-13",
+      "from": {
+        "x": 21,
+        "y": 27
+      },
+      "to": {
+        "x": 21,
+        "y": 31
+      },
+      "portals": [
+        {
+          "id": "wall-door-27",
+          "kind": "sliding-door",
+          "position": 0.375
+        },
+        {
+          "id": "wall-door-28",
+          "kind": "sliding-door",
+          "position": 0.875
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-14",
+      "from": {
+        "x": 24,
+        "y": 31
+      },
+      "to": {
+        "x": 21,
+        "y": 31
+      }
+    },
+    {
+      "id": "drawn-wall-15",
+      "from": {
+        "x": 24,
+        "y": 29
+      },
+      "to": {
+        "x": 21,
+        "y": 29
+      }
+    },
+    {
+      "id": "drawn-wall-16",
+      "from": {
+        "x": 17,
+        "y": 29
+      },
+      "to": {
+        "x": 20,
+        "y": 29
+      }
+    },
+    {
+      "id": "drawn-wall-17",
+      "from": {
+        "x": 17,
+        "y": 31
+      },
+      "to": {
+        "x": 20,
+        "y": 31
+      }
+    },
+    {
+      "id": "drawn-wall-18",
+      "from": {
+        "x": 20,
+        "y": 27
+      },
+      "to": {
+        "x": 20,
+        "y": 14
+      },
+      "portals": [
+        {
+          "id": "wall-door-11",
+          "kind": "sliding-door",
+          "position": 0.8076923076923077
+        },
+        {
+          "id": "wall-door-12",
+          "kind": "sliding-door",
+          "position": 0.7307692307692307
+        },
+        {
+          "id": "wall-door-13",
+          "kind": "sliding-door",
+          "position": 0.5769230769230769
+        },
+        {
+          "id": "wall-door-14",
+          "kind": "sliding-door",
+          "position": 0.4230769230769231
+        },
+        {
+          "id": "wall-door-33",
+          "kind": "sliding-door",
+          "position": 0.038461538461538464
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-19",
+      "from": {
+        "x": 21,
+        "y": 17
+      },
+      "to": {
+        "x": 21,
+        "y": 21
+      },
+      "portals": [
+        {
+          "id": "wall-door-41",
+          "kind": "sliding-door",
+          "position": 0.625
+        },
+        {
+          "id": "wall-door-42",
+          "kind": "sliding-door",
+          "position": 0.125
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-20",
+      "from": {
+        "x": 27,
+        "y": 17
+      },
+      "to": {
+        "x": 21,
+        "y": 17
+      }
+    },
+    {
+      "id": "drawn-wall-21",
+      "from": {
+        "x": 27,
+        "y": 21
+      },
+      "to": {
+        "x": 27,
+        "y": 17
+      },
+      "portals": [
+        {
+          "id": "wall-door-43",
+          "kind": "sliding-door",
+          "position": 0.875
+        },
+        {
+          "id": "wall-door-44",
+          "kind": "sliding-door",
+          "position": 0.375
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-22",
+      "from": {
+        "x": 24,
+        "y": 17
+      },
+      "to": {
+        "x": 24,
+        "y": 21
+      }
+    },
+    {
+      "id": "drawn-wall-23",
+      "from": {
+        "x": 21,
+        "y": 19
+      },
+      "to": {
+        "x": 27,
+        "y": 19
+      }
+    },
+    {
+      "id": "drawn-wall-24",
+      "from": {
+        "x": 24,
+        "y": 14
+      },
+      "to": {
+        "x": 24,
+        "y": 17
+      }
+    },
+    {
+      "id": "drawn-wall-25",
+      "from": {
+        "x": 28,
+        "y": 14
+      },
+      "to": {
+        "x": 28,
+        "y": 27
+      },
+      "portals": [
+        {
+          "id": "wall-door-6",
+          "kind": "sliding-door",
+          "position": 0.19230769230769232
+        },
+        {
+          "id": "wall-door-7",
+          "kind": "sliding-door",
+          "position": 0.2692307692307692
+        },
+        {
+          "id": "wall-door-8",
+          "kind": "sliding-door",
+          "position": 0.4230769230769231
+        },
+        {
+          "id": "wall-door-9",
+          "kind": "sliding-door",
+          "position": 0.5769230769230769
+        },
+        {
+          "id": "wall-door-2",
+          "kind": "sliding-door",
+          "position": 0.9615384615384616
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-26",
+      "from": {
+        "x": 26,
+        "y": 27
+      },
+      "to": {
+        "x": 31,
+        "y": 27
+      }
+    },
+    {
+      "id": "drawn-wall-27",
+      "from": {
+        "x": 31,
+        "y": 34
+      },
+      "to": {
+        "x": 31,
+        "y": 27
+      },
+      "portals": [
+        {
+          "id": "wall-door-30",
+          "kind": "sliding-door",
+          "position": 0.35714285714285715
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-28",
+      "from": {
+        "x": 26,
+        "y": 29
+      },
+      "to": {
+        "x": 26,
+        "y": 27
+      }
+    },
+    {
+      "id": "drawn-wall-29",
+      "from": {
+        "x": 29,
+        "y": 29
+      },
+      "to": {
+        "x": 26,
+        "y": 29
+      },
+      "portals": []
+    },
+    {
+      "id": "drawn-wall-30",
+      "from": {
+        "x": 26,
+        "y": 32
+      },
+      "to": {
+        "x": 26,
+        "y": 30
+      }
+    },
+    {
+      "id": "drawn-wall-31",
+      "from": {
+        "x": 29,
+        "y": 30
+      },
+      "to": {
+        "x": 26,
+        "y": 30
+      },
+      "portals": []
+    },
+    {
+      "id": "drawn-wall-33",
+      "from": {
+        "x": 29,
+        "y": 27
+      },
+      "to": {
+        "x": 29,
+        "y": 34
+      },
+      "portals": [
+        {
+          "id": "wall-door-29",
+          "kind": "sliding-door",
+          "position": 0.35714285714285715
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-34",
+      "from": {
+        "x": 26,
+        "y": 32
+      },
+      "to": {
+        "x": 29,
+        "y": 32
+      }
+    },
+    {
+      "id": "drawn-wall-35",
+      "from": {
+        "x": 24,
+        "y": 32
+      },
+      "to": {
+        "x": 26,
+        "y": 32
+      },
+      "portals": [
+        {
+          "id": "wall-door-21",
+          "kind": "sliding-door",
+          "position": 0.25
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-36",
+      "from": {
+        "x": 28,
+        "y": 21
+      },
+      "to": {
+        "x": 31,
+        "y": 21
+      }
+    },
+    {
+      "id": "drawn-wall-37",
+      "from": {
+        "x": 31,
+        "y": 14
+      },
+      "to": {
+        "x": 31,
+        "y": 21
+      }
+    },
+    {
+      "id": "drawn-wall-38",
+      "from": {
+        "x": 34,
+        "y": 16
+      },
+      "to": {
+        "x": 31,
+        "y": 16
+      },
+      "portals": [
+        {
+          "id": "wall-door-26",
+          "kind": "sliding-door",
+          "position": 0.8333333333333334
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-39",
+      "from": {
+        "x": 34,
+        "y": 20
+      },
+      "to": {
+        "x": 32,
+        "y": 20
+      }
+    },
+    {
+      "id": "drawn-wall-40",
+      "from": {
+        "x": 28,
+        "y": 22
+      },
+      "to": {
+        "x": 32,
+        "y": 22
+      },
+      "portals": [
+        {
+          "id": "wall-door-10",
+          "kind": "sliding-door",
+          "position": 0.375
+        },
+        {
+          "id": "wall-door-4",
+          "kind": "sliding-door",
+          "position": 0.875
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-41",
+      "from": {
+        "x": 32,
+        "y": 20
+      },
+      "to": {
+        "x": 32,
+        "y": 22
+      },
+      "portals": [
+        {
+          "id": "wall-door-5",
+          "kind": "sliding-door",
+          "position": 0.75
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-42",
+      "from": {
+        "x": 34,
+        "y": 22
+      },
+      "to": {
+        "x": 32,
+        "y": 22
+      }
+    },
+    {
+      "id": "drawn-wall-43",
+      "from": {
+        "x": 31,
+        "y": 22
+      },
+      "to": {
+        "x": 31,
+        "y": 26
+      }
+    },
+    {
+      "id": "drawn-wall-44",
+      "from": {
+        "x": 28,
+        "y": 26
+      },
+      "to": {
+        "x": 34,
+        "y": 26
+      },
+      "portals": [
+        {
+          "id": "wall-door-1",
+          "kind": "sliding-door",
+          "position": 0.25
+        },
+        {
+          "id": "wall-door-3",
+          "kind": "sliding-door",
+          "position": 0.5833333333333334
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-45",
+      "from": {
+        "x": 28,
+        "y": 24
+      },
+      "to": {
+        "x": 34,
+        "y": 24
+      }
+    },
+    {
+      "id": "drawn-wall-46",
+      "from": {
+        "x": 14,
+        "y": 16
+      },
+      "to": {
+        "x": 17,
+        "y": 16
+      },
+      "portals": [
+        {
+          "id": "wall-door-24",
+          "kind": "sliding-door",
+          "position": 0.8333333333333334
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-47",
+      "from": {
+        "x": 17,
+        "y": 14
+      },
+      "to": {
+        "x": 17,
+        "y": 21
+      },
+      "portals": [
+        {
+          "id": "wall-door-25",
+          "kind": "sliding-door",
+          "position": 0.35714285714285715
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-48",
+      "from": {
+        "x": 20,
+        "y": 21
+      },
+      "to": {
+        "x": 17,
+        "y": 21
+      }
+    },
+    {
+      "id": "drawn-wall-49",
+      "from": {
+        "x": 20,
+        "y": 19
+      },
+      "to": {
+        "x": 17,
+        "y": 19
+      }
+    },
+    {
+      "id": "drawn-wall-50",
+      "from": {
+        "x": 20,
+        "y": 17
+      },
+      "to": {
+        "x": 17,
+        "y": 17
+      }
+    },
+    {
+      "id": "drawn-wall-51",
+      "from": {
+        "x": 19,
+        "y": 14
+      },
+      "to": {
+        "x": 19,
+        "y": 17
+      }
+    },
+    {
+      "id": "drawn-wall-52",
+      "from": {
+        "x": 14,
+        "y": 20
+      },
+      "to": {
+        "x": 16,
+        "y": 20
+      }
+    },
+    {
+      "id": "drawn-wall-53",
+      "from": {
+        "x": 14,
+        "y": 22
+      },
+      "to": {
+        "x": 16,
+        "y": 22
+      }
+    },
+    {
+      "id": "drawn-wall-54",
+      "from": {
+        "x": 16,
+        "y": 20
+      },
+      "to": {
+        "x": 16,
+        "y": 22
+      },
+      "portals": []
+    },
+    {
+      "id": "drawn-wall-55",
+      "from": {
+        "x": 16,
+        "y": 22
+      },
+      "to": {
+        "x": 20,
+        "y": 22
+      },
+      "portals": [
+        {
+          "id": "wall-door-15",
+          "kind": "sliding-door",
+          "position": 0.625
+        },
+        {
+          "id": "wall-door-20",
+          "kind": "sliding-door",
+          "position": 0.125
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-56",
+      "from": {
+        "x": 20,
+        "y": 26
+      },
+      "to": {
+        "x": 14,
+        "y": 26
+      },
+      "portals": [
+        {
+          "id": "wall-door-16",
+          "kind": "sliding-door",
+          "position": 0.25
+        },
+        {
+          "id": "wall-door-17",
+          "kind": "sliding-door",
+          "position": 0.5833333333333334
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-57",
+      "from": {
+        "x": 14,
+        "y": 28
+      },
+      "to": {
+        "x": 16,
+        "y": 28
+      }
+    },
+    {
+      "id": "drawn-wall-58",
+      "from": {
+        "x": 16,
+        "y": 26
+      },
+      "to": {
+        "x": 16,
+        "y": 28
+      },
+      "portals": [
+        {
+          "id": "wall-door-22",
+          "kind": "sliding-door",
+          "position": 0.25
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-59",
+      "from": {
+        "x": 14,
+        "y": 24
+      },
+      "to": {
+        "x": 20,
+        "y": 24
+      }
+    },
+    {
+      "id": "drawn-wall-60",
+      "from": {
+        "x": 17,
+        "y": 22
+      },
+      "to": {
+        "x": 17,
+        "y": 26
+      }
+    },
+    {
+      "id": "drawn-wall-61",
+      "from": {
+        "x": 14,
+        "y": 32
+      },
+      "to": {
+        "x": 17,
+        "y": 32
+      },
+      "portals": [
+        {
+          "id": "wall-door-23",
+          "kind": "sliding-door",
+          "position": 0.8333333333333334
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-62",
+      "from": {
+        "x": 31,
+        "y": 32
+      },
+      "to": {
+        "x": 34,
+        "y": 32
+      },
+      "portals": [
+        {
+          "id": "wall-door-31",
+          "kind": "sliding-door",
+          "position": 0.16666666666666666
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-63",
+      "from": {
+        "x": 32,
+        "y": 26
+      },
+      "to": {
+        "x": 32,
+        "y": 28
+      },
+      "portals": [
+        {
+          "id": "wall-door-32",
+          "kind": "sliding-door",
+          "position": 0.25
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-64",
+      "from": {
+        "x": 34,
+        "y": 28
+      },
+      "to": {
+        "x": 32,
+        "y": 28
+      }
+    },
+    {
+      "id": "drawn-wall-65",
+      "from": {
+        "x": 23,
+        "y": 21
+      },
+      "to": {
+        "x": 23,
+        "y": 25
+      }
+    },
+    {
+      "id": "drawn-wall-66",
+      "from": {
+        "x": 25,
+        "y": 21
+      },
+      "to": {
+        "x": 25,
+        "y": 23
+      }
+    },
+    {
+      "id": "drawn-wall-67",
+      "from": {
+        "x": 31,
+        "y": 31
+      },
+      "to": {
+        "x": 29,
+        "y": 31
+      }
+    },
+    {
+      "id": "drawn-wall-32",
+      "from": {
+        "x": 19,
+        "y": 31
+      },
+      "to": {
+        "x": 19,
+        "y": 34
+      }
+    },
+    {
+      "id": "drawn-wall-68",
+      "from": {
+        "x": 43,
+        "y": 18
+      },
+      "to": {
+        "x": 47,
+        "y": 18
+      },
+      "control": {
+        "x": 45.07936477661133,
+        "y": 13.66650104522705
+      }
+    },
+    {
+      "id": "drawn-wall-69",
+      "from": {
+        "x": 43,
+        "y": 25
+      },
+      "to": {
+        "x": 43,
+        "y": 18
+      },
+      "portals": [
+        {
+          "id": "wall-door-45",
+          "kind": "sliding-door",
+          "position": 0.6428571428571429
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-70",
+      "from": {
+        "x": 47,
+        "y": 25
+      },
+      "to": {
+        "x": 47,
+        "y": 18
+      },
+      "portals": [
+        {
+          "id": "wall-door-46",
+          "kind": "sliding-door",
+          "position": 0.6428571428571429
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-71",
+      "from": {
+        "x": 47,
+        "y": 25
+      },
+      "to": {
+        "x": 43,
+        "y": 25
+      },
+      "portals": [
+        {
+          "id": "wall-door-47",
+          "kind": "sliding-door",
+          "position": 0.875
+        },
+        {
+          "id": "wall-door-48",
+          "kind": "sliding-door",
+          "position": 0.125
+        }
+      ]
+    }
+  ],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [],
+  "fireCells": [],
+  "smokeCells": []
+}

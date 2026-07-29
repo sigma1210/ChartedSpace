@@ -454,6 +454,12 @@ describe("tactical terrain interactions", () => {
       enemies: [{ id: "enemy-1", position: firstPosition }],
     }));
     expect(state.tacticalMap?.lastKnownEnemyPositions?.["enemy-1"]).toEqual(firstPosition);
+    const recordedState = state;
+    state = reducer(state, recordTacticalEnemySightings({
+      visibleCellKeys: [pointKey(firstPosition)],
+      enemies: [{ id: "enemy-1", position: firstPosition }],
+    }));
+    expect(state).toBe(recordedState);
 
     state = reducer(state, recordTacticalEnemySightings({ visibleCellKeys: ["0:0"], enemies: [] }));
     expect(state.tacticalMap?.lastKnownEnemyPositions?.["enemy-1"]).toEqual(firstPosition);

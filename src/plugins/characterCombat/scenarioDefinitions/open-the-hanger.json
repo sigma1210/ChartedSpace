@@ -1,0 +1,705 @@
+{
+  "schemaVersion": 1,
+  "id": "open-the-hanger",
+  "consoleVictoryDefinitionId": "open-the-hanger",
+  "title": "Open the Hanger doors",
+  "briefing": "Open the hanger doors",
+  "objective": "open the hanger bay doors",
+  "map": {
+    "width": 72,
+    "height": 48
+  },
+  "tracingTemplate": {
+    "imagePath": "/images/tactical/landing-pad/map.jpg",
+    "x": 0,
+    "y": 0,
+    "width": 72,
+    "height": 48,
+    "rotation": 0,
+    "opacity": 0.45,
+    "visible": true,
+    "lockAspectRatio": true
+  },
+  "terrainPlacements": [
+    {
+      "id": "console-1x1-1",
+      "terrainDefinitionId": "console-1x1",
+      "origin": {
+        "x": 36,
+        "y": 23
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Hanger Door Control"
+        }
+      }
+    }
+  ],
+  "drawnWalls": [
+    {
+      "id": "drawn-wall-1",
+      "from": {
+        "x": 24,
+        "y": 17
+      },
+      "to": {
+        "x": 29,
+        "y": 12
+      }
+    },
+    {
+      "id": "drawn-wall-2",
+      "from": {
+        "x": 42,
+        "y": 12
+      },
+      "to": {
+        "x": 29,
+        "y": 12
+      },
+      "portals": [
+        {
+          "id": "wall-door-21",
+          "kind": "sliding-door",
+          "position": 0.34615384615384615
+        },
+        {
+          "id": "wall-door-22",
+          "kind": "sliding-door",
+          "position": 0.5769230769230769
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-3",
+      "from": {
+        "x": 47,
+        "y": 17
+      },
+      "to": {
+        "x": 42,
+        "y": 12
+      }
+    },
+    {
+      "id": "drawn-wall-4",
+      "from": {
+        "x": 47,
+        "y": 31
+      },
+      "to": {
+        "x": 47,
+        "y": 17
+      },
+      "portals": [
+        {
+          "id": "wall-door-3",
+          "kind": "sliding-door",
+          "position": 0.8214285714285714
+        },
+        {
+          "id": "wall-door-4",
+          "kind": "sliding-door",
+          "position": 0.17857142857142858
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-5",
+      "from": {
+        "x": 41,
+        "y": 37
+      },
+      "to": {
+        "x": 47,
+        "y": 31
+      }
+    },
+    {
+      "id": "drawn-wall-6",
+      "from": {
+        "x": 31,
+        "y": 37
+      },
+      "to": {
+        "x": 24,
+        "y": 31
+      }
+    },
+    {
+      "id": "drawn-wall-7",
+      "from": {
+        "x": 24,
+        "y": 17
+      },
+      "to": {
+        "x": 24,
+        "y": 31
+      },
+      "portals": [
+        {
+          "id": "wall-door-1",
+          "kind": "sliding-door",
+          "position": 0.8214285714285714
+        },
+        {
+          "id": "wall-door-2",
+          "kind": "sliding-door",
+          "position": 0.17857142857142858
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-8",
+      "from": {
+        "x": 11,
+        "y": 6
+      },
+      "to": {
+        "x": 16,
+        "y": 6
+      }
+    },
+    {
+      "id": "drawn-wall-9",
+      "from": {
+        "x": 11,
+        "y": 6
+      },
+      "to": {
+        "x": 11,
+        "y": 42
+      }
+    },
+    {
+      "id": "drawn-wall-10",
+      "from": {
+        "x": 16,
+        "y": 42
+      },
+      "to": {
+        "x": 11,
+        "y": 42
+      }
+    },
+    {
+      "id": "drawn-wall-11",
+      "from": {
+        "x": 16,
+        "y": 6
+      },
+      "to": {
+        "x": 16,
+        "y": 42
+      },
+      "portals": [
+        {
+          "id": "wall-door-5",
+          "kind": "sliding-door",
+          "position": 0.2916666666666667
+        },
+        {
+          "id": "wall-door-6",
+          "kind": "sliding-door",
+          "position": 0.4861111111111111
+        },
+        {
+          "id": "wall-door-7",
+          "kind": "sliding-door",
+          "position": 0.7083333333333334
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-12",
+      "from": {
+        "x": 11,
+        "y": 13
+      },
+      "to": {
+        "x": 16,
+        "y": 13
+      },
+      "portals": [
+        {
+          "id": "wall-door-9",
+          "kind": "sliding-door",
+          "position": 0.5
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-13",
+      "from": {
+        "x": 11,
+        "y": 20
+      },
+      "to": {
+        "x": 16,
+        "y": 20
+      }
+    },
+    {
+      "id": "drawn-wall-14",
+      "from": {
+        "x": 11,
+        "y": 28
+      },
+      "to": {
+        "x": 16,
+        "y": 28
+      }
+    },
+    {
+      "id": "drawn-wall-15",
+      "from": {
+        "x": 11,
+        "y": 35
+      },
+      "to": {
+        "x": 16,
+        "y": 35
+      },
+      "portals": [
+        {
+          "id": "wall-door-8",
+          "kind": "sliding-door",
+          "position": 0.5
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-16",
+      "from": {
+        "x": 57,
+        "y": 6
+      },
+      "to": {
+        "x": 57,
+        "y": 42
+      },
+      "portals": [
+        {
+          "id": "wall-door-12",
+          "kind": "sliding-door",
+          "position": 0.7083333333333334
+        },
+        {
+          "id": "wall-door-13",
+          "kind": "sliding-door",
+          "position": 0.4861111111111111
+        },
+        {
+          "id": "wall-door-14",
+          "kind": "sliding-door",
+          "position": 0.2916666666666667
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-17",
+      "from": {
+        "x": 62,
+        "y": 42
+      },
+      "to": {
+        "x": 57,
+        "y": 42
+      }
+    },
+    {
+      "id": "drawn-wall-18",
+      "from": {
+        "x": 62,
+        "y": 6
+      },
+      "to": {
+        "x": 57,
+        "y": 6
+      }
+    },
+    {
+      "id": "drawn-wall-19",
+      "from": {
+        "x": 62,
+        "y": 6
+      },
+      "to": {
+        "x": 62,
+        "y": 42
+      }
+    },
+    {
+      "id": "drawn-wall-20",
+      "from": {
+        "x": 57,
+        "y": 13
+      },
+      "to": {
+        "x": 62,
+        "y": 13
+      },
+      "portals": [
+        {
+          "id": "wall-door-10",
+          "kind": "sliding-door",
+          "position": 0.5
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-21",
+      "from": {
+        "x": 57,
+        "y": 20
+      },
+      "to": {
+        "x": 62,
+        "y": 20
+      }
+    },
+    {
+      "id": "drawn-wall-22",
+      "from": {
+        "x": 57,
+        "y": 28
+      },
+      "to": {
+        "x": 62,
+        "y": 28
+      }
+    },
+    {
+      "id": "drawn-wall-23",
+      "from": {
+        "x": 57,
+        "y": 35
+      },
+      "to": {
+        "x": 62,
+        "y": 35
+      },
+      "portals": [
+        {
+          "id": "wall-door-11",
+          "kind": "sliding-door",
+          "position": 0.5
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-24",
+      "from": {
+        "x": 16,
+        "y": 37
+      },
+      "to": {
+        "x": 33,
+        "y": 37
+      },
+      "portals": [
+        {
+          "id": "wall-door-16",
+          "kind": "sliding-door",
+          "position": 0.20588235294117646
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-25",
+      "from": {
+        "x": 16,
+        "y": 41
+      },
+      "to": {
+        "x": 33,
+        "y": 41
+      }
+    },
+    {
+      "id": "drawn-wall-26",
+      "from": {
+        "x": 33,
+        "y": 37
+      },
+      "to": {
+        "x": 33,
+        "y": 41
+      }
+    },
+    {
+      "id": "drawn-wall-27",
+      "from": {
+        "x": 39,
+        "y": 41
+      },
+      "to": {
+        "x": 39,
+        "y": 37
+      }
+    },
+    {
+      "id": "drawn-wall-28",
+      "from": {
+        "x": 57,
+        "y": 41
+      },
+      "to": {
+        "x": 39,
+        "y": 41
+      }
+    },
+    {
+      "id": "drawn-wall-29",
+      "from": {
+        "x": 57,
+        "y": 37
+      },
+      "to": {
+        "x": 39,
+        "y": 37
+      },
+      "portals": [
+        {
+          "id": "wall-door-15",
+          "kind": "sliding-door",
+          "position": 0.19444444444444445
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-30",
+      "from": {
+        "x": 16,
+        "y": 12
+      },
+      "to": {
+        "x": 29,
+        "y": 12
+      },
+      "portals": [
+        {
+          "id": "wall-door-17",
+          "kind": "sliding-door",
+          "position": 0.2692307692307692
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-31",
+      "from": {
+        "x": 57,
+        "y": 12
+      },
+      "to": {
+        "x": 42,
+        "y": 12
+      },
+      "portals": [
+        {
+          "id": "wall-door-18",
+          "kind": "sliding-door",
+          "position": 0.23333333333333334
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-32",
+      "from": {
+        "x": 57,
+        "y": 7
+      },
+      "to": {
+        "x": 39,
+        "y": 7
+      }
+    },
+    {
+      "id": "drawn-wall-33",
+      "from": {
+        "x": 39,
+        "y": 12
+      },
+      "to": {
+        "x": 39,
+        "y": 7
+      },
+      "portals": [
+        {
+          "id": "wall-door-19",
+          "kind": "sliding-door",
+          "position": 0.5
+        }
+      ]
+    },
+    {
+      "id": "drawn-wall-34",
+      "from": {
+        "x": 16,
+        "y": 7
+      },
+      "to": {
+        "x": 33,
+        "y": 7
+      }
+    },
+    {
+      "id": "drawn-wall-35",
+      "from": {
+        "x": 33,
+        "y": 12
+      },
+      "to": {
+        "x": 33,
+        "y": 7
+      },
+      "portals": [
+        {
+          "id": "wall-door-20",
+          "kind": "sliding-door",
+          "position": 0.5
+        }
+      ]
+    }
+  ],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [
+    {
+      "id": "gang-member-1",
+      "type": "gang-member",
+      "name": "Gang Member 1",
+      "position": {
+        "x": 59,
+        "y": 24
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-green-v1.png"
+    },
+    {
+      "id": "gang-member-2",
+      "type": "gang-member",
+      "name": "Gang Member 2",
+      "position": {
+        "x": 59,
+        "y": 30
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-brown-v1.png"
+    },
+    {
+      "id": "gang-member-3",
+      "type": "gang-member",
+      "name": "Gang Member 3",
+      "position": {
+        "x": 59,
+        "y": 16
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v2.png"
+    },
+    {
+      "id": "gang-member-4",
+      "type": "gang-member",
+      "name": "Gang Member 4",
+      "position": {
+        "x": 12,
+        "y": 16
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-brown-v1.png"
+    },
+    {
+      "id": "gang-member-5",
+      "type": "gang-member",
+      "name": "Gang Member 5",
+      "position": {
+        "x": 13,
+        "y": 23
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-brown-v1.png"
+    },
+    {
+      "id": "gang-member-6",
+      "type": "gang-member",
+      "name": "Gang Member 6",
+      "position": {
+        "x": 13,
+        "y": 31
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-7",
+      "type": "gang-member",
+      "name": "Gang Member 7",
+      "position": {
+        "x": 19,
+        "y": 18
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-brown-v1.png"
+    },
+    {
+      "id": "gang-member-8",
+      "type": "gang-member",
+      "name": "Gang Member 8",
+      "position": {
+        "x": 19,
+        "y": 29
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v2.png"
+    },
+    {
+      "id": "gang-member-9",
+      "type": "gang-member",
+      "name": "Gang Member 9",
+      "position": {
+        "x": 52,
+        "y": 17
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-10",
+      "type": "gang-member",
+      "name": "Gang Member 10",
+      "position": {
+        "x": 52,
+        "y": 28
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-11",
+      "type": "gang-member",
+      "name": "Gang Member 11",
+      "position": {
+        "x": 21,
+        "y": 38
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-12",
+      "type": "gang-member",
+      "name": "Gang Member 12",
+      "position": {
+        "x": 48,
+        "y": 39
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-brown-v1.png"
+    }
+  ],
+  "fireCells": [],
+  "smokeCells": []
+}

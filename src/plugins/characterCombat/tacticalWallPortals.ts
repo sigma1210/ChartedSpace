@@ -30,6 +30,7 @@ export const tacticalWallPortalPlacementCandidate = (
   maximumDistance = 0.75,
 ): TacticalWallPortalPlacementCandidate | null => {
   const projectedWalls = walls.flatMap((wall) => {
+    if (wall.control) return [];
     const dx = wall.to.x - wall.from.x;
     const dy = wall.to.y - wall.from.y;
     const length = Math.hypot(dx, dy);
