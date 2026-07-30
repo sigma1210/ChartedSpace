@@ -91,6 +91,29 @@ const scenarioSchema = z.object({
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["portals"], message: "Curved walls cannot contain portals." });
     }
   })).optional(),
+  drawnRaisedAreas: z.array(z.object({
+    id: z.string().min(1),
+    segments: z.array(z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("line"),
+        from: gridPointSchema,
+        to: gridPointSchema,
+      }).strict(),
+      z.object({
+        kind: z.literal("quadratic"),
+        from: gridPointSchema,
+        control: finitePointSchema,
+        to: gridPointSchema,
+      }).strict(),
+    ])).min(3),
+  }).strict()).optional(),
+  elevationTransitions: z.array(z.object({
+    id: z.string().min(1),
+    kind: z.enum(["stairs", "ladder", "ramp"]),
+    lower: gridPointSchema,
+    upper: gridPointSchema,
+    path: z.array(gridPointSchema).min(2).optional(),
+  }).strict()).optional(),
   deploymentEdges: z.array(z.enum(["north", "east", "south", "west"])).default(["south"]),
   enemyPlacements: z.array(enemyPlacementSchema).default([]),
   fireCells: z.array(gridPointSchema),

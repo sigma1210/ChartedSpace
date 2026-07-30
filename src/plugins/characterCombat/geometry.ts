@@ -660,11 +660,37 @@ export const tacticalRangedEnemies = (scenario: CombatScenario, combatantId: str
     && inFieldOfFire(attacker, target.position) && snapShotTarget(attacker, target) && tacticalVisibilityAssessment(scenario, attacker, target).observable);
 };
 
-export const reachableOpenMapMovement = ({ width, height, origin, originElevationLevel, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationLevelByCell = {}, bridges = [], closeMachineryCells = [], elevationAccessCells = [] }: { width: number; height: number; origin: GridPoint; originElevationLevel?: number; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationLevelByCell?: CombatScenario["elevationLevelByCell"]; bridges?: CombatScenario["bridges"]; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[] }) => {
+export const reachableOpenMapMovement = ({ width, height, origin, originElevationLevel, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationLevelByCell = {}, bridges = [], closeMachineryCells = [], elevationAccessCells = [], elevationTransitions = [] }: { width: number; height: number; origin: GridPoint; originElevationLevel?: number; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationLevelByCell?: CombatScenario["elevationLevelByCell"]; bridges?: CombatScenario["bridges"]; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[]; elevationTransitions?: CombatScenario["elevationTransitions"] }) => {
   const results = new Map<string, PlannedMove>();
   const elevationAccess = new Set(elevationAccessCells.map(pointKey));
   const elevationLevel = (point: GridPoint) => elevationLevelByCell?.[pointKey(point)] ?? (terrainByCell?.[pointKey(point)] === "elevated" ? 1 : 0);
   const bridgeLevelByCell = new Map(bridges.flatMap((bridge) => bridge.cells.map((point) => [pointKey(point), bridge.elevationLevel] as const)));
+  const rampMembershipByCell = new Map(
+    (elevationTransitions ?? [])
+      .filter((transition) => transition.kind === "ramp")
+      .flatMap((transition) => transition.path.map((point, index) => [
+        pointKey(point),
+        { transition, index },
+      ] as const)),
+  );
+  const rampStepAllowed = (from: GridPoint, to: GridPoint) => {
+    const fromMembership = rampMembershipByCell.get(pointKey(from));
+    const toMembership = rampMembershipByCell.get(pointKey(to));
+    if (!fromMembership && !toMembership) return true;
+    if (fromMembership && toMembership
+      && fromMembership.transition.id === toMembership.transition.id) {
+      return Math.abs(fromMembership.index - toMembership.index) === 1;
+    }
+    const fromIsEndpoint = fromMembership
+      ? fromMembership.index === 0
+        || fromMembership.index === fromMembership.transition.path.length - 1
+      : true;
+    const toIsEndpoint = toMembership
+      ? toMembership.index === 0
+        || toMembership.index === toMembership.transition.path.length - 1
+      : true;
+    return fromIsEndpoint && toIsEndpoint;
+  };
   const availableLevels = (point: GridPoint) => {
     const solidLevel = elevationLevel(point);
     if (solidLevel > 0) return [solidLevel];
@@ -672,6 +698,25 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
     return bridgeLevel ? [0, bridgeLevel] : [0];
   };
   const initialLevel = originElevationLevel ?? elevationLevel(origin);
+  const transitionForStep = (
+    from: GridPoint,
+    fromLevel: number,
+    to: GridPoint,
+    toLevel: number,
+  ) => elevationTransitions?.find((transition) => {
+    const lowerAccess = transition.path[transition.path.length - 2] ?? transition.lower;
+    return (
+      samePoint(from, lowerAccess)
+      && fromLevel === transition.lowerLevel
+      && samePoint(to, transition.upper)
+      && toLevel === transition.upperLevel
+    ) || (
+      samePoint(from, transition.upper)
+      && fromLevel === transition.upperLevel
+      && samePoint(to, lowerAccess)
+      && toLevel === transition.lowerLevel
+    );
+  });
   const queue: { point: GridPoint; level: number; path: GridPoint[]; pathLevels: number[]; cost: number; facing: Combatant["facing"]; costBreakdown: string[] }[] = [{ point: origin, level: initialLevel, path: [], pathLevels: [], cost: 0, facing, costBreakdown: [] }];
   const stateKey = (point: GridPoint, level: number, direction: Combatant["facing"]) => `${pointKey(point)}@${level}:${direction}`;
   const bestCost = new Map([[stateKey(origin, initialLevel, facing), 0]]);
@@ -681,8 +726,10 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
     if (current.cost !== bestCost.get(stateKey(current.point, current.level, current.facing)) || current.cost >= allowance) continue;
     for (const destination of movementNeighbors(current.point)) {
       if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
+      if (!rampStepAllowed(current.point, destination)) continue;
       if (blockedCells.has(pointKey(destination))) continue;
       const destinationLevels = availableLevels(destination).filter((destinationLevel) => destinationLevel === current.level
+        || Boolean(transitionForStep(current.point, current.level, destination, destinationLevel))
         || (elevationAccess.has(pointKey(current.point)) || elevationAccess.has(pointKey(destination))));
       if (destinationLevels.length === 0) continue;
       const diagonal = current.point.x !== destination.x && current.point.y !== destination.y;
@@ -695,17 +742,27 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
       ] : [tacticalMovementEdgeKey(current.point, destination)];
       if (crossingEdges.some((edge) => blockedEdges.has(edge))) continue;
       for (const destinationLevel of destinationLevels) {
+        const elevationTransition = current.level === destinationLevel
+          ? undefined
+          : transitionForStep(current.point, current.level, destination, destinationLevel);
         if (current.point.x !== destination.x && current.point.y !== destination.y && current.level !== destinationLevel) continue;
         const activeOccupants = activeOccupantsByCell.get(`${pointKey(destination)}@${destinationLevel}`) ?? activeOccupantsByCell.get(pointKey(destination)) ?? 0;
         if (activeOccupants >= 4) continue;
         for (const nextFacing of movementFacingChoices(current.facing, current.point, destination, trotting)) {
-          const cost = current.cost + movementTurnCost(current.facing, nextFacing, trotting) + movementStepCost({ terrainByCell, closeMachineryCells }, current.point, destination, nextFacing, trotting) + activeOccupants;
+          const stepCost = elevationTransition?.movementCost
+            ?? movementStepCost({ terrainByCell, closeMachineryCells }, current.point, destination, nextFacing, trotting);
+          const cost = current.cost + movementTurnCost(current.facing, nextFacing, trotting) + stepCost + activeOccupants;
           const key = stateKey(destination, destinationLevel, nextFacing);
           if (cost > allowance || cost >= (bestCost.get(key) ?? Number.POSITIVE_INFINITY)) continue;
           bestCost.set(key, cost);
           const path = [...current.path, destination];
           const pathLevels = [...current.pathLevels, destinationLevel];
-          const costBreakdown = activeOccupants > 0 ? [...current.costBreakdown, `congestion +${activeOccupants}`] : current.costBreakdown;
+          const transitionBreakdown = elevationTransition?.kind === "ladder" ? ["ladder 3 AP"] : [];
+          const costBreakdown = [
+            ...current.costBreakdown,
+            ...transitionBreakdown,
+            ...(activeOccupants > 0 ? [`congestion +${activeOccupants}`] : []),
+          ];
           const resultKey = pointKey(destination);
           const existing = results.get(resultKey);
           if (!existing || cost < existing.cost) results.set(resultKey, { combatantId: "tactical-map", destination, path, cost, finalFacing: nextFacing, finalElevationLevel: destinationLevel, pathElevationLevels: pathLevels, costBreakdown });

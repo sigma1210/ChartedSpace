@@ -18,6 +18,7 @@ interface TacticalTerrainBase { id: string; blocking: boolean; targetable: boole
 interface TacticalBoundary extends TacticalTerrainBase {
   edge: { from: GridPoint; to: GridPoint };
   integrity: number;
+  elevationLevel?: number;
 }
 
 export interface TacticalWallSegment extends TacticalBoundary { kind: "wall" }
@@ -153,10 +154,10 @@ export const activeTacticalTerrainObjects = (scenario: CombatScenario, doorOpenB
   .filter((object) => !destroyedIds.includes(object.id))
   .map((object) => object.kind === "door" || object.kind === "hatch" ? { ...object, open: doorOpenById[object.id] ?? object.open } : object);
 
-export interface TacticalWallVisualRun { edge: { from: GridPoint; to: GridPoint }; segmentIds: string[] }
+export interface TacticalWallVisualRun { edge: { from: GridPoint; to: GridPoint }; segmentIds: string[]; elevationLevel: number }
 
 export const tacticalWallVisualRuns = (objects: TacticalTerrainObject[]): TacticalWallVisualRun[] => {
-  const groups = new Map<string, { id: string; start: number; end: number; fixed: number; horizontal: boolean }[]>();
+  const groups = new Map<string, { id: string; start: number; end: number; fixed: number; horizontal: boolean; elevationLevel: number }[]>();
   const runs: TacticalWallVisualRun[] = [];
   objects.filter((object): object is TacticalWallSegment => object.kind === "wall").forEach((wall) => {
     const horizontal = wall.edge.from.y === wall.edge.to.y;
@@ -165,14 +166,16 @@ export const tacticalWallVisualRuns = (objects: TacticalTerrainObject[]): Tactic
       runs.push({
         edge: { from: { ...wall.edge.from }, to: { ...wall.edge.to } },
         segmentIds: [wall.id],
+        elevationLevel: wall.elevationLevel ?? 0,
       });
       return;
     }
     const fixed = horizontal ? wall.edge.from.y : wall.edge.from.x;
     const start = Math.min(horizontal ? wall.edge.from.x : wall.edge.from.y, horizontal ? wall.edge.to.x : wall.edge.to.y);
     const end = Math.max(horizontal ? wall.edge.from.x : wall.edge.from.y, horizontal ? wall.edge.to.x : wall.edge.to.y);
-    const key = `${horizontal ? "h" : "v"}:${fixed}`;
-    groups.set(key, [...groups.get(key) ?? [], { id: wall.id, start, end, fixed, horizontal }]);
+    const elevationLevel = wall.elevationLevel ?? 0;
+    const key = `${horizontal ? "h" : "v"}:${fixed}:level:${elevationLevel}`;
+    groups.set(key, [...groups.get(key) ?? [], { id: wall.id, start, end, fixed, horizontal, elevationLevel }]);
   });
 
   groups.forEach((segments) => {
@@ -181,29 +184,33 @@ export const tacticalWallVisualRuns = (objects: TacticalTerrainObject[]): Tactic
       const previous = runs[runs.length - 1];
       const previousEnd = previous && (segment.horizontal ? previous.edge.to.x : previous.edge.to.y);
       const sameLine = previous && (segment.horizontal ? previous.edge.from.y === segment.fixed && previous.edge.to.y === segment.fixed : previous.edge.from.x === segment.fixed && previous.edge.to.x === segment.fixed);
-      if (sameLine && previousEnd === segment.start) {
+      if (sameLine && previous.elevationLevel === segment.elevationLevel && previousEnd === segment.start) {
         previous.edge.to = segment.horizontal ? { x: segment.end, y: segment.fixed } : { x: segment.fixed, y: segment.end };
         previous.segmentIds.push(segment.id);
       } else runs.push({
         edge: segment.horizontal ? { from: { x: segment.start, y: segment.fixed }, to: { x: segment.end, y: segment.fixed } } : { from: { x: segment.fixed, y: segment.start }, to: { x: segment.fixed, y: segment.end } },
         segmentIds: [segment.id],
+        elevationLevel: segment.elevationLevel,
       });
     });
   });
   return runs;
 };
 
-export const tacticalWallCornerPoints = (objects: TacticalTerrainObject[]) => {
-  const connections = new Map<string, { point: GridPoint; orientations: Set<"horizontal" | "vertical"> }>();
+export const tacticalWallCornerPoints = (objects: TacticalTerrainObject[]): (GridPoint & { elevationLevel?: number })[] => {
+  const connections = new Map<string, { point: GridPoint; elevationLevel: number; orientations: Set<"horizontal" | "vertical"> }>();
   objects.filter((object): object is TacticalWallSegment | TacticalDoor => object.kind === "wall" || object.kind === "door").forEach((boundary) => {
     if (boundary.edge.from.x !== boundary.edge.to.x && boundary.edge.from.y !== boundary.edge.to.y) return;
     const orientation = boundary.edge.from.y === boundary.edge.to.y ? "horizontal" : "vertical";
+    const elevationLevel = boundary.elevationLevel ?? 0;
     for (const point of [boundary.edge.from, boundary.edge.to]) {
-      const key = pointKey(point);
-      const connection = connections.get(key) ?? { point, orientations: new Set<"horizontal" | "vertical">() };
+      const key = `${pointKey(point)}:level:${elevationLevel}`;
+      const connection = connections.get(key) ?? { point, elevationLevel, orientations: new Set<"horizontal" | "vertical">() };
       connection.orientations.add(orientation);
       connections.set(key, connection);
     }
   });
-  return [...connections.values()].filter((connection) => connection.orientations.size === 2).map((connection) => connection.point);
+  return [...connections.values()].filter((connection) => connection.orientations.size === 2).map((connection) => connection.elevationLevel > 0
+    ? { ...connection.point, elevationLevel: connection.elevationLevel }
+    : connection.point);
 };

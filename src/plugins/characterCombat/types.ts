@@ -13,6 +13,17 @@ export type TacticalLightingPreset = "exterior-dark" | "exterior-lit";
 export interface TacticalLightSource { id: string; position: GridPoint; range: number; on?: boolean }
 export interface TacticalBridge { id: string; cells: GridPoint[]; elevationLevel: number }
 export interface TacticalLiquidHydrogenArea { id: string; cells: GridPoint[]; filled: boolean; elevationLevel: number }
+export type TacticalElevationTransitionKind = "stairs" | "ladder" | "ramp";
+export interface TacticalElevationTransition {
+  id: string;
+  kind: TacticalElevationTransitionKind;
+  lower: GridPoint;
+  upper: GridPoint;
+  path: GridPoint[];
+  lowerLevel: number;
+  upperLevel: number;
+  movementCost?: number;
+}
 export type TerrainType = "difficult" | "elevated" | "hazardous" | "close-machinery";
 export type WeaponRangeBand = "effective" | "long" | "extreme";
 export type WeaponVisualCategory = "pistol" | "shotgun" | "smg" | "rifle" | "laser-rifle" | "gauss-rifle";
@@ -24,7 +35,7 @@ export interface Combatant { moraleFactor?: number }
 
 export interface CombatScenario {
   id: string; title: string; briefing: string; objective: string; width: number; height: number; backgroundImage?: string;
-  walls: WallSegment[]; doors: DoorSegment[]; objects: MapObject[]; combatants: Combatant[]; terrainObjects?: TacticalTerrainObject[]; consoleVictory?: import("./tacticalConsoleVictory").TacticalConsoleVictoryDefinitionFile; bridges?: TacticalBridge[]; liquidHydrogenAreas?: TacticalLiquidHydrogenArea[]; deploymentCells?: GridPoint[]; gravityMode?: "normal" | "zero-g"; defaultLighting?: LightingLevel; lightingByCell?: Record<string, LightingLevel>; exteriorLighting?: LightingLevel; interiorCells?: GridPoint[]; lightSources?: TacticalLightSource[]; terrainByCell?: Record<string, TerrainType>; elevationLevelByCell?: Record<string, number>; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[]; flareCells?: GridPoint[]; handholds?: GridPoint[]; vacuumSources?: GridPoint[]; fireCells?: GridPoint[]; smokeCells?: GridPoint[]; criticalFireCells?: GridPoint[]; fireSpreadSchedule?: FireSpreadEvent[]; criticalFireDeadlineTurn?: number; victoryCondition?: "secure-objective" | "rescue-extract" | "hold-zone" | "staged-objectives" | "capture-target"; captiveId?: string; captureTargetId?: string; holdUntilTurn?: number; stageObjectiveIds?: string[]; stageUnlockDoorId?: string; defendedObjectiveByCombatantId?: Record<string, string>; flankBiasByCombatantId?: Record<string, "left" | "right">; contestedObjectiveIds?: string[];
+  walls: WallSegment[]; doors: DoorSegment[]; objects: MapObject[]; combatants: Combatant[]; terrainObjects?: TacticalTerrainObject[]; drawnRaisedAreas?: import("./tacticalScenarioDefinitions").TacticalDrawnRaisedArea[]; drawnRaisedAreaLevels?: Record<string, number>; elevationTransitions?: TacticalElevationTransition[]; consoleVictory?: import("./tacticalConsoleVictory").TacticalConsoleVictoryDefinitionFile; bridges?: TacticalBridge[]; liquidHydrogenAreas?: TacticalLiquidHydrogenArea[]; deploymentCells?: GridPoint[]; gravityMode?: "normal" | "zero-g"; defaultLighting?: LightingLevel; lightingByCell?: Record<string, LightingLevel>; exteriorLighting?: LightingLevel; interiorCells?: GridPoint[]; lightSources?: TacticalLightSource[]; terrainByCell?: Record<string, TerrainType>; elevationLevelByCell?: Record<string, number>; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[]; flareCells?: GridPoint[]; handholds?: GridPoint[]; vacuumSources?: GridPoint[]; fireCells?: GridPoint[]; smokeCells?: GridPoint[]; criticalFireCells?: GridPoint[]; fireSpreadSchedule?: FireSpreadEvent[]; criticalFireDeadlineTurn?: number; victoryCondition?: "secure-objective" | "rescue-extract" | "hold-zone" | "staged-objectives" | "capture-target"; captiveId?: string; captureTargetId?: string; holdUntilTurn?: number; stageObjectiveIds?: string[]; stageUnlockDoorId?: string; defendedObjectiveByCombatantId?: Record<string, string>; flankBiasByCombatantId?: Record<string, "left" | "right">; contestedObjectiveIds?: string[];
 }
 export type FireMode = "snap" | "aimed" | "automatic" | "suppressive" | "covering" | "melee";
 export interface CharacterCombatHudLayout { visible: boolean; pinned: boolean; position: GridPoint }

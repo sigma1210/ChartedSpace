@@ -40,6 +40,21 @@ describe("tactical scenario files", () => {
       control: { x: 15.25, y: 9.5 },
       to: { x: 20, y: 4 },
     }];
+    draft.drawnRaisedAreas = [{
+      id: "raised-loading-platform",
+      segments: [
+        { kind: "line", from: { x: 2, y: 10 }, to: { x: 6, y: 10 } },
+        { kind: "quadratic", from: { x: 6, y: 10 }, control: { x: 7, y: 12 }, to: { x: 6, y: 14 } },
+        { kind: "line", from: { x: 6, y: 14 }, to: { x: 2, y: 14 } },
+        { kind: "line", from: { x: 2, y: 14 }, to: { x: 2, y: 10 } },
+      ],
+    }];
+    draft.elevationTransitions = [{
+      id: "ladder-test",
+      kind: "ladder",
+      lower: { x: 1, y: 11 },
+      upper: { x: 2, y: 11 },
+    }];
     draft.tracingTemplate = {
       imagePath: "/images/tactical/landing-pad/map.jpg",
       x: 1.5,
@@ -60,6 +75,8 @@ describe("tactical scenario files", () => {
     expect(loaded).toEqual(saved);
     expect(loaded.enemyPlacements?.[0].facing).toBe("east");
     expect(loaded.drawnWalls).toEqual(draft.drawnWalls);
+    expect(loaded.drawnRaisedAreas).toEqual(draft.drawnRaisedAreas);
+    expect(loaded.elevationTransitions).toEqual(draft.elevationTransitions);
     expect(loaded.tracingTemplate).toEqual(draft.tracingTemplate);
     expect(source).toContain('\n  "schemaVersion": 1,');
     expect(await listTacticalScenarioFiles(directory)).toEqual([

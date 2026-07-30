@@ -18,11 +18,21 @@ import {
 import {
   TACTICAL_DOOR_CENTER_Y,
   TACTICAL_DOOR_HEIGHT,
+  TACTICAL_RAMP_DECK_THICKNESS,
   TACTICAL_WALL_CENTER_Y,
   TACTICAL_WALL_HEIGHT,
+  tacticalBoundaryBaseHeight,
+  tacticalElevationTransitionVisualPlacement,
+  tacticalRampCellAtWorldPoint,
+  tacticalRampGridLinePositions,
+  tacticalRaisedGridLinePositions,
   tacticalStairPlatformPlacement,
   tacticalVisualHeightAt,
 } from "./tacticalSceneGeometry";
+import {
+  tacticalDrawnRaisedAreaLevelsByCell,
+  tacticalDrawnRaisedAreaShape,
+} from "./tacticalDrawnRaisedAreaGeometry";
 import { tacticalDeploymentAreaScenarioEqual } from "./tacticalStaticLayerMemo";
 
 const IRIS_WALL_SHAPE = (() => {
@@ -105,12 +115,53 @@ const TacticalElevationTerrain = ({
 }: {
   scenario: CombatScenario;
   onSelectCell: (point: { x: number; y: number }) => void;
-}) => (
-  <>
-    {Object.entries(scenario.terrainByCell ?? {}).map(([key, terrain]) => {
-      if (terrain !== "elevated") return null;
+}) => {
+  const drawnRaisedAreas = scenario.drawnRaisedAreas ?? [];
+  const drawnRaisedAreaLevelsByCell = useMemo(
+    () => tacticalDrawnRaisedAreaLevelsByCell(
+      drawnRaisedAreas,
+      scenario.drawnRaisedAreaLevels ?? {},
+      scenario.width,
+      scenario.height,
+    ),
+    [drawnRaisedAreas, scenario.drawnRaisedAreaLevels, scenario.height, scenario.width],
+  );
+  const drawnRaisedAreaShapes = useMemo(
+    () => drawnRaisedAreas.map((area) => ({
+      id: area.id,
+      level: scenario.drawnRaisedAreaLevels?.[area.id] ?? 1,
+      shape: tacticalDrawnRaisedAreaShape(
+        area,
+        scenario.width,
+        scenario.height,
+      ),
+    })),
+    [drawnRaisedAreas, scenario.drawnRaisedAreaLevels, scenario.height, scenario.width],
+  );
+  const explicitStairCells = useMemo(
+    () => new Set((scenario.elevationTransitions ?? [])
+      .filter((transition) => transition.kind === "stairs")
+      .map((transition) => pointKey(transition.lower))),
+    [scenario.elevationTransitions],
+  );
+  const raisedGridPositions = useMemo(
+    () => tacticalRaisedGridLinePositions(scenario),
+    [scenario.elevationLevelByCell, scenario.height, scenario.width],
+  );
+
+  return (
+    <>
+      {Object.entries(scenario.terrainByCell ?? {}).map(([key, terrain]) => {
+        if (terrain !== "elevated") return null;
       const [x, y] = key.split(":").map(Number);
       const height = tacticalVisualHeightAt(scenario, { x, y });
+      const level = scenario.elevationLevelByCell?.[key] ?? 1;
+      const drawnLevels = drawnRaisedAreaLevelsByCell.get(key) ?? new Set<number>();
+      const squareLevels = Array.from(
+        { length: level },
+        (_, index) => index + 1,
+      ).filter((candidate) => !drawnLevels.has(candidate));
+      if (squareLevels.length === 0) return null;
       return (
         <group
           key={`elevated:${key}`}
@@ -120,64 +171,166 @@ const TacticalElevationTerrain = ({
             onSelectCell({ x, y });
           }}
         >
-          <mesh position={[0, height / 2, 0]} receiveShadow castShadow>
-            <boxGeometry args={[1, height, 1]} />
+          {squareLevels.map((squareLevel) => <mesh key={squareLevel} position={[0, (squareLevel - 0.5) * TACTICAL_WALL_HEIGHT, 0]} receiveShadow castShadow>
+            <boxGeometry args={[1, TACTICAL_WALL_HEIGHT, 1]} />
             <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.22} />
-          </mesh>
-          <mesh position={[0, height + 0.003, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          </mesh>)}
+          {!drawnLevels.has(level) && <mesh position={[0, height + 0.003, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[0.94, 0.94]} />
             <meshStandardMaterial color="#263b46" roughness={0.9} metalness={0.08} />
-          </mesh>
+          </mesh>}
         </group>
       );
-    })}
-    {(scenario.elevationAccessCells ?? []).map((point) => {
-      const platform = tacticalStairPlatformPlacement(scenario, point);
-      if (!platform) return null;
-      return (
-        <group
-          key={`stairs:${pointKey(point)}`}
-          position={[
-            point.x + 0.5 - scenario.width / 2,
-            platform.baseHeight,
-            point.y + 0.5 - scenario.height / 2,
-          ]}
+      })}
+      {drawnRaisedAreaShapes.map(({ id, level, shape }) => (
+        <mesh
+          key={`drawn-raised-area:${id}`}
+          data-testid={`drawn-raised-area-mesh-${id}`}
+          position={[0, level * TACTICAL_WALL_HEIGHT, 0]}
+          rotation={[Math.PI / 2, 0, 0]}
+          receiveShadow
+          castShadow
           onClick={(event) => {
             event.stopPropagation();
-            onSelectCell(point);
+            onSelectCell({
+              x: Math.floor(event.point.x + scenario.width / 2),
+              y: Math.floor(event.point.z + scenario.height / 2),
+            });
           }}
         >
-          <mesh
-            position={[0, platform.height / 2, 0]}
-            receiveShadow
-            castShadow
+          <extrudeGeometry args={[shape, {
+            depth: TACTICAL_WALL_HEIGHT,
+            bevelEnabled: false,
+            curveSegments: 32,
+          }]} />
+          <meshStandardMaterial color="#425866" roughness={0.82} metalness={0.12} />
+        </mesh>
+      ))}
+      {raisedGridPositions.length > 0 && <lineSegments data-testid="raised-surface-grid">
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[raisedGridPositions, 3]} />
+        </bufferGeometry>
+        <lineBasicMaterial color="#4f8797" transparent opacity={0.72} />
+      </lineSegments>}
+      {(scenario.elevationAccessCells ?? []).map((point) => {
+        if (explicitStairCells.has(pointKey(point))) return null;
+        const platform = tacticalStairPlatformPlacement(scenario, point);
+        if (!platform) return null;
+        return (
+          <group
+            key={`stairs:${pointKey(point)}`}
+            position={[
+              point.x + 0.5 - scenario.width / 2,
+              platform.baseHeight,
+              point.y + 0.5 - scenario.height / 2,
+            ]}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectCell(point);
+            }}
           >
-            <boxGeometry
-              args={[0.94, platform.height, 0.94]}
-            />
-            <meshStandardMaterial
-              color="#64748b"
-              roughness={0.72}
-              metalness={0.22}
-            />
-          </mesh>
-          <mesh
-            position={[0, platform.height + 0.003, 0]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            receiveShadow
+            <mesh
+              position={[0, platform.height / 2, 0]}
+              receiveShadow
+              castShadow
+            >
+              <boxGeometry
+                args={[0.94, platform.height, 0.94]}
+              />
+              <meshStandardMaterial
+                color="#64748b"
+                roughness={0.72}
+                metalness={0.22}
+              />
+            </mesh>
+            <mesh
+              position={[0, platform.height + 0.003, 0]}
+              rotation={[-Math.PI / 2, 0, 0]}
+              receiveShadow
+            >
+              <planeGeometry args={[0.88, 0.88]} />
+              <meshStandardMaterial
+                color="#263b46"
+                roughness={0.9}
+                metalness={0.08}
+              />
+            </mesh>
+          </group>
+        );
+      })}
+      {(scenario.elevationTransitions ?? []).map((transition) => {
+        const placement = tacticalElevationTransitionVisualPlacement(scenario, transition);
+        const select = (event: { stopPropagation: () => void }) => {
+          event.stopPropagation();
+          onSelectCell(transition.lower);
+        };
+        if (placement.kind === "stairs") {
+          return <group key={transition.id} data-testid={`elevation-transition-${transition.id}`} position={placement.position} onClick={select}>
+            <mesh position={[0, placement.height / 2, 0]} receiveShadow castShadow>
+              <boxGeometry args={[0.94, placement.height, 0.94]} />
+              <meshStandardMaterial color="#64748b" roughness={0.72} metalness={0.22} />
+            </mesh>
+            <mesh position={[0, placement.height + 0.003, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[0.88, 0.88]} />
+              <meshStandardMaterial color="#263b46" roughness={0.9} metalness={0.08} />
+            </mesh>
+          </group>;
+        }
+        if (placement.kind === "ladder") {
+          const railOffset = 0.27;
+          return <group
+            key={transition.id}
+            data-testid={`elevation-transition-${transition.id}`}
+            position={placement.position}
+            rotation={placement.rotation}
+            onClick={select}
           >
-            <planeGeometry args={[0.88, 0.88]} />
-            <meshStandardMaterial
-              color="#263b46"
-              roughness={0.9}
-              metalness={0.08}
-            />
+            {[-railOffset, railOffset].map((offset) => <mesh key={offset} position={[offset, 0, 0]} receiveShadow castShadow>
+              <boxGeometry args={[0.045, placement.height, 0.045]} />
+              <meshStandardMaterial color="#f59e0b" roughness={0.45} metalness={0.62} />
+            </mesh>)}
+            {Array.from({ length: 5 }, (_, index) => -placement.height / 2 + placement.height * (index + 1) / 6).map((height) => <mesh key={height} position={[0, height, 0]} receiveShadow castShadow>
+              <boxGeometry args={[railOffset * 2, 0.045, 0.045]} />
+              <meshStandardMaterial color="#fbbf24" roughness={0.45} metalness={0.62} />
+            </mesh>)}
+          </group>;
+        }
+        const dimensions: [number, number, number] = placement.longAxis === "x"
+          ? [placement.length, TACTICAL_RAMP_DECK_THICKNESS, 0.9]
+          : [0.9, TACTICAL_RAMP_DECK_THICKNESS, placement.length];
+        const gridPositions = tacticalRampGridLinePositions(
+          placement,
+          transition.path.length - 1,
+        );
+        return <group
+          key={transition.id}
+          data-testid={`elevation-transition-${transition.id}`}
+          position={placement.position}
+          rotation={placement.rotation}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectCell(tacticalRampCellAtWorldPoint(
+              scenario,
+              transition,
+              event.point,
+            ));
+          }}
+        >
+          <mesh receiveShadow castShadow>
+            <boxGeometry args={dimensions} />
+            <meshStandardMaterial color="#425866" roughness={0.82} metalness={0.12} />
           </mesh>
-        </group>
-      );
-    })}
-  </>
-);
+          <lineSegments data-testid={`ramp-grid-${transition.id}`}>
+            <bufferGeometry>
+              <bufferAttribute attach="attributes-position" args={[gridPositions, 3]} />
+            </bufferGeometry>
+            <lineBasicMaterial color="#6f9eaa" transparent opacity={0.82} />
+          </lineSegments>
+        </group>;
+      })}
+    </>
+  );
+};
 
 const TacticalCloseMachineryTerrain = ({
   scenario,
@@ -438,9 +591,10 @@ const TacticalTerrainPiece = ({
 
   const dx = object.edge.to.x - object.edge.from.x;
   const dy = object.edge.to.y - object.edge.from.y;
+  const boundaryBaseHeight = tacticalBoundaryBaseHeight(object.elevationLevel);
   const position: [number, number, number] = [
     (object.edge.from.x + object.edge.to.x) / 2 - mapWidth / 2,
-    object.kind === "wall" ? TACTICAL_WALL_CENTER_Y : TACTICAL_DOOR_CENTER_Y,
+    boundaryBaseHeight + (object.kind === "wall" ? TACTICAL_WALL_CENTER_Y : TACTICAL_DOOR_CENTER_Y),
     (object.edge.from.y + object.edge.to.y) / 2 - mapHeight / 2,
   ];
   const selectEdge = (event: { point: { x: number; z: number }; stopPropagation: () => void }) => {
@@ -518,7 +672,7 @@ const TacticalWallRun = ({
   const wallLength = Math.hypot(dx, dy);
   const position: [number, number, number] = [
     (run.edge.from.x + run.edge.to.x) / 2 - mapWidth / 2,
-    TACTICAL_WALL_CENTER_Y,
+    tacticalBoundaryBaseHeight(run.elevationLevel) + TACTICAL_WALL_CENTER_Y,
     (run.edge.from.y + run.edge.to.y) / 2 - mapHeight / 2,
   ];
   return (
@@ -592,10 +746,10 @@ export const TacticalTerrainLayer = ({
       ))}
       {wallCorners.map((corner) => (
         <mesh
-          key={`${corner.x}:${corner.y}`}
+          key={`${corner.x}:${corner.y}:level:${corner.elevationLevel ?? 0}`}
           position={[
             corner.x - scenario.width / 2,
-            TACTICAL_WALL_CENTER_Y,
+            tacticalBoundaryBaseHeight(corner.elevationLevel) + TACTICAL_WALL_CENTER_Y,
             corner.y - scenario.height / 2,
           ]}
           castShadow

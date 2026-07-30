@@ -65,6 +65,7 @@ export const buildTacticalMovementPreview = (
       bridges: map.scenario.bridges,
       closeMachineryCells: map.scenario.closeMachineryCells,
       elevationAccessCells: map.scenario.elevationAccessCells,
+      elevationTransitions: map.scenario.elevationTransitions,
     });
 
   const suppressed = map.suppressedCombatantIds.includes(combatant.id);

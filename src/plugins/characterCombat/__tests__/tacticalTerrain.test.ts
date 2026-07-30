@@ -114,42 +114,295 @@ describe("tactical Control Room", () => {
     expect(terrain.elevationAccessCells).toEqual([{ x: 10 + height, y: 11 }]);
   });
 
-  it("resolves and rotates an empty 3x3 room with one centered door", () => {
+  it("resolves a drawn raised area without requiring stairs", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{ id: "room-3x3-1", terrainDefinitionId: "room-3x3", origin: { x: 10, y: 10 }, rotation: 90 as const }],
+      drawnRaisedAreas: [{
+        id: "drawn-platform",
+        segments: [
+          { kind: "line" as const, from: { x: 2, y: 2 }, to: { x: 5, y: 2 } },
+          { kind: "line" as const, from: { x: 5, y: 2 }, to: { x: 5, y: 5 } },
+          { kind: "line" as const, from: { x: 5, y: 5 }, to: { x: 2, y: 5 } },
+          { kind: "line" as const, from: { x: 2, y: 5 }, to: { x: 2, y: 2 } },
+        ],
+      }],
     };
-    const terrain = resolveTacticalScenarioTerrain(definition);
-    const doors = terrain.terrainObjects.filter((object) => object.kind === "door");
 
-    expect(tacticalTerrainPalette.find((item) => item.id === "room-3x3")).toMatchObject({ label: "Room 3x3", size: { width: 3, height: 3 } });
-    expect(terrain.interiorCells).toHaveLength(9);
-    expect(terrain.terrainObjects.filter((object) => object.kind === "wall")).toHaveLength(11);
-    expect(doors).toHaveLength(1);
-    expect(doors[0]).toMatchObject({
-      id: "room-3x3-1:north:door:1",
-      edge: { from: { x: 13, y: 11 }, to: { x: 13, y: 12 } },
-      separates: { first: { x: 12, y: 11 }, second: { x: 13, y: 11 } },
-    });
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
+
+    expect(
+      Object.entries(terrain.elevationLevelByCell)
+        .filter(([, level]) => level === 1)
+        .map(([key]) => key),
+    ).toEqual(expect.arrayContaining([
+      "2:2", "3:2", "4:2",
+      "2:3", "3:3", "4:3",
+      "2:4", "3:4", "4:4",
+    ]));
+    expect(terrain.elevationAccessCells).not.toEqual(
+      expect.arrayContaining([
+        { x: 2, y: 2 },
+        { x: 3, y: 2 },
+        { x: 4, y: 2 },
+      ]),
+    );
+    expect(scenario.drawnRaisedAreas).toEqual(definition.drawnRaisedAreas);
   });
 
-  it("replaces one wall edge with a rotatable iris valve portal", () => {
+  it("stacks nested drawn raised areas across three elevation levels", () => {
+    const rectangle = (id: string, from: { x: number; y: number }, to: { x: number; y: number }) => ({
+      id,
+      segments: [
+        { kind: "line" as const, from, to: { x: to.x, y: from.y } },
+        { kind: "line" as const, from: { x: to.x, y: from.y }, to },
+        { kind: "line" as const, from: to, to: { x: from.x, y: to.y } },
+        { kind: "line" as const, from: { x: from.x, y: to.y }, to: from },
+      ],
+    });
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "room", terrainDefinitionId: "room-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "iris", terrainDefinitionId: "iris-valve", origin: { x: 12, y: 11 }, rotation: 90 as const },
+      drawnRaisedAreas: [
+        rectangle("drawn-top", { x: 6, y: 6 }, { x: 8, y: 8 }),
+        rectangle("drawn-base", { x: 2, y: 2 }, { x: 12, y: 12 }),
+        rectangle("drawn-middle", { x: 4, y: 4 }, { x: 10, y: 10 }),
       ],
     };
 
     const terrain = resolveTacticalScenarioTerrain(definition);
-    const iris = terrain.terrainObjects.find((object) => object.id === "iris:north:door:0");
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
 
-    expect(tacticalTerrainPalette.find((item) => item.id === "iris-valve")).toMatchObject({ label: "Iris Valve", size: { width: 1, height: 1 } });
-    expect(iris).toMatchObject({ kind: "door", portalType: "iris-valve", open: false, edge: { from: { x: 13, y: 11 }, to: { x: 13, y: 12 } }, separates: { first: { x: 12, y: 11 }, second: { x: 13, y: 11 } } });
-    expect(terrain.walls.some((wall) => wall.from.x === 13 && wall.to.x === 13 && Math.min(wall.from.y, wall.to.y) === 11)).toBe(false);
-    expect(terrain.doors.find((door) => door.id === "iris:north:door:0")).toMatchObject({ portalType: "iris-valve" });
-    expect(tacticalTerrainBlockedEdges(terrain.terrainObjects)).toContain(tacticalMovementEdgeKey({ x: 12, y: 11 }, { x: 13, y: 11 }));
+    expect(terrain.drawnRaisedAreaLevels).toEqual({
+      "drawn-top": 3,
+      "drawn-base": 1,
+      "drawn-middle": 2,
+    });
+    expect(terrain.elevationLevelByCell["2:2"]).toBe(1);
+    expect(terrain.elevationLevelByCell["4:4"]).toBe(2);
+    expect(terrain.elevationLevelByCell["6:6"]).toBe(3);
+    expect(scenario.drawnRaisedAreaLevels).toEqual(terrain.drawnRaisedAreaLevels);
+    expect(terrainHeightAt(scenario, { x: 6, y: 6 })).toBeCloseTo(1.95);
+  });
+
+  it("allows drawn and template raised areas to support one another", () => {
+    const drawnArea = {
+      id: "drawn-platform",
+      segments: [
+        { kind: "line" as const, from: { x: 12, y: 12 }, to: { x: 15, y: 12 } },
+        { kind: "line" as const, from: { x: 15, y: 12 }, to: { x: 15, y: 15 } },
+        { kind: "line" as const, from: { x: 15, y: 15 }, to: { x: 12, y: 15 } },
+        { kind: "line" as const, from: { x: 12, y: 15 }, to: { x: 12, y: 12 } },
+      ],
+    };
+    const drawnOnTemplate = resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: "template-base", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 }],
+      drawnRaisedAreas: [drawnArea],
+    });
+    const templateOnDrawn = resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: "template-top", terrainDefinitionId: "raised-area-3x3", origin: { x: 12, y: 12 }, rotation: 0 }],
+      drawnRaisedAreas: [{
+        ...drawnArea,
+        id: "drawn-base",
+        segments: [
+          { kind: "line" as const, from: { x: 8, y: 8 }, to: { x: 20, y: 8 } },
+          { kind: "line" as const, from: { x: 20, y: 8 }, to: { x: 20, y: 20 } },
+          { kind: "line" as const, from: { x: 20, y: 20 }, to: { x: 8, y: 20 } },
+          { kind: "line" as const, from: { x: 8, y: 20 }, to: { x: 8, y: 8 } },
+        ],
+      }],
+    });
+
+    expect(drawnOnTemplate.drawnRaisedAreaLevels["drawn-platform"]).toBe(2);
+    expect(drawnOnTemplate.elevationLevelByCell["12:12"]).toBe(2);
+    expect(templateOnDrawn.drawnRaisedAreaLevels["drawn-base"]).toBe(1);
+    expect(templateOnDrawn.elevationLevelByCell["12:12"]).toBe(2);
+  });
+
+  it("resolves stairs, ladders, and ramps between adjacent raised levels", () => {
+    const base = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    base.drawnRaisedAreas = [{
+      id: "transition-platform",
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 20, y: 10 } },
+        { kind: "line", from: { x: 20, y: 10 }, to: { x: 20, y: 20 } },
+        { kind: "line", from: { x: 20, y: 20 }, to: { x: 10, y: 20 } },
+        { kind: "line", from: { x: 10, y: 20 }, to: { x: 10, y: 10 } },
+      ],
+    }];
+    const stairs = resolveTacticalScenarioTerrain({
+      ...base,
+      elevationTransitions: [{
+        id: "stairs-a",
+        kind: "stairs",
+        lower: { x: 9, y: 15 },
+        upper: { x: 10, y: 15 },
+      }],
+    });
+    const ladder = resolveTacticalScenarioTerrain({
+      ...base,
+      elevationTransitions: [{
+        id: "ladder-a",
+        kind: "ladder",
+        lower: { x: 9, y: 16 },
+        upper: { x: 10, y: 16 },
+      }],
+    });
+    const ramp = resolveTacticalScenarioTerrain({
+      ...base,
+      elevationTransitions: [{
+        id: "ramp-a",
+        kind: "ramp",
+        lower: { x: 7, y: 12 },
+        upper: { x: 10, y: 12 },
+        path: [{ x: 7, y: 12 }, { x: 8, y: 12 }, { x: 9, y: 12 }, { x: 10, y: 12 }],
+      }],
+    });
+
+    expect(stairs.elevationTransitions[0]).toMatchObject({
+      kind: "stairs",
+      lowerLevel: 0,
+      upperLevel: 1,
+      path: [{ x: 9, y: 15 }, { x: 10, y: 15 }],
+    });
+    expect(ladder.elevationTransitions[0]).toMatchObject({
+      kind: "ladder",
+      movementCost: 3,
+      lowerLevel: 0,
+      upperLevel: 1,
+    });
+    expect(ramp.elevationTransitions[0]).toMatchObject({
+      kind: "ramp",
+      lowerLevel: 0,
+      upperLevel: 1,
+      path: [{ x: 7, y: 12 }, { x: 8, y: 12 }, { x: 9, y: 12 }, { x: 10, y: 12 }],
+    });
+
+    const stairMoves = reachableOpenMapMovement({
+      width: base.map.width,
+      height: base.map.height,
+      origin: { x: 9, y: 15 },
+      facing: "east",
+      allowance: 3,
+      trotting: false,
+      elevationLevelByCell: stairs.elevationLevelByCell,
+      elevationTransitions: stairs.elevationTransitions,
+    });
+    const ladderMoves = reachableOpenMapMovement({
+      width: base.map.width,
+      height: base.map.height,
+      origin: { x: 9, y: 16 },
+      facing: "east",
+      allowance: 3,
+      trotting: false,
+      elevationLevelByCell: ladder.elevationLevelByCell,
+      elevationTransitions: ladder.elevationTransitions,
+    });
+    const rampMoves = reachableOpenMapMovement({
+      width: base.map.width,
+      height: base.map.height,
+      origin: { x: 7, y: 12 },
+      facing: "east",
+      allowance: 6,
+      trotting: false,
+      elevationLevelByCell: ramp.elevationLevelByCell,
+      elevationTransitions: ramp.elevationTransitions,
+    });
+    const rampApproachMoves = reachableOpenMapMovement({
+      width: base.map.width,
+      height: base.map.height,
+      origin: { x: 7, y: 13 },
+      facing: "north",
+      allowance: 12,
+      trotting: false,
+      elevationLevelByCell: ramp.elevationLevelByCell,
+      elevationTransitions: ramp.elevationTransitions,
+    });
+    const rampDescentMoves = reachableOpenMapMovement({
+      width: base.map.width,
+      height: base.map.height,
+      origin: { x: 10, y: 12 },
+      originElevationLevel: 1,
+      facing: "west",
+      allowance: 6,
+      trotting: false,
+      elevationLevelByCell: ramp.elevationLevelByCell,
+      elevationTransitions: ramp.elevationTransitions,
+    });
+    const rampSideEntryMoves = reachableOpenMapMovement({
+      width: base.map.width,
+      height: base.map.height,
+      origin: { x: 8, y: 13 },
+      facing: "north",
+      allowance: 2,
+      trotting: false,
+      elevationLevelByCell: ramp.elevationLevelByCell,
+      elevationTransitions: ramp.elevationTransitions,
+    });
+
+    expect(stairMoves.get("10:15")).toMatchObject({ cost: 2, finalElevationLevel: 1 });
+    expect(ladderMoves.get("10:16")).toMatchObject({
+      cost: 3,
+      finalElevationLevel: 1,
+      costBreakdown: ["ladder 3 AP"],
+    });
+    expect(rampMoves.get("10:12")).toMatchObject({
+      cost: 6,
+      finalElevationLevel: 1,
+    });
+    expect(rampMoves.get("8:12")).toMatchObject({
+      cost: 2,
+      finalElevationLevel: 0,
+    });
+    expect(rampMoves.get("9:12")).toMatchObject({
+      cost: 4,
+      finalElevationLevel: 0,
+    });
+    expect(rampApproachMoves.get("10:12")?.path).toEqual([
+      { x: 7, y: 12 },
+      { x: 8, y: 12 },
+      { x: 9, y: 12 },
+      { x: 10, y: 12 },
+    ]);
+    expect(rampDescentMoves.get("7:12")?.path).toEqual([
+      { x: 9, y: 12 },
+      { x: 8, y: 12 },
+      { x: 7, y: 12 },
+    ]);
+    expect(rampSideEntryMoves.has("8:12")).toBe(false);
+  });
+
+  it("rejects elevation transitions that do not connect adjacent levels", () => {
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      elevationTransitions: [{
+        id: "unsupported-ladder",
+        kind: "ladder",
+        lower: { x: 2, y: 2 },
+        upper: { x: 3, y: 2 },
+      }],
+    })).toThrow("must connect adjacent levels");
+  });
+
+  it("rejects partially overlapping drawn raised areas", () => {
+    const rectangle = (id: string, from: { x: number; y: number }, to: { x: number; y: number }) => ({
+      id,
+      segments: [
+        { kind: "line" as const, from, to: { x: to.x, y: from.y } },
+        { kind: "line" as const, from: { x: to.x, y: from.y }, to },
+        { kind: "line" as const, from: to, to: { x: from.x, y: to.y } },
+        { kind: "line" as const, from: { x: from.x, y: to.y }, to: from },
+      ],
+    });
+
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      drawnRaisedAreas: [
+        rectangle("first", { x: 2, y: 2 }, { x: 8, y: 8 }),
+        rectangle("second", { x: 6, y: 6 }, { x: 12, y: 12 }),
+      ],
+    })).toThrow("partially overlap");
   });
 
   it("resolves a 1x1 hatch as an independent floor portal", () => {
@@ -213,42 +466,6 @@ describe("tactical Control Room", () => {
     expect(resolveTacticalScenarioTerrain(supported).liquidHydrogenAreas[0]).toMatchObject({ elevationLevel: 1, filled: true });
     const overhanging = { ...supported, terrainPlacements: [supported.terrainPlacements[0], { ...supported.terrainPlacements[1], origin: { x: 12, y: 12 } }] };
     expect(() => resolveTacticalScenarioTerrain(overhanging)).toThrow("must fit entirely within one raised-area placement");
-  });
-
-  it("rejects an iris valve without exactly one underlying wall segment", () => {
-    const unsupported = { ...defaultTacticalScenarioDefinition, terrainPlacements: [{ id: "iris", terrainDefinitionId: "iris-valve", origin: { x: 10, y: 10 }, rotation: 0 as const }] };
-    const overDoor = {
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "room", terrainDefinitionId: "room-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "iris", terrainDefinitionId: "iris-valve", origin: { x: 11, y: 10 }, rotation: 0 as const },
-      ],
-    };
-
-    expect(() => resolveTacticalScenarioTerrain(unsupported)).toThrow("must replace one existing wall segment");
-    expect(() => resolveTacticalScenarioTerrain(overDoor)).toThrow("must replace one existing wall segment");
-  });
-
-  it.each([
-    { id: "room-3x5", label: "Room 3x5", width: 3, height: 5, doorOffset: 1 },
-    { id: "room-3x7", label: "Room 3x7", width: 3, height: 7, doorOffset: 1 },
-    { id: "room-5x5", label: "Room 5x5", width: 5, height: 5, doorOffset: 2 },
-  ])("resolves and rotates $label with one centered door", ({ id, label, width, height, doorOffset }) => {
-    const definition = {
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{ id: `${id}-1`, terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 90 as const }],
-    };
-    const terrain = resolveTacticalScenarioTerrain(definition);
-    const doors = terrain.terrainObjects.filter((object) => object.kind === "door");
-
-    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width, height } });
-    expect(terrain.interiorCells).toHaveLength(width * height);
-    expect(terrain.terrainObjects.filter((object) => object.kind === "wall")).toHaveLength(2 * width + 2 * height - 1);
-    expect(doors).toHaveLength(1);
-    expect(doors[0]).toMatchObject({
-      edge: { from: { x: 10 + height, y: 10 + doorOffset }, to: { x: 10 + height, y: 11 + doorOffset } },
-      separates: { first: { x: 9 + height, y: 10 + doorOffset }, second: { x: 10 + height, y: 10 + doorOffset } },
-    });
   });
 
   it.each([
@@ -752,6 +969,62 @@ describe("tactical Control Room", () => {
       targetable: true,
     });
     expect(run?.edge).toEqual({ from: { x: 2, y: 2 }, to: { x: 7, y: 5 } });
+  });
+
+  it("places drawn walls and wall portals on their supporting raised level", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnRaisedAreas = [{
+      id: "wall-platform",
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 20, y: 10 } },
+        { kind: "line", from: { x: 20, y: 10 }, to: { x: 20, y: 20 } },
+        { kind: "line", from: { x: 20, y: 20 }, to: { x: 10, y: 20 } },
+        { kind: "line", from: { x: 10, y: 20 }, to: { x: 10, y: 10 } },
+      ],
+    }];
+    definition.drawnWalls = [{
+      id: "elevated-bulkhead",
+      from: { x: 12, y: 14 },
+      to: { x: 18, y: 14 },
+      portals: [
+        { id: "elevated-door", kind: "sliding-door", position: 0.3 },
+        { id: "elevated-iris", kind: "iris-valve", position: 0.7 },
+      ],
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const boundaries = terrain.terrainObjects.filter((object) =>
+      object.kind === "wall" || object.kind === "door");
+    const run = tacticalWallVisualRuns(boundaries).find((candidate) =>
+      candidate.segmentIds.some((id) => id.startsWith("elevated-bulkhead")));
+
+    expect(boundaries.filter((object) =>
+      object.id.startsWith("elevated-bulkhead")
+      || object.id === "elevated-door"
+      || object.id === "elevated-iris")
+      .every((object) => object.elevationLevel === 1)).toBe(true);
+    expect(run?.elevationLevel).toBe(1);
+  });
+
+  it("rejects a drawn wall that crosses multiple elevation levels", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnRaisedAreas = [{
+      id: "wall-platform",
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 20, y: 10 } },
+        { kind: "line", from: { x: 20, y: 10 }, to: { x: 20, y: 20 } },
+        { kind: "line", from: { x: 20, y: 20 }, to: { x: 10, y: 20 } },
+        { kind: "line", from: { x: 10, y: 20 }, to: { x: 10, y: 10 } },
+      ],
+    }];
+    definition.drawnWalls = [{
+      id: "unsupported-bulkhead",
+      from: { x: 5, y: 15 },
+      to: { x: 25, y: 15 },
+    }];
+
+    expect(() => resolveTacticalScenarioTerrain(definition))
+      .toThrow("crosses multiple elevation levels");
   });
 
   it("resolves a quadratic Bezier wall into stable blocking segments", () => {

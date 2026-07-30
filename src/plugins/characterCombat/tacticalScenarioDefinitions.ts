@@ -4,10 +4,6 @@ import raisedArea5x5DefinitionJson from "./terrainDefinitions/raised-area-5x5.js
 import raisedArea3x3DefinitionJson from "./terrainDefinitions/raised-area-3x3.json";
 import raisedArea3x5DefinitionJson from "./terrainDefinitions/raised-area-3x5.json";
 import raisedArea3x7DefinitionJson from "./terrainDefinitions/raised-area-3x7.json";
-import room3x3DefinitionJson from "./terrainDefinitions/room-3x3.json";
-import room3x5DefinitionJson from "./terrainDefinitions/room-3x5.json";
-import room3x7DefinitionJson from "./terrainDefinitions/room-3x7.json";
-import room5x5DefinitionJson from "./terrainDefinitions/room-5x5.json";
 import closeMachinery1x1DefinitionJson from "./terrainDefinitions/close-machinery-1x1.json";
 import closeMachinery2x2DefinitionJson from "./terrainDefinitions/close-machinery-2x2.json";
 import closeMachinery3x3DefinitionJson from "./terrainDefinitions/close-machinery-3x3.json";
@@ -16,7 +12,6 @@ import console1x1DefinitionJson from "./terrainDefinitions/console-1x1.json";
 import bridge1x5DefinitionJson from "./terrainDefinitions/bridge-1x5.json";
 import bridge1x7DefinitionJson from "./terrainDefinitions/bridge-1x7.json";
 import bridge1x9DefinitionJson from "./terrainDefinitions/bridge-1x9.json";
-import irisValveDefinitionJson from "./terrainDefinitions/iris-valve.json";
 import hatch1x1DefinitionJson from "./terrainDefinitions/hatch-1x1.json";
 import liquidHydrogen2x2DefinitionJson from "./terrainDefinitions/liquid-hydrogen-2x2.json";
 import liquidHydrogen3x3DefinitionJson from "./terrainDefinitions/liquid-hydrogen-3x3.json";
@@ -24,9 +19,10 @@ import liquidHydrogen4x4DefinitionJson from "./terrainDefinitions/liquid-hydroge
 import interactiveHumanDefinitionJson from "./terrainDefinitions/interactive-human.json";
 import deploymentZone9x9DefinitionJson from "./terrainDefinitions/deployment-zone-9x9.json";
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
-import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
+import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalElevationTransition, TacticalElevationTransitionKind, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
 import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
 import { tacticalQuadraticBezierWallSegments } from "./tacticalBezierWalls";
+import { tacticalDrawnRaisedAreaCells } from "./tacticalDrawnRaisedAreas";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
 import type { TacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
 
@@ -99,6 +95,29 @@ export interface TacticalDrawnWall extends WallSegment {
   }[];
 }
 
+export type TacticalRaisedAreaOutlineSegment = {
+  kind: "line";
+  from: GridPoint;
+  to: GridPoint;
+} | {
+  kind: "quadratic";
+  from: GridPoint;
+  control: GridPoint;
+  to: GridPoint;
+};
+
+export interface TacticalDrawnRaisedArea {
+  id: string;
+  segments: TacticalRaisedAreaOutlineSegment[];
+}
+export interface TacticalElevationTransitionDefinition {
+  id: string;
+  kind: TacticalElevationTransitionKind;
+  lower: GridPoint;
+  upper: GridPoint;
+  path?: GridPoint[];
+}
+
 export interface TacticalScenarioTracingTemplate {
   imagePath: string;
   x: number;
@@ -122,6 +141,8 @@ export interface TacticalScenarioDefinitionFile {
   tracingTemplate?: TacticalScenarioTracingTemplate;
   terrainPlacements: TacticalTerrainPlacement[];
   drawnWalls?: TacticalDrawnWall[];
+  drawnRaisedAreas?: TacticalDrawnRaisedArea[];
+  elevationTransitions?: TacticalElevationTransitionDefinition[];
   deploymentEdges?: TacticalDeploymentEdge[];
   enemyPlacements?: TacticalEnemyPlacement[];
   fireCells: GridPoint[];
@@ -137,6 +158,8 @@ export interface ResolvedTacticalScenarioTerrain {
   lightSources: TacticalLightSource[];
   terrainByCell: Record<string, TerrainType>;
   elevationLevelByCell: Record<string, number>;
+  drawnRaisedAreaLevels: Record<string, number>;
+  elevationTransitions: TacticalElevationTransition[];
   closeMachineryCells: GridPoint[];
   elevationAccessCells: GridPoint[];
   bridges: TacticalBridge[];
@@ -158,10 +181,6 @@ const raisedArea5x5Definition = deepFreeze(raisedArea5x5DefinitionJson as Tactic
 const raisedArea3x3Definition = deepFreeze(raisedArea3x3DefinitionJson as TacticalTerrainDefinitionFile);
 const raisedArea3x5Definition = deepFreeze(raisedArea3x5DefinitionJson as TacticalTerrainDefinitionFile);
 const raisedArea3x7Definition = deepFreeze(raisedArea3x7DefinitionJson as TacticalTerrainDefinitionFile);
-const room3x3Definition = deepFreeze(room3x3DefinitionJson as TacticalTerrainDefinitionFile);
-const room3x5Definition = deepFreeze(room3x5DefinitionJson as TacticalTerrainDefinitionFile);
-const room3x7Definition = deepFreeze(room3x7DefinitionJson as TacticalTerrainDefinitionFile);
-const room5x5Definition = deepFreeze(room5x5DefinitionJson as TacticalTerrainDefinitionFile);
 const closeMachinery1x1Definition = deepFreeze(closeMachinery1x1DefinitionJson as TacticalTerrainDefinitionFile);
 const closeMachinery2x2Definition = deepFreeze(closeMachinery2x2DefinitionJson as TacticalTerrainDefinitionFile);
 const closeMachinery3x3Definition = deepFreeze(closeMachinery3x3DefinitionJson as TacticalTerrainDefinitionFile);
@@ -170,7 +189,6 @@ const console1x1Definition = deepFreeze(console1x1DefinitionJson as TacticalTerr
 const bridge1x5Definition = deepFreeze(bridge1x5DefinitionJson as TacticalTerrainDefinitionFile);
 const bridge1x7Definition = deepFreeze(bridge1x7DefinitionJson as TacticalTerrainDefinitionFile);
 const bridge1x9Definition = deepFreeze(bridge1x9DefinitionJson as TacticalTerrainDefinitionFile);
-const irisValveDefinition = deepFreeze(irisValveDefinitionJson as TacticalTerrainDefinitionFile);
 const hatch1x1Definition = deepFreeze(hatch1x1DefinitionJson as TacticalTerrainDefinitionFile);
 const liquidHydrogen2x2Definition = deepFreeze(liquidHydrogen2x2DefinitionJson as TacticalTerrainDefinitionFile);
 const liquidHydrogen3x3Definition = deepFreeze(liquidHydrogen3x3DefinitionJson as TacticalTerrainDefinitionFile);
@@ -186,10 +204,6 @@ const tacticalTerrainDefinitions = new Map([
   [raisedArea3x3Definition.id, raisedArea3x3Definition],
   [raisedArea3x5Definition.id, raisedArea3x5Definition],
   [raisedArea3x7Definition.id, raisedArea3x7Definition],
-  [room3x3Definition.id, room3x3Definition],
-  [room3x5Definition.id, room3x5Definition],
-  [room3x7Definition.id, room3x7Definition],
-  [room5x5Definition.id, room5x5Definition],
   [closeMachinery1x1Definition.id, closeMachinery1x1Definition],
   [closeMachinery2x2Definition.id, closeMachinery2x2Definition],
   [closeMachinery3x3Definition.id, closeMachinery3x3Definition],
@@ -198,7 +212,6 @@ const tacticalTerrainDefinitions = new Map([
   [bridge1x5Definition.id, bridge1x5Definition],
   [bridge1x7Definition.id, bridge1x7Definition],
   [bridge1x9Definition.id, bridge1x9Definition],
-  [irisValveDefinition.id, irisValveDefinition],
   [hatch1x1Definition.id, hatch1x1Definition],
   [liquidHydrogen2x2Definition.id, liquidHydrogen2x2Definition],
   [liquidHydrogen3x3Definition.id, liquidHydrogen3x3Definition],
@@ -375,6 +388,25 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     drawnWallIds.add(wall.id);
     drawnWallSegments.add(key);
   });
+  const drawnRaisedAreaIds = new Set<string>();
+  const drawnRaisedAreas = (scenario.drawnRaisedAreas ?? []).map((area) => {
+    if (drawnRaisedAreaIds.has(area.id)) {
+      throw new Error(`Duplicate drawn raised area ID: ${area.id}.`);
+    }
+    if (drawnObjectIds.has(area.id)) {
+      throw new Error(`Duplicate drawn terrain ID: ${area.id}.`);
+    }
+    drawnRaisedAreaIds.add(area.id);
+    drawnObjectIds.add(area.id);
+    return {
+      area,
+      cells: tacticalDrawnRaisedAreaCells(
+        area,
+        scenario.map.width,
+        scenario.map.height,
+      ),
+    };
+  });
   const fireCellKeys = new Set<string>();
   scenario.fireCells.forEach((point) => {
     if (!validCell(point)) throw new Error(`Scenario fire extends outside the map at ${pointKey(point)}.`);
@@ -409,21 +441,41 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const raisedRecords = records.filter((record) => record.resolved.elevatedCells.length > 0);
   const nonRaisedRecords = records.filter((record) => record.resolved.elevatedCells.length === 0 && record.resolved.occupiedCells.length > 0);
   const keySet = (points: GridPoint[]) => new Set(points.map(pointKey));
-  const raisedSets = new Map(raisedRecords.map((record) => [record.placement.id, { elevated: keySet(record.resolved.elevatedCells), occupied: keySet(record.resolved.occupiedCells) }]));
-  const supports = (lower: typeof raisedRecords[number], upper: typeof raisedRecords[number]) => {
-    const lowerCells = raisedSets.get(lower.placement.id)!.elevated;
-    return lower.resolved.elevatedCells.length > upper.resolved.elevatedCells.length
-      && upper.resolved.occupiedCells.every((point) => lowerCells.has(pointKey(point)));
+  type RaisedNode = {
+    id: string;
+    elevatedCells: GridPoint[];
+    occupiedCells: GridPoint[];
   };
-  for (let firstIndex = 0; firstIndex < raisedRecords.length; firstIndex += 1) {
-    for (let secondIndex = firstIndex + 1; secondIndex < raisedRecords.length; secondIndex += 1) {
-      const first = raisedRecords[firstIndex];
-      const second = raisedRecords[secondIndex];
-      const firstOccupied = raisedSets.get(first.placement.id)!.occupied;
-      const overlaps = second.resolved.occupiedCells.some((point) => firstOccupied.has(pointKey(point)));
+  const raisedNodes: RaisedNode[] = [
+    ...raisedRecords.map((record) => ({
+      id: record.placement.id,
+      elevatedCells: record.resolved.elevatedCells,
+      occupiedCells: record.resolved.occupiedCells,
+    })),
+    ...drawnRaisedAreas.map(({ area, cells }) => ({
+      id: area.id,
+      elevatedCells: cells,
+      occupiedCells: cells,
+    })),
+  ];
+  const raisedSets = new Map(raisedNodes.map((node) => [node.id, {
+    elevated: keySet(node.elevatedCells),
+    occupied: keySet(node.occupiedCells),
+  }]));
+  const supports = (lower: RaisedNode, upper: RaisedNode) => {
+    const lowerCells = raisedSets.get(lower.id)!.elevated;
+    return lower.elevatedCells.length > upper.elevatedCells.length
+      && upper.occupiedCells.every((point) => lowerCells.has(pointKey(point)));
+  };
+  for (let firstIndex = 0; firstIndex < raisedNodes.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < raisedNodes.length; secondIndex += 1) {
+      const first = raisedNodes[firstIndex];
+      const second = raisedNodes[secondIndex];
+      const firstOccupied = raisedSets.get(first.id)!.occupied;
+      const overlaps = second.occupiedCells.some((point) => firstOccupied.has(pointKey(point)));
       if (overlaps && !supports(first, second) && !supports(second, first)) {
-        const overlap = second.resolved.occupiedCells.find((point) => firstOccupied.has(pointKey(point)))!;
-        throw new Error(`Tactical terrain placements ${first.placement.id} and ${second.placement.id} overlap at ${pointKey(overlap)}`);
+        const overlap = second.occupiedCells.find((point) => firstOccupied.has(pointKey(point)))!;
+        throw new Error(`Raised areas ${first.id} and ${second.id} partially overlap at ${pointKey(overlap)}.`);
       }
     }
   }
@@ -432,30 +484,97 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     const key = pointKey(point);
     const existing = nonRaisedOwnerByCell.get(key);
     if (existing) throw new Error(`Tactical terrain placements ${existing} and ${record.placement.id} overlap at ${key}`);
-    const raised = raisedRecords.find((candidate) => candidate.resolved.occupiedCells.some((cell) => pointKey(cell) === key));
-    if (raised) throw new Error(`Tactical terrain placements ${raised.placement.id} and ${record.placement.id} overlap at ${key}`);
+    const raised = raisedNodes.find((candidate) => candidate.occupiedCells.some((cell) => pointKey(cell) === key));
+    if (raised) throw new Error(`Tactical terrain placements ${raised.id} and ${record.placement.id} overlap at ${key}`);
     nonRaisedOwnerByCell.set(key, record.placement.id);
   }));
 
   const levelByRaisedId = new Map<string, number>();
-  const raisedLevel = (record: typeof raisedRecords[number]): number => {
-    const existing = levelByRaisedId.get(record.placement.id);
+  const raisedLevel = (node: RaisedNode): number => {
+    const existing = levelByRaisedId.get(node.id);
     if (existing) return existing;
-    const supporting = raisedRecords.filter((candidate) => supports(candidate, record));
+    const supporting = raisedNodes.filter((candidate) => supports(candidate, node));
     const level = supporting.length > 0 ? Math.max(...supporting.map(raisedLevel)) + 1 : 1;
-    levelByRaisedId.set(record.placement.id, level);
+    levelByRaisedId.set(node.id, level);
     return level;
   };
-  raisedRecords.forEach(raisedLevel);
+  raisedNodes.forEach(raisedLevel);
   const topRaisedOwnerByCell = new Map<string, string>();
-  [...raisedRecords].sort((first, second) => raisedLevel(first) - raisedLevel(second)).forEach((record) => {
-    const level = raisedLevel(record);
-    record.resolved.elevatedCells.forEach((point) => {
+  [...raisedNodes].sort((first, second) => raisedLevel(first) - raisedLevel(second)).forEach((node) => {
+    const level = raisedLevel(node);
+    node.elevatedCells.forEach((point) => {
       const key = pointKey(point);
       elevationLevelByCell[key] = level;
       terrainByCell[key] = "elevated";
-      topRaisedOwnerByCell.set(key, record.placement.id);
+      topRaisedOwnerByCell.set(key, node.id);
     });
+  });
+  const drawnRaisedAreaLevels = Object.fromEntries(
+    drawnRaisedAreas.map(({ area }) => [area.id, levelByRaisedId.get(area.id) ?? 1]),
+  );
+  drawnRaisedAreas.forEach(({ area, cells }) => cells.forEach((point) => {
+    const key = pointKey(point);
+    const existingTerrain = nonRaisedOwnerByCell.get(key);
+    if (existingTerrain) {
+      throw new Error(`Drawn raised area ${area.id} overlaps terrain placement ${existingTerrain} at ${key}.`);
+    }
+  }));
+  const transitionEdges = new Set<string>();
+  const elevationTransitions = (scenario.elevationTransitions ?? []).map((transition): TacticalElevationTransition => {
+    if (!transition.id.trim()) throw new Error("Elevation transitions require an ID.");
+    if (drawnObjectIds.has(transition.id)) throw new Error(`Duplicate drawn terrain ID: ${transition.id}.`);
+    drawnObjectIds.add(transition.id);
+    if (!validCell(transition.lower) || !validCell(transition.upper)) {
+      throw new Error(`Elevation transition ${transition.id} extends outside the map.`);
+    }
+    const lowerLevel = elevationLevelByCell[pointKey(transition.lower)] ?? 0;
+    const upperLevel = elevationLevelByCell[pointKey(transition.upper)] ?? 0;
+    if (upperLevel !== lowerLevel + 1) {
+      throw new Error(`Elevation transition ${transition.id} must connect adjacent levels from lower to upper.`);
+    }
+    const dx = transition.upper.x - transition.lower.x;
+    const dy = transition.upper.y - transition.lower.y;
+    const distance = Math.abs(dx) + Math.abs(dy);
+    if (dx !== 0 && dy !== 0) {
+      throw new Error(`Elevation transition ${transition.id} must run horizontally or vertically.`);
+    }
+    if ((transition.kind === "stairs" || transition.kind === "ladder") && distance !== 1) {
+      throw new Error(`${transition.kind === "stairs" ? "Stairs" : "Ladder"} ${transition.id} must connect neighboring squares.`);
+    }
+    const direction = { x: Math.sign(dx), y: Math.sign(dy) };
+    const expectedPath = Array.from({ length: distance + 1 }, (_, index) => ({
+      x: transition.lower.x + direction.x * index,
+      y: transition.lower.y + direction.y * index,
+    }));
+    const path = transition.kind === "ramp" ? transition.path ?? expectedPath : expectedPath;
+    if (transition.kind === "ramp") {
+      if (distance < 1) throw new Error(`Ramp ${transition.id} must be at least one square long.`);
+      if (path.length !== expectedPath.length || path.some((point, index) =>
+        point.x !== expectedPath[index].x || point.y !== expectedPath[index].y)) {
+        throw new Error(`Ramp ${transition.id} path must run directly from its lower square to its upper square.`);
+      }
+      path.forEach((point, index) => {
+        if (!validCell(point)) throw new Error(`Ramp ${transition.id} extends outside the map.`);
+        const level = elevationLevelByCell[pointKey(point)] ?? 0;
+        const expectedLevel = index === path.length - 1 ? upperLevel : lowerLevel;
+        if (level !== expectedLevel) {
+          throw new Error(`Ramp ${transition.id} must remain on its lower level until its upper endpoint.`);
+        }
+      });
+    }
+    const edgeKey = [pointKey(transition.lower), pointKey(transition.upper)].sort().join("|");
+    if (transitionEdges.has(edgeKey)) throw new Error(`Two elevation transitions use edge ${edgeKey}.`);
+    transitionEdges.add(edgeKey);
+    return {
+      id: transition.id,
+      kind: transition.kind,
+      lower: { ...transition.lower },
+      upper: { ...transition.upper },
+      path: path.map((point) => ({ ...point })),
+      lowerLevel,
+      upperLevel,
+      ...(transition.kind === "ladder" ? { movementCost: 3 } : {}),
+    };
   });
 
   const bridgeOwnerByCell = new Map<string, string>();
@@ -578,13 +697,6 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       ? `v:${object.edge.from.x}:${Math.min(object.edge.from.y, object.edge.to.y)}:${Math.max(object.edge.from.y, object.edge.to.y)}`
       : `h:${object.edge.from.y}:${Math.min(object.edge.from.x, object.edge.to.x)}:${Math.max(object.edge.from.x, object.edge.to.x)}`;
   };
-  terrainObjects.filter((object): object is Extract<TacticalTerrainObject, { kind: "door" }> => object.kind === "door" && object.portalType === "iris-valve").forEach((iris) => {
-    const edgeKey = boundaryEdgeKey(iris);
-    const underlying = terrainObjects.filter((candidate): candidate is Extract<TacticalTerrainObject, { kind: "wall" | "door" }> => candidate !== iris && (candidate.kind === "wall" || candidate.kind === "door") && boundaryEdgeKey(candidate) === edgeKey);
-    if (!underlying.some((candidate) => candidate.kind === "wall") || underlying.some((candidate) => candidate.kind === "door")) {
-      throw new Error(`Iris valve placement ${iris.id} must replace one existing wall segment.`);
-    }
-  });
   terrainObjects.forEach((object) => {
     if (object.kind !== "wall" && object.kind !== "door") {
       mergedNonBoundaryObjects.push(object);
@@ -596,36 +708,82 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       boundaryByEdge.set(edgeKey, object);
       return;
     }
-    if (object.kind === "door" && object.portalType === "iris-valve" && existing.kind === "wall") {
-      boundaryByEdge.set(edgeKey, object);
-      return;
-    }
-    if (existing.kind === "door" && existing.portalType === "iris-valve" && object.kind === "wall") return;
     if (existing.kind !== object.kind) throw new Error(`Tactical terrain boundary conflict between ${existing.id} and ${object.id}.`);
   });
-  const generatedTerrainObjects = [...mergedNonBoundaryObjects, ...boundaryByEdge.values()];
+  const boundaryElevationLevel = (
+    id: string,
+    edges: { from: GridPoint; to: GridPoint }[],
+  ) => {
+    const levels = new Set<number>();
+    edges.forEach((edge) => {
+      const length = Math.hypot(edge.to.x - edge.from.x, edge.to.y - edge.from.y);
+      const sampleCount = Math.max(1, Math.ceil(length * 2));
+      for (let index = 0; index < sampleCount; index += 1) {
+        const fromRatio = index / sampleCount;
+        const toRatio = (index + 1) / sampleCount;
+        const sample = {
+          from: {
+            x: edge.from.x + (edge.to.x - edge.from.x) * fromRatio,
+            y: edge.from.y + (edge.to.y - edge.from.y) * fromRatio,
+          },
+          to: {
+            x: edge.from.x + (edge.to.x - edge.from.x) * toRatio,
+            y: edge.from.y + (edge.to.y - edge.from.y) * toRatio,
+          },
+        };
+        const separated = tacticalCellsSeparatedBySegment(sample);
+        const adjacentLevels = [separated.first, separated.second]
+          .filter(validCell)
+          .map((point) => elevationLevelByCell[pointKey(point)] ?? 0);
+        levels.add(adjacentLevels.length > 0 ? Math.max(...adjacentLevels) : 0);
+      }
+    });
+    if (levels.size > 1) {
+      throw new Error(`Wall ${id} crosses multiple elevation levels.`);
+    }
+    return [...levels][0] ?? 0;
+  };
+  const withBoundaryElevation = (object: TacticalTerrainObject): TacticalTerrainObject =>
+    object.kind === "wall" || object.kind === "door"
+      ? { ...object, elevationLevel: boundaryElevationLevel(object.id, [object.edge]) }
+      : object;
+  const generatedTerrainObjects = [...mergedNonBoundaryObjects, ...boundaryByEdge.values()]
+    .map(withBoundaryElevation);
   const generatedIds = new Set(generatedTerrainObjects.map((object) => object.id));
   drawnObjectIds.forEach((id) => {
     if (generatedIds.has(id)) throw new Error(`Drawn terrain ID ${id} conflicts with generated terrain.`);
   });
   const drawnWallObjects = (scenario.drawnWalls ?? []).flatMap((wall): TacticalTerrainObject[] => {
     const portals = [...(wall.portals ?? [])].sort((first, second) => first.position - second.position);
-    if (wall.control) return tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).map((segment) => ({
-      id: segment.id,
-      kind: "wall",
-      edge: { from: { ...segment.from }, to: { ...segment.to } },
-      blocking: true,
-      targetable: true,
-      integrity: 3,
-    }));
-    if (portals.length === 0) return [{
-      id: wall.id,
-      kind: "wall",
-      edge: { from: { ...wall.from }, to: { ...wall.to } },
-      blocking: true,
-      targetable: true,
-      integrity: 3,
-    }];
+    if (wall.control) {
+      const curvedObjects: TacticalTerrainObject[] = tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).map((segment) => ({
+        id: segment.id,
+        kind: "wall",
+        edge: { from: { ...segment.from }, to: { ...segment.to } },
+        blocking: true,
+        targetable: true,
+        integrity: 3,
+      }));
+      const elevationLevel = boundaryElevationLevel(
+        wall.id,
+        curvedObjects.flatMap((object) => object.kind === "wall" ? [object.edge] : []),
+      );
+      return curvedObjects.map((object) => object.kind === "wall"
+        ? { ...object, elevationLevel }
+        : object);
+    }
+    if (portals.length === 0) {
+      const elevationLevel = boundaryElevationLevel(wall.id, [{ from: wall.from, to: wall.to }]);
+      return [{
+        id: wall.id,
+        kind: "wall",
+        edge: { from: { ...wall.from }, to: { ...wall.to } },
+        blocking: true,
+        targetable: true,
+        integrity: 3,
+        elevationLevel,
+      }];
+    }
     const dx = wall.to.x - wall.from.x;
     const dy = wall.to.y - wall.from.y;
     const length = Math.hypot(dx, dy);
@@ -679,7 +837,13 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         integrity: 3,
       });
     }
-    return resolved;
+    const elevationLevel = boundaryElevationLevel(
+      wall.id,
+      resolved.flatMap((object) => object.kind === "wall" || object.kind === "door" ? [object.edge] : []),
+    );
+    return resolved.map((object) => object.kind === "wall" || object.kind === "door"
+      ? { ...object, elevationLevel }
+      : object);
   });
   const mergedTerrainObjects = [...generatedTerrainObjects, ...drawnWallObjects];
   mergedTerrainObjects.forEach((object) => {
@@ -690,5 +854,5 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const deploymentEdges = scenario.deploymentEdges ?? ["south"];
   const edgeDeploymentCells = Array.from({ length: scenario.map.width }, (_, x) => Array.from({ length: scenario.map.height }, (_, y) => ({ x, y }))).flat().filter((point) => deploymentEdges.some((edge) => edge === "north" ? point.y < 6 : edge === "south" ? point.y >= scenario.map.height - 6 : edge === "west" ? point.x < 6 : point.x >= scenario.map.width - 6));
   const uniqueDeploymentCells = [...new Map([...edgeDeploymentCells, ...deploymentCells].map((point) => [pointKey(point), point])).values()];
-  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, closeMachineryCells, elevationAccessCells, bridges, liquidHydrogenAreas, deploymentCells: uniqueDeploymentCells };
+  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, drawnRaisedAreaLevels, elevationTransitions, closeMachineryCells, elevationAccessCells, bridges, liquidHydrogenAreas, deploymentCells: uniqueDeploymentCells };
 };

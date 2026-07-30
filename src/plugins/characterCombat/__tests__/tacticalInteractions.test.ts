@@ -90,7 +90,18 @@ const stateWithCrewAt = (position: { x: number; y: number }, doorOpenById: Recor
 
 const stateWithIrisValve = (): CharacterCombatState => {
   const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-  draft.terrainPlacements.push({ id: "test-iris", terrainDefinitionId: "iris-valve", origin: { x: 47, y: 38 }, rotation: 0 });
+  draft.terrainPlacements = [];
+  draft.drawnWalls = [
+    {
+      id: "test-iris-wall",
+      from: { x: 46, y: 38 },
+      to: { x: 49, y: 38 },
+      portals: [{ id: "test-iris", kind: "iris-valve", position: 0.5 }],
+    },
+    { id: "test-iris-east", from: { x: 49, y: 38 }, to: { x: 49, y: 41 } },
+    { id: "test-iris-south", from: { x: 49, y: 41 }, to: { x: 46, y: 41 } },
+    { id: "test-iris-west", from: { x: 46, y: 41 }, to: { x: 46, y: 38 } },
+  ];
   let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
   state = reducer(state, equipTacticalDeploymentItem({ characterId: "crew-1", lockerItemId: "test-lag", catalogItemId: "weapon-light-assault-gun" }));
   state = reducer(state, startTacticalScenario());
@@ -2198,10 +2209,10 @@ describe("tactical terrain interactions", () => {
 
   it("commands an adjacent iris valve for 2 AP", () => {
     let state = stateWithIrisValve();
-    state = reducer(state, selectTacticalTerrainObject("test-iris:north:door:0"));
+    state = reducer(state, selectTacticalTerrainObject("test-iris"));
     state = reducer(state, interactWithTacticalTerrain());
 
-    expect(state.tacticalMap?.pendingDoorCommandsById["test-iris:north:door:0"]).toEqual({ open: true, resolvesAtTurn: 2, characterId: "crew-1" });
+    expect(state.tacticalMap?.pendingDoorCommandsById["test-iris"]).toEqual({ open: true, resolvesAtTurn: 2, characterId: "crew-1" });
     expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(4);
     expect(state.tacticalMap?.events[0]).toContain("activated the iris valve");
   });
@@ -2209,7 +2220,7 @@ describe("tactical terrain interactions", () => {
   it("prevents an iris valve opening across a pressure differential", () => {
     let state = stateWithIrisValve();
     state = { ...state, tacticalMap: { ...state.tacticalMap!, scenario: { ...state.tacticalMap!.scenario, vacuumSources: [{ x: 47, y: 37 }] } } };
-    state = reducer(state, selectTacticalTerrainObject("test-iris:north:door:0"));
+    state = reducer(state, selectTacticalTerrainObject("test-iris"));
     state = reducer(state, interactWithTacticalTerrain());
 
     expect(state.tacticalMap?.pendingDoorCommandsById).toEqual({});
@@ -2251,13 +2262,13 @@ describe("tactical terrain interactions", () => {
 
   it("uses the AHL iris-valve penetration modifier and 10-point breach threshold", () => {
     const base = stateWithIrisValve();
-    let state: CharacterCombatState = { ...base, tacticalMap: { ...base.tacticalMap!, terrainDamageById: { "test-iris:north:door:0": 9 }, ammunitionByCharacterId: { ...base.tacticalMap!.ammunitionByCharacterId, "crew-1": 4 } } };
-    state = reducer(state, selectTacticalTerrainObject("test-iris:north:door:0"));
+    let state: CharacterCombatState = { ...base, tacticalMap: { ...base.tacticalMap!, terrainDamageById: { "test-iris": 9 }, ammunitionByCharacterId: { ...base.tacticalMap!.ammunitionByCharacterId, "crew-1": 4 } } };
+    state = reducer(state, selectTacticalTerrainObject("test-iris"));
     state = reducer(state, fireAtTacticalTerrain({ hitDice: { first: 6, second: 6 } }));
 
-    expect(state.tacticalMap?.terrainDamageById["test-iris:north:door:0"]).toBe(10);
-    expect(state.tacticalMap?.destroyedTerrainObjectIds).toContain("test-iris:north:door:0");
-    expect(state.tacticalMap?.doorOpenById["test-iris:north:door:0"]).toBe(true);
+    expect(state.tacticalMap?.terrainDamageById["test-iris"]).toBe(10);
+    expect(state.tacticalMap?.destroyedTerrainObjectIds).toContain("test-iris");
+    expect(state.tacticalMap?.doorOpenById["test-iris"]).toBe(true);
   });
 
   it("activates the Security Terminal and completes the default scenario", () => {

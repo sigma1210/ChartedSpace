@@ -175,6 +175,7 @@ export const tacticalPlayerMovementReducers = {
         bridges: map.scenario.bridges,
         closeMachineryCells: map.scenario.closeMachineryCells,
         elevationAccessCells: map.scenario.elevationAccessCells,
+        elevationTransitions: map.scenario.elevationTransitions,
       });
     const selectedMove = moves.get(pointKey(destination));
     if (!selectedMove) return;

@@ -4,11 +4,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import TacticalScenarioEditorClient, {
   fitTacticalTracingTemplate,
+  removeDrawnRaisedAreaCandidate,
   removeConsolePlacementOperations,
   resizeTacticalTracingTemplate,
+  tacticalElevationTransitionPlacementCandidate,
   tacticalEditorMarkerInteractionEnabled,
 } from "../TacticalScenarioEditorClient";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "@/plugins/characterCombat/tacticalConsoleVictory";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 
 jest.mock("../../TacticalMapPageClient", () => ({ __esModule: true, default: () => null }));
 
@@ -49,9 +52,19 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain(">Fire</button>");
     expect(markup).toContain(">Wall</button>");
     expect(markup).toContain(">Curved Wall</button>");
+    expect(markup).toContain(">Raised Area</button>");
+    expect(markup).toContain(">Raised Curve</button>");
+    expect(markup).toContain(">Stairs</button>");
+    expect(markup).toContain(">Ladder</button>");
+    expect(markup).toContain(">Ramp</button>");
     expect(markup).toContain(">Door</button>");
     expect(markup).toContain(">Wall Iris Valve</button>");
-    expect(markup).toContain(">Legacy Iris Valve</button>");
+    expect(markup).toContain(">Control Room</button>");
+    expect(markup).not.toContain(">Room 3x3</button>");
+    expect(markup).not.toContain(">Room 3x5</button>");
+    expect(markup).not.toContain(">Room 3x7</button>");
+    expect(markup).not.toContain(">Room 5x5</button>");
+    expect(markup).not.toContain(">Legacy Iris Valve</button>");
     expect(markup).toContain(">Hatch 1x1</button>");
     expect(markup).toContain(">Liquid Hydrogen 2x2</button>");
     expect(markup).toContain(">Liquid Hydrogen 3x3</button>");
@@ -61,6 +74,98 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain("Crew deployment edges");
     expect(markup).not.toContain("<title>");
     expect(markup).toContain('aria-label="Gang Member 1 · facing North"');
+  });
+
+  it.each(["stairs", "ladder"] as const)("places a %s across the selected edge between adjacent levels", (kind) => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [{
+      id: "transition-platform",
+      terrainDefinitionId: "raised-area-3x3",
+      origin: { x: 10, y: 10 },
+      rotation: 0,
+    }];
+    definition.elevationTransitions = [];
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const directions = [
+      { dx: 0, dy: -1, edgeRotation: 0 as const },
+      { dx: 1, dy: 0, edgeRotation: 90 as const },
+      { dx: 0, dy: 1, edgeRotation: 180 as const },
+      { dx: -1, dy: 0, edgeRotation: 270 as const },
+    ];
+    let placementPoint: { x: number; y: number; edgeRotation: 0 | 90 | 180 | 270 } | null = null;
+    for (let y = 0; y < definition.map.height && !placementPoint; y += 1) {
+      for (let x = 0; x < definition.map.width && !placementPoint; x += 1) {
+        const level = terrain.elevationLevelByCell[`${x}:${y}`] ?? 0;
+        const direction = directions.find(({ dx, dy }) => {
+          const adjacent = { x: x + dx, y: y + dy };
+          if (adjacent.x < 0 || adjacent.y < 0 || adjacent.x >= definition.map.width || adjacent.y >= definition.map.height) return false;
+          return Math.abs((terrain.elevationLevelByCell[`${adjacent.x}:${adjacent.y}`] ?? 0) - level) === 1;
+        });
+        if (direction) placementPoint = { x, y, edgeRotation: direction.edgeRotation };
+      }
+    }
+
+    expect(placementPoint).not.toBeNull();
+    const candidate = tacticalElevationTransitionPlacementCandidate(definition, kind, placementPoint!);
+
+    expect(candidate.transition.kind).toBe(kind);
+    expect(candidate.definition.elevationTransitions).toContainEqual(candidate.transition);
+    expect(resolveTacticalScenarioTerrain(candidate.definition).elevationTransitions).toHaveLength(1);
+  });
+
+  it("snaps stairs to a nearby highlighted edge even when the raw cell edge is not valid", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnRaisedAreas = [{
+      id: "snap-platform",
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
+        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
+        { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
+        { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
+      ],
+    }];
+    definition.elevationTransitions = [];
+
+    const candidate = tacticalElevationTransitionPlacementCandidate(definition, "stairs", {
+      x: 9,
+      y: 11,
+      edgeRotation: 0,
+      mapX: 9.62,
+      mapY: 11.4,
+    });
+
+    expect(candidate.transition).toMatchObject({
+      lower: { x: 9, y: 11 },
+      upper: { x: 10, y: 11 },
+    });
+  });
+
+  it("deletes a drawn raised area and any transition that depended on it", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnRaisedAreas = [{
+      id: "raised-area-to-delete",
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
+        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
+        { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
+        { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
+      ],
+    }];
+    definition.elevationTransitions = [];
+    const withLadder = tacticalElevationTransitionPlacementCandidate(
+      definition,
+      "ladder",
+      { x: 9, y: 11, edgeRotation: 90 },
+    ).definition;
+
+    const removed = removeDrawnRaisedAreaCandidate(withLadder, "raised-area-to-delete");
+
+    expect(removed.definition.drawnRaisedAreas).toEqual([]);
+    expect(removed.definition.elevationTransitions).toEqual([]);
+    expect(removed.removedTransitionIds).toEqual(["ladder-1"]);
+    expect(() => resolveTacticalScenarioTerrain(removed.definition)).not.toThrow();
   });
 
   it("fits tracing templates inside the grid while preserving their aspect ratio", () => {
@@ -279,6 +384,34 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.queryByTestId("wall-portal-wall-iris-valve-1")).toBeNull();
   });
 
+  it("completes an enclosed wall outline with click-start and click-end", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Wall" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    const drawClickedWall = (
+      from: { x: number; y: number },
+      to: { x: number; y: number },
+      pointerId: number,
+    ) => {
+      fireEvent.pointerDown(preview, { clientX: from.x, clientY: from.y, pointerId });
+      fireEvent.pointerUp(preview, { clientX: from.x, clientY: from.y, pointerId });
+      expect(screen.getByTestId("wall-draft-preview")).toBeTruthy();
+      fireEvent.pointerMove(preview, { clientX: to.x, clientY: to.y, pointerId: pointerId + 1 });
+      fireEvent.pointerDown(preview, { clientX: to.x, clientY: to.y, pointerId: pointerId + 1 });
+      fireEvent.pointerUp(preview, { clientX: to.x, clientY: to.y, pointerId: pointerId + 1 });
+    };
+
+    drawClickedWall({ x: 10, y: 10 }, { x: 15, y: 10 }, 80);
+    drawClickedWall({ x: 15, y: 10 }, { x: 15, y: 15 }, 82);
+    drawClickedWall({ x: 15, y: 15 }, { x: 10, y: 15 }, 84);
+    drawClickedWall({ x: 10, y: 15 }, { x: 10, y: 10 }, 86);
+
+    expect(screen.getByTestId("drawn-wall-drawn-wall-1")).toBeTruthy();
+    expect(screen.getByTestId("drawn-wall-drawn-wall-4")).toBeTruthy();
+    expect(screen.queryByText("A wall must have different start and end points.")).toBeNull();
+    expect(screen.queryByTestId("wall-draft-preview")).toBeNull();
+  });
+
   it("draws, reshapes, moves, resizes, and deletes a curved wall", () => {
     render(<TacticalScenarioEditorClient />);
     fireEvent.click(screen.getByRole("button", { name: "Curved Wall" }));
@@ -313,6 +446,80 @@ describe("TacticalScenarioEditorClient", () => {
 
     fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.queryByTestId("drawn-wall-drawn-wall-1")).toBeNull();
+  });
+
+  it("draws and closes a raised area with a live enclosed-cell preview", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Raised Area" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 20, pointerId: 50 });
+    expect(screen.getByTestId("raised-area-draft-preview")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel outline" })).toBeTruthy();
+    fireEvent.pointerDown(preview, { clientX: 25, clientY: 20, pointerId: 51 });
+    fireEvent.pointerDown(preview, { clientX: 25, clientY: 25, pointerId: 52 });
+    fireEvent.pointerMove(preview, { clientX: 20, clientY: 25, pointerId: 53 });
+    expect(screen.getByTestId("raised-area-draft-preview").querySelectorAll("rect")).toHaveLength(25);
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 25, pointerId: 54 });
+    fireEvent.pointerMove(preview, { clientX: 20, clientY: 20, pointerId: 55 });
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 20, pointerId: 56 });
+
+    expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
+    expect(screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-0")).toBeTruthy();
+    expect(screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-3")).toBeTruthy();
+  });
+
+  it("cancels an unfinished raised-area outline with Escape", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Raised Curve" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 60 });
+    fireEvent.pointerMove(preview, { clientX: 35, clientY: 20, pointerId: 61 });
+    expect(screen.getByTestId("raised-area-draft-preview").querySelector("path")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
+  });
+
+  it("reshapes a raised-area curve after its second point is placed", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Raised Curve" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 62 });
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 10, pointerId: 63 });
+
+    const handle = screen.getByTestId("raised-area-draft-segment-0-control-handle");
+    expect(handle.getAttribute("cx")).toBe("15");
+    expect(handle.getAttribute("cy")).toBe("12.5");
+    fireEvent.pointerDown(handle, { clientX: 15, clientY: 12.5, pointerId: 64 });
+    fireEvent.pointerMove(preview, { clientX: 15, clientY: 16, pointerId: 64 });
+    fireEvent.pointerUp(preview, { clientX: 15, clientY: 16, pointerId: 64 });
+
+    expect(screen.getByTestId("raised-area-draft-segment-0").getAttribute("d")).toBe("M 10 10 Q 15 16 20 10");
+  });
+
+  it("switches between straight and curved segments within one raised-area outline", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    fireEvent.click(screen.getByRole("button", { name: "Raised Area" }));
+    fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 70 });
+    fireEvent.pointerDown(preview, { clientX: 35, clientY: 20, pointerId: 71 });
+    fireEvent.click(screen.getByRole("button", { name: "Raised Curve" }));
+    fireEvent.pointerDown(preview, { clientX: 35, clientY: 25, pointerId: 72 });
+    fireEvent.click(screen.getByRole("button", { name: "Raised Area" }));
+    fireEvent.pointerDown(preview, { clientX: 30, clientY: 25, pointerId: 73 });
+    fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 74 });
+
+    const curvedSegment = screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-1");
+    expect(curvedSegment.tagName.toLowerCase()).toBe("path");
+    expect(curvedSegment.getAttribute("d")).toBe("M 35 20 Q 33.75 22.5 35 25");
+    expect(screen.getByRole("button", { name: "Raised Area" }).getAttribute("aria-pressed")).toBe("false");
+
+    const completedHandle = screen.getByTestId("raised-area-drawn-raised-area-1-segment-1-control-handle");
+    fireEvent.pointerDown(completedHandle, { clientX: 33.75, clientY: 22.5, pointerId: 75 });
+    fireEvent.pointerMove(preview, { clientX: 32, clientY: 22.5, pointerId: 75 });
+    fireEvent.pointerUp(preview, { clientX: 32, clientY: 22.5, pointerId: 75 });
+    expect(screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-1").getAttribute("d")).toBe("M 35 20 Q 32 22.5 35 25");
   });
 
   it("lets enemy-tool clicks pass through raised terrain and fire markers", () => {

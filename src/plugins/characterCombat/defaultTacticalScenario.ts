@@ -40,6 +40,22 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     objects: terrain.objects,
     ...(resolvedConsoleVictory ? { consoleVictory: resolvedConsoleVictory } : {}),
     terrainObjects: terrain.terrainObjects,
+    drawnRaisedAreas: definition.drawnRaisedAreas?.map((area) => ({
+      id: area.id,
+      segments: area.segments.map((segment) => ({
+        ...segment,
+        from: { ...segment.from },
+        to: { ...segment.to },
+        ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+      })),
+    })),
+    drawnRaisedAreaLevels: { ...terrain.drawnRaisedAreaLevels },
+    elevationTransitions: terrain.elevationTransitions.map((transition) => ({
+      ...transition,
+      lower: { ...transition.lower },
+      upper: { ...transition.upper },
+      path: transition.path.map((point) => ({ ...point })),
+    })),
     bridges: terrain.bridges,
     liquidHydrogenAreas: terrain.liquidHydrogenAreas,
     deploymentCells: terrain.deploymentCells,
