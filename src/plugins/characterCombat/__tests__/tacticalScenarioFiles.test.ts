@@ -6,6 +6,7 @@ import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDef
 import { defaultTacticalInteractiveHumanCombatProfile } from "../tacticalInteractiveHuman";
 import {
   DEFAULT_TACTICAL_SCENARIO_ID,
+  deleteTacticalScenarioBundle,
   listTacticalScenarioFiles,
   loadTacticalScenarioBundle,
   loadTacticalScenarioFile,
@@ -49,6 +50,31 @@ describe("tactical scenario files", () => {
         { kind: "line", from: { x: 2, y: 14 }, to: { x: 2, y: 10 } },
       ],
     }];
+    draft.drawnTerrainRegions = [{
+      id: "machinery-zone",
+      kind: "close-machinery",
+      segments: [
+        { kind: "line", from: { x: 20, y: 20 }, to: { x: 24, y: 20 } },
+        { kind: "line", from: { x: 24, y: 20 }, to: { x: 24, y: 24 } },
+        { kind: "line", from: { x: 24, y: 24 }, to: { x: 20, y: 24 } },
+        { kind: "line", from: { x: 20, y: 24 }, to: { x: 20, y: 20 } },
+      ],
+    }, {
+      id: "hydrogen-pool",
+      kind: "liquid-hydrogen",
+      settings: { filled: false },
+      segments: [
+        { kind: "line", from: { x: 30, y: 20 }, to: { x: 34, y: 20 } },
+        {
+          kind: "quadratic",
+          from: { x: 34, y: 20 },
+          control: { x: 36, y: 22 },
+          to: { x: 34, y: 24 },
+        },
+        { kind: "line", from: { x: 34, y: 24 }, to: { x: 30, y: 24 } },
+        { kind: "line", from: { x: 30, y: 24 }, to: { x: 30, y: 20 } },
+      ],
+    }];
     draft.elevationTransitions = [{
       id: "ladder-test",
       kind: "ladder",
@@ -76,12 +102,69 @@ describe("tactical scenario files", () => {
     expect(loaded.enemyPlacements?.[0].facing).toBe("east");
     expect(loaded.drawnWalls).toEqual(draft.drawnWalls);
     expect(loaded.drawnRaisedAreas).toEqual(draft.drawnRaisedAreas);
+    expect(loaded.drawnTerrainRegions).toEqual(draft.drawnTerrainRegions);
     expect(loaded.elevationTransitions).toEqual(draft.elevationTransitions);
     expect(loaded.tracingTemplate).toEqual(draft.tracingTemplate);
     expect(source).toContain('\n  "schemaVersion": 1,');
     expect(await listTacticalScenarioFiles(directory)).toEqual([
       { id: "cargo-deck-assault", title: "Cargo Deck Assault", isDefault: false },
     ]);
+  });
+
+  it("rejects duplicate and invalid drawn terrain-region outlines", async () => {
+    const duplicate = cloneTacticalScenarioDefinition(
+      defaultTacticalScenarioDefinition,
+    );
+    duplicate.drawnRaisedAreas = [{
+      id: "shared-region",
+      segments: [
+        { kind: "line", from: { x: 2, y: 2 }, to: { x: 5, y: 2 } },
+        { kind: "line", from: { x: 5, y: 2 }, to: { x: 5, y: 5 } },
+        { kind: "line", from: { x: 5, y: 5 }, to: { x: 2, y: 5 } },
+        { kind: "line", from: { x: 2, y: 5 }, to: { x: 2, y: 2 } },
+      ],
+    }];
+    duplicate.drawnTerrainRegions = [{
+      id: "shared-region",
+      kind: "close-machinery",
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
+        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
+        { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
+        { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
+      ],
+    }];
+    await expect(saveTacticalScenarioAs(
+      "Duplicate Region",
+      duplicate,
+      directory,
+    )).rejects.toMatchObject({
+      code: "invalid-scenario",
+      status: 400,
+      message: expect.stringContaining("Duplicate drawn terrain ID"),
+    });
+
+    const open = cloneTacticalScenarioDefinition(
+      defaultTacticalScenarioDefinition,
+    );
+    open.drawnTerrainRegions = [{
+      id: "open-machinery",
+      kind: "close-machinery",
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
+        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
+        { kind: "line", from: { x: 13, y: 13 }, to: { x: 11, y: 12 } },
+      ],
+    }];
+    await expect(saveTacticalScenarioAs(
+      "Open Region",
+      open,
+      directory,
+    )).rejects.toMatchObject({
+      code: "invalid-scenario",
+      status: 400,
+      message: expect.stringContaining("outline must be closed"),
+    });
   });
 
   it("saves and loads the scenario and console-victory definitions together", async () => {
@@ -120,6 +203,48 @@ describe("tactical scenario files", () => {
       code: "default-scenario",
       status: 409,
     });
+  });
+
+  it("deletes a saved scenario and its console-victory definition together", async () => {
+    const scenarioDirectory = path.join(directory, "scenarios");
+    const consoleDirectory = path.join(directory, "consoles");
+    await saveTacticalScenarioBundleAs(
+      "Disposable Scenario",
+      cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition),
+      cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition),
+      scenarioDirectory,
+      consoleDirectory,
+    );
+
+    await expect(deleteTacticalScenarioBundle(
+      "disposable-scenario",
+      scenarioDirectory,
+      consoleDirectory,
+    )).resolves.toEqual({
+      id: "disposable-scenario",
+      title: defaultTacticalScenarioDefinition.title,
+    });
+    await expect(loadTacticalScenarioFile(
+      "disposable-scenario",
+      scenarioDirectory,
+    )).rejects.toMatchObject({ code: "scenario-not-found", status: 404 });
+    await expect(readFile(
+      path.join(consoleDirectory, "disposable-scenario.json"),
+      "utf8",
+    )).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("protects the default scenario and rejects unsafe deletion IDs", async () => {
+    await expect(deleteTacticalScenarioBundle(
+      DEFAULT_TACTICAL_SCENARIO_ID,
+      directory,
+      directory,
+    )).rejects.toMatchObject({ code: "default-scenario", status: 409 });
+    await expect(deleteTacticalScenarioBundle(
+      "../outside",
+      directory,
+      directory,
+    )).rejects.toMatchObject({ code: "invalid-scenario-id", status: 400 });
   });
 
   it("preserves interactive-human combat profiles and transformation outcomes", async () => {

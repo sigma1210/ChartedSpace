@@ -9,14 +9,14 @@ import {
 const CURVE_SEGMENTS = 32;
 const INTERSECTION_TOLERANCE = 1e-6;
 
-type OutlinePoint = { x: number; y: number };
+export type TacticalAreaOutlinePoint = { x: number; y: number };
 
-const tacticalDrawnRaisedAreaOutlinePoints = (
-  area: TacticalDrawnRaisedArea,
+export const tacticalAreaOutlinePoints = (
+  area: Pick<TacticalDrawnRaisedArea, "segments">,
 ) => {
   const first = area.segments[0]?.from;
   if (!first) return [];
-  const points: OutlinePoint[] = [{ ...first }];
+  const points: TacticalAreaOutlinePoint[] = [{ ...first }];
   area.segments.forEach((segment) => {
     if (segment.kind === "line") {
       points.push({ ...segment.to });
@@ -46,6 +46,46 @@ const tacticalDrawnRaisedAreaOutlinePoints = (
   return points;
 };
 
+const pointToSegmentDistance = (
+  point: TacticalAreaOutlinePoint,
+  from: TacticalAreaOutlinePoint,
+  to: TacticalAreaOutlinePoint,
+) => {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared < INTERSECTION_TOLERANCE) {
+    return Math.hypot(point.x - from.x, point.y - from.y);
+  }
+  const progress = Math.max(0, Math.min(1,
+    ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared));
+  return Math.hypot(
+    point.x - (from.x + dx * progress),
+    point.y - (from.y + dy * progress),
+  );
+};
+
+export const tacticalOutlineInteriorDetailScale = (
+  outline: TacticalAreaOutlinePoint[],
+  center: TacticalAreaOutlinePoint,
+  fullDetailRadius = 0.58,
+) => {
+  if (outline.length < 2) return 0;
+  const clearance = Math.min(...outline.slice(0, -1).map((from, index) =>
+    pointToSegmentDistance(center, from, outline[index + 1]!)));
+  return Math.max(0, Math.min(1, (clearance - 0.02) / fullDetailRadius));
+};
+
+export const tacticalAreaInteriorDetailScale = (
+  area: Pick<TacticalDrawnRaisedArea, "segments">,
+  center: TacticalAreaOutlinePoint,
+  fullDetailRadius = 0.58,
+) => tacticalOutlineInteriorDetailScale(
+  tacticalAreaOutlinePoints(area),
+  center,
+  fullDetailRadius,
+);
+
 const uniqueSorted = (values: number[]) => values
   .sort((left, right) => left - right)
   .filter((value, index, sorted) =>
@@ -63,7 +103,7 @@ const pairedIntervals = (intersections: number[]) => {
 };
 
 export const tacticalDrawnRaisedAreaShape = (
-  area: TacticalDrawnRaisedArea,
+  area: Pick<TacticalDrawnRaisedArea, "segments">,
   mapWidth: number,
   mapHeight: number,
 ) => {
@@ -96,7 +136,7 @@ export const tacticalDrawnRaisedAreaGridLinePositions = (
   mapWidth: number,
   mapHeight: number,
 ) => {
-  const outline = tacticalDrawnRaisedAreaOutlinePoints(area);
+  const outline = tacticalAreaOutlinePoints(area);
   if (outline.length < 4) return new Float32Array();
   const height = elevationLevel * TACTICAL_WALL_HEIGHT
     + TACTICAL_TERRAIN_GRID_LIFT;

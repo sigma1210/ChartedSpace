@@ -54,6 +54,10 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain(">Curved Wall</button>");
     expect(markup).toContain(">Raised Area</button>");
     expect(markup).toContain(">Raised Curve</button>");
+    expect(markup).toContain(">Draw Machinery</button>");
+    expect(markup).toContain(">Machinery Curve</button>");
+    expect(markup).toContain(">Draw Liquid H₂</button>");
+    expect(markup).toContain(">Liquid H₂ Curve</button>");
     expect(markup).toContain(">Stairs</button>");
     expect(markup).toContain(">Ladder</button>");
     expect(markup).toContain(">Ramp</button>");
@@ -64,6 +68,11 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).not.toContain(">Room 3x5</button>");
     expect(markup).not.toContain(">Room 3x7</button>");
     expect(markup).not.toContain(">Room 5x5</button>");
+    expect(markup).not.toContain(">Raised Area 3x3</button>");
+    expect(markup).not.toContain(">Raised Area 3x5</button>");
+    expect(markup).not.toContain(">Raised Area 3x7</button>");
+    expect(markup).not.toContain(">Raised Area 5x5</button>");
+    expect(markup).not.toContain(">Raised Area 7x7</button>");
     expect(markup).not.toContain(">Legacy Iris Valve</button>");
     expect(markup).toContain(">Hatch 1x1</button>");
     expect(markup).toContain(">Liquid Hydrogen 2x2</button>");
@@ -78,35 +87,28 @@ describe("TacticalScenarioEditorClient", () => {
 
   it.each(["stairs", "ladder"] as const)("places a %s across the selected edge between adjacent levels", (kind) => {
     const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    definition.terrainPlacements = [{
+    definition.terrainPlacements = [];
+    definition.drawnRaisedAreas = [{
       id: "transition-platform",
-      terrainDefinitionId: "raised-area-3x3",
-      origin: { x: 10, y: 10 },
-      rotation: 0,
+      segments: [
+        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
+        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
+        { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
+        { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
+      ],
     }];
     definition.elevationTransitions = [];
-    const terrain = resolveTacticalScenarioTerrain(definition);
-    const directions = [
-      { dx: 0, dy: -1, edgeRotation: 0 as const },
-      { dx: 1, dy: 0, edgeRotation: 90 as const },
-      { dx: 0, dy: 1, edgeRotation: 180 as const },
-      { dx: -1, dy: 0, edgeRotation: 270 as const },
-    ];
-    let placementPoint: { x: number; y: number; edgeRotation: 0 | 90 | 180 | 270 } | null = null;
-    for (let y = 0; y < definition.map.height && !placementPoint; y += 1) {
-      for (let x = 0; x < definition.map.width && !placementPoint; x += 1) {
-        const level = terrain.elevationLevelByCell[`${x}:${y}`] ?? 0;
-        const direction = directions.find(({ dx, dy }) => {
-          const adjacent = { x: x + dx, y: y + dy };
-          if (adjacent.x < 0 || adjacent.y < 0 || adjacent.x >= definition.map.width || adjacent.y >= definition.map.height) return false;
-          return Math.abs((terrain.elevationLevelByCell[`${adjacent.x}:${adjacent.y}`] ?? 0) - level) === 1;
-        });
-        if (direction) placementPoint = { x, y, edgeRotation: direction.edgeRotation };
-      }
-    }
-
-    expect(placementPoint).not.toBeNull();
-    const candidate = tacticalElevationTransitionPlacementCandidate(definition, kind, placementPoint!);
+    const candidate = tacticalElevationTransitionPlacementCandidate(
+      definition,
+      kind,
+      {
+        x: 9,
+        y: 11,
+        edgeRotation: 90,
+        mapX: 9.6,
+        mapY: 11.5,
+      },
+    );
 
     expect(candidate.transition.kind).toBe(kind);
     expect(candidate.definition.elevationTransitions).toContainEqual(candidate.transition);
@@ -522,10 +524,52 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-1").getAttribute("d")).toBe("M 35 20 Q 32 22.5 35 25");
   });
 
+  it("draws, reshapes, selects, and deletes a closed-machinery region", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    fireEvent.click(screen.getByRole("button", { name: "Draw Machinery" }));
+    fireEvent.pointerDown(preview, { clientX: 40, clientY: 10, pointerId: 80 });
+    fireEvent.pointerDown(preview, { clientX: 45, clientY: 10, pointerId: 81 });
+    fireEvent.click(screen.getByRole("button", { name: "Machinery Curve" }));
+    fireEvent.pointerDown(preview, { clientX: 45, clientY: 15, pointerId: 82 });
+    fireEvent.click(screen.getByRole("button", { name: "Draw Machinery" }));
+    fireEvent.pointerDown(preview, { clientX: 40, clientY: 15, pointerId: 83 });
+    fireEvent.pointerDown(preview, { clientX: 40, clientY: 10, pointerId: 84 });
+
+    const curve = screen.getByTestId("drawn-terrain-region-drawn-close-machinery-1-segment-1");
+    expect(curve.tagName.toLowerCase()).toBe("path");
+    expect(screen.getByText("Closed machinery · 4 boundary segments")).toBeTruthy();
+    const handle = screen.getByTestId("terrain-region-drawn-close-machinery-1-segment-1-control-handle");
+    fireEvent.pointerDown(handle, { clientX: 43.75, clientY: 12.5, pointerId: 85 });
+    fireEvent.pointerMove(preview, { clientX: 42, clientY: 12.5, pointerId: 85 });
+    fireEvent.pointerUp(preview, { clientX: 42, clientY: 12.5, pointerId: 85 });
+    expect(screen.getByTestId("drawn-terrain-region-drawn-close-machinery-1-segment-1").getAttribute("d")).toBe("M 45 10 Q 42 12.5 45 15");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete terrain region" }));
+    expect(screen.queryByTestId("drawn-terrain-region-drawn-close-machinery-1")).toBeNull();
+  });
+
+  it("draws a liquid-hydrogen region and changes its filled state", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    fireEvent.click(screen.getByRole("button", { name: "Draw Liquid H₂" }));
+    fireEvent.pointerDown(preview, { clientX: 50, clientY: 10, pointerId: 90 });
+    fireEvent.pointerDown(preview, { clientX: 55, clientY: 10, pointerId: 91 });
+    fireEvent.pointerDown(preview, { clientX: 55, clientY: 15, pointerId: 92 });
+    fireEvent.pointerDown(preview, { clientX: 50, clientY: 15, pointerId: 93 });
+    fireEvent.pointerDown(preview, { clientX: 50, clientY: 10, pointerId: 94 });
+
+    const filled = screen.getByRole("checkbox", { name: "Liquid hydrogen region filled" }) as HTMLInputElement;
+    expect(filled.checked).toBe(true);
+    fireEvent.click(filled);
+    expect(filled.checked).toBe(false);
+    expect(screen.getByText("Liquid hydrogen · empty")).toBeTruthy();
+  });
+
   it("lets enemy-tool clicks pass through raised terrain and fire markers", () => {
     expect(tacticalEditorMarkerInteractionEnabled(null, "gang-member")).toBe(false);
     expect(tacticalEditorMarkerInteractionEnabled(null, "gang-leader")).toBe(false);
-    expect(tacticalEditorMarkerInteractionEnabled("raised-area", null)).toBe(false);
+    expect(tacticalEditorMarkerInteractionEnabled("scenario-raised-area", null)).toBe(false);
     expect(tacticalEditorMarkerInteractionEnabled(null, null)).toBe(true);
   });
 
@@ -536,8 +580,91 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain("Load scenario");
     expect(markup).toContain("Save changes");
     expect(markup).toContain("Save as new scenario");
+    expect(markup).toContain("Delete scenario");
     expect(markup).toContain("never overwrites an existing scenario");
     expect(markup).toContain("immutable source");
+  });
+
+  it("confirms deletion, removes the saved scenario, and returns to the default", async () => {
+    const customDefinition = cloneTacticalScenarioDefinition(
+      defaultTacticalScenarioDefinition,
+    );
+    customDefinition.id = "disposable-scenario";
+    customDefinition.consoleVictoryDefinitionId = "disposable-scenario";
+    customDefinition.title = "Disposable Scenario";
+    const customConsoleVictory = cloneTacticalConsoleVictoryDefinition(
+      defaultTacticalConsoleVictoryDefinition,
+    );
+    customConsoleVictory.id = "disposable-scenario";
+    customConsoleVictory.scenarioId = "disposable-scenario";
+    const response = (body: unknown, status = 200) => ({
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => body,
+    }) as Response;
+    global.fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/tactical/templates") {
+        return response({ templates: [] });
+      }
+      if (url === "/api/tactical/scenarios"
+        && (!init?.method || init.method === "GET")) {
+        return response({ scenarios: [
+          {
+            id: defaultTacticalScenarioDefinition.id,
+            title: defaultTacticalScenarioDefinition.title,
+            isDefault: true,
+          },
+          {
+            id: customDefinition.id,
+            title: customDefinition.title,
+            isDefault: false,
+          },
+        ] });
+      }
+      if (url.endsWith("/disposable-scenario")
+        && (!init?.method || init.method === "GET")) {
+        return response({
+          definition: customDefinition,
+          consoleVictory: customConsoleVictory,
+        });
+      }
+      if (url.endsWith("/disposable-scenario")
+        && init?.method === "DELETE") {
+        return response({
+          deleted: {
+            id: customDefinition.id,
+            title: customDefinition.title,
+          },
+        });
+      }
+      return response({ error: "Unexpected request." }, 500);
+    }) as typeof fetch;
+    const confirm = jest.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<TacticalScenarioEditorClient />);
+    await screen.findByRole("option", { name: "Disposable Scenario" });
+    fireEvent.change(screen.getByLabelText("Load scenario"), {
+      target: { value: "disposable-scenario" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Load scenario" }));
+    await screen.findByText("Loaded Disposable Scenario.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete scenario" }));
+
+    await screen.findByText(
+      "Deleted disposable-scenario.json and returned to the default scenario.",
+    );
+    expect(confirm).toHaveBeenCalledWith(
+      'Permanently delete "Disposable Scenario"? This cannot be undone.',
+    );
+    expect(screen.queryByRole("option", { name: "Disposable Scenario" }))
+      .toBeNull();
+    expect(screen.getByText(/immutable source/)).toBeTruthy();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/tactical/scenarios/disposable-scenario",
+      { method: "DELETE" },
+    );
   });
 
   it("removes console operations when their terrain placement is deleted", () => {

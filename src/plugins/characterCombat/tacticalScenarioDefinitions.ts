@@ -1,9 +1,4 @@
 import controlRoomDefinitionJson from "./terrainDefinitions/control-room.json";
-import raisedAreaDefinitionJson from "./terrainDefinitions/raised-area.json";
-import raisedArea5x5DefinitionJson from "./terrainDefinitions/raised-area-5x5.json";
-import raisedArea3x3DefinitionJson from "./terrainDefinitions/raised-area-3x3.json";
-import raisedArea3x5DefinitionJson from "./terrainDefinitions/raised-area-3x5.json";
-import raisedArea3x7DefinitionJson from "./terrainDefinitions/raised-area-3x7.json";
 import closeMachinery1x1DefinitionJson from "./terrainDefinitions/close-machinery-1x1.json";
 import closeMachinery2x2DefinitionJson from "./terrainDefinitions/close-machinery-2x2.json";
 import closeMachinery3x3DefinitionJson from "./terrainDefinitions/close-machinery-3x3.json";
@@ -95,7 +90,7 @@ export interface TacticalDrawnWall extends WallSegment {
   }[];
 }
 
-export type TacticalRaisedAreaOutlineSegment = {
+export type TacticalAreaOutlineSegment = {
   kind: "line";
   from: GridPoint;
   to: GridPoint;
@@ -106,10 +101,24 @@ export type TacticalRaisedAreaOutlineSegment = {
   to: GridPoint;
 };
 
+export type TacticalRaisedAreaOutlineSegment = TacticalAreaOutlineSegment;
+
 export interface TacticalDrawnRaisedArea {
   id: string;
-  segments: TacticalRaisedAreaOutlineSegment[];
+  segments: TacticalAreaOutlineSegment[];
 }
+
+export type TacticalDrawnTerrainRegion = {
+  id: string;
+  kind: "close-machinery";
+  segments: TacticalAreaOutlineSegment[];
+} | {
+  id: string;
+  kind: "liquid-hydrogen";
+  segments: TacticalAreaOutlineSegment[];
+  settings?: { filled?: boolean };
+};
+
 export interface TacticalElevationTransitionDefinition {
   id: string;
   kind: TacticalElevationTransitionKind;
@@ -143,6 +152,7 @@ export interface TacticalScenarioDefinitionFile {
   terrainPlacements: TacticalTerrainPlacement[];
   drawnWalls?: TacticalDrawnWall[];
   drawnRaisedAreas?: TacticalDrawnRaisedArea[];
+  drawnTerrainRegions?: TacticalDrawnTerrainRegion[];
   elevationTransitions?: TacticalElevationTransitionDefinition[];
   deploymentEdges?: TacticalDeploymentEdge[];
   enemyPlacements?: TacticalEnemyPlacement[];
@@ -160,6 +170,7 @@ export interface ResolvedTacticalScenarioTerrain {
   terrainByCell: Record<string, TerrainType>;
   elevationLevelByCell: Record<string, number>;
   drawnRaisedAreaLevels: Record<string, number>;
+  drawnTerrainRegions: TacticalDrawnTerrainRegion[];
   elevationTransitions: TacticalElevationTransition[];
   closeMachineryCells: GridPoint[];
   elevationAccessCells: GridPoint[];
@@ -177,11 +188,6 @@ const deepFreeze = <T,>(value: T): T => {
 };
 
 const controlRoomDefinition = deepFreeze(controlRoomDefinitionJson as TacticalTerrainDefinitionFile);
-const raisedAreaDefinition = deepFreeze(raisedAreaDefinitionJson as TacticalTerrainDefinitionFile);
-const raisedArea5x5Definition = deepFreeze(raisedArea5x5DefinitionJson as TacticalTerrainDefinitionFile);
-const raisedArea3x3Definition = deepFreeze(raisedArea3x3DefinitionJson as TacticalTerrainDefinitionFile);
-const raisedArea3x5Definition = deepFreeze(raisedArea3x5DefinitionJson as TacticalTerrainDefinitionFile);
-const raisedArea3x7Definition = deepFreeze(raisedArea3x7DefinitionJson as TacticalTerrainDefinitionFile);
 const closeMachinery1x1Definition = deepFreeze(closeMachinery1x1DefinitionJson as TacticalTerrainDefinitionFile);
 const closeMachinery2x2Definition = deepFreeze(closeMachinery2x2DefinitionJson as TacticalTerrainDefinitionFile);
 const closeMachinery3x3Definition = deepFreeze(closeMachinery3x3DefinitionJson as TacticalTerrainDefinitionFile);
@@ -200,11 +206,6 @@ export const defaultTacticalScenarioDefinition = deepFreeze(defaultScenarioDefin
 export const cloneTacticalScenarioDefinition = (definition: TacticalScenarioDefinitionFile): TacticalScenarioDefinitionFile => JSON.parse(JSON.stringify(definition)) as TacticalScenarioDefinitionFile;
 const tacticalTerrainDefinitions = new Map([
   [controlRoomDefinition.id, controlRoomDefinition],
-  [raisedAreaDefinition.id, raisedAreaDefinition],
-  [raisedArea5x5Definition.id, raisedArea5x5Definition],
-  [raisedArea3x3Definition.id, raisedArea3x3Definition],
-  [raisedArea3x5Definition.id, raisedArea3x5Definition],
-  [raisedArea3x7Definition.id, raisedArea3x7Definition],
   [closeMachinery1x1Definition.id, closeMachinery1x1Definition],
   [closeMachinery2x2Definition.id, closeMachinery2x2Definition],
   [closeMachinery3x3Definition.id, closeMachinery3x3Definition],
@@ -313,7 +314,6 @@ const resolveTerrainPlacement = (definition: TacticalTerrainDefinitionFile, plac
     cells: Array.from({ length: region.width }, (_, x) => Array.from({ length: region.height }, (_, y) => worldPoint(placement.origin, rotatedCell({ x: region.origin.x + x, y: region.origin.y + y }, definition.size, placement.rotation)))).flat(),
   }));
   const interiorCells = resolvedRegions.filter((region) => region.terrainType === "interior").flatMap((region) => region.cells);
-  const elevatedCells = resolvedRegions.filter((region) => region.terrainType === "elevated").flatMap((region) => region.cells);
   const closeMachineryCells = resolvedRegions.filter((region) => region.terrainType === "close-machinery").flatMap((region) => region.cells);
   const terrainByCell = Object.fromEntries(resolvedRegions.filter((region) => region.terrainType !== "interior" && region.terrainType !== "close-machinery").flatMap((region) => region.cells.map((point) => [`${point.x}:${point.y}`, region.terrainType as TerrainType])));
   const elevationAccessCells = (definition.elevationAccessCells ?? []).map((point) => worldPoint(placement.origin, rotatedCell(point, definition.size, placement.rotation)));
@@ -332,7 +332,7 @@ const resolveTerrainPlacement = (definition: TacticalTerrainDefinitionFile, plac
     id: `${placement.id}:${source.id}`,
     position: worldPoint(placement.origin, rotatedCell(source.position, definition.size, placement.rotation)),
   }));
-  return { objects, interiorCells, elevatedCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, bridgeCells, liquidHydrogenFootprintCells, liquidHydrogenFilled: placement.terrainSettings?.filled !== false, deploymentCells, occupiedCells };
+  return { objects, interiorCells, lightSources, terrainByCell, closeMachineryCells, elevationAccessCells, bridgeCells, liquidHydrogenFootprintCells, liquidHydrogenFilled: placement.terrainSettings?.filled !== false, deploymentCells, occupiedCells };
 };
 
 export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinitionFile): ResolvedTacticalScenarioTerrain => {
@@ -408,6 +408,20 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       ),
     };
   });
+  const drawnTerrainRegions = (scenario.drawnTerrainRegions ?? []).map((region) => {
+    if (drawnObjectIds.has(region.id)) {
+      throw new Error(`Duplicate drawn terrain ID: ${region.id}.`);
+    }
+    drawnObjectIds.add(region.id);
+    return {
+      region,
+      cells: tacticalDrawnRaisedAreaCells(
+        region,
+        scenario.map.width,
+        scenario.map.height,
+      ),
+    };
+  });
   const fireCellKeys = new Set<string>();
   scenario.fireCells.forEach((point) => {
     if (!validCell(point)) throw new Error(`Scenario fire extends outside the map at ${pointKey(point)}.`);
@@ -433,32 +447,24 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     terrainObjects.push(...resolved.objects);
     interiorCells.push(...resolved.interiorCells);
     lightSources.push(...resolved.lightSources);
-    Object.entries(resolved.terrainByCell).filter(([, terrain]) => terrain !== "elevated").forEach(([key, terrain]) => { terrainByCell[key] = terrain; });
+    Object.entries(resolved.terrainByCell).forEach(([key, terrain]) => { terrainByCell[key] = terrain; });
     elevationAccessCells.push(...resolved.elevationAccessCells);
     deploymentCells.push(...resolved.deploymentCells);
     return { placement, resolved };
   });
 
-  const raisedRecords = records.filter((record) => record.resolved.elevatedCells.length > 0);
-  const nonRaisedRecords = records.filter((record) => record.resolved.elevatedCells.length === 0 && record.resolved.occupiedCells.length > 0);
+  const nonRaisedRecords = records.filter((record) => record.resolved.occupiedCells.length > 0);
   const keySet = (points: GridPoint[]) => new Set(points.map(pointKey));
   type RaisedNode = {
     id: string;
     elevatedCells: GridPoint[];
     occupiedCells: GridPoint[];
   };
-  const raisedNodes: RaisedNode[] = [
-    ...raisedRecords.map((record) => ({
-      id: record.placement.id,
-      elevatedCells: record.resolved.elevatedCells,
-      occupiedCells: record.resolved.occupiedCells,
-    })),
-    ...drawnRaisedAreas.map(({ area, cells }) => ({
+  const raisedNodes: RaisedNode[] = drawnRaisedAreas.map(({ area, cells }) => ({
       id: area.id,
       elevatedCells: cells,
       occupiedCells: cells,
-    })),
-  ];
+    }));
   const raisedSets = new Map(raisedNodes.map((node) => [node.id, {
     elevated: keySet(node.elevatedCells),
     occupied: keySet(node.occupiedCells),
@@ -649,7 +655,14 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     bridges.push({ id: record.placement.id, cells: cells.map((point) => ({ ...point })), elevationLevel: elevationLevelByCell[pointKey(support.first)] });
   });
 
-  const closeMachineryPlacements = records.filter((record) => record.resolved.closeMachineryCells.length > 0).map((record) => ({ id: record.placement.id, cells: record.resolved.closeMachineryCells }));
+  const closeMachineryPlacements = [
+    ...records
+      .filter((record) => record.resolved.closeMachineryCells.length > 0)
+      .map((record) => ({ id: record.placement.id, cells: record.resolved.closeMachineryCells })),
+    ...drawnTerrainRegions
+      .filter(({ region }) => region.kind === "close-machinery")
+      .map(({ region, cells }) => ({ id: region.id, cells })),
+  ];
   const machineryOwnerByCell = new Map<string, string>();
   closeMachineryPlacements.forEach(({ id, cells }) => {
     cells.forEach((point) => {
@@ -672,7 +685,12 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
 
   const terminalByCell = new Map<string, string>();
   const machineryCells = new Set(closeMachineryCells.map((point) => `${point.x}:${point.y}`));
-  const stairCells = new Set(elevationAccessCells.map((point) => `${point.x}:${point.y}`));
+  const stairCells = new Set([
+    ...elevationAccessCells.map((point) => `${point.x}:${point.y}`),
+    ...elevationTransitions
+      .filter((transition) => transition.kind === "stairs")
+      .map((transition) => pointKey(transition.lower)),
+  ]);
   terrainObjects.filter((object) => object.kind === "terminal").forEach((terminal) => {
     const { x, y } = terminal.position;
     const key = `${x}:${y}`;
@@ -702,27 +720,43 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   });
 
   const liquidHydrogenOwnerByCell = new Map<string, string>();
-  records.filter((record) => record.resolved.liquidHydrogenFootprintCells.length > 0).forEach((record) => {
-    const cells = record.resolved.liquidHydrogenFootprintCells;
+  const liquidHydrogenRegions = [
+    ...records
+      .filter((record) => record.resolved.liquidHydrogenFootprintCells.length > 0)
+      .map((record) => ({
+        id: record.placement.id,
+        cells: record.resolved.liquidHydrogenFootprintCells,
+        filled: record.resolved.liquidHydrogenFilled,
+      })),
+    ...drawnTerrainRegions
+      .filter(({ region }) => region.kind === "liquid-hydrogen")
+      .map(({ region, cells }) => ({
+        id: region.id,
+        cells,
+        filled: region.kind === "liquid-hydrogen" && region.settings?.filled !== false,
+      })),
+  ];
+  liquidHydrogenRegions.forEach((region) => {
+    const { cells } = region;
     cells.forEach((point) => {
       const key = pointKey(point);
       const existing = liquidHydrogenOwnerByCell.get(key);
-      if (existing) throw new Error(`Liquid-hydrogen placements ${existing} and ${record.placement.id} overlap at ${key}.`);
-      if (machineryCells.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps close machinery at ${key}.`);
-      if (stairCells.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps stairs at ${key}.`);
-      if (bridgeOwnerByCell.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps a bridge at ${key}.`);
-      if (terminalByCell.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps a console at ${key}.`);
-      if (hatchByCell.has(key)) throw new Error(`Liquid-hydrogen placement ${record.placement.id} overlaps a hatch at ${key}.`);
-      liquidHydrogenOwnerByCell.set(key, record.placement.id);
+      if (existing) throw new Error(`Liquid-hydrogen regions ${existing} and ${region.id} overlap at ${key}.`);
+      if (machineryCells.has(key)) throw new Error(`Liquid-hydrogen region ${region.id} overlaps close machinery at ${key}.`);
+      if (stairCells.has(key)) throw new Error(`Liquid-hydrogen region ${region.id} overlaps stairs at ${key}.`);
+      if (bridgeOwnerByCell.has(key)) throw new Error(`Liquid-hydrogen region ${region.id} overlaps a bridge at ${key}.`);
+      if (terminalByCell.has(key)) throw new Error(`Liquid-hydrogen region ${region.id} overlaps a console at ${key}.`);
+      if (hatchByCell.has(key)) throw new Error(`Liquid-hydrogen region ${region.id} overlaps a hatch at ${key}.`);
+      liquidHydrogenOwnerByCell.set(key, region.id);
     });
     const raisedOwners = cells.map((point) => topRaisedOwnerByCell.get(pointKey(point)));
     const coveredOwners = new Set(raisedOwners.filter((owner): owner is string => Boolean(owner)));
     if (coveredOwners.size > 0 && (coveredOwners.size !== 1 || raisedOwners.some((owner) => owner !== raisedOwners[0]))) {
-      throw new Error(`Liquid-hydrogen placement ${record.placement.id} must fit entirely within one raised-area placement.`);
+      throw new Error(`Liquid-hydrogen region ${region.id} must fit entirely within one raised-area placement.`);
     }
     const levels = new Set(cells.map((point) => elevationLevelByCell[pointKey(point)] ?? 0));
-    if (levels.size !== 1) throw new Error(`Liquid-hydrogen placement ${record.placement.id} must occupy one elevation level.`);
-    liquidHydrogenAreas.push({ id: record.placement.id, cells: cells.map((point) => ({ ...point })), filled: record.resolved.liquidHydrogenFilled, elevationLevel: [...levels][0] });
+    if (levels.size !== 1) throw new Error(`Liquid-hydrogen region ${region.id} must occupy one elevation level.`);
+    liquidHydrogenAreas.push({ id: region.id, cells: cells.map((point) => ({ ...point })), filled: region.filled, elevationLevel: [...levels][0] });
   });
 
   const walls: CombatScenario["walls"] = [];
@@ -893,5 +927,33 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const deploymentEdges = scenario.deploymentEdges ?? ["south"];
   const edgeDeploymentCells = Array.from({ length: scenario.map.width }, (_, x) => Array.from({ length: scenario.map.height }, (_, y) => ({ x, y }))).flat().filter((point) => deploymentEdges.some((edge) => edge === "north" ? point.y < 6 : edge === "south" ? point.y >= scenario.map.height - 6 : edge === "west" ? point.x < 6 : point.x >= scenario.map.width - 6));
   const uniqueDeploymentCells = [...new Map([...edgeDeploymentCells, ...deploymentCells].map((point) => [pointKey(point), point])).values()];
-  return { terrainObjects: mergedTerrainObjects, walls, doors, objects, interiorCells, lightSources, terrainByCell, elevationLevelByCell, drawnRaisedAreaLevels, elevationTransitions, closeMachineryCells, elevationAccessCells, bridges, liquidHydrogenAreas, deploymentCells: uniqueDeploymentCells };
+  return {
+    terrainObjects: mergedTerrainObjects,
+    walls,
+    doors,
+    objects,
+    interiorCells,
+    lightSources,
+    terrainByCell,
+    elevationLevelByCell,
+    drawnRaisedAreaLevels,
+    drawnTerrainRegions: drawnTerrainRegions.map(({ region }) => ({
+      ...region,
+      segments: region.segments.map((segment) => ({
+        ...segment,
+        from: { ...segment.from },
+        to: { ...segment.to },
+        ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+      })),
+      ...(region.kind === "liquid-hydrogen" && region.settings
+        ? { settings: { ...region.settings } }
+        : {}),
+    })),
+    elevationTransitions,
+    closeMachineryCells,
+    elevationAccessCells,
+    bridges,
+    liquidHydrogenAreas,
+    deploymentCells: uniqueDeploymentCells,
+  };
 };

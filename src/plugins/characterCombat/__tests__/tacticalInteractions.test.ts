@@ -8,6 +8,22 @@ import type { CharacterCombatState } from "../types";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "../tacticalScenarioDefinitions";
 import { characterCombatArmor, characterCombatWeapons } from "../equipment";
 
+const drawnRectangle = (
+  id: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) => ({
+  id,
+  segments: [
+    { kind: "line" as const, from: { x, y }, to: { x: x + width, y } },
+    { kind: "line" as const, from: { x: x + width, y }, to: { x: x + width, y: y + height } },
+    { kind: "line" as const, from: { x: x + width, y: y + height }, to: { x, y: y + height } },
+    { kind: "line" as const, from: { x, y: y + height }, to: { x, y } },
+  ],
+});
+
 const tacticalTestInitializationType = "characterCombatTests/initializeActiveTacticalMap";
 const tacticalTestLoadoutCatalogItems = {
   scout: { weapon: "weapon-laser-rifle", armor: "armor-flak-vest" },
@@ -387,9 +403,10 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap).toMatchObject({ scenarioStatus: "setup", scenario: { title: "Draft Playtest" }, turn: 1, activeCharacterId: null });
   });
 
-  it("moves a tactical unit across the playable top of a raised-area placement", () => {
+  it("moves a tactical unit across the top of a drawn raised area", () => {
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    draft.terrainPlacements = [{ id: "raised-area-test", terrainDefinitionId: "raised-area", origin: { x: 45, y: 33 }, rotation: 0 }];
+    draft.terrainPlacements = [];
+    draft.drawnRaisedAreas = [drawnRectangle("raised-area-test", 45, 33, 7, 7)];
     let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
     state = reducer(state, startTacticalScenario());
 
@@ -404,9 +421,11 @@ describe("tactical terrain interactions", () => {
   it("moves a tactical unit onto a bridge deck at its supported elevation", () => {
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     draft.terrainPlacements = [
-      { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 47, y: 32 }, rotation: 0 },
-      { id: "south-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 47, y: 38 }, rotation: 180 },
       { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 48, y: 34 }, rotation: 0 },
+    ];
+    draft.drawnRaisedAreas = [
+      drawnRectangle("north-platform", 47, 32, 3, 3),
+      drawnRectangle("south-platform", 47, 38, 3, 3),
     ];
     let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: ["crew-1", "crew-2"], definition: draft }));
     state = reducer(state, startTacticalScenario());

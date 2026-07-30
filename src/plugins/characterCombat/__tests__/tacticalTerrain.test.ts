@@ -3,6 +3,22 @@ import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
 import { combatantFacingForTacticalRotation, createControlRoom, interactiveHumanModelFacingForTacticalRotation, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
 
+const drawnRectangle = (
+  id: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) => ({
+  id,
+  segments: [
+    { kind: "line" as const, from: { x, y }, to: { x: x + width, y } },
+    { kind: "line" as const, from: { x: x + width, y }, to: { x: x + width, y: y + height } },
+    { kind: "line" as const, from: { x: x + width, y: y + height }, to: { x, y: y + height } },
+    { kind: "line" as const, from: { x, y: y + height }, to: { x, y } },
+  ],
+});
+
 describe("tactical Control Room", () => {
   it("maps editor rotations to combatant facing directions", () => {
     expect(([0, 90, 180, 270] as const).map(combatantFacingForTacticalRotation)).toEqual(["north", "east", "south", "west"]);
@@ -64,54 +80,9 @@ describe("tactical Control Room", () => {
     });
   });
 
-  it("resolves the raised-area palette piece as a playable 7 by 7 top with one external stair cell", () => {
-    const definition = {
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{ id: "raised-area-1", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 as const }],
-    };
-    const terrain = resolveTacticalScenarioTerrain(definition);
-    const scenario = buildDefaultTacticalScenario("exterior-dark", definition);
-
-    expect(tacticalTerrainPalette.find((item) => item.id === "raised-area")).toMatchObject({ label: "Raised Area 7x7", size: { width: 7, height: 7 } });
-    expect(Object.values(terrain.terrainByCell).filter((value) => value === "elevated")).toHaveLength(49);
-    expect(terrain.elevationAccessCells).toEqual([{ x: 13, y: 9 }]);
-    expect(scenario.terrainByCell?.["10:10"]).toBe("elevated");
-    expect(scenario.elevationAccessCells).toEqual([{ x: 13, y: 9 }]);
-
-    const stairMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 13, y: 9 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationAccessCells: scenario.elevationAccessCells });
-    const blockedEdgeMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 12, y: 9 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationAccessCells: scenario.elevationAccessCells });
-    expect(stairMoves.has("13:10")).toBe(true);
-    expect(blockedEdgeMoves.has("12:10")).toBe(false);
-  });
-
-  it.each([
-    { id: "raised-area-5x5", label: "Raised Area 5x5", size: 5, elevatedCells: 25, stair: { x: 12, y: 9 } },
-    { id: "raised-area-3x3", label: "Raised Area 3x3", size: 3, elevatedCells: 9, stair: { x: 11, y: 9 } },
-  ])("resolves $label with a playable top and external stair", ({ id, label, size, elevatedCells, stair }) => {
-    const definition = {
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{ id: `${id}-1`, terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 0 as const }],
-    };
-    const terrain = resolveTacticalScenarioTerrain(definition);
-
-    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width: size, height: size } });
-    expect(Object.values(terrain.terrainByCell).filter((value) => value === "elevated")).toHaveLength(elevatedCells);
-    expect(terrain.elevationAccessCells).toEqual([stair]);
-  });
-
-  it.each([
-    { id: "raised-area-3x5", label: "Raised Area 3x5", width: 3, height: 5, elevatedCells: 15 },
-    { id: "raised-area-3x7", label: "Raised Area 3x7", width: 3, height: 7, elevatedCells: 21 },
-  ])("resolves and rotates $label", ({ id, label, width, height, elevatedCells }) => {
-    const definition = {
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{ id: `${id}-1`, terrainDefinitionId: id, origin: { x: 10, y: 10 }, rotation: 90 as const }],
-    };
-    const terrain = resolveTacticalScenarioTerrain(definition);
-
-    expect(tacticalTerrainPalette.find((item) => item.id === id)).toMatchObject({ label, size: { width, height } });
-    expect(Object.values(terrain.terrainByCell).filter((value) => value === "elevated")).toHaveLength(elevatedCells);
-    expect(terrain.elevationAccessCells).toEqual([{ x: 10 + height, y: 11 }]);
+  it("does not expose fixed raised-area pieces in the terrain palette", () => {
+    expect(tacticalTerrainPalette.filter((item) =>
+      item.id.startsWith("raised-area"))).toEqual([]);
   });
 
   it("resolves a drawn raised area without requiring stairs", () => {
@@ -182,42 +153,6 @@ describe("tactical Control Room", () => {
     expect(terrain.elevationLevelByCell["6:6"]).toBe(3);
     expect(scenario.drawnRaisedAreaLevels).toEqual(terrain.drawnRaisedAreaLevels);
     expect(terrainHeightAt(scenario, { x: 6, y: 6 })).toBeCloseTo(1.95);
-  });
-
-  it("allows drawn and template raised areas to support one another", () => {
-    const drawnArea = {
-      id: "drawn-platform",
-      segments: [
-        { kind: "line" as const, from: { x: 12, y: 12 }, to: { x: 15, y: 12 } },
-        { kind: "line" as const, from: { x: 15, y: 12 }, to: { x: 15, y: 15 } },
-        { kind: "line" as const, from: { x: 15, y: 15 }, to: { x: 12, y: 15 } },
-        { kind: "line" as const, from: { x: 12, y: 15 }, to: { x: 12, y: 12 } },
-      ],
-    };
-    const drawnOnTemplate = resolveTacticalScenarioTerrain({
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{ id: "template-base", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 }],
-      drawnRaisedAreas: [drawnArea],
-    });
-    const templateOnDrawn = resolveTacticalScenarioTerrain({
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{ id: "template-top", terrainDefinitionId: "raised-area-3x3", origin: { x: 12, y: 12 }, rotation: 0 }],
-      drawnRaisedAreas: [{
-        ...drawnArea,
-        id: "drawn-base",
-        segments: [
-          { kind: "line" as const, from: { x: 8, y: 8 }, to: { x: 20, y: 8 } },
-          { kind: "line" as const, from: { x: 20, y: 8 }, to: { x: 20, y: 20 } },
-          { kind: "line" as const, from: { x: 20, y: 20 }, to: { x: 8, y: 20 } },
-          { kind: "line" as const, from: { x: 8, y: 20 }, to: { x: 8, y: 8 } },
-        ],
-      }],
-    });
-
-    expect(drawnOnTemplate.drawnRaisedAreaLevels["drawn-platform"]).toBe(2);
-    expect(drawnOnTemplate.elevationLevelByCell["12:12"]).toBe(2);
-    expect(templateOnDrawn.drawnRaisedAreaLevels["drawn-base"]).toBe(1);
-    expect(templateOnDrawn.elevationLevelByCell["12:12"]).toBe(2);
   });
 
   it("resolves stairs, ladders, and ramps between adjacent raised levels", () => {
@@ -517,16 +452,76 @@ describe("tactical Control Room", () => {
     expect(route?.some((point) => filledLiquidHydrogenCellKeys(filledScenario).has(pointKey(point)))).toBe(false);
   });
 
+  it("resolves a curved drawn close-machinery region into gameplay cells", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [],
+      drawnTerrainRegions: [{
+        id: "curved-machinery",
+        kind: "close-machinery" as const,
+        segments: [
+          { kind: "quadratic" as const, from: { x: 2, y: 2 }, control: { x: 4, y: 0 }, to: { x: 6, y: 2 } },
+          { kind: "line" as const, from: { x: 6, y: 2 }, to: { x: 6, y: 6 } },
+          { kind: "line" as const, from: { x: 6, y: 6 }, to: { x: 2, y: 6 } },
+          { kind: "line" as const, from: { x: 2, y: 6 }, to: { x: 2, y: 2 } },
+        ],
+      }],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
+
+    expect(terrain.closeMachineryCells).toContainEqual({ x: 3, y: 1 });
+    expect(scenario.closeMachineryCells).toEqual(terrain.closeMachineryCells);
+    expect(scenario.drawnTerrainRegions).toEqual(definition.drawnTerrainRegions);
+    expect(scenario.drawnTerrainRegions).not.toBe(definition.drawnTerrainRegions);
+    expect(scenario.terrainByCell?.["3:1"]).toBeUndefined();
+  });
+
+  it("resolves filled and empty drawn liquid-hydrogen regions at their supporting elevation", () => {
+    const definition = {
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [],
+      drawnRaisedAreas: [drawnRectangle("platform", 10, 10, 6, 6)],
+      drawnTerrainRegions: [
+        { ...drawnRectangle("filled-hydrogen", 11, 11, 2, 2), kind: "liquid-hydrogen" as const },
+        { ...drawnRectangle("empty-hydrogen", 13, 13, 2, 2), kind: "liquid-hydrogen" as const, settings: { filled: false } },
+      ],
+    };
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
+
+    expect(terrain.liquidHydrogenAreas).toEqual([
+      { id: "filled-hydrogen", cells: expect.any(Array), filled: true, elevationLevel: 1 },
+      { id: "empty-hydrogen", cells: expect.any(Array), filled: false, elevationLevel: 1 },
+    ]);
+    expect(filledLiquidHydrogenCellKeys(scenario)).toEqual(new Set(["11:11", "12:11", "11:12", "12:12"]));
+  });
+
+  it("applies terrain overlap and raised-support validation to drawn regions", () => {
+    const machinery = { ...drawnRectangle("machinery", 10, 10, 3, 3), kind: "close-machinery" as const };
+    const hydrogen = { ...drawnRectangle("hydrogen", 11, 11, 2, 2), kind: "liquid-hydrogen" as const };
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [],
+      drawnTerrainRegions: [machinery, hydrogen],
+    })).toThrow("overlaps close machinery");
+
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [],
+      drawnRaisedAreas: [drawnRectangle("platform", 10, 10, 2, 2)],
+      drawnTerrainRegions: [{ ...hydrogen, segments: drawnRectangle("ignored", 11, 11, 2, 2).segments }],
+    })).toThrow("must fit entirely within one raised-area placement");
+  });
+
   it("places liquid hydrogen on one raised area without losing its elevation and rejects overhang", () => {
     const supported = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "hydrogen", terrainDefinitionId: "liquid-hydrogen-2x2", origin: { x: 10, y: 10 }, rotation: 0 as const },
-      ],
+      terrainPlacements: [{ id: "hydrogen", terrainDefinitionId: "liquid-hydrogen-2x2", origin: { x: 10, y: 10 }, rotation: 0 as const }],
+      drawnRaisedAreas: [drawnRectangle("platform", 10, 10, 3, 3)],
     };
     expect(resolveTacticalScenarioTerrain(supported).liquidHydrogenAreas[0]).toMatchObject({ elevationLevel: 1, filled: true });
-    const overhanging = { ...supported, terrainPlacements: [supported.terrainPlacements[0], { ...supported.terrainPlacements[1], origin: { x: 12, y: 12 } }] };
+    const overhanging = { ...supported, terrainPlacements: [{ ...supported.terrainPlacements[0], origin: { x: 12, y: 12 } }] };
     expect(() => resolveTacticalScenarioTerrain(overhanging)).toThrow("must fit entirely within one raised-area placement");
   });
 
@@ -551,10 +546,8 @@ describe("tactical Control Room", () => {
   it("places close machinery on one raised area without replacing its elevation", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "machinery", terrainDefinitionId: "close-machinery-3x3", origin: { x: 11, y: 11 }, rotation: 90 as const },
-        { id: "platform", terrainDefinitionId: "raised-area-5x5", origin: { x: 10, y: 10 }, rotation: 0 as const },
-      ],
+      terrainPlacements: [{ id: "machinery", terrainDefinitionId: "close-machinery-3x3", origin: { x: 11, y: 11 }, rotation: 90 as const }],
+      drawnRaisedAreas: [drawnRectangle("platform", 10, 10, 5, 5)],
     };
     const terrain = resolveTacticalScenarioTerrain(definition);
     const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
@@ -568,24 +561,24 @@ describe("tactical Control Room", () => {
   it("rejects close machinery that overhangs a raised area", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "machinery", terrainDefinitionId: "close-machinery-4x4", origin: { x: 10, y: 10 }, rotation: 0 as const },
-      ],
+      terrainPlacements: [{ id: "machinery", terrainDefinitionId: "close-machinery-4x4", origin: { x: 10, y: 10 }, rotation: 0 as const }],
+      drawnRaisedAreas: [drawnRectangle("platform", 10, 10, 3, 3)],
     };
 
     expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("must fit entirely within one raised-area placement");
   });
 
-  it("stacks smaller raised areas and places machinery and a console on the highest surface", () => {
+  it("places machinery and a console on stacked drawn raised areas", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
       terrainPlacements: [
-        { id: "top", terrainDefinitionId: "raised-area-3x3", origin: { x: 12, y: 12 }, rotation: 0 as const },
-        { id: "base", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 as const },
         { id: "machinery", terrainDefinitionId: "close-machinery-1x1", origin: { x: 12, y: 12 }, rotation: 0 as const },
-        { id: "middle", terrainDefinitionId: "raised-area-5x5", origin: { x: 11, y: 11 }, rotation: 0 as const },
         { id: "console", terrainDefinitionId: "console-1x1", origin: { x: 13, y: 13 }, rotation: 0 as const },
+      ],
+      drawnRaisedAreas: [
+        drawnRectangle("top", 12, 12, 3, 3),
+        drawnRectangle("base", 10, 10, 7, 7),
+        drawnRectangle("middle", 11, 11, 5, 5),
       ],
     };
     const terrain = resolveTacticalScenarioTerrain(definition);
@@ -598,23 +591,6 @@ describe("tactical Control Room", () => {
     expect(terrain.closeMachineryCells).toContainEqual({ x: 12, y: 12 });
     expect(terrain.terrainObjects.find((object) => object.id === "console:terminal")).toMatchObject({ position: { x: 13, y: 13 } });
     expect(terrainHeightAt(scenario, { x: 13, y: 13 })).toBeCloseTo(1.95);
-
-    const stairMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 13, y: 11 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationLevelByCell: scenario.elevationLevelByCell, elevationAccessCells: scenario.elevationAccessCells });
-    const blockedEdgeMoves = reachableOpenMapMovement({ width: scenario.width, height: scenario.height, origin: { x: 12, y: 11 }, facing: "south", allowance: 2, trotting: false, terrainByCell: scenario.terrainByCell, elevationLevelByCell: scenario.elevationLevelByCell, elevationAccessCells: scenario.elevationAccessCells });
-    expect(stairMoves.has("13:12")).toBe(true);
-    expect(blockedEdgeMoves.has("12:12")).toBe(false);
-  });
-
-  it("rejects a stacked raised area when its staircase overhangs the supporting surface", () => {
-    const definition = {
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "base", terrainDefinitionId: "raised-area", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "overhanging", terrainDefinitionId: "raised-area-5x5", origin: { x: 10, y: 10 }, rotation: 0 as const },
-      ],
-    };
-
-    expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("overlap at");
   });
 
   it.each([
@@ -628,10 +604,10 @@ describe("tactical Control Room", () => {
   it("connects equal-height raised areas while preserving movement below the bridge", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "south-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 16 }, rotation: 180 as const },
-        { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 12 }, rotation: 0 as const },
+      terrainPlacements: [{ id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 12 }, rotation: 0 as const }],
+      drawnRaisedAreas: [
+        drawnRectangle("north-platform", 10, 10, 3, 3),
+        drawnRectangle("south-platform", 10, 16, 3, 3),
       ],
     };
     const scenario = buildDefaultTacticalScenario("exterior-lit", definition);
@@ -655,10 +631,10 @@ describe("tactical Control Room", () => {
   it("places a bridge whose full stated length spans the open gap", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "south-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 18 }, rotation: 180 as const },
-        { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 13 }, rotation: 0 as const },
+      terrainPlacements: [{ id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 13 }, rotation: 0 as const }],
+      drawnRaisedAreas: [
+        drawnRectangle("north-platform", 10, 10, 3, 3),
+        drawnRectangle("south-platform", 10, 18, 3, 3),
       ],
     };
 
@@ -670,10 +646,8 @@ describe("tactical Control Room", () => {
   it("rejects a bridge without two raised supports at the same height", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "north-platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 12 }, rotation: 0 as const },
-      ],
+      terrainPlacements: [{ id: "bridge", terrainDefinitionId: "bridge-1x5", origin: { x: 11, y: 12 }, rotation: 0 as const }],
+      drawnRaisedAreas: [drawnRectangle("north-platform", 10, 10, 3, 3)],
     };
     expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("must connect two raised areas at the same height");
   });
@@ -734,10 +708,8 @@ describe("tactical Control Room", () => {
   it("places a console on a raised area while preserving the raised cell", () => {
     const definition = {
       ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [
-        { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-        { id: "standalone-console", terrainDefinitionId: "console-1x1", origin: { x: 11, y: 11 }, rotation: 0 as const },
-      ],
+      terrainPlacements: [{ id: "standalone-console", terrainDefinitionId: "console-1x1", origin: { x: 11, y: 11 }, rotation: 0 as const }],
+      drawnRaisedAreas: [drawnRectangle("platform", 10, 10, 3, 3)],
     };
     const terrain = resolveTacticalScenarioTerrain(definition);
 
@@ -746,11 +718,17 @@ describe("tactical Control Room", () => {
   });
 
   it("rejects a console on stairs, close machinery, or another console", () => {
-    const placements = [
-      { id: "platform", terrainDefinitionId: "raised-area-3x3", origin: { x: 10, y: 10 }, rotation: 0 as const },
-      { id: "stairs-console", terrainDefinitionId: "console-1x1", origin: { x: 11, y: 9 }, rotation: 0 as const },
-    ];
-    expect(() => resolveTacticalScenarioTerrain({ ...defaultTacticalScenarioDefinition, terrainPlacements: placements })).toThrow("overlaps stairs");
+    expect(() => resolveTacticalScenarioTerrain({
+      ...defaultTacticalScenarioDefinition,
+      terrainPlacements: [{ id: "stairs-console", terrainDefinitionId: "console-1x1", origin: { x: 11, y: 9 }, rotation: 0 as const }],
+      drawnRaisedAreas: [drawnRectangle("platform", 10, 10, 3, 3)],
+      elevationTransitions: [{
+        id: "stairs",
+        kind: "stairs",
+        lower: { x: 11, y: 9 },
+        upper: { x: 11, y: 10 },
+      }],
+    })).toThrow("overlaps stairs");
 
     expect(() => resolveTacticalScenarioTerrain({
       ...defaultTacticalScenarioDefinition,

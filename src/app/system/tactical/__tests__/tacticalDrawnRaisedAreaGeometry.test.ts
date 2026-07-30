@@ -1,5 +1,7 @@
 import type { TacticalDrawnRaisedArea } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import {
+  tacticalAreaInteriorDetailScale,
+  tacticalAreaOutlinePoints,
   tacticalDrawnRaisedAreaCellKeys,
   tacticalDrawnRaisedAreaGridLinePositions,
   tacticalDrawnRaisedAreaLevelsByCell,
@@ -33,6 +35,21 @@ describe("drawn raised-area play geometry", () => {
     expect(points.length).toBeGreaterThan(curvedArea.segments.length);
     expect(points.some((point) => !Number.isInteger(point.x) || !Number.isInteger(point.y))).toBe(true);
     expect(Math.max(...points.map((point) => point.x))).toBeGreaterThan(1);
+  });
+
+  it("samples a closed smooth boundary for shaped terrain-region rims", () => {
+    const points = tacticalAreaOutlinePoints(curvedArea);
+
+    expect(points.length).toBeGreaterThan(curvedArea.segments.length);
+    expect(points[0]).toEqual(points.at(-1));
+    expect(points.some((point) => !Number.isInteger(point.x) || !Number.isInteger(point.y))).toBe(true);
+    expect(Math.max(...points.map((point) => point.x))).toBeGreaterThan(6);
+  });
+
+  it("shrinks machinery details as their centers approach an outline", () => {
+    expect(tacticalAreaInteriorDetailScale(curvedArea, { x: 4, y: 4 })).toBe(1);
+    expect(tacticalAreaInteriorDetailScale(curvedArea, { x: 2.1, y: 4 })).toBeLessThan(0.16);
+    expect(tacticalAreaInteriorDetailScale(curvedArea, { x: 2.5, y: 4 })).toBeGreaterThan(0.8);
   });
 
   it("identifies gameplay cells replaced by the smooth visual mesh", () => {

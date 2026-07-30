@@ -50,6 +50,7 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
       })),
     })),
     drawnRaisedAreaLevels: { ...terrain.drawnRaisedAreaLevels },
+    drawnTerrainRegions: terrain.drawnTerrainRegions,
     elevationTransitions: terrain.elevationTransitions.map((transition) => ({
       ...transition,
       lower: { ...transition.lower },

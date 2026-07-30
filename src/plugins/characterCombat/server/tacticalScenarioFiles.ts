@@ -62,6 +62,20 @@ const tracingTemplateSchema = z.object({
   visible: z.boolean(),
   lockAspectRatio: z.boolean(),
 }).strict();
+const areaOutlineSegmentSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("line"),
+    from: gridPointSchema,
+    to: gridPointSchema,
+  }).strict(),
+  z.object({
+    kind: z.literal("quadratic"),
+    from: gridPointSchema,
+    control: finitePointSchema,
+    to: gridPointSchema,
+  }).strict(),
+]);
+const areaOutlineSchema = z.array(areaOutlineSegmentSchema).min(3);
 const scenarioSchema = z.object({
   schemaVersion: z.literal(1),
   id: z.string().regex(scenarioIdPattern),
@@ -93,20 +107,23 @@ const scenarioSchema = z.object({
   })).optional(),
   drawnRaisedAreas: z.array(z.object({
     id: z.string().min(1),
-    segments: z.array(z.discriminatedUnion("kind", [
-      z.object({
-        kind: z.literal("line"),
-        from: gridPointSchema,
-        to: gridPointSchema,
-      }).strict(),
-      z.object({
-        kind: z.literal("quadratic"),
-        from: gridPointSchema,
-        control: finitePointSchema,
-        to: gridPointSchema,
-      }).strict(),
-    ])).min(3),
+    segments: areaOutlineSchema,
   }).strict()).optional(),
+  drawnTerrainRegions: z.array(z.discriminatedUnion("kind", [
+    z.object({
+      id: z.string().min(1),
+      kind: z.literal("close-machinery"),
+      segments: areaOutlineSchema,
+    }).strict(),
+    z.object({
+      id: z.string().min(1),
+      kind: z.literal("liquid-hydrogen"),
+      segments: areaOutlineSchema,
+      settings: z.object({
+        filled: z.boolean().optional(),
+      }).strict().optional(),
+    }).strict(),
+  ])).optional(),
   elevationTransitions: z.array(z.object({
     id: z.string().min(1),
     kind: z.enum(["stairs", "ladder", "ramp"]),
@@ -407,4 +424,52 @@ export const saveTacticalScenarioBundle = async (scenarioId: string, scenarioVal
     await Promise.all([unlink(scenarioTemporary).catch(() => undefined), unlink(consoleTemporary).catch(() => undefined)]);
   }
   return { scenario, consoleVictory };
+};
+
+export const deleteTacticalScenarioBundle = async (
+  scenarioId: string,
+  scenarioDirectory = tacticalScenarioDirectory,
+  consoleDirectory = tacticalConsoleVictoryDirectory,
+) => {
+  const id = safeScenarioId(scenarioId);
+  if (id === DEFAULT_TACTICAL_SCENARIO_ID) {
+    throw new TacticalScenarioFileError(
+      "The default scenario is immutable and cannot be deleted.",
+      409,
+      "default-scenario",
+    );
+  }
+  const scenario = await loadTacticalScenarioFile(id, scenarioDirectory);
+  const scenarioDestination = scenarioPath(scenarioDirectory, id);
+  const consoleId = scenario.consoleVictoryDefinitionId ?? id;
+  const consoleDestination = consoleId === id
+    ? scenarioPath(consoleDirectory, consoleId)
+    : null;
+  const token = `${process.pid}.${randomUUID()}`;
+  const scenarioTombstone = path.join(scenarioDirectory, `.${id}.${token}.deleted`);
+  const consoleTombstone = consoleDestination
+    ? path.join(consoleDirectory, `.${consoleId}.${token}.deleted`)
+    : null;
+
+  await rename(scenarioDestination, scenarioTombstone);
+  let consoleMoved = false;
+  try {
+    if (consoleDestination && consoleTombstone) {
+      try {
+        await rename(consoleDestination, consoleTombstone);
+        consoleMoved = true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
+  } catch (error) {
+    await rename(scenarioTombstone, scenarioDestination);
+    throw error;
+  }
+
+  await Promise.all([
+    unlink(scenarioTombstone),
+    ...(consoleMoved && consoleTombstone ? [unlink(consoleTombstone)] : []),
+  ]);
+  return { id: scenario.id, title: scenario.title };
 };

@@ -1,11 +1,12 @@
 import { Html } from "@react-three/drei";
 import { memo, Suspense, useMemo } from "react";
-import { Path, Shape } from "three";
+import { DoubleSide, Path, Shape } from "three";
 import {
   AnimatedCombatantFallback,
   AnimatedCombatantModel,
 } from "@/plugins/characterCombat/AnimatedCombatantModel";
 import { pointKey } from "@/plugins/characterCombat/geometry";
+import { tacticalDrawnRaisedAreaCells } from "@/plugins/characterCombat/tacticalDrawnRaisedAreas";
 import type { CombatScenario, TacticalMapState } from "@/plugins/characterCombat/types";
 import {
   activeTacticalTerrainObjects,
@@ -30,9 +31,11 @@ import {
   tacticalVisualHeightAt,
 } from "./tacticalSceneGeometry";
 import {
+  tacticalAreaOutlinePoints,
   tacticalDrawnRaisedAreaGridLinePositions,
   tacticalDrawnRaisedAreaLevelsByCell,
   tacticalDrawnRaisedAreaShape,
+  tacticalOutlineInteriorDetailScale,
 } from "./tacticalDrawnRaisedAreaGeometry";
 import { tacticalDeploymentAreaScenarioEqual } from "./tacticalStaticLayerMemo";
 
@@ -362,45 +365,158 @@ const TacticalElevationTerrain = ({
   );
 };
 
+const TacticalTerrainRegionRim = ({
+  points,
+  mapWidth,
+  mapHeight,
+  height,
+  color,
+}: {
+  points: { x: number; y: number }[];
+  mapWidth: number;
+  mapHeight: number;
+  height: number;
+  color: string;
+}) => (
+  <>
+    {points.slice(0, -1).map((from, index) => {
+      const to = points[index + 1]!;
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 1e-6) return null;
+      return <mesh
+        key={index}
+        position={[
+          (from.x + to.x) / 2 - mapWidth / 2,
+          height,
+          (from.y + to.y) / 2 - mapHeight / 2,
+        ]}
+        rotation={[0, -Math.atan2(dy, dx), 0]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[length + 0.005, 0.03, 0.0275]} />
+        <meshStandardMaterial color={color} roughness={0.52} metalness={0.5} />
+      </mesh>;
+    })}
+  </>
+);
+
+const TacticalCloseMachineryCellDetails = ({
+  point,
+  scenario,
+  scale = 1,
+  surfaceLift = 0,
+  onSelectCell,
+}: {
+  point: { x: number; y: number };
+  scenario: CombatScenario;
+  scale?: number;
+  surfaceLift?: number;
+  onSelectCell: (point: { x: number; y: number }) => void;
+}) => {
+  if (scale < 0.16) return null;
+  return <group
+    position={[
+      point.x + 0.5 - scenario.width / 2,
+      tacticalVisualHeightAt(scenario, point) + surfaceLift,
+      point.y + 0.5 - scenario.height / 2,
+    ]}
+    scale={[scale, 1, scale]}
+    onClick={(event) => {
+      event.stopPropagation();
+      onSelectCell(point);
+    }}
+  >
+    {[[-0.31, -0.31], [0.31, -0.31], [-0.31, 0.31], [0.31, 0.31]].map(([offsetX, offsetZ], index) => (
+      <mesh key={`column:${index}`} position={[offsetX, 0.28, offsetZ]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, 0.56, 0.2]} />
+        <meshStandardMaterial color="#475569" roughness={0.62} metalness={0.42} />
+      </mesh>
+    ))}
+    <mesh position={[0, 0.2, -0.28]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+      <cylinderGeometry args={[0.075, 0.075, 0.76, 10]} />
+      <meshStandardMaterial color="#b45309" roughness={0.48} metalness={0.5} />
+    </mesh>
+    <mesh position={[0.28, 0.38, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+      <cylinderGeometry args={[0.065, 0.065, 0.76, 10]} />
+      <meshStandardMaterial color="#0e7490" roughness={0.48} metalness={0.5} />
+    </mesh>
+  </group>;
+};
+
 const TacticalCloseMachineryTerrain = ({
   scenario,
   onSelectCell,
 }: {
   scenario: CombatScenario;
   onSelectCell: (point: { x: number; y: number }) => void;
-}) => (
-  <>
-    {(scenario.closeMachineryCells ?? []).map(({ x, y }) => (
-      <group
-        key={`close-machinery:${x}:${y}`}
-        position={[
-          x + 0.5 - scenario.width / 2,
-          tacticalVisualHeightAt(scenario, { x, y }),
-          y + 0.5 - scenario.height / 2,
-        ]}
+}) => {
+  const drawnRegions = useMemo(() => (scenario.drawnTerrainRegions ?? [])
+    .filter((region) => region.kind === "close-machinery")
+    .map((region) => {
+      const cells = tacticalDrawnRaisedAreaCells(region, scenario.width, scenario.height);
+      const outline = tacticalAreaOutlinePoints(region);
+      return {
+        region,
+        cells,
+        detailCells: cells.map((point) => ({
+          point,
+          scale: tacticalOutlineInteriorDetailScale(
+            outline,
+            { x: point.x + 0.5, y: point.y + 0.5 },
+          ),
+        })),
+        outline,
+        shape: tacticalDrawnRaisedAreaShape(region, scenario.width, scenario.height),
+        elevation: cells.length > 0 ? tacticalVisualHeightAt(scenario, cells[0]) : 0,
+      };
+    }), [scenario]);
+  const drawnCellKeys = useMemo(
+    () => new Set(drawnRegions.flatMap(({ cells }) => cells.map(pointKey))),
+    [drawnRegions],
+  );
+  return <>
+    {(scenario.closeMachineryCells ?? []).filter((cell) => !drawnCellKeys.has(pointKey(cell))).map((point) => (
+      <TacticalCloseMachineryCellDetails key={`close-machinery:${pointKey(point)}`} point={point} scenario={scenario} onSelectCell={onSelectCell} />
+    ))}
+    {drawnRegions.map(({ region, detailCells, outline, shape, elevation }) => <group key={region.id}>
+      <mesh
+        data-testid={`drawn-close-machinery-mesh-${region.id}`}
+        position={[0, elevation + 0.18, 0]}
+        rotation={[Math.PI / 2, 0, 0]}
+        castShadow
+        receiveShadow
         onClick={(event) => {
           event.stopPropagation();
-          onSelectCell({ x, y });
+          onSelectCell({
+            x: Math.floor(event.point.x + scenario.width / 2),
+            y: Math.floor(event.point.z + scenario.height / 2),
+          });
         }}
       >
-        {[[-0.31, -0.31], [0.31, -0.31], [-0.31, 0.31], [0.31, 0.31]].map(([offsetX, offsetZ], index) => (
-          <mesh key={`column:${index}`} position={[offsetX, 0.28, offsetZ]} castShadow receiveShadow>
-            <boxGeometry args={[0.2, 0.56, 0.2]} />
-            <meshStandardMaterial color="#475569" roughness={0.62} metalness={0.42} />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.2, -0.28]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.075, 0.075, 0.76, 10]} />
-          <meshStandardMaterial color="#b45309" roughness={0.48} metalness={0.5} />
-        </mesh>
-        <mesh position={[0.28, 0.38, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.065, 0.065, 0.76, 10]} />
-          <meshStandardMaterial color="#0e7490" roughness={0.48} metalness={0.5} />
-        </mesh>
-      </group>
-    ))}
-  </>
-);
+        <extrudeGeometry args={[shape, { depth: 0.18, bevelEnabled: false, curveSegments: 32 }]} />
+        <meshStandardMaterial color="#475569" roughness={0.58} metalness={0.48} />
+      </mesh>
+      {detailCells.map(({ point, scale }) => <TacticalCloseMachineryCellDetails
+        key={`${region.id}:${pointKey(point)}`}
+        point={point}
+        scenario={scenario}
+        scale={scale}
+        surfaceLift={0.18}
+        onSelectCell={onSelectCell}
+      />)}
+      <TacticalTerrainRegionRim
+        points={outline}
+        mapWidth={scenario.width}
+        mapHeight={scenario.height}
+        height={elevation + 0.19}
+        color="#b45309"
+      />
+    </group>)}
+  </>;
+};
 
 const TacticalBridges = ({
   scenario,
@@ -477,9 +593,57 @@ const DeploymentArea = memo(function DeploymentArea({
   previous.onSelectCell === next.onSelectCell
   && tacticalDeploymentAreaScenarioEqual(previous.scenario, next.scenario));
 
-const LiquidHydrogenAreas = ({ scenario }: { scenario: CombatScenario }) => (
-  <>
+const LiquidHydrogenAreas = ({ scenario }: { scenario: CombatScenario }) => {
+  const drawnRegionsById = useMemo(
+    () => new Map((scenario.drawnTerrainRegions ?? [])
+      .filter((region) => region.kind === "liquid-hydrogen")
+      .map((region) => [region.id, region])),
+    [scenario.drawnTerrainRegions],
+  );
+  return <>
     {(scenario.liquidHydrogenAreas ?? []).map((area) => {
+      const drawnRegion = drawnRegionsById.get(area.id);
+      if (drawnRegion) {
+        const shape = tacticalDrawnRaisedAreaShape(drawnRegion, scenario.width, scenario.height);
+        const elevation = area.elevationLevel * TACTICAL_WALL_HEIGHT;
+        return <group key={area.id} data-testid={`drawn-liquid-hydrogen-${area.id}`}>
+          <mesh
+            data-testid={`drawn-liquid-hydrogen-basin-${area.id}`}
+            position={[0, elevation + 0.12, 0]}
+            rotation={[Math.PI / 2, 0, 0]}
+            receiveShadow
+            castShadow
+          >
+            <extrudeGeometry args={[shape, { depth: 0.12, bevelEnabled: false, curveSegments: 32 }]} />
+            <meshStandardMaterial color="#475569" roughness={0.64} metalness={0.48} />
+          </mesh>
+          <mesh
+            data-testid={`drawn-liquid-hydrogen-surface-${area.id}`}
+            position={[0, elevation + (area.filled ? 0.145 : 0.132), 0]}
+            rotation={[Math.PI / 2, 0, 0]}
+            receiveShadow
+          >
+            <shapeGeometry args={[shape, 32]} />
+            <meshStandardMaterial
+              color={area.filled ? "#67e8f9" : "#0f172a"}
+              emissive={area.filled ? "#0891b2" : "#000000"}
+              emissiveIntensity={area.filled ? 0.32 : 0}
+              roughness={area.filled ? 0.16 : 0.82}
+              metalness={area.filled ? 0.18 : 0.3}
+              transparent={area.filled}
+              opacity={area.filled ? 0.82 : 1}
+              side={DoubleSide}
+            />
+          </mesh>
+          <TacticalTerrainRegionRim
+            points={tacticalAreaOutlinePoints(drawnRegion)}
+            mapWidth={scenario.width}
+            mapHeight={scenario.height}
+            height={elevation + 0.165}
+            color="#64748b"
+          />
+        </group>;
+      }
       const minX = Math.min(...area.cells.map((cell) => cell.x));
       const maxX = Math.max(...area.cells.map((cell) => cell.x));
       const minY = Math.min(...area.cells.map((cell) => cell.y));
@@ -506,8 +670,8 @@ const LiquidHydrogenAreas = ({ scenario }: { scenario: CombatScenario }) => (
         </group>
       );
     })}
-  </>
-);
+  </>;
+};
 
 const TacticalTerrainPiece = ({
   object,

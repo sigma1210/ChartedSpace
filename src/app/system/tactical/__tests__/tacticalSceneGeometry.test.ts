@@ -90,35 +90,6 @@ describe("tactical scene geometry", () => {
     );
   });
 
-  it.each([
-    "raised-area",
-    "raised-area-5x5",
-    "raised-area-3x7",
-    "raised-area-3x5",
-    "raised-area-3x3",
-  ])("uses the same platform geometry for %s stairs", (terrainDefinitionId) => {
-    const scenario = buildDefaultTacticalScenario("exterior-dark", {
-      ...defaultTacticalScenarioDefinition,
-      terrainPlacements: [{
-        id: `test:${terrainDefinitionId}`,
-        terrainDefinitionId,
-        origin: { x: 10, y: 10 },
-        rotation: 0,
-      }],
-    });
-    const stair = scenario.elevationAccessCells?.[0];
-
-    expect(stair).toBeDefined();
-    expect(
-      tacticalStairPlatformPlacement(scenario, stair!),
-    ).toEqual({
-      baseHeight: 0,
-      height: TACTICAL_STAIR_PLATFORM_HEIGHT,
-      centerHeight: TACTICAL_STAIR_PLATFORM_HEIGHT / 2,
-      topHeight: TACTICAL_STAIR_PLATFORM_HEIGHT,
-    });
-  });
-
   it("creates distinct visual geometry for explicit stairs, ladders, and ramps", () => {
     const scenario = buildDefaultTacticalScenario("exterior-dark");
     const base = {
