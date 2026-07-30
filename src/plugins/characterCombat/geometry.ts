@@ -673,10 +673,26 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
         { transition, index },
       ] as const)),
   );
-  const rampStepAllowed = (from: GridPoint, to: GridPoint) => {
+  const rampStepAllowed = (
+    from: GridPoint,
+    fromLevel: number,
+    to: GridPoint,
+    toLevel: number,
+  ) => {
     const fromMembership = rampMembershipByCell.get(pointKey(from));
     const toMembership = rampMembershipByCell.get(pointKey(to));
     if (!fromMembership && !toMembership) return true;
+    const flatTransition = [
+      fromMembership?.transition,
+      toMembership?.transition,
+    ].find((transition) =>
+      transition
+      && transition.lowerLevel === transition.upperLevel) ?? null;
+    if (flatTransition
+      && fromLevel !== flatTransition.lowerLevel
+      && toLevel !== flatTransition.lowerLevel) {
+      return true;
+    }
     if (fromMembership && toMembership
       && fromMembership.transition.id === toMembership.transition.id) {
       return Math.abs(fromMembership.index - toMembership.index) === 1;
@@ -691,11 +707,25 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
       : true;
     return fromIsEndpoint && toIsEndpoint;
   };
+  const flatRampLevelByCell = new Map(
+    (elevationTransitions ?? [])
+      .filter((transition) =>
+        transition.kind === "ramp"
+        && transition.lowerLevel === transition.upperLevel)
+      .flatMap((transition) => transition.path.map((point) => [
+        pointKey(point),
+        transition.lowerLevel,
+      ] as const)),
+  );
   const availableLevels = (point: GridPoint) => {
     const solidLevel = elevationLevel(point);
-    if (solidLevel > 0) return [solidLevel];
     const bridgeLevel = bridgeLevelByCell.get(pointKey(point));
-    return bridgeLevel ? [0, bridgeLevel] : [0];
+    const flatRampLevel = flatRampLevelByCell.get(pointKey(point));
+    return [...new Set([
+      solidLevel,
+      ...(bridgeLevel === undefined ? [] : [bridgeLevel]),
+      ...(flatRampLevel === undefined ? [] : [flatRampLevel]),
+    ])];
   };
   const initialLevel = originElevationLevel ?? elevationLevel(origin);
   const transitionForStep = (
@@ -726,11 +756,12 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
     if (current.cost !== bestCost.get(stateKey(current.point, current.level, current.facing)) || current.cost >= allowance) continue;
     for (const destination of movementNeighbors(current.point)) {
       if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
-      if (!rampStepAllowed(current.point, destination)) continue;
       if (blockedCells.has(pointKey(destination))) continue;
       const destinationLevels = availableLevels(destination).filter((destinationLevel) => destinationLevel === current.level
         || Boolean(transitionForStep(current.point, current.level, destination, destinationLevel))
-        || (elevationAccess.has(pointKey(current.point)) || elevationAccess.has(pointKey(destination))));
+        || (elevationAccess.has(pointKey(current.point)) || elevationAccess.has(pointKey(destination))))
+        .filter((destinationLevel) =>
+          rampStepAllowed(current.point, current.level, destination, destinationLevel));
       if (destinationLevels.length === 0) continue;
       const diagonal = current.point.x !== destination.x && current.point.y !== destination.y;
       const crossingEdges = diagonal ? [

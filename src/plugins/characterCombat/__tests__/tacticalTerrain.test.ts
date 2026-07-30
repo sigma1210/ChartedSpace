@@ -385,6 +385,68 @@ describe("tactical Control Room", () => {
     })).toThrow("must connect adjacent levels");
   });
 
+  it("resolves a flat ramp as a traversable bridge between matching platforms", () => {
+    const base = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    base.terrainPlacements = [];
+    base.drawnRaisedAreas = [
+      {
+        id: "west-platform",
+        segments: [
+          { kind: "line", from: { x: 5, y: 10 }, to: { x: 8, y: 10 } },
+          { kind: "line", from: { x: 8, y: 10 }, to: { x: 8, y: 13 } },
+          { kind: "line", from: { x: 8, y: 13 }, to: { x: 5, y: 13 } },
+          { kind: "line", from: { x: 5, y: 13 }, to: { x: 5, y: 10 } },
+        ],
+      },
+      {
+        id: "east-platform",
+        segments: [
+          { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
+          { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
+          { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
+          { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
+        ],
+      },
+    ];
+    const scenario = resolveTacticalScenarioTerrain({
+      ...base,
+      elevationTransitions: [{
+        id: "flat-bridge",
+        kind: "ramp",
+        lower: { x: 7, y: 11 },
+        upper: { x: 10, y: 11 },
+        path: [
+          { x: 7, y: 11 },
+          { x: 8, y: 11 },
+          { x: 9, y: 11 },
+          { x: 10, y: 11 },
+        ],
+      }],
+    });
+
+    expect(scenario.elevationTransitions[0]).toMatchObject({
+      kind: "ramp",
+      lowerLevel: 1,
+      upperLevel: 1,
+    });
+    const moves = reachableOpenMapMovement({
+      width: scenario.width,
+      height: scenario.height,
+      origin: { x: 7, y: 11 },
+      originElevationLevel: 1,
+      facing: "east",
+      allowance: 6,
+      trotting: false,
+      elevationLevelByCell: scenario.elevationLevelByCell,
+      elevationTransitions: scenario.elevationTransitions,
+    });
+    expect(moves.get("10:11")).toMatchObject({
+      finalElevationLevel: 1,
+      pathElevationLevels: [1, 1, 1],
+    });
+    expect(moves.get("8:11")).toMatchObject({ finalElevationLevel: 1 });
+  });
+
   it("rejects partially overlapping drawn raised areas", () => {
     const rectangle = (id: string, from: { x: number; y: number }, to: { x: number; y: number }) => ({
       id,

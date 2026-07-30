@@ -99,6 +99,7 @@ export const tacticalPlayerMovementReducers = {
       bridges: map.scenario.bridges,
       closeMachineryCells: map.scenario.closeMachineryCells,
       elevationAccessCells: map.scenario.elevationAccessCells,
+      elevationTransitions: map.scenario.elevationTransitions,
     });
     const move = moves.get(pointKey(target.position));
     if (!move || (map.suppressedCombatantIds.includes(moverId) && move.path.length > 2)) return;

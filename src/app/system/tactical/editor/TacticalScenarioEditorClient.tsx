@@ -9,7 +9,7 @@ import TacticalMapPageClient from "../TacticalMapPageClient";
 import { TacticalNavigationHud } from "../TacticalNavigationHud";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalDeploymentEdge, type TacticalDrawnRaisedArea, type TacticalDrawnWall, type TacticalElevationTransitionDefinition, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalRaisedAreaOutlineSegment, type TacticalScenarioDefinitionFile, type TacticalScenarioTracingTemplate, type TacticalTerrainPlacement } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import { tacticalDrawnRaisedAreaCells } from "@/plugins/characterCombat/tacticalDrawnRaisedAreas";
-import { tacticalElevationEdgeCandidates, tacticalNearestElevationEdgeCandidate, tacticalRampPlacementCandidate, tacticalRampPlacementPreview, type TacticalElevationEdgeCandidate, type TacticalElevationEdgePointer } from "@/plugins/characterCombat/tacticalElevationTransitions";
+import { tacticalElevationEdgeCandidates, tacticalLadderMountForEdge, tacticalNearestElevationEdgeCandidate, tacticalRampPlacementCandidate, tacticalRampPlacementPreview, type TacticalElevationEdgeCandidate, type TacticalElevationEdgePointer } from "@/plugins/characterCombat/tacticalElevationTransitions";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition, TRAVELLER_TASK_DIFFICULTIES, validateTacticalConsoleVictoryDefinition, type TacticalConsoleOperation, type TacticalConsoleVictoryDefinitionFile, type TravellerTaskDifficulty } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { randomTacticalEnemyAvatarPath, tacticalEnemyPalette } from "@/plugins/characterCombat/tacticalEnemyDefinitions";
 import type { TacticalTerminalKind } from "@/plugins/characterCombat/tacticalTerrain";
@@ -170,6 +170,10 @@ export const tacticalElevationTransitionPlacementCandidate = (
   }
   const lower = gridPoint(edgeCandidate.lower);
   const upper = gridPoint(edgeCandidate.upper);
+  const ladderMount = kind === "ladder"
+    ? tacticalLadderMountForEdge(definition, edgeCandidate)
+    : { mount: null, error: null };
+  if (ladderMount.error) throw new Error(ladderMount.error);
   let suffix = 1;
   let id = `${kind}-${suffix}`;
   while ((definition.elevationTransitions ?? []).some((transition) => transition.id === id)) {
@@ -181,6 +185,7 @@ export const tacticalElevationTransitionPlacementCandidate = (
     kind,
     lower,
     upper,
+    ...(ladderMount.mount ? { ladderMount: ladderMount.mount } : {}),
   };
   const candidate = {
     ...definition,
@@ -391,6 +396,10 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   const elevationEdgePreview = rampDraft?.edge ?? nearestElevationEdgePreview;
   const rampPreview = rampDraft && placementHover
     ? tacticalRampPlacementPreview(definition, rampDraft.edge, placementHover)
+    : null;
+  const ladderMountPreview = elevationTransitionKindForTool(placementKind) === "ladder"
+    && elevationEdgePreview
+    ? tacticalLadderMountForEdge(definition, elevationEdgePreview)
     : null;
 
   const localMapPoint = (event: ReactPointerEvent<SVGElement>) => {
@@ -799,15 +808,20 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         />}
         {elevationTransitionKind === "ladder" && <g data-testid="ladder-placement-preview">
           <line
-            x1={elevationEdgePreview.edge.from.x}
-            y1={elevationEdgePreview.edge.from.y}
-            x2={elevationEdgePreview.edge.to.x}
-            y2={elevationEdgePreview.edge.to.y}
-            stroke="#f59e0b"
+            x1={(ladderMountPreview?.mount?.position.x ?? elevationEdgePreview.edge.from.x)
+              - (ladderMountPreview?.mount?.tangent.x ?? 0) * 0.27}
+            y1={(ladderMountPreview?.mount?.position.y ?? elevationEdgePreview.edge.from.y)
+              - (ladderMountPreview?.mount?.tangent.y ?? 0) * 0.27}
+            x2={(ladderMountPreview?.mount?.position.x ?? elevationEdgePreview.edge.to.x)
+              + (ladderMountPreview?.mount?.tangent.x ?? 0) * 0.27}
+            y2={(ladderMountPreview?.mount?.position.y ?? elevationEdgePreview.edge.to.y)
+              + (ladderMountPreview?.mount?.tangent.y ?? 0) * 0.27}
+            stroke={ladderMountPreview?.error ? "#ef4444" : "#f59e0b"}
             strokeWidth="0.28"
           />
-          <circle cx={elevationEdgePreview.center.x} cy={elevationEdgePreview.center.y} r="0.2" fill="#0f172a" stroke="#fef08a" strokeWidth="0.08" />
-          <text x={elevationEdgePreview.center.x} y={elevationEdgePreview.center.y + 0.11} textAnchor="middle" fill="#fef3c7" fontSize="0.28" fontWeight="bold">L</text>
+          <circle cx={ladderMountPreview?.mount?.position.x ?? elevationEdgePreview.center.x} cy={ladderMountPreview?.mount?.position.y ?? elevationEdgePreview.center.y} r="0.2" fill="#0f172a" stroke={ladderMountPreview?.error ? "#fecaca" : "#fef08a"} strokeWidth="0.08" />
+          <text x={ladderMountPreview?.mount?.position.x ?? elevationEdgePreview.center.x} y={(ladderMountPreview?.mount?.position.y ?? elevationEdgePreview.center.y) + 0.11} textAnchor="middle" fill={ladderMountPreview?.error ? "#fecaca" : "#fef3c7"} fontSize="0.28" fontWeight="bold">L</text>
+          {ladderMountPreview?.error && <text x={elevationEdgePreview.center.x} y={elevationEdgePreview.center.y - 0.35} textAnchor="middle" fill="#fecaca" fontSize="0.28" fontWeight="bold">{ladderMountPreview.error}</text>}
         </g>}
         {elevationTransitionKind === "ramp" && rampPreview && <g data-testid="ramp-placement-preview">
           {rampPreview.path.slice(0, -1).map((cell) => <rect
@@ -2715,7 +2729,7 @@ const TacticalScenarioEditorClient = () => {
                 className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === tool.id ? "border-fuchsia-200 bg-fuchsia-300/20 text-fuchsia-50" : "border-(--hud-border) text-fuchsia-200 hover:border-fuchsia-200"}`}
               >{tool.label}</button>)}
               {rampDraft && <div className="col-span-2 border border-purple-600 bg-purple-950/40 p-2 normal-case leading-relaxed text-purple-100">
-                Move straight outward over at least two lower-level squares, then click to place the ramp.
+                Move straight outward over at least two squares. Finish on lower terrain for a ramp or on a matching raised platform for a flat bridge.
                 <button type="button" onClick={() => { setRampDraft(null); setPlacementError(null); }} className="mt-2 h-7 w-full border border-red-400 font-bold uppercase text-red-100">Cancel ramp</button>
               </div>}
               <button type="button" aria-pressed={placementKind === DOOR_TOOL_ID} onClick={() => { setPlacementKind(DOOR_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setPortalHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === DOOR_TOOL_ID ? "border-emerald-200 bg-emerald-300/20 text-emerald-50" : "border-(--hud-border) text-emerald-200 hover:border-emerald-200"}`}>Door</button>

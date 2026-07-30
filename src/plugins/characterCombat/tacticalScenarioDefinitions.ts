@@ -19,7 +19,7 @@ import liquidHydrogen4x4DefinitionJson from "./terrainDefinitions/liquid-hydroge
 import interactiveHumanDefinitionJson from "./terrainDefinitions/interactive-human.json";
 import deploymentZone9x9DefinitionJson from "./terrainDefinitions/deployment-zone-9x9.json";
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
-import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalElevationTransition, TacticalElevationTransitionKind, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
+import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalElevationTransition, TacticalElevationTransitionKind, TacticalLadderMount, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
 import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
 import { tacticalQuadraticBezierWallSegments } from "./tacticalBezierWalls";
 import { tacticalDrawnRaisedAreaCells } from "./tacticalDrawnRaisedAreas";
@@ -116,6 +116,7 @@ export interface TacticalElevationTransitionDefinition {
   lower: GridPoint;
   upper: GridPoint;
   path?: GridPoint[];
+  ladderMount?: TacticalLadderMount;
 }
 
 export interface TacticalScenarioTracingTemplate {
@@ -529,7 +530,10 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     }
     const lowerLevel = elevationLevelByCell[pointKey(transition.lower)] ?? 0;
     const upperLevel = elevationLevelByCell[pointKey(transition.upper)] ?? 0;
-    if (upperLevel !== lowerLevel + 1) {
+    const flatBridge = transition.kind === "ramp"
+      && lowerLevel === upperLevel
+      && lowerLevel > 0;
+    if (!flatBridge && upperLevel !== lowerLevel + 1) {
       throw new Error(`Elevation transition ${transition.id} must connect adjacent levels from lower to upper.`);
     }
     const dx = transition.upper.x - transition.lower.x;
@@ -540,6 +544,26 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     }
     if ((transition.kind === "stairs" || transition.kind === "ladder") && distance !== 1) {
       throw new Error(`${transition.kind === "stairs" ? "Stairs" : "Ladder"} ${transition.id} must connect neighboring squares.`);
+    }
+    if (transition.ladderMount) {
+      if (transition.kind !== "ladder") {
+        throw new Error(`Only ladders may define curve-aware mount geometry.`);
+      }
+      const tangentLength = Math.hypot(
+        transition.ladderMount.tangent.x,
+        transition.ladderMount.tangent.y,
+      );
+      const normalLength = Math.hypot(
+        transition.ladderMount.outwardNormal.x,
+        transition.ladderMount.outwardNormal.y,
+      );
+      const alignment = transition.ladderMount.tangent.x * transition.ladderMount.outwardNormal.x
+        + transition.ladderMount.tangent.y * transition.ladderMount.outwardNormal.y;
+      if (Math.abs(tangentLength - 1) > 0.02
+        || Math.abs(normalLength - 1) > 0.02
+        || Math.abs(alignment) > 0.02) {
+        throw new Error(`Ladder ${transition.id} mount tangent and normal must be perpendicular unit vectors.`);
+      }
     }
     const direction = { x: Math.sign(dx), y: Math.sign(dy) };
     const expectedPath = Array.from({ length: distance + 1 }, (_, index) => ({
@@ -556,8 +580,16 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       path.forEach((point, index) => {
         if (!validCell(point)) throw new Error(`Ramp ${transition.id} extends outside the map.`);
         const level = elevationLevelByCell[pointKey(point)] ?? 0;
-        const expectedLevel = index === path.length - 1 ? upperLevel : lowerLevel;
-        if (level !== expectedLevel) {
+        const endpoint = index === 0 || index === path.length - 1;
+        const validLevel = flatBridge
+          ? endpoint
+            ? level === lowerLevel
+            : level < lowerLevel
+          : level === (index === path.length - 1 ? upperLevel : lowerLevel);
+        if (!validLevel) {
+          if (flatBridge) {
+            throw new Error(`Bridge ${transition.id} must connect matching raised endpoints across lower terrain.`);
+          }
           throw new Error(`Ramp ${transition.id} must remain on its lower level until its upper endpoint.`);
         }
       });
@@ -574,6 +606,13 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       lowerLevel,
       upperLevel,
       ...(transition.kind === "ladder" ? { movementCost: 3 } : {}),
+      ...(transition.ladderMount ? {
+        ladderMount: {
+          position: { ...transition.ladderMount.position },
+          tangent: { ...transition.ladderMount.tangent },
+          outwardNormal: { ...transition.ladderMount.outwardNormal },
+        },
+      } : {}),
     };
   });
 

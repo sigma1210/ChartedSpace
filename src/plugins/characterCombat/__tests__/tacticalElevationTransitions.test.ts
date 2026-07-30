@@ -6,6 +6,7 @@ import {
   tacticalElevationEdgeCandidateAt,
   tacticalElevationEdgeCandidates,
   tacticalElevationEdgeKey,
+  tacticalLadderMountForEdge,
   tacticalNearestElevationEdgeCandidate,
   tacticalRampPlacementCandidate,
   tacticalRampPlacementPreview,
@@ -21,6 +22,47 @@ const raisedAreaDefinition = () => {
       { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
       { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
       { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
+    ],
+  }];
+  definition.elevationTransitions = [];
+  return definition;
+};
+
+const bridgeDefinition = () => {
+  const definition = raisedAreaDefinition();
+  definition.drawnRaisedAreas!.push({
+    id: "matching-platform",
+    segments: [
+      { kind: "line", from: { x: 5, y: 10 }, to: { x: 8, y: 10 } },
+      { kind: "line", from: { x: 8, y: 10 }, to: { x: 8, y: 13 } },
+      { kind: "line", from: { x: 8, y: 13 }, to: { x: 5, y: 13 } },
+      { kind: "line", from: { x: 5, y: 13 }, to: { x: 5, y: 10 } },
+    ],
+  });
+  return definition;
+};
+
+const curvedJoinDefinition = (sharp: boolean) => {
+  const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+  definition.terrainPlacements = [];
+  definition.drawnRaisedAreas = [{
+    id: sharp ? "sharp-curve-platform" : "smooth-curve-platform",
+    segments: [
+      { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
+      { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
+      { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
+      {
+        kind: "quadratic",
+        from: { x: 10, y: 13 },
+        control: sharp ? { x: 9.5, y: 12 } : { x: 9.5, y: 12.5 },
+        to: { x: 10, y: 12 },
+      },
+      {
+        kind: "quadratic",
+        from: { x: 10, y: 12 },
+        control: sharp ? { x: 10, y: 11 } : { x: 10.5, y: 11.5 },
+        to: { x: 10, y: 10 },
+      },
     ],
   }];
   definition.elevationTransitions = [];
@@ -175,6 +217,77 @@ describe("tactical elevation transition edge candidates", () => {
     })).toMatchObject({
       valid: false,
       error: "A ramp must extend straight outward from the selected platform edge.",
+    });
+  });
+
+  it("creates a flat ramp between matching raised platforms", () => {
+    const definition = bridgeDefinition();
+    const edge = tacticalElevationEdgeCandidateAt(
+      tacticalElevationEdgeCandidates(definition),
+      { x: 9, y: 11, edgeRotation: 90 },
+    )!;
+    const preview = tacticalRampPlacementPreview(definition, edge, {
+      x: 7,
+      y: 11,
+      mapX: 7.5,
+      mapY: 11.5,
+    });
+
+    expect(preview).toMatchObject({
+      valid: true,
+      lower: { x: 7, y: 11 },
+      upper: { x: 10, y: 11 },
+      path: [
+        { x: 7, y: 11 },
+        { x: 8, y: 11 },
+        { x: 9, y: 11 },
+        { x: 10, y: 11 },
+      ],
+    });
+    expect(tacticalRampPlacementCandidate(definition, edge, {
+      x: 7,
+      y: 11,
+      mapX: 7.5,
+      mapY: 11.5,
+    }).definition.elevationTransitions).toContainEqual(expect.objectContaining({
+      kind: "ramp",
+      lower: { x: 7, y: 11 },
+      upper: { x: 10, y: 11 },
+    }));
+  });
+
+  it("blends compatible tangents where two curved raised-area segments meet", () => {
+    const definition = curvedJoinDefinition(false);
+    const edge = tacticalElevationEdgeCandidateAt(
+      tacticalElevationEdgeCandidates(definition),
+      { x: 9, y: 11, edgeRotation: 90 },
+    )!;
+
+    const result = tacticalLadderMountForEdge(definition, edge);
+
+    expect(result.error).toBeNull();
+    expect(result.mount).not.toBeNull();
+    expect(Math.hypot(
+      result.mount!.tangent.x,
+      result.mount!.tangent.y,
+    )).toBeCloseTo(1);
+    expect(
+      result.mount!.outwardNormal.x * result.mount!.tangent.x
+        + result.mount!.outwardNormal.y * result.mount!.tangent.y,
+    ).toBeCloseTo(0);
+    expect(result.mount!.outwardNormal.x).toBeLessThan(0);
+  });
+
+  it("rejects ladder mounting where curved segments meet with incompatible tangents", () => {
+    const definition = curvedJoinDefinition(true);
+    const edge = tacticalElevationEdgeCandidateAt(
+      tacticalElevationEdgeCandidates(definition),
+      { x: 9, y: 11, edgeRotation: 90 },
+    )!;
+
+    expect(tacticalLadderMountForEdge(definition, edge)).toEqual({
+      mount: null,
+      error: "Ladders cannot be mounted where raised-area curves meet with different tangents.",
     });
   });
 });

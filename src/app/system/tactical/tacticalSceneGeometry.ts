@@ -25,12 +25,18 @@ export const tacticalRaisedSurfaceHeightAt = (
 export const tacticalRampSurfaceHeightAt = (
   scenario: Pick<CombatScenario, "elevationTransitions">,
   point: { x: number; y: number },
+  elevationLevel?: number,
 ) => {
   const key = pointKey(point);
   const ramp = scenario.elevationTransitions?.find((transition) =>
     transition.kind === "ramp"
     && transition.path.some((cell) => pointKey(cell) === key));
   if (!ramp) return null;
+  if (ramp.lowerLevel === ramp.upperLevel
+    && elevationLevel !== undefined
+    && elevationLevel !== ramp.lowerLevel) {
+    return null;
+  }
   const index = ramp.path.findIndex((cell) => pointKey(cell) === key);
   const progress = ramp.path.length > 1 ? index / (ramp.path.length - 1) : 0;
   return (ramp.lowerLevel + (ramp.upperLevel - ramp.lowerLevel) * progress)
@@ -59,7 +65,7 @@ export const tacticalMovementVisualHeightAt = (
   point: { x: number; y: number },
   elevationLevel?: number,
 ) =>
-  tacticalRampSurfaceHeightAt(scenario, point)
+  tacticalRampSurfaceHeightAt(scenario, point, elevationLevel)
     ?? (scenario.elevationAccessCells?.some(
     (cell) => pointKey(cell) === pointKey(point),
   ) || scenario.elevationTransitions?.some(
@@ -138,11 +144,13 @@ export type TacticalElevationTransitionVisualPlacement =
 
 export const tacticalRaisedGridLinePositions = (
   scenario: Pick<CombatScenario, "width" | "height" | "elevationLevelByCell">,
+  excludedLevelsByCell?: ReadonlyMap<string, ReadonlySet<number>>,
 ) => {
   const positions: number[] = [];
   const edges = new Set<string>();
   Object.entries(scenario.elevationLevelByCell ?? {}).forEach(([key, level]) => {
     if (level <= 0) return;
+    if (excludedLevelsByCell?.get(key)?.has(level)) return;
     const [x, y] = key.split(":").map(Number);
     const height = level * TACTICAL_WALL_HEIGHT + TACTICAL_TERRAIN_GRID_LIFT;
     const corners = [
@@ -215,6 +223,25 @@ export const tacticalElevationTransitionVisualPlacement = (
     };
   }
   if (transition.kind === "ladder") {
+    if (transition.ladderMount) {
+      return {
+        kind: "ladder",
+        position: [
+          transition.ladderMount.position.x - scenario.width / 2,
+          (lower.y + upper.y) / 2,
+          transition.ladderMount.position.y - scenario.height / 2,
+        ],
+        height: upper.y - lower.y,
+        rotation: [
+          0,
+          Math.atan2(
+            -transition.ladderMount.tangent.y,
+            transition.ladderMount.tangent.x,
+          ),
+          0,
+        ],
+      };
+    }
     const dx = upper.x - lower.x;
     const dz = upper.z - lower.z;
     const horizontalDistance = Math.hypot(dx, dz);
@@ -256,7 +283,11 @@ export const tacticalCombatantHeight = (
   )?.elevationLevel;
   return bridgeLevel !== undefined && combatant.elevationLevel === bridgeLevel
     ? bridgeLevel * TACTICAL_WALL_HEIGHT
-    : tacticalVisualHeightAt(scenario, combatant.position);
+    : tacticalMovementVisualHeightAt(
+      scenario,
+      combatant.position,
+      combatant.elevationLevel,
+    );
 };
 
 export const tacticalWorldMovement = (

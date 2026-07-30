@@ -14,6 +14,11 @@ export interface TacticalLightSource { id: string; position: GridPoint; range: n
 export interface TacticalBridge { id: string; cells: GridPoint[]; elevationLevel: number }
 export interface TacticalLiquidHydrogenArea { id: string; cells: GridPoint[]; filled: boolean; elevationLevel: number }
 export type TacticalElevationTransitionKind = "stairs" | "ladder" | "ramp";
+export interface TacticalLadderMount {
+  position: { x: number; y: number };
+  tangent: { x: number; y: number };
+  outwardNormal: { x: number; y: number };
+}
 export interface TacticalElevationTransition {
   id: string;
   kind: TacticalElevationTransitionKind;
@@ -23,6 +28,7 @@ export interface TacticalElevationTransition {
   lowerLevel: number;
   upperLevel: number;
   movementCost?: number;
+  ladderMount?: TacticalLadderMount;
 }
 export type TerrainType = "difficult" | "elevated" | "hazardous" | "close-machinery";
 export type WeaponRangeBand = "effective" | "long" | "extreme";

@@ -55,6 +55,13 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
       lower: { ...transition.lower },
       upper: { ...transition.upper },
       path: transition.path.map((point) => ({ ...point })),
+      ...(transition.ladderMount ? {
+        ladderMount: {
+          position: { ...transition.ladderMount.position },
+          tangent: { ...transition.ladderMount.tangent },
+          outwardNormal: { ...transition.ladderMount.outwardNormal },
+        },
+      } : {}),
     })),
     bridges: terrain.bridges,
     liquidHydrogenAreas: terrain.liquidHydrogenAreas,

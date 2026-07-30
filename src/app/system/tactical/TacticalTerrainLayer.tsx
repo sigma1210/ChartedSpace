@@ -30,6 +30,7 @@ import {
   tacticalVisualHeightAt,
 } from "./tacticalSceneGeometry";
 import {
+  tacticalDrawnRaisedAreaGridLinePositions,
   tacticalDrawnRaisedAreaLevelsByCell,
   tacticalDrawnRaisedAreaShape,
 } from "./tacticalDrawnRaisedAreaGeometry";
@@ -145,8 +146,31 @@ const TacticalElevationTerrain = ({
     [scenario.elevationTransitions],
   );
   const raisedGridPositions = useMemo(
-    () => tacticalRaisedGridLinePositions(scenario),
-    [scenario.elevationLevelByCell, scenario.height, scenario.width],
+    () => tacticalRaisedGridLinePositions(
+      scenario,
+      drawnRaisedAreaLevelsByCell,
+    ),
+    [
+      drawnRaisedAreaLevelsByCell,
+      scenario.elevationLevelByCell,
+      scenario.height,
+      scenario.width,
+    ],
+  );
+  const drawnRaisedGridPositions = useMemo(
+    () => new Float32Array(drawnRaisedAreas.flatMap((area) =>
+      Array.from(tacticalDrawnRaisedAreaGridLinePositions(
+        area,
+        scenario.drawnRaisedAreaLevels?.[area.id] ?? 1,
+        scenario.width,
+        scenario.height,
+      )))),
+    [
+      drawnRaisedAreas,
+      scenario.drawnRaisedAreaLevels,
+      scenario.height,
+      scenario.width,
+    ],
   );
 
   return (
@@ -209,6 +233,12 @@ const TacticalElevationTerrain = ({
       {raisedGridPositions.length > 0 && <lineSegments data-testid="raised-surface-grid">
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[raisedGridPositions, 3]} />
+        </bufferGeometry>
+        <lineBasicMaterial color="#4f8797" transparent opacity={0.72} />
+      </lineSegments>}
+      {drawnRaisedGridPositions.length > 0 && <lineSegments data-testid="drawn-raised-surface-grid">
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[drawnRaisedGridPositions, 3]} />
         </bufferGeometry>
         <lineBasicMaterial color="#4f8797" transparent opacity={0.72} />
       </lineSegments>}

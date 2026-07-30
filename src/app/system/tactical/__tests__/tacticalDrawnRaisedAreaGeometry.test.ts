@@ -1,10 +1,15 @@
 import type { TacticalDrawnRaisedArea } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import {
   tacticalDrawnRaisedAreaCellKeys,
+  tacticalDrawnRaisedAreaGridLinePositions,
   tacticalDrawnRaisedAreaLevelsByCell,
   tacticalDrawnRaisedAreaShape,
   tacticalDrawnRaisedAreaTopLevelByCell,
 } from "../tacticalDrawnRaisedAreaGeometry";
+import {
+  TACTICAL_TERRAIN_GRID_LIFT,
+  TACTICAL_WALL_HEIGHT,
+} from "../tacticalSceneGeometry";
 
 describe("drawn raised-area play geometry", () => {
   const curvedArea: TacticalDrawnRaisedArea = {
@@ -36,6 +41,54 @@ describe("drawn raised-area play geometry", () => {
     expect(keys.has("3:3")).toBe(true);
     expect(keys.has("6:3")).toBe(true);
     expect(keys.has("1:3")).toBe(false);
+  });
+
+  it("clips world-aligned grid lines to the curved visual outline", () => {
+    const positions = Array.from(tacticalDrawnRaisedAreaGridLinePositions(
+      curvedArea,
+      1,
+      10,
+      10,
+    ));
+    const points = Array.from(
+      { length: positions.length / 3 },
+      (_, index) => ({
+        x: positions[index * 3]!,
+        height: positions[index * 3 + 1]!,
+        y: positions[index * 3 + 2]!,
+      }),
+    );
+
+    expect(points.length).toBeGreaterThan(0);
+    points.forEach((point) => {
+      expect(point.height).toBeCloseTo(
+        TACTICAL_WALL_HEIGHT + TACTICAL_TERRAIN_GRID_LIFT,
+      );
+      expect(point.x).toBeGreaterThanOrEqual(-3);
+      expect(point.x).toBeLessThanOrEqual(2);
+      expect(point.y).toBeGreaterThanOrEqual(-3);
+      expect(point.y).toBeLessThanOrEqual(1);
+    });
+
+    const horizontalAtMapY3 = points.filter((point) =>
+      Math.abs(point.y - (3 - 10 / 2)) < 1e-6);
+    expect(Math.max(...horizontalAtMapY3.map((point) => point.x)))
+      .toBeCloseTo(6.75 - 10 / 2, 2);
+  });
+
+  it("places clipped grids at each drawn platform's own level", () => {
+    [1, 2].forEach((level) => {
+      const positions = tacticalDrawnRaisedAreaGridLinePositions(
+        curvedArea,
+        level,
+        10,
+        10,
+      );
+      Array.from(positions).filter((_, index) => index % 3 === 1)
+        .forEach((height) => expect(height).toBeCloseTo(
+          level * TACTICAL_WALL_HEIGHT + TACTICAL_TERRAIN_GRID_LIFT,
+        ));
+    });
   });
 
   it("tracks the highest smooth platform level covering each cell", () => {

@@ -113,6 +113,11 @@ const scenarioSchema = z.object({
     lower: gridPointSchema,
     upper: gridPointSchema,
     path: z.array(gridPointSchema).min(2).optional(),
+    ladderMount: z.object({
+      position: finitePointSchema,
+      tangent: finitePointSchema,
+      outwardNormal: finitePointSchema,
+    }).strict().optional(),
   }).strict()).optional(),
   deploymentEdges: z.array(z.enum(["north", "east", "south", "west"])).default(["south"]),
   enemyPlacements: z.array(enemyPlacementSchema).default([]),

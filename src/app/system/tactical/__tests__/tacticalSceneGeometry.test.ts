@@ -158,12 +158,77 @@ describe("tactical scene geometry", () => {
         (base.lower.y + 2 + 1 - scenario.height) / 2,
       );
     }
+    const curveMountedLadder = tacticalElevationTransitionVisualPlacement(scenario, {
+      ...base,
+      kind: "ladder",
+      movementCost: 3,
+      ladderMount: {
+        position: { x: 9.8, y: 11.4 },
+        tangent: { x: 0.6, y: 0.8 },
+        outwardNormal: { x: -0.8, y: 0.6 },
+      },
+    });
+    expect(curveMountedLadder).toMatchObject({
+      kind: "ladder",
+      position: [
+        9.8 - scenario.width / 2,
+        TACTICAL_WALL_HEIGHT / 2,
+        11.4 - scenario.height / 2,
+      ],
+    });
+    if (curveMountedLadder.kind === "ladder") {
+      expect(curveMountedLadder.rotation[1]).toBeCloseTo(Math.atan2(-0.8, 0.6));
+    }
     const ramp = tacticalElevationTransitionVisualPlacement(scenario, { ...base, kind: "ramp" });
     expect(ramp).toMatchObject({ kind: "ramp", longAxis: "x" });
     if (ramp.kind === "ramp") {
       expect(ramp.length).toBeCloseTo(Math.hypot(1, TACTICAL_WALL_HEIGHT));
       expect(ramp.rotation[2]).toBeCloseTo(Math.atan2(TACTICAL_WALL_HEIGHT, 1));
     }
+    const bridge = tacticalElevationTransitionVisualPlacement(scenario, {
+      ...base,
+      kind: "ramp",
+      lower: { x: 1, y: 1 },
+      upper: { x: 4, y: 1 },
+      path: [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+        { x: 3, y: 1 },
+        { x: 4, y: 1 },
+      ],
+      lowerLevel: 1,
+      upperLevel: 1,
+    });
+    expect(bridge).toMatchObject({
+      kind: "ramp",
+      length: 3,
+      rotation: [0, 0, 0],
+      longAxis: "x",
+    });
+    scenario.elevationTransitions = [{
+      ...base,
+      kind: "ramp",
+      lower: { x: 1, y: 1 },
+      upper: { x: 4, y: 1 },
+      path: [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+        { x: 3, y: 1 },
+        { x: 4, y: 1 },
+      ],
+      lowerLevel: 1,
+      upperLevel: 1,
+    }];
+    expect(tacticalRampSurfaceHeightAt(
+      scenario,
+      { x: 2, y: 1 },
+      1,
+    )).toBeCloseTo(TACTICAL_WALL_HEIGHT);
+    expect(tacticalRampSurfaceHeightAt(
+      scenario,
+      { x: 2, y: 1 },
+      0,
+    )).toBeNull();
   });
 
   it("interpolates model height across every ramp cell and maps ramp clicks to that cell", () => {
@@ -223,6 +288,15 @@ describe("tactical scene geometry", () => {
       .forEach((height) => expect(height).toBeCloseTo(
         TACTICAL_WALL_HEIGHT + TACTICAL_TERRAIN_GRID_LIFT,
       ));
+    const clippedRaisedGrid = tacticalRaisedGridLinePositions({
+      width: 10,
+      height: 10,
+      elevationLevelByCell: {
+        "2:2": 1,
+        "3:2": 1,
+      },
+    }, new Map([["2:2", new Set([1])]]));
+    expect(clippedRaisedGrid).toHaveLength(4 * 2 * 3);
 
     const scenario = buildDefaultTacticalScenario("exterior-dark");
     const placement = tacticalElevationTransitionVisualPlacement(scenario, {

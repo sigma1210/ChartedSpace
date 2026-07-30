@@ -5,6 +5,8 @@ import {
 } from "./tacticalScenarioDefinitions";
 import type { GridPoint } from "./types";
 import { tacticalMovementStepCrossesWall } from "./tacticalSegmentGeometry";
+import { tacticalDrawnRaisedAreaCells } from "./tacticalDrawnRaisedAreas";
+import type { TacticalLadderMount } from "./types";
 
 export type TacticalElevationEdgeRotation = 0 | 90 | 180 | 270;
 
@@ -36,6 +38,168 @@ export interface TacticalRampPlacementPreview {
 }
 
 export const TACTICAL_RAMP_MINIMUM_RUN = 2;
+const TACTICAL_LADDER_HALF_WIDTH = 0.27;
+const TACTICAL_LADDER_CURVE_CLEARANCE = TACTICAL_LADDER_HALF_WIDTH + 0.33;
+const TACTICAL_LADDER_FACE_OFFSET = 0.09;
+const TACTICAL_LADDER_JOIN_ANGLE = 25 * Math.PI / 180;
+
+const normalizeVector = (vector: { x: number; y: number }) => {
+  const length = Math.hypot(vector.x, vector.y);
+  return length > 1e-9
+    ? { x: vector.x / length, y: vector.y / length }
+    : { x: 1, y: 0 };
+};
+
+const segmentPointAndTangent = (
+  segment: NonNullable<TacticalScenarioDefinitionFile["drawnRaisedAreas"]>[number]["segments"][number],
+  t: number,
+) => {
+  if (segment.kind === "line") {
+    return {
+      point: {
+        x: segment.from.x + (segment.to.x - segment.from.x) * t,
+        y: segment.from.y + (segment.to.y - segment.from.y) * t,
+      },
+      tangent: normalizeVector({
+        x: segment.to.x - segment.from.x,
+        y: segment.to.y - segment.from.y,
+      }),
+    };
+  }
+  const oneMinusT = 1 - t;
+  return {
+    point: {
+      x: oneMinusT * oneMinusT * segment.from.x
+        + 2 * oneMinusT * t * segment.control.x
+        + t * t * segment.to.x,
+      y: oneMinusT * oneMinusT * segment.from.y
+        + 2 * oneMinusT * t * segment.control.y
+        + t * t * segment.to.y,
+    },
+    tangent: normalizeVector({
+      x: 2 * oneMinusT * (segment.control.x - segment.from.x)
+        + 2 * t * (segment.to.x - segment.control.x),
+      y: 2 * oneMinusT * (segment.control.y - segment.from.y)
+        + 2 * t * (segment.to.y - segment.control.y),
+    }),
+  };
+};
+
+export const tacticalLadderMountForEdge = (
+  definition: TacticalScenarioDefinitionFile,
+  edge: TacticalElevationEdgeCandidate,
+): { mount: TacticalLadderMount | null; error: string | null } => {
+  const owningArea = (definition.drawnRaisedAreas ?? []).find((area) => {
+    const cells = new Set(
+      tacticalDrawnRaisedAreaCells(
+        area,
+        definition.map.width,
+        definition.map.height,
+      ).map(pointKey),
+    );
+    return cells.has(pointKey(edge.upper)) && !cells.has(pointKey(edge.lower));
+  });
+  if (!owningArea) return { mount: null, error: null };
+
+  const samples = owningArea.segments.map((segment, segmentIndex) => {
+    let closest = {
+      segmentIndex,
+      t: 0,
+      ...segmentPointAndTangent(segment, 0),
+      distance: Number.POSITIVE_INFINITY,
+    };
+    for (let index = 0; index <= 64; index += 1) {
+      const t = index / 64;
+      const sample = segmentPointAndTangent(segment, t);
+      const distance = Math.hypot(
+        sample.point.x - edge.center.x,
+        sample.point.y - edge.center.y,
+      );
+      if (distance < closest.distance) closest = {
+        segmentIndex,
+        t,
+        ...sample,
+        distance,
+      };
+    }
+    return closest;
+  }).sort((first, second) => first.distance - second.distance);
+  const closest = samples[0];
+  if (!closest || closest.distance > 1.25) return { mount: null, error: null };
+
+  let tangent = closest.tangent;
+  const competing = samples.find((sample) =>
+    sample.segmentIndex !== closest.segmentIndex
+    && sample.distance <= closest.distance + 0.06
+    && Math.hypot(
+      sample.point.x - closest.point.x,
+      sample.point.y - closest.point.y,
+    ) <= 0.16);
+  if (competing) {
+    const alignment = Math.abs(
+      tangent.x * competing.tangent.x + tangent.y * competing.tangent.y,
+    );
+    if (Math.acos(Math.max(-1, Math.min(1, alignment))) > TACTICAL_LADDER_JOIN_ANGLE) {
+      return {
+        mount: null,
+        error: "Ladders cannot be mounted where raised-area curves meet with different tangents.",
+      };
+    }
+    const direction = tangent.x * competing.tangent.x + tangent.y * competing.tangent.y < 0 ? -1 : 1;
+    tangent = normalizeVector({
+      x: tangent.x + competing.tangent.x * direction,
+      y: tangent.y + competing.tangent.y * direction,
+    });
+  }
+
+  const selectedSegment = owningArea.segments[closest.segmentIndex];
+  const chordLength = Math.hypot(
+    selectedSegment.to.x - selectedSegment.from.x,
+    selectedSegment.to.y - selectedSegment.from.y,
+  );
+  if (Math.min(closest.t, 1 - closest.t) * chordLength < TACTICAL_LADDER_CURVE_CLEARANCE) {
+    const joinsAtStart = closest.t <= 0.5;
+    const previousIndex = (closest.segmentIndex - 1 + owningArea.segments.length)
+      % owningArea.segments.length;
+    const nextIndex = (closest.segmentIndex + 1) % owningArea.segments.length;
+    const incoming = joinsAtStart
+      ? segmentPointAndTangent(owningArea.segments[previousIndex], 1).tangent
+      : segmentPointAndTangent(selectedSegment, 1).tangent;
+    const outgoing = joinsAtStart
+      ? segmentPointAndTangent(selectedSegment, 0).tangent
+      : segmentPointAndTangent(owningArea.segments[nextIndex], 0).tangent;
+    const alignment = Math.abs(
+      incoming.x * outgoing.x + incoming.y * outgoing.y,
+    );
+    if (Math.acos(Math.max(-1, Math.min(1, alignment))) > TACTICAL_LADDER_JOIN_ANGLE) {
+      return {
+        mount: null,
+        error: "Ladders cannot be mounted where raised-area curves meet with different tangents.",
+      };
+    }
+  }
+
+  const lowerCenter = { x: edge.lower.x + 0.5, y: edge.lower.y + 0.5 };
+  const normalA = { x: -tangent.y, y: tangent.x };
+  const towardLower = {
+    x: lowerCenter.x - closest.point.x,
+    y: lowerCenter.y - closest.point.y,
+  };
+  const outwardNormal = normalA.x * towardLower.x + normalA.y * towardLower.y >= 0
+    ? normalA
+    : { x: -normalA.x, y: -normalA.y };
+  return {
+    mount: {
+      position: {
+        x: closest.point.x + outwardNormal.x * TACTICAL_LADDER_FACE_OFFSET,
+        y: closest.point.y + outwardNormal.y * TACTICAL_LADDER_FACE_OFFSET,
+      },
+      tangent: { ...tangent },
+      outwardNormal,
+    },
+    error: null,
+  };
+};
 
 export const tacticalElevationEdgeKey = (
   first: GridPoint,
@@ -211,9 +375,17 @@ export const tacticalRampPlacementPreview = (
       if (overlap) {
         error = `The ramp overlaps another elevation transition at ${pointKey(overlap)}.`;
       }
-      const wrongLevel = path.slice(0, -1).find((cell) =>
+      const farEndpointLevel = terrain.elevationLevelByCell[pointKey(lower)] ?? 0;
+      const wrongRampLevel = path.slice(0, -1).find((cell) =>
         (terrain.elevationLevelByCell[pointKey(cell)] ?? 0) !== edge.lowerLevel);
-      if (!error && wrongLevel) {
+      const wrongBridgeLevel = path.slice(1, -1).find((cell) =>
+        (terrain.elevationLevelByCell[pointKey(cell)] ?? 0) !== edge.lowerLevel);
+      if (!error && farEndpointLevel !== edge.lowerLevel
+        && farEndpointLevel !== edge.upperLevel) {
+        error = `The ramp must end on level ${edge.lowerLevel} or a matching level ${edge.upperLevel} platform.`;
+      } else if (!error && farEndpointLevel === edge.upperLevel && wrongBridgeLevel) {
+        error = `A bridge must cross level ${edge.lowerLevel} until it reaches the matching platform.`;
+      } else if (!error && farEndpointLevel === edge.lowerLevel && wrongRampLevel) {
         error = `The ramp must remain on level ${edge.lowerLevel} until it reaches the platform.`;
       }
     }
