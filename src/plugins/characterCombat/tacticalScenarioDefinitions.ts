@@ -17,6 +17,7 @@ import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactica
 import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalElevationTransition, TacticalElevationTransitionKind, TacticalLadderMount, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
 import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
 import { tacticalCirclePrimitiveOutline, tacticalCircleWallBoundary } from "./tacticalTerrainPrimitives";
+import { tacticalNaturalTerrainFootprintCells } from "./tacticalNaturalTerrain";
 import { tacticalQuadraticBezierWallSegments } from "./tacticalBezierWalls";
 import { tacticalDrawnRaisedAreaCells } from "./tacticalDrawnRaisedAreas";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
@@ -118,6 +119,17 @@ export type TacticalDrawnTerrainRegion = {
   kind: "liquid-hydrogen";
   segments: TacticalAreaOutlineSegment[];
   settings?: { filled?: boolean };
+} | {
+  id: string;
+  kind: "grass" | "sand" | "water";
+  segments: TacticalAreaOutlineSegment[];
+};
+
+export type TacticalNaturalTerrainPlacement = {
+  id: string;
+  kind: "tree" | "bush" | "rock";
+  position: GridPoint;
+  radius: number;
 };
 
 export type TacticalTerrainPrimitiveType =
@@ -177,6 +189,7 @@ export interface TacticalScenarioDefinitionFile {
   drawnRaisedAreas?: TacticalDrawnRaisedArea[];
   drawnTerrainRegions?: TacticalDrawnTerrainRegion[];
   drawnTerrainPrimitives?: TacticalDrawnTerrainPrimitive[];
+  naturalTerrainPlacements?: TacticalNaturalTerrainPlacement[];
   elevationTransitions?: TacticalElevationTransitionDefinition[];
   deploymentEdges?: TacticalDeploymentEdge[];
   enemyPlacements?: TacticalEnemyPlacement[];
@@ -196,6 +209,10 @@ export interface ResolvedTacticalScenarioTerrain {
   drawnRaisedAreaLevels: Record<string, number>;
   drawnRaisedAreas: TacticalDrawnRaisedArea[];
   drawnTerrainRegions: TacticalDrawnTerrainRegion[];
+  naturalTerrainPlacements: TacticalNaturalTerrainPlacement[];
+  treeTrunkCells: GridPoint[];
+  bushCells: GridPoint[];
+  rockCells: GridPoint[];
   elevationTransitions: TacticalElevationTransition[];
   closeMachineryCells: GridPoint[];
   elevationAccessCells: GridPoint[];
@@ -541,6 +558,50 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       ),
     };
   });
+  const naturalTerrainPlacements = (scenario.naturalTerrainPlacements ?? []).map((placement) => {
+    if (drawnObjectIds.has(placement.id)) {
+      throw new Error(`Duplicate drawn terrain ID: ${placement.id}.`);
+    }
+    if (!Number.isFinite(placement.radius) || placement.radius <= 0) {
+      throw new Error(`${placement.kind === "tree" ? "Tree" : placement.kind === "bush" ? "Bush" : "Rock"} ${placement.id} requires a finite positive radius.`);
+    }
+    if (!validCell(placement.position)) {
+      throw new Error(`${placement.kind === "tree" ? "Tree" : placement.kind === "bush" ? "Bush" : "Rock"} ${placement.id} has a center outside the map.`);
+    }
+    const center = { x: placement.position.x + 0.5, y: placement.position.y + 0.5 };
+    if (
+      center.x - placement.radius < 0
+      || center.y - placement.radius < 0
+      || center.x + placement.radius > scenario.map.width
+      || center.y + placement.radius > scenario.map.height
+    ) {
+      throw new Error(`${placement.kind === "tree" ? "Tree" : placement.kind === "bush" ? "Bush" : "Rock"} ${placement.id} extends outside the map.`);
+    }
+    drawnObjectIds.add(placement.id);
+    return {
+      ...placement,
+      position: { ...placement.position },
+    };
+  });
+  const treeTrunkCells = naturalTerrainPlacements
+    .filter((placement) => placement.kind === "tree")
+    .map((placement) => ({ ...placement.position }));
+  const bushCells = [...new Map(naturalTerrainPlacements
+    .filter((placement) => placement.kind === "bush")
+    .flatMap((placement) => tacticalNaturalTerrainFootprintCells(
+      placement,
+      scenario.map.width,
+      scenario.map.height,
+    ))
+    .map((point) => [pointKey(point), point])).values()];
+  const rockCells = [...new Map(naturalTerrainPlacements
+    .filter((placement) => placement.kind === "rock")
+    .flatMap((placement) => tacticalNaturalTerrainFootprintCells(
+      placement,
+      scenario.map.width,
+      scenario.map.height,
+    ))
+    .map((point) => [pointKey(point), point])).values()];
   const fireCellKeys = new Set<string>();
   scenario.fireCells.forEach((point) => {
     if (!validCell(point)) throw new Error(`Scenario fire extends outside the map at ${pointKey(point)}.`);
@@ -645,6 +706,25 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       throw new Error(`Drawn raised area ${area.id} overlaps terrain placement ${existingTerrain} at ${key}.`);
     }
   }));
+  (["grass", "sand", "water"] as const).forEach((kind) => {
+    drawnTerrainRegions
+      .filter(({ region }) => region.kind === kind)
+      .forEach(({ cells }) => cells.forEach((point) => {
+        terrainByCell[pointKey(point)] = kind;
+      }));
+  });
+  naturalTerrainPlacements.forEach((placement) => {
+    const cells = tacticalNaturalTerrainFootprintCells(
+      placement,
+      scenario.map.width,
+      scenario.map.height,
+    );
+    if (cells.some((point) => terrainByCell[pointKey(point)] === "water")) {
+      throw new Error(`${placement.kind === "tree" ? "Tree" : placement.kind === "bush" ? "Bush" : "Rock"} ${placement.id} cannot be placed in water.`);
+    }
+  });
+  bushCells.forEach((point) => { terrainByCell[pointKey(point)] = "bush"; });
+  rockCells.forEach((point) => { terrainByCell[pointKey(point)] = "rock"; });
   const transitionEdges = new Set<string>();
   const elevationTransitions = (scenario.elevationTransitions ?? []).map((transition): TacticalElevationTransition => {
     if (!transition.id.trim()) throw new Error("Elevation transitions require an ID.");
@@ -1111,6 +1191,13 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         ? { settings: { ...region.settings } }
         : {}),
     })),
+    naturalTerrainPlacements: naturalTerrainPlacements.map((placement) => ({
+      ...placement,
+      position: { ...placement.position },
+    })),
+    treeTrunkCells,
+    bushCells,
+    rockCells,
     elevationTransitions,
     closeMachineryCells,
     elevationAccessCells,

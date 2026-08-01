@@ -1,0 +1,593 @@
+{
+  "schemaVersion": 1,
+  "id": "over-the-river-and-thru-the-woods",
+  "consoleVictoryDefinitionId": "over-the-river-and-thru-the-woods",
+  "title": "Over the River",
+  "briefing": "The boarding crew has reached a hostile vessel's security control room.",
+  "objective": "Secure the Security Terminal.",
+  "map": {
+    "width": 72,
+    "height": 48
+  },
+  "terrainPlacements": [
+    {
+      "id": "interactive-human-1",
+      "terrainDefinitionId": "interactive-human",
+      "origin": {
+        "x": 35,
+        "y": 20
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Big Bad Wolf",
+          "combatProfile": {
+            "weaponId": "bodyPistol",
+            "weaponSkill": 0,
+            "armorId": "clothing",
+            "meleeWeaponName": "Unarmed",
+            "meleePenetration": 0,
+            "meleeRating": 0,
+            "moraleFactor": 7,
+            "leadershipRating": 0,
+            "skills": [
+              {
+                "name": "Skill",
+                "level": 0
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "drawnTerrainRegions": [
+    {
+      "id": "drawn-grass-1",
+      "kind": "grass",
+      "segments": [
+        {
+          "kind": "line",
+          "from": {
+            "x": 1,
+            "y": 0
+          },
+          "to": {
+            "x": 0,
+            "y": 48
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 0,
+            "y": 48
+          },
+          "to": {
+            "x": 72,
+            "y": 48
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 72,
+            "y": 48
+          },
+          "to": {
+            "x": 72,
+            "y": 0
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 72,
+            "y": 0
+          },
+          "to": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "drawn-water-1",
+      "kind": "water",
+      "segments": [
+        {
+          "kind": "line",
+          "from": {
+            "x": 22,
+            "y": 0
+          },
+          "to": {
+            "x": 27,
+            "y": 0
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 27,
+            "y": 0
+          },
+          "control": {
+            "x": 29.263694763183594,
+            "y": 5.84219217300415
+          },
+          "to": {
+            "x": 34,
+            "y": 9
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 34,
+            "y": 9
+          },
+          "control": {
+            "x": 40.230262756347656,
+            "y": 14.203563690185547
+          },
+          "to": {
+            "x": 47,
+            "y": 19
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 47,
+            "y": 19
+          },
+          "control": {
+            "x": 55.42433547973633,
+            "y": 27.514860153198242
+          },
+          "to": {
+            "x": 58,
+            "y": 35
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 58,
+            "y": 35
+          },
+          "control": {
+            "x": 59.470890045166016,
+            "y": 41.246299743652344
+          },
+          "to": {
+            "x": 59,
+            "y": 46
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 59,
+            "y": 46
+          },
+          "control": {
+            "x": 57.160770416259766,
+            "y": 48
+          },
+          "to": {
+            "x": 57,
+            "y": 48
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 57,
+            "y": 48
+          },
+          "to": {
+            "x": 53,
+            "y": 48
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 53,
+            "y": 48
+          },
+          "control": {
+            "x": 53.59206771850586,
+            "y": 42.252159118652344
+          },
+          "to": {
+            "x": 51,
+            "y": 36
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 51,
+            "y": 36
+          },
+          "control": {
+            "x": 43.265602111816406,
+            "y": 26.08812141418457
+          },
+          "to": {
+            "x": 41,
+            "y": 24
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 41,
+            "y": 24
+          },
+          "control": {
+            "x": 34.84133529663086,
+            "y": 18.868215560913086
+          },
+          "to": {
+            "x": 29,
+            "y": 13
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 29,
+            "y": 13
+          },
+          "control": {
+            "x": 24.278799057006836,
+            "y": 6.857485771179199
+          },
+          "to": {
+            "x": 22,
+            "y": 0
+          }
+        }
+      ]
+    }
+  ],
+  "drawnTerrainPrimitives": [],
+  "naturalTerrainPlacements": [
+    {
+      "id": "tree-1",
+      "kind": "tree",
+      "position": {
+        "x": 29,
+        "y": 20
+      },
+      "radius": 1.9578614983600469
+    },
+    {
+      "id": "tree-2",
+      "kind": "tree",
+      "position": {
+        "x": 38,
+        "y": 25
+      },
+      "radius": 1.1137066582883417
+    },
+    {
+      "id": "tree-3",
+      "kind": "tree",
+      "position": {
+        "x": 41,
+        "y": 13
+      },
+      "radius": 2.4163780889691107
+    },
+    {
+      "id": "tree-4",
+      "kind": "tree",
+      "position": {
+        "x": 49,
+        "y": 20
+      },
+      "radius": 2.0806986767298397
+    },
+    {
+      "id": "tree-5",
+      "kind": "tree",
+      "position": {
+        "x": 35,
+        "y": 7
+      },
+      "radius": 1.8836027544203828
+    },
+    {
+      "id": "tree-6",
+      "kind": "tree",
+      "position": {
+        "x": 40,
+        "y": 8
+      },
+      "radius": 2.2689757336864984
+    },
+    {
+      "id": "tree-7",
+      "kind": "tree",
+      "position": {
+        "x": 22,
+        "y": 20
+      },
+      "radius": 1.2757593739045712
+    },
+    {
+      "id": "tree-8",
+      "kind": "tree",
+      "position": {
+        "x": 33,
+        "y": 25
+      },
+      "radius": 2.4134226834939194
+    },
+    {
+      "id": "tree-9",
+      "kind": "tree",
+      "position": {
+        "x": 43,
+        "y": 31
+      },
+      "radius": 2.4743787703006537
+    },
+    {
+      "id": "tree-10",
+      "kind": "tree",
+      "position": {
+        "x": 46,
+        "y": 35
+      },
+      "radius": 3.0579134562730923
+    },
+    {
+      "id": "tree-11",
+      "kind": "tree",
+      "position": {
+        "x": 24,
+        "y": 13
+      },
+      "radius": 2.2387754444145758
+    },
+    {
+      "id": "tree-12",
+      "kind": "tree",
+      "position": {
+        "x": 21,
+        "y": 8
+      },
+      "radius": 1.8468988425400836
+    },
+    {
+      "id": "tree-13",
+      "kind": "tree",
+      "position": {
+        "x": 17,
+        "y": 10
+      },
+      "radius": 2.2799711213822267
+    },
+    {
+      "id": "tree-14",
+      "kind": "tree",
+      "position": {
+        "x": 33,
+        "y": 2
+      },
+      "radius": 1.9735694487399815
+    },
+    {
+      "id": "tree-15",
+      "kind": "tree",
+      "position": {
+        "x": 38,
+        "y": 3
+      },
+      "radius": 2.580150252002956
+    },
+    {
+      "id": "bush-1",
+      "kind": "bush",
+      "position": {
+        "x": 17,
+        "y": 30
+      },
+      "radius": 2.6075642602478064
+    },
+    {
+      "id": "bush-2",
+      "kind": "bush",
+      "position": {
+        "x": 21,
+        "y": 25
+      },
+      "radius": 1.6931252330095972
+    },
+    {
+      "id": "bush-3",
+      "kind": "bush",
+      "position": {
+        "x": 26,
+        "y": 33
+      },
+      "radius": 1.7239598803194607
+    },
+    {
+      "id": "bush-4",
+      "kind": "bush",
+      "position": {
+        "x": 25,
+        "y": 26
+      },
+      "radius": 1.1889815114616544
+    },
+    {
+      "id": "bush-5",
+      "kind": "bush",
+      "position": {
+        "x": 17,
+        "y": 22
+      },
+      "radius": 1.2782201994497953
+    },
+    {
+      "id": "bush-6",
+      "kind": "bush",
+      "position": {
+        "x": 16,
+        "y": 17
+      },
+      "radius": 1.3351984379859467
+    },
+    {
+      "id": "bush-7",
+      "kind": "bush",
+      "position": {
+        "x": 19,
+        "y": 15
+      },
+      "radius": 2.5483714494829357
+    },
+    {
+      "id": "bush-8",
+      "kind": "bush",
+      "position": {
+        "x": 25,
+        "y": 17
+      },
+      "radius": 1.2655929618119157
+    },
+    {
+      "id": "bush-9",
+      "kind": "bush",
+      "position": {
+        "x": 29,
+        "y": 16
+      },
+      "radius": 1.7700955310785693
+    },
+    {
+      "id": "bush-10",
+      "kind": "bush",
+      "position": {
+        "x": 33,
+        "y": 18
+      },
+      "radius": 0.7325451744325456
+    },
+    {
+      "id": "bush-11",
+      "kind": "bush",
+      "position": {
+        "x": 29,
+        "y": 24
+      },
+      "radius": 2.1726985703953257
+    },
+    {
+      "id": "bush-12",
+      "kind": "bush",
+      "position": {
+        "x": 36,
+        "y": 30
+      },
+      "radius": 1.4291160096792888
+    },
+    {
+      "id": "bush-13",
+      "kind": "bush",
+      "position": {
+        "x": 41,
+        "y": 28
+      },
+      "radius": 1.283068776572369
+    },
+    {
+      "id": "bush-14",
+      "kind": "bush",
+      "position": {
+        "x": 39,
+        "y": 35
+      },
+      "radius": 1.2751906884584008
+    },
+    {
+      "id": "bush-15",
+      "kind": "bush",
+      "position": {
+        "x": 46,
+        "y": 40
+      },
+      "radius": 1.2228875520812479
+    },
+    {
+      "id": "bush-16",
+      "kind": "bush",
+      "position": {
+        "x": 47,
+        "y": 16
+      },
+      "radius": 1.572484236382188
+    },
+    {
+      "id": "bush-17",
+      "kind": "bush",
+      "position": {
+        "x": 45,
+        "y": 11
+      },
+      "radius": 2.4245968549848596
+    },
+    {
+      "id": "bush-18",
+      "kind": "bush",
+      "position": {
+        "x": 37,
+        "y": 10
+      },
+      "radius": 1.2062327762410865
+    },
+    {
+      "id": "bush-19",
+      "kind": "bush",
+      "position": {
+        "x": 43,
+        "y": 5
+      },
+      "radius": 0.8592629354087632
+    },
+    {
+      "id": "bush-20",
+      "kind": "bush",
+      "position": {
+        "x": 33,
+        "y": 5
+      },
+      "radius": 1.1524026227566788
+    },
+    {
+      "id": "bush-21",
+      "kind": "bush",
+      "position": {
+        "x": 30,
+        "y": 3
+      },
+      "radius": 1.1735448656512277
+    }
+  ],
+  "elevationTransitions": [],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [],
+  "fireCells": [],
+  "smokeCells": []
+}

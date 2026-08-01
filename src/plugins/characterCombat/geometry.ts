@@ -48,6 +48,7 @@ const doorAdjacentCells = (door: DoorSegment): GridPoint[] => {
 
 const blockedCells = (scenario: CombatScenario, movingId: string) => new Set([
   ...scenario.objects.filter((object) => object.kind === "cover").map((object) => pointKey(object.position)),
+  ...(scenario.treeTrunkCells ?? []).map(pointKey),
   ...scenario.combatants.filter((unit) => unit.id !== movingId && !unit.defeated).map((unit) => pointKey(unit.position)),
 ]);
 
@@ -125,10 +126,15 @@ const movementFacingChoices = (facing: Combatant["facing"], origin: GridPoint, d
 const movementStepCost = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, origin: GridPoint, destination: GridPoint, facing?: Combatant["facing"], trotting = false) => {
   if (isCloseMachineryCell(scenario, destination)) return 6;
   const diagonal = origin.x !== destination.x && origin.y !== destination.y;
-  const terrain = scenario.terrainByCell?.[pointKey(destination)] === "difficult" ? 1 : 0;
-  if (!facing) return (diagonal ? 2 : 1) + terrain;
-  if (!forwardStep(facing, origin, destination)) return trotting ? Number.POSITIVE_INFINITY : 6 + terrain;
-  return (trotting ? diagonal ? 1.5 : 1 : diagonal ? 3 : 2) + terrain;
+  const terrain = scenario.terrainByCell?.[pointKey(destination)];
+  const difficultSurcharge = terrain === "difficult" ? 1 : 0;
+  const terrainMinimum = terrain === "water" || terrain === "rock" ? 3 : terrain === "bush" ? 2 : 0;
+  if (!facing) return Math.max((diagonal ? 2 : 1) + difficultSurcharge, terrainMinimum);
+  if (!forwardStep(facing, origin, destination)) return trotting ? Number.POSITIVE_INFINITY : Math.max(6 + difficultSurcharge, terrainMinimum);
+  return Math.max(
+    (trotting ? diagonal ? 1.5 : 1 : diagonal ? 3 : 2) + difficultSurcharge,
+    terrainMinimum,
+  );
 };
 
 export const movementPathCost = (scenario: Pick<CombatScenario, "terrainByCell" | "closeMachineryCells">, origin: GridPoint, path: GridPoint[], initialFacing?: Combatant["facing"], trotting = false) => {
@@ -326,6 +332,7 @@ export const grenadeLandingPoint = (scenario: CombatScenario, thrower: GridPoint
 
 export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: GridPoint) => {
   const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
+  const treeTrunks = new Set((scenario.treeTrunkCells ?? []).map(pointKey));
   const closeMachinery = closeMachineryCellKeys(scenario);
   if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
   if (scenario.walls.some((wall) => wallBlocksStep(from, to, wall))
@@ -339,6 +346,7 @@ export const hasLineOfSight = (scenario: CombatScenario, from: GridPoint, to: Gr
     const next = { x: Math.floor(from.x + 0.5 + dx * index / samples), y: Math.floor(from.y + 0.5 + dy * index / samples) };
     if (next.x === cell.x && next.y === cell.y) continue;
     if (smoke.has(pointKey(next))) return false;
+    if (treeTrunks.has(pointKey(next)) && !samePoint(next, from) && !samePoint(next, to)) return false;
     if (!samePoint(next, to) && terrainHeightAt(scenario, next) > highestEndpoint) return false;
     if (closeMachinery.has(pointKey(next)) && !samePoint(next, from) && !samePoint(next, to)) {
       const fromAdjacent = Math.max(Math.abs(from.x - next.x), Math.abs(from.y - next.y)) === 1;
@@ -612,7 +620,7 @@ const protectedByStructuralCorner = (attacker: GridPoint, target: GridPoint, seg
   });
 };
 
-export const coverAssessment = (scenario: CombatScenario, attackerId: string, targetId: string): { value: number; source: "low-cover" | "console" | "close-machinery" | "platform-edge" | "corner-cover" | null } => {
+export const coverAssessment = (scenario: CombatScenario, attackerId: string, targetId: string): { value: number; source: "low-cover" | "console" | "close-machinery" | "platform-edge" | "corner-cover" | "bush" | "rock" | null } => {
   const attacker = scenario.combatants.find((unit) => unit.id === attackerId);
   const target = scenario.combatants.find((unit) => unit.id === targetId);
   if (!attacker || !target) return { value: 0, source: null };
@@ -627,6 +635,14 @@ export const coverAssessment = (scenario: CombatScenario, attackerId: string, ta
     && terrainHeightAt(scenario, object.position) === targetHeight
     && adjacentToTarget(object.position));
   const protectedByConsole = scenario.objects.some((object) => (object.kind === "console" || object.coverType === "console") && line.has(pointKey(object.position)) && adjacentToTarget(object.position));
+  const protectedByBush = (scenario.bushCells ?? []).some((position) => (
+    samePoint(position, target.position)
+    || (line.has(pointKey(position)) && adjacentToTarget(position))
+  ));
+  const protectedByRock = (scenario.rockCells ?? []).some((position) => (
+    samePoint(position, target.position)
+    || (line.has(pointKey(position)) && adjacentToTarget(position))
+  ));
   const attackerTargetAdjacent = Math.max(Math.abs(attacker.position.x - target.position.x), Math.abs(attacker.position.y - target.position.y)) === 1;
   const protectedByMachinery = !attackerTargetAdjacent && [...closeMachineryCellKeys(scenario)].some((key) => {
     const machinery = line.get(key);
@@ -638,6 +654,8 @@ export const coverAssessment = (scenario: CombatScenario, attackerId: string, ta
   if (protectedByPlatformEdge) return { value: 2, source: "platform-edge" };
   if (attackerHeight <= targetHeight && protectedByCargo) return { value: 2, source: "low-cover" };
   if (protectedByConsole) return { value: 2, source: "console" };
+  if (protectedByBush) return { value: 2, source: "bush" };
+  if (protectedByRock) return { value: 2, source: "rock" };
   if (protectedByMachinery) return { value: 2, source: "close-machinery" };
   if (protectedByCorner) return { value: 2, source: "corner-cover" };
   return { value: 0, source: null };

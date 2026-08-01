@@ -61,6 +61,10 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
     if (existing) add("occupied-cell", `${item.id} overlaps ${existing} at ${position}.`);
     else occupied.set(position, item.id);
   });
+  const treeTrunks = new Set((scenario.treeTrunkCells ?? []).map(key));
+  scenario.combatants.forEach((unit) => {
+    if (treeTrunks.has(key(unit.position))) add("tree-overlap", `${unit.id} overlaps a tree trunk at ${key(unit.position)}.`);
+  });
   if (scenario.deploymentCells) {
     const deploymentCells = new Set(scenario.deploymentCells.map(key));
     scenario.deploymentCells.forEach((cell) => { if (!inCellBounds(scenario, cell)) add("deployment-bounds", `Deployment square ${key(cell)} is outside the deck.`); });
@@ -68,7 +72,10 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
     scenario.combatants.filter((unit) => unit.side === "player").forEach((unit) => { if (!deploymentCells.has(key(unit.position))) add("crew-deployment", `${unit.id} must begin inside a crew deployment zone.`); });
   }
 
-  const blocked = new Set(scenario.objects.filter((object) => object.kind === "cover").map((object) => key(object.position)));
+  const blocked = new Set([
+    ...scenario.objects.filter((object) => object.kind === "cover").map((object) => key(object.position)),
+    ...(scenario.treeTrunkCells ?? []).map(key),
+  ]);
   const walkable = new Set<string>();
   for (let x = 0; x < scenario.width; x += 1) for (let y = 0; y < scenario.height; y += 1) if (!blocked.has(`${x}:${y}`)) walkable.add(`${x}:${y}`);
   const start = scenario.combatants.find((unit) => unit.side === "player")?.position ?? null;

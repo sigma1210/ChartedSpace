@@ -22,4 +22,36 @@ describe("tactical scenario draft isolation", () => {
     expect(activeStore.getState().plugins.characterCombat.tacticalMap).toBe(activeBefore);
     expect(activeStore.getState().plugins.characterCombat.tacticalMap).toMatchObject({ scenarioStatus: "setup", scenario: { title: "Control Room Assault" } });
   });
+
+  it("preserves drawn grass and water when initializing a draft playtest", () => {
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    draft.drawnTerrainRegions = [{
+      id: "draft-grass",
+      kind: "grass",
+      segments: [
+        { kind: "line", from: { x: 20, y: 2 }, to: { x: 24, y: 2 } },
+        { kind: "line", from: { x: 24, y: 2 }, to: { x: 24, y: 6 } },
+        { kind: "line", from: { x: 24, y: 6 }, to: { x: 20, y: 6 } },
+        { kind: "line", from: { x: 20, y: 6 }, to: { x: 20, y: 2 } },
+      ],
+    }, {
+      id: "draft-water",
+      kind: "water",
+      segments: [
+        { kind: "line", from: { x: 26, y: 2 }, to: { x: 30, y: 2 } },
+        { kind: "line", from: { x: 30, y: 2 }, to: { x: 30, y: 6 } },
+        { kind: "line", from: { x: 30, y: 6 }, to: { x: 26, y: 6 } },
+        { kind: "line", from: { x: 26, y: 6 }, to: { x: 26, y: 2 } },
+      ],
+    }];
+
+    const sandboxStore = createAppStore();
+    sandboxStore.dispatch(initializeTacticalDraftPlaytest({
+      crew: ["crew-1", "crew-2"],
+      definition: draft,
+    }));
+
+    expect(sandboxStore.getState().plugins.characterCombat.tacticalMap?.scenario.drawnTerrainRegions)
+      .toEqual(draft.drawnTerrainRegions);
+  });
 });

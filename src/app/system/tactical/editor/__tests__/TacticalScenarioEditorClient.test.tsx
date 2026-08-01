@@ -62,6 +62,13 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain(">Machinery Curve</button>");
     expect(markup).toContain(">Draw Liquid H₂</button>");
     expect(markup).toContain(">Liquid H₂ Curve</button>");
+    expect(markup).toContain(">Draw Grass</button>");
+    expect(markup).toContain(">Grass Curve</button>");
+    expect(markup).toContain(">Draw Water</button>");
+    expect(markup).toContain(">Water Curve</button>");
+    expect(markup).toContain(">Tree</button>");
+    expect(markup).toContain(">Bush</button>");
+    expect(markup).toContain(">Rock</button>");
     expect(markup).toContain(">Stairs</button>");
     expect(markup).toContain(">Ladder</button>");
     expect(markup).toContain(">Ramp</button>");
@@ -755,6 +762,98 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(filled);
     expect(filled.checked).toBe(false);
     expect(screen.getByText("Liquid hydrogen · empty")).toBeTruthy();
+  });
+
+  it("draws flat grass, sand, and water regions with straight and curved boundaries", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    fireEvent.click(screen.getByRole("button", { name: "Draw Grass" }));
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 30, pointerId: 95 });
+    fireEvent.pointerDown(preview, { clientX: 15, clientY: 30, pointerId: 96 });
+    fireEvent.click(screen.getByRole("button", { name: "Grass Curve" }));
+    fireEvent.pointerDown(preview, { clientX: 15, clientY: 35, pointerId: 97 });
+    fireEvent.click(screen.getByRole("button", { name: "Draw Grass" }));
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 35, pointerId: 98 });
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 30, pointerId: 99 });
+
+    const grass = screen.getByTestId("drawn-terrain-region-drawn-grass-1");
+    expect(screen.getByText("Grass · 4 boundary segments")).toBeTruthy();
+    expect(screen.getByTestId("drawn-terrain-region-drawn-grass-1-segment-1").tagName.toLowerCase()).toBe("path");
+    expect(grass.querySelector("rect")?.getAttribute("stroke-width")).toBe("0");
+
+    fireEvent.click(screen.getByRole("button", { name: "Draw Water" }));
+    fireEvent.pointerDown(preview, { clientX: 12, clientY: 32, pointerId: 105 });
+    fireEvent.pointerDown(preview, { clientX: 17, clientY: 32, pointerId: 106 });
+    fireEvent.pointerDown(preview, { clientX: 17, clientY: 37, pointerId: 107 });
+    fireEvent.pointerDown(preview, { clientX: 12, clientY: 37, pointerId: 108 });
+    fireEvent.pointerDown(preview, { clientX: 12, clientY: 32, pointerId: 109 });
+
+    expect(screen.getByTestId("drawn-terrain-region-drawn-water-1")).toBeTruthy();
+    expect(screen.getByText("Water · 4 boundary segments")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Draw Sand" }));
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 30, pointerId: 115 });
+    fireEvent.pointerDown(preview, { clientX: 25, clientY: 30, pointerId: 116 });
+    fireEvent.click(screen.getByRole("button", { name: "Sand Curve" }));
+    fireEvent.pointerDown(preview, { clientX: 25, clientY: 35, pointerId: 117 });
+    fireEvent.click(screen.getByRole("button", { name: "Draw Sand" }));
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 35, pointerId: 118 });
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 30, pointerId: 119 });
+
+    expect(screen.getByTestId("drawn-terrain-region-drawn-sand-1")).toBeTruthy();
+    expect(screen.getByText("Sand · 4 boundary segments")).toBeTruthy();
+    expect(screen.getByTestId("drawn-terrain-region-drawn-sand-1-segment-1").tagName.toLowerCase()).toBe("path");
+  });
+
+  it("places, moves, resizes, previews, and deletes trees, bushes, and rocks", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    fireEvent.pointerMove(preview, { clientX: 20, clientY: 20, pointerId: 110 });
+    expect(screen.getByTestId("natural-terrain-placement-preview")).toBeTruthy();
+    fireEvent.pointerDown(preview, { clientX: 20, clientY: 20, pointerId: 110 });
+    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+
+    const tree = screen.getByTestId("natural-terrain-tree-1");
+    expect(screen.getAllByTestId(/natural-terrain-tree-1-footprint-/)).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("Tree radius"), { target: { value: "2" } });
+    expect(screen.getAllByTestId(/natural-terrain-tree-1-footprint-/)).toHaveLength(1);
+    const treeCanopy = tree.querySelector("circle")!;
+    fireEvent.pointerDown(treeCanopy, { clientX: 20.5, clientY: 20.5, pointerId: 111 });
+    fireEvent.pointerMove(preview, { clientX: 25.5, clientY: 20.5, pointerId: 111 });
+    fireEvent.pointerUp(preview, { clientX: 25.5, clientY: 20.5, pointerId: 111 });
+    expect(screen.getByTestId("natural-terrain-tree-1").querySelector("circle")?.getAttribute("cx")).toBe("25.5");
+
+    fireEvent.click(screen.getByRole("button", { name: "Bush" }));
+    fireEvent.pointerMove(preview, { clientX: 30, clientY: 20, pointerId: 112 });
+    fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 112 });
+    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.change(screen.getByLabelText("Bush radius"), { target: { value: "1.5" } });
+    expect(screen.getAllByTestId(/natural-terrain-bush-1-footprint-/)).toHaveLength(9);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rock" }));
+    fireEvent.pointerMove(preview, { clientX: 36, clientY: 20, pointerId: 113 });
+    expect(screen.getByTestId("natural-terrain-placement-preview")).toBeTruthy();
+    fireEvent.pointerDown(preview, { clientX: 36, clientY: 20, pointerId: 113 });
+    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.change(screen.getByLabelText("Rock radius"), { target: { value: "1.5" } });
+    expect(screen.getAllByTestId(/natural-terrain-rock-1-footprint-/)).toHaveLength(9);
+    expect(screen.getByText("Center 36,20 · 9 cover squares · 3 AP")).toBeTruthy();
+    const rock = screen.getByTestId("natural-terrain-rock-1").querySelector("circle")!;
+    fireEvent.pointerDown(rock, { clientX: 36.5, clientY: 20.5, pointerId: 114 });
+    fireEvent.pointerMove(preview, { clientX: 38.5, clientY: 20.5, pointerId: 114 });
+    fireEvent.pointerUp(preview, { clientX: 38.5, clientY: 20.5, pointerId: 114 });
+    expect(screen.getByText("Center 38,20 · 9 cover squares · 3 AP")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Delete rock" }));
+    expect(screen.queryByTestId("natural-terrain-rock-1")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /bush-1 bush · 30,20/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete bush" }));
+    expect(screen.queryByTestId("natural-terrain-bush-1")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /tree-1 tree · 25,20/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete tree" }));
+    expect(screen.queryByTestId("natural-terrain-tree-1")).toBeNull();
   });
 
   it("closes a freeform terrain outline when the pointer returns near its starting point", () => {

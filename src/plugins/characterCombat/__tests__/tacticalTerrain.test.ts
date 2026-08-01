@@ -24,6 +24,141 @@ describe("tactical Control Room", () => {
     expect(([0, 90, 180, 270] as const).map(combatantFacingForTacticalRotation)).toEqual(["north", "east", "south", "west"]);
   });
 
+  it("resolves grass, sand, water, resizable trees, and resizable bushes", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnTerrainRegions = [
+      { ...drawnRectangle("grass-field", 4, 4, 6, 6), kind: "grass" },
+      { ...drawnRectangle("sand-field", 20, 4, 4, 4), kind: "sand" },
+      { ...drawnRectangle("water-pool", 14, 4, 4, 4), kind: "water" },
+    ];
+    definition.naturalTerrainPlacements = [
+      { id: "broad-tree", kind: "tree", position: { x: 8, y: 8 }, radius: 2 },
+      { id: "wide-bush", kind: "bush", position: { x: 25, y: 10 }, radius: 1.5 },
+      { id: "rock-field", kind: "rock", position: { x: 32, y: 10 }, radius: 1.5 },
+    ];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
+    const blockedCells = tacticalTerrainBlockedCells(
+      terrain.terrainObjects,
+      terrain.treeTrunkCells,
+    );
+
+    expect(terrain.terrainByCell["5:5"]).toBe("grass");
+    expect(terrain.terrainByCell["21:5"]).toBe("sand");
+    expect(terrain.terrainByCell["15:5"]).toBe("water");
+    expect(terrain.treeTrunkCells).toEqual([{ x: 8, y: 8 }]);
+    expect(terrain.bushCells).toHaveLength(9);
+    expect(terrain.rockCells).toHaveLength(9);
+    expect(terrain.terrainByCell["25:10"]).toBe("bush");
+    expect(terrain.terrainByCell["32:10"]).toBe("rock");
+    expect(blockedCells).toContain("8:8");
+    expect(blockedCells).not.toContain("7:8");
+    expect(scenario.drawnTerrainRegions).toEqual(definition.drawnTerrainRegions);
+    expect(scenario.naturalTerrainPlacements).toEqual(definition.naturalTerrainPlacements);
+    expect(hasLineOfSight(scenario, { x: 6, y: 8 }, { x: 10, y: 8 })).toBe(false);
+
+    const movement = (
+      origin: { x: number; y: number },
+      allowance: number,
+      trotting: boolean,
+    ) => reachableOpenMapMovement({
+      width: scenario.width,
+      height: scenario.height,
+      origin,
+      facing: "east",
+      allowance,
+      trotting,
+      terrainByCell: scenario.terrainByCell,
+      blockedCells,
+    });
+    expect(movement({ x: 14, y: 5 }, 2, false).has("15:5")).toBe(false);
+    expect(movement({ x: 14, y: 5 }, 3, false).get("15:5")?.cost).toBe(3);
+    expect(movement({ x: 24, y: 10 }, 1, true).has("25:10")).toBe(false);
+    expect(movement({ x: 24, y: 10 }, 2, true).get("25:10")?.cost).toBe(2);
+    expect(movement({ x: 31, y: 10 }, 2, false).has("32:10")).toBe(false);
+    expect(movement({ x: 31, y: 10 }, 3, false).get("32:10")?.cost).toBe(3);
+    expect(movement({ x: 4, y: 5 }, 1, true).get("5:5")?.cost).toBe(1);
+    expect(movement({ x: 20, y: 5 }, 1, true).get("21:5")?.cost).toBe(1);
+
+    const attacker = scenario.combatants[0];
+    const target = scenario.combatants[1];
+    attacker.position = { x: 22, y: 10 };
+    target.position = { x: 25, y: 10 };
+    expect(coverAssessment(scenario, attacker.id, target.id)).toEqual({
+      value: 2,
+      source: "bush",
+    });
+    attacker.position = { x: 29, y: 10 };
+    target.position = { x: 32, y: 10 };
+    expect(coverAssessment(scenario, attacker.id, target.id)).toEqual({
+      value: 2,
+      source: "rock",
+    });
+    expect(hasLineOfSight(scenario, attacker.position, target.position)).toBe(true);
+  });
+
+  it("allows water to overlap grass and gives water gameplay priority", () => {
+    const grass = { ...drawnRectangle("grass-field", 4, 4, 6, 6), kind: "grass" as const };
+    const water = { ...drawnRectangle("water-pool", 8, 6, 4, 4), kind: "water" as const };
+    const resolve = (drawnTerrainRegions: [typeof grass, typeof water] | [typeof water, typeof grass]) =>
+      resolveTacticalScenarioTerrain({
+        ...cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition),
+        terrainPlacements: [],
+        drawnTerrainRegions,
+        naturalTerrainPlacements: [],
+      });
+
+    const grassThenWater = resolve([grass, water]);
+    const waterThenGrass = resolve([water, grass]);
+
+    expect(grassThenWater.terrainByCell["5:5"]).toBe("grass");
+    expect(grassThenWater.terrainByCell["8:6"]).toBe("water");
+    expect(waterThenGrass.terrainByCell["8:6"]).toBe("water");
+
+    const scenario = buildDefaultTacticalScenario(undefined, {
+      ...cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition),
+      terrainPlacements: [],
+      drawnTerrainRegions: [grass, water],
+      naturalTerrainPlacements: [],
+    });
+    expect(reachableOpenMapMovement({
+      width: scenario.width,
+      height: scenario.height,
+      origin: { x: 7, y: 6 },
+      facing: "east",
+      allowance: 2,
+      trotting: false,
+      terrainByCell: scenario.terrainByCell,
+    }).has("8:6")).toBe(false);
+    expect(reachableOpenMapMovement({
+      width: scenario.width,
+      height: scenario.height,
+      origin: { x: 7, y: 6 },
+      facing: "east",
+      allowance: 3,
+      trotting: false,
+      terrainByCell: scenario.terrainByCell,
+    }).has("8:6")).toBe(true);
+  });
+
+  it("allows water to overlap sand and gives water gameplay priority", () => {
+    const sand = { ...drawnRectangle("sand-field", 4, 4, 6, 6), kind: "sand" as const };
+    const water = { ...drawnRectangle("water-pool", 8, 6, 4, 4), kind: "water" as const };
+    const resolve = (drawnTerrainRegions: [typeof sand, typeof water] | [typeof water, typeof sand]) =>
+      resolveTacticalScenarioTerrain({
+        ...cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition),
+        terrainPlacements: [],
+        drawnTerrainRegions,
+        naturalTerrainPlacements: [],
+      });
+
+    expect(resolve([sand, water]).terrainByCell["5:5"]).toBe("sand");
+    expect(resolve([sand, water]).terrainByCell["8:6"]).toBe("water");
+    expect(resolve([water, sand]).terrainByCell["8:6"]).toBe("water");
+  });
+
   it("resolves a circle primitive as raised terrain and preserves its curved playtest outline", () => {
     const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     definition.terrainPlacements = [];

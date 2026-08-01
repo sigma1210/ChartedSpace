@@ -22,6 +22,7 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
   const unavailableDeploymentCells = new Set([
     ...terrain.objects.map((object) => `${object.position.x}:${object.position.y}`),
     ...terrain.closeMachineryCells.map((cell) => `${cell.x}:${cell.y}`),
+    ...terrain.treeTrunkCells.map((cell) => `${cell.x}:${cell.y}`),
     ...enemies.map((enemy) => `${enemy.position.x}:${enemy.position.y}`),
     ...definition.fireCells.map((cell) => `${cell.x}:${cell.y}`),
   ]);
@@ -51,6 +52,10 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     })),
     drawnRaisedAreaLevels: { ...terrain.drawnRaisedAreaLevels },
     drawnTerrainRegions: terrain.drawnTerrainRegions,
+    naturalTerrainPlacements: terrain.naturalTerrainPlacements,
+    treeTrunkCells: terrain.treeTrunkCells,
+    bushCells: terrain.bushCells,
+    rockCells: terrain.rockCells,
     elevationTransitions: terrain.elevationTransitions.map((transition) => ({
       ...transition,
       lower: { ...transition.lower },

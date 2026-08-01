@@ -31,7 +31,7 @@ export const buildTacticalMovementPreview = (
     map.doorOpenById,
     map.destroyedTerrainObjectIds,
   );
-  const blockedCells = tacticalTerrainBlockedCells(terrain);
+  const blockedCells = tacticalTerrainBlockedCells(terrain, map.scenario.treeTrunkCells);
   const blockedEdges = tacticalTerrainBlockedEdges(terrain);
   const activeOccupantsByCell = tacticalOccupantCounts(map.scenario, combatant.id);
   const moves = mode === "sidestep"

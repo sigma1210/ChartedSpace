@@ -123,6 +123,11 @@ const scenarioSchema = z.object({
         filled: z.boolean().optional(),
       }).strict().optional(),
     }).strict(),
+    z.object({
+      id: z.string().min(1),
+      kind: z.enum(["grass", "sand", "water"]),
+      segments: areaOutlineSchema,
+    }).strict(),
   ])).optional(),
   drawnTerrainPrimitives: z.array(z.discriminatedUnion("shape", [
     z.object({
@@ -141,6 +146,12 @@ const scenarioSchema = z.object({
       }).strict()).optional(),
     }).strict(),
   ])).optional(),
+  naturalTerrainPlacements: z.array(z.object({
+    id: z.string().min(1),
+    kind: z.enum(["tree", "bush", "rock"]),
+    position: gridPointSchema,
+    radius: z.number().finite().positive(),
+  }).strict()).optional(),
   elevationTransitions: z.array(z.object({
     id: z.string().min(1),
     kind: z.enum(["stairs", "ladder", "ramp"]),
@@ -243,7 +254,9 @@ export const parseTacticalScenarioFile = (value: unknown): TacticalScenarioDefin
     (scenario.enemyPlacements ?? []).forEach((enemy) => {
       const position = `${enemy.position.x}:${enemy.position.y}`;
       if (deploymentCells.has(position)) throw new TacticalScenarioFileError(`Enemy ${enemy.id} cannot be placed in the crew deployment zone at ${position}.`, 400, "invalid-scenario");
-      if (terrain.objects.some((object) => `${object.position.x}:${object.position.y}` === position) || terrain.closeMachineryCells.some((cell) => `${cell.x}:${cell.y}` === position)) {
+      if (terrain.objects.some((object) => `${object.position.x}:${object.position.y}` === position)
+        || terrain.closeMachineryCells.some((cell) => `${cell.x}:${cell.y}` === position)
+        || terrain.treeTrunkCells.some((cell) => `${cell.x}:${cell.y}` === position)) {
         throw new TacticalScenarioFileError(`Enemy ${enemy.id} cannot occupy blocked terrain at ${position}.`, 400, "invalid-scenario");
       }
     });

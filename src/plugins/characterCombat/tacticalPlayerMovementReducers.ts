@@ -91,7 +91,7 @@ export const tacticalPlayerMovementReducers = {
       facing: mover.facing,
       allowance: Math.min(6, map.actionPointsByCharacterId[moverId] ?? 0),
       trotting: false,
-      blockedCells: tacticalTerrainBlockedCells(terrain),
+      blockedCells: tacticalTerrainBlockedCells(terrain, map.scenario.treeTrunkCells),
       blockedEdges: tacticalTerrainBlockedEdges(terrain),
       activeOccupantsByCell: tacticalOccupantCounts(map.scenario, moverId),
       terrainByCell: map.scenario.terrainByCell,
@@ -144,7 +144,7 @@ export const tacticalPlayerMovementReducers = {
     const prone = character?.posture === "prone";
     if (prone) return;
     const terrain = activeTacticalTerrainObjects(map.scenario, map.doorOpenById, map.destroyedTerrainObjectIds);
-    const blockedCells = tacticalTerrainBlockedCells(terrain);
+    const blockedCells = tacticalTerrainBlockedCells(terrain, map.scenario.treeTrunkCells);
     const moves = mode === "sidestep"
       ? sidestepAndBackstepMoves({
         width: map.scenario.width,

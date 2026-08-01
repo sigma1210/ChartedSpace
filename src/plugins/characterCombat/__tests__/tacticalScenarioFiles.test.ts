@@ -74,6 +74,33 @@ describe("tactical scenario files", () => {
         { kind: "line", from: { x: 34, y: 24 }, to: { x: 30, y: 24 } },
         { kind: "line", from: { x: 30, y: 24 }, to: { x: 30, y: 20 } },
       ],
+    }, {
+      id: "grass-field",
+      kind: "grass",
+      segments: [
+        { kind: "line", from: { x: 38, y: 2 }, to: { x: 42, y: 2 } },
+        { kind: "line", from: { x: 42, y: 2 }, to: { x: 42, y: 6 } },
+        { kind: "line", from: { x: 42, y: 6 }, to: { x: 38, y: 6 } },
+        { kind: "line", from: { x: 38, y: 6 }, to: { x: 38, y: 2 } },
+      ],
+    }, {
+      id: "sand-field",
+      kind: "sand",
+      segments: [
+        { kind: "line", from: { x: 38, y: 8 }, to: { x: 42, y: 8 } },
+        { kind: "line", from: { x: 42, y: 8 }, to: { x: 42, y: 12 } },
+        { kind: "line", from: { x: 42, y: 12 }, to: { x: 38, y: 12 } },
+        { kind: "line", from: { x: 38, y: 12 }, to: { x: 38, y: 8 } },
+      ],
+    }, {
+      id: "water-pool",
+      kind: "water",
+      segments: [
+        { kind: "line", from: { x: 44, y: 2 }, to: { x: 48, y: 2 } },
+        { kind: "line", from: { x: 48, y: 2 }, to: { x: 48, y: 6 } },
+        { kind: "line", from: { x: 48, y: 6 }, to: { x: 44, y: 6 } },
+        { kind: "line", from: { x: 44, y: 6 }, to: { x: 44, y: 2 } },
+      ],
     }];
     draft.drawnTerrainPrimitives = [{
       id: "circular-platform",
@@ -105,6 +132,11 @@ describe("tactical scenario files", () => {
       lower: { x: 1, y: 11 },
       upper: { x: 2, y: 11 },
     }];
+    draft.naturalTerrainPlacements = [
+      { id: "tree-1", kind: "tree", position: { x: 52, y: 8 }, radius: 2.25 },
+      { id: "bush-1", kind: "bush", position: { x: 56, y: 8 }, radius: 1.5 },
+      { id: "rock-1", kind: "rock", position: { x: 60, y: 8 }, radius: 1.25 },
+    ];
     draft.tracingTemplate = {
       imagePath: "/images/tactical/landing-pad/map.jpg",
       x: 1.5,
@@ -128,6 +160,7 @@ describe("tactical scenario files", () => {
     expect(loaded.drawnRaisedAreas).toEqual(draft.drawnRaisedAreas);
     expect(loaded.drawnTerrainRegions).toEqual(draft.drawnTerrainRegions);
     expect(loaded.drawnTerrainPrimitives).toEqual(draft.drawnTerrainPrimitives);
+    expect(loaded.naturalTerrainPlacements).toEqual(draft.naturalTerrainPlacements);
     expect(loaded.elevationTransitions).toEqual(draft.elevationTransitions);
     expect(loaded.tracingTemplate).toEqual(draft.tracingTemplate);
     expect(source).toContain('\n  "schemaVersion": 1,');

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "over-the-river-and-thru-the-woods",
+  "scenarioId": "over-the-river-and-thru-the-woods",
+  "operations": [
+    {
+      "id": "interactive-human-1-operation-1",
+      "consolePlacementId": "interactive-human-1",
+      "label": "Interact with Big Bad Wolf",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "interactive-human-1-operation-1-check-1",
+          "skill": "Persuade",
+          "difficulty": "average",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      }
+    }
+  ]
+}

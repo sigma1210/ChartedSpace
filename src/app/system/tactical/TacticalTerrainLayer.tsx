@@ -120,7 +120,10 @@ const TacticalElevationTerrain = ({
   scenario: CombatScenario;
   onSelectCell: (point: { x: number; y: number }) => void;
 }) => {
-  const drawnRaisedAreas = scenario.drawnRaisedAreas ?? [];
+  const drawnRaisedAreas = useMemo(
+    () => scenario.drawnRaisedAreas ?? [],
+    [scenario.drawnRaisedAreas],
+  );
   const drawnRaisedAreaLevelsByCell = useMemo(
     () => tacticalDrawnRaisedAreaLevelsByCell(
       drawnRaisedAreas,
@@ -150,7 +153,11 @@ const TacticalElevationTerrain = ({
   );
   const raisedGridPositions = useMemo(
     () => tacticalRaisedGridLinePositions(
-      scenario,
+      {
+        width: scenario.width,
+        height: scenario.height,
+        elevationLevelByCell: scenario.elevationLevelByCell,
+      },
       drawnRaisedAreaLevelsByCell,
     ),
     [
@@ -402,6 +409,173 @@ const TacticalTerrainRegionRim = ({
     })}
   </>
 );
+
+const TacticalFlatNaturalTerrain = ({
+  scenario,
+  onSelectCell,
+}: {
+  scenario: CombatScenario;
+  onSelectCell: (point: { x: number; y: number }) => void;
+}) => {
+  const regions = useMemo(() => (scenario.drawnTerrainRegions ?? [])
+    .filter((region) => region.kind === "grass" || region.kind === "sand" || region.kind === "water")
+    .map((region) => {
+      const cells = tacticalDrawnRaisedAreaCells(region, scenario.width, scenario.height);
+      return {
+        region,
+        shape: tacticalDrawnRaisedAreaShape(region, scenario.width, scenario.height),
+        elevation: cells.length > 0 ? tacticalVisualHeightAt(scenario, cells[0]) : 0,
+      };
+    }), [scenario]);
+
+  return <>
+    {regions.map(({ region, shape, elevation }) => {
+      const water = region.kind === "water";
+      const sand = region.kind === "sand";
+      const surfaceOffset = water ? 0.03 : sand ? 0.02 : 0.01;
+      return <mesh
+        key={region.id}
+        data-testid={`drawn-${region.kind}-surface-${region.id}`}
+        position={[0, elevation + surfaceOffset, 0]}
+        rotation={[Math.PI / 2, 0, 0]}
+        receiveShadow
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelectCell({
+            x: Math.floor(event.point.x + scenario.width / 2),
+            y: Math.floor(event.point.z + scenario.height / 2),
+          });
+        }}
+      >
+        <shapeGeometry args={[shape, 32]} />
+        <meshStandardMaterial
+          color={water ? "#256d85" : sand ? "#c9ad70" : "#3f6f3a"}
+          emissive={water ? "#0c4a6e" : sand ? "#4b371d" : "#183c20"}
+          emissiveIntensity={water ? 0.16 : 0.08}
+          roughness={water ? 0.24 : 0.96}
+          metalness={water ? 0.12 : 0}
+          transparent
+          opacity={water ? 0.7 : 0.88}
+          depthWrite={!water}
+          side={DoubleSide}
+        />
+      </mesh>;
+    })}
+  </>;
+};
+
+const TacticalNaturalTerrain = ({
+  scenario,
+  onSelectCell,
+}: {
+  scenario: CombatScenario;
+  onSelectCell: (point: { x: number; y: number }) => void;
+}) => <>
+  {(scenario.naturalTerrainPlacements ?? []).map((placement) => {
+    const radius = Math.max(0.25, placement.radius);
+    const surfaceHeight = tacticalVisualHeightAt(scenario, placement.position);
+    const select = (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      onSelectCell(placement.position);
+    };
+    if (placement.kind === "tree") {
+      const trunkHeight = 0.95 + Math.min(radius, 3) * 0.12;
+      const canopyHeight = Math.max(0.5, radius * 0.72);
+      return <group
+        key={placement.id}
+        data-testid={`tactical-tree-${placement.id}`}
+        position={[
+          placement.position.x + 0.5 - scenario.width / 2,
+          surfaceHeight,
+          placement.position.y + 0.5 - scenario.height / 2,
+        ]}
+        onClick={select}
+      >
+        <mesh position={[0, trunkHeight / 2, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.13, 0.2, trunkHeight, 9]} />
+          <meshStandardMaterial color="#6b4423" roughness={0.94} metalness={0} />
+        </mesh>
+        <mesh
+          data-testid={`tactical-tree-canopy-${placement.id}`}
+          position={[0, trunkHeight + canopyHeight * 0.36, 0]}
+          scale={[radius, canopyHeight, radius]}
+          castShadow
+          receiveShadow
+        >
+          <sphereGeometry args={[1, 12, 8]} />
+          <meshStandardMaterial color="#2f6b36" roughness={0.9} metalness={0} />
+        </mesh>
+      </group>;
+    }
+    if (placement.kind === "rock") {
+      const rockHeight = 0.34 + Math.min(radius, 3) * 0.16;
+      return <group
+        key={placement.id}
+        data-testid={`tactical-rock-${placement.id}`}
+        position={[
+          placement.position.x + 0.5 - scenario.width / 2,
+          surfaceHeight,
+          placement.position.y + 0.5 - scenario.height / 2,
+        ]}
+        onClick={select}
+      >
+        <mesh
+          data-testid={`tactical-rock-mass-${placement.id}`}
+          position={[0, rockHeight * 0.45, 0]}
+          rotation={[0.08, 0.42, -0.06]}
+          scale={[radius * 0.68, rockHeight, radius * 0.58]}
+          castShadow
+          receiveShadow
+        >
+          <dodecahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial color="#78716c" roughness={0.94} metalness={0.04} />
+        </mesh>
+        <mesh
+          position={[radius * 0.4, rockHeight * 0.3, radius * 0.15]}
+          rotation={[-0.12, 0.9, 0.08]}
+          scale={[radius * 0.34, rockHeight * 0.64, radius * 0.3]}
+          castShadow
+          receiveShadow
+        >
+          <dodecahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial color="#57534e" roughness={0.96} metalness={0.02} />
+        </mesh>
+        <mesh
+          position={[-radius * 0.38, rockHeight * 0.25, -radius * 0.18]}
+          rotation={[0.14, -0.35, 0.05]}
+          scale={[radius * 0.3, rockHeight * 0.54, radius * 0.34]}
+          castShadow
+          receiveShadow
+        >
+          <dodecahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial color="#8d8780" roughness={0.95} metalness={0.02} />
+        </mesh>
+      </group>;
+    }
+    const bushHeight = 0.32 + Math.min(radius, 3) * 0.12;
+    return <group
+      key={placement.id}
+      data-testid={`tactical-bush-${placement.id}`}
+      position={[
+        placement.position.x + 0.5 - scenario.width / 2,
+        surfaceHeight,
+        placement.position.y + 0.5 - scenario.height / 2,
+      ]}
+      onClick={select}
+    >
+      <mesh
+        data-testid={`tactical-bush-canopy-${placement.id}`}
+        position={[0, bushHeight * 0.42, 0]}
+        scale={[radius, bushHeight, radius]}
+        castShadow
+        receiveShadow
+      >
+        <sphereGeometry args={[1, 14, 8]} />
+        <meshStandardMaterial color="#4d7c3f" roughness={0.96} metalness={0} />
+      </mesh>
+    </group>;
+  })}
+</>;
 
 const TacticalCloseMachineryCellDetails = ({
   point,
@@ -916,6 +1090,7 @@ export const TacticalTerrainLayer = ({
         />
         <TacticalElevationTerrain scenario={scenario} onSelectCell={onSelectCell} />
         <TacticalBridges scenario={scenario} onSelectCell={onSelectCell} />
+        <TacticalFlatNaturalTerrain scenario={scenario} onSelectCell={onSelectCell} />
         <TacticalCloseMachineryTerrain scenario={scenario} onSelectCell={onSelectCell} />
         {tacticalMap.scenarioStatus === "setup" && (
           <DeploymentArea
@@ -930,6 +1105,7 @@ export const TacticalTerrainLayer = ({
   return (
     <>
       <LiquidHydrogenAreas scenario={scenario} />
+      <TacticalNaturalTerrain scenario={scenario} onSelectCell={onSelectCell} />
       {wallRuns.map((run) => (
         <TacticalWallRun
           key={run.segmentIds.join(":")}

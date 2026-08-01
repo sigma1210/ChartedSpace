@@ -1,0 +1,827 @@
+{
+  "schemaVersion": 1,
+  "id": "outside",
+  "consoleVictoryDefinitionId": "outside",
+  "title": "Touch Grass",
+  "briefing": "GO out side and touch grass",
+  "objective": "Go Outside and touch grass,",
+  "map": {
+    "width": 72,
+    "height": 48
+  },
+  "terrainPlacements": [
+    {
+      "id": "console-1x1-1",
+      "terrainDefinitionId": "console-1x1",
+      "origin": {
+        "x": 43,
+        "y": 15
+      },
+      "rotation": 0,
+      "objectSettings": {
+        "terminal": {
+          "label": "Grass"
+        }
+      }
+    }
+  ],
+  "drawnTerrainRegions": [
+    {
+      "id": "drawn-grass-1",
+      "kind": "grass",
+      "segments": [
+        {
+          "kind": "line",
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to": {
+            "x": 0,
+            "y": 48
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 0,
+            "y": 48
+          },
+          "to": {
+            "x": 72,
+            "y": 48
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 72,
+            "y": 48
+          },
+          "to": {
+            "x": 72,
+            "y": 0
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 72,
+            "y": 0
+          },
+          "to": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "drawn-water-1",
+      "kind": "water",
+      "segments": [
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 21,
+            "y": 0
+          },
+          "control": {
+            "x": 24.701501846313477,
+            "y": 8.471376419067383
+          },
+          "to": {
+            "x": 33,
+            "y": 14
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 33,
+            "y": 14
+          },
+          "control": {
+            "x": 40.1408576965332,
+            "y": 21.7520751953125
+          },
+          "to": {
+            "x": 51,
+            "y": 25
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 51,
+            "y": 25
+          },
+          "control": {
+            "x": 57.94363021850586,
+            "y": 24.79869270324707
+          },
+          "to": {
+            "x": 61,
+            "y": 33
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 61,
+            "y": 33
+          },
+          "control": {
+            "x": 64.85556030273438,
+            "y": 38.3868293762207
+          },
+          "to": {
+            "x": 65,
+            "y": 48
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 65,
+            "y": 48
+          },
+          "to": {
+            "x": 69,
+            "y": 48
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 69,
+            "y": 48
+          },
+          "control": {
+            "x": 69.508056640625,
+            "y": 40.07970428466797
+          },
+          "to": {
+            "x": 66,
+            "y": 33
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 66,
+            "y": 33
+          },
+          "control": {
+            "x": 59.193946838378906,
+            "y": 21.478609085083008
+          },
+          "to": {
+            "x": 55,
+            "y": 22
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 55,
+            "y": 22
+          },
+          "control": {
+            "x": 44.802406311035156,
+            "y": 20.19243812561035
+          },
+          "to": {
+            "x": 36,
+            "y": 12
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 36,
+            "y": 12
+          },
+          "control": {
+            "x": 30.90475845336914,
+            "y": 8.260757446289062
+          },
+          "to": {
+            "x": 28,
+            "y": 2
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 28,
+            "y": 2
+          },
+          "control": {
+            "x": 28,
+            "y": 0.75
+          },
+          "to": {
+            "x": 27,
+            "y": 0
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 27,
+            "y": 0
+          },
+          "to": {
+            "x": 21,
+            "y": 0
+          }
+        }
+      ]
+    }
+  ],
+  "naturalTerrainPlacements": [
+    {
+      "id": "tree-1",
+      "kind": "tree",
+      "position": {
+        "x": 40,
+        "y": 24
+      },
+      "radius": 2.064965948969377
+    },
+    {
+      "id": "tree-2",
+      "kind": "tree",
+      "position": {
+        "x": 52,
+        "y": 30
+      },
+      "radius": 2.623491832257476
+    },
+    {
+      "id": "tree-3",
+      "kind": "tree",
+      "position": {
+        "x": 57,
+        "y": 32
+      },
+      "radius": 0.9221406526009353
+    },
+    {
+      "id": "tree-4",
+      "kind": "tree",
+      "position": {
+        "x": 45,
+        "y": 25
+      },
+      "radius": 2.403876703547967
+    },
+    {
+      "id": "tree-5",
+      "kind": "tree",
+      "position": {
+        "x": 31,
+        "y": 21
+      },
+      "radius": 2.3209978242638942
+    },
+    {
+      "id": "tree-6",
+      "kind": "tree",
+      "position": {
+        "x": 34,
+        "y": 18
+      },
+      "radius": 0.7471718827012231
+    },
+    {
+      "id": "tree-7",
+      "kind": "tree",
+      "position": {
+        "x": 30,
+        "y": 15
+      },
+      "radius": 2.021431650338433
+    },
+    {
+      "id": "tree-8",
+      "kind": "tree",
+      "position": {
+        "x": 25,
+        "y": 15
+      },
+      "radius": 2.101775091753247
+    },
+    {
+      "id": "tree-9",
+      "kind": "tree",
+      "position": {
+        "x": 35,
+        "y": 24
+      },
+      "radius": 1.2400085893480957
+    },
+    {
+      "id": "tree-10",
+      "kind": "tree",
+      "position": {
+        "x": 48,
+        "y": 15
+      },
+      "radius": 2.3695183195226335
+    },
+    {
+      "id": "tree-11",
+      "kind": "tree",
+      "position": {
+        "x": 39,
+        "y": 9
+      },
+      "radius": 2.2277572144313575
+    },
+    {
+      "id": "tree-12",
+      "kind": "tree",
+      "position": {
+        "x": 49,
+        "y": 9
+      },
+      "radius": 2.027601314303961
+    },
+    {
+      "id": "tree-13",
+      "kind": "tree",
+      "position": {
+        "x": 56,
+        "y": 18
+      },
+      "radius": 2.198396389254652
+    },
+    {
+      "id": "tree-14",
+      "kind": "tree",
+      "position": {
+        "x": 62,
+        "y": 20
+      },
+      "radius": 2.1771207512152375
+    },
+    {
+      "id": "tree-15",
+      "kind": "tree",
+      "position": {
+        "x": 63,
+        "y": 25
+      },
+      "radius": 2.067339608198446
+    },
+    {
+      "id": "tree-16",
+      "kind": "tree",
+      "position": {
+        "x": 52,
+        "y": 12
+      },
+      "radius": 1.5
+    },
+    {
+      "id": "tree-17",
+      "kind": "tree",
+      "position": {
+        "x": 23,
+        "y": 10
+      },
+      "radius": 1.2339935497104877
+    },
+    {
+      "id": "tree-18",
+      "kind": "tree",
+      "position": {
+        "x": 20,
+        "y": 4
+      },
+      "radius": 1.8369229881889566
+    },
+    {
+      "id": "bush-1",
+      "kind": "bush",
+      "position": {
+        "x": 22,
+        "y": 21
+      },
+      "radius": 1.6215598299483687
+    },
+    {
+      "id": "bush-2",
+      "kind": "bush",
+      "position": {
+        "x": 24,
+        "y": 22
+      },
+      "radius": 0.9712674795963929
+    },
+    {
+      "id": "bush-3",
+      "kind": "bush",
+      "position": {
+        "x": 30,
+        "y": 27
+      },
+      "radius": 1.3098575647883677
+    },
+    {
+      "id": "bush-4",
+      "kind": "bush",
+      "position": {
+        "x": 27,
+        "y": 19
+      },
+      "radius": 1.3469257904555163
+    },
+    {
+      "id": "bush-5",
+      "kind": "bush",
+      "position": {
+        "x": 26,
+        "y": 12
+      },
+      "radius": 0.9195755677255044
+    },
+    {
+      "id": "bush-6",
+      "kind": "bush",
+      "position": {
+        "x": 36,
+        "y": 21
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-7",
+      "kind": "bush",
+      "position": {
+        "x": 38,
+        "y": 28
+      },
+      "radius": 0.9410599805365221
+    },
+    {
+      "id": "bush-8",
+      "kind": "bush",
+      "position": {
+        "x": 39,
+        "y": 29
+      },
+      "radius": 1.017749620204113
+    },
+    {
+      "id": "bush-9",
+      "kind": "bush",
+      "position": {
+        "x": 43,
+        "y": 30
+      },
+      "radius": 1.7670311678787027
+    },
+    {
+      "id": "bush-10",
+      "kind": "bush",
+      "position": {
+        "x": 46,
+        "y": 31
+      },
+      "radius": 1.0038097281036253
+    },
+    {
+      "id": "bush-11",
+      "kind": "bush",
+      "position": {
+        "x": 46,
+        "y": 34
+      },
+      "radius": 1.0731745186988344
+    },
+    {
+      "id": "bush-12",
+      "kind": "bush",
+      "position": {
+        "x": 18,
+        "y": 13
+      },
+      "radius": 1.4555992344466393
+    },
+    {
+      "id": "bush-13",
+      "kind": "bush",
+      "position": {
+        "x": 15,
+        "y": 6
+      },
+      "radius": 1.0608686611691773
+    },
+    {
+      "id": "bush-14",
+      "kind": "bush",
+      "position": {
+        "x": 15,
+        "y": 12
+      },
+      "radius": 1.0261363254986047
+    },
+    {
+      "id": "bush-15",
+      "kind": "bush",
+      "position": {
+        "x": 16,
+        "y": 16
+      },
+      "radius": 1.2101999228668692
+    },
+    {
+      "id": "bush-16",
+      "kind": "bush",
+      "position": {
+        "x": 17,
+        "y": 12
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-17",
+      "kind": "bush",
+      "position": {
+        "x": 16,
+        "y": 8
+      },
+      "radius": 1.4753043636503074
+    },
+    {
+      "id": "bush-18",
+      "kind": "bush",
+      "position": {
+        "x": 17,
+        "y": 6
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-19",
+      "kind": "bush",
+      "position": {
+        "x": 32,
+        "y": 3
+      },
+      "radius": 1.1839148876782326
+    },
+    {
+      "id": "bush-20",
+      "kind": "bush",
+      "position": {
+        "x": 34,
+        "y": 5
+      },
+      "radius": 0.8035474180860924
+    },
+    {
+      "id": "bush-21",
+      "kind": "bush",
+      "position": {
+        "x": 34,
+        "y": 7
+      },
+      "radius": 1.2024349669440388
+    },
+    {
+      "id": "bush-22",
+      "kind": "bush",
+      "position": {
+        "x": 36,
+        "y": 6
+      },
+      "radius": 0.8602754928595682
+    },
+    {
+      "id": "bush-23",
+      "kind": "bush",
+      "position": {
+        "x": 40,
+        "y": 6
+      },
+      "radius": 1.0289316262361627
+    },
+    {
+      "id": "bush-24",
+      "kind": "bush",
+      "position": {
+        "x": 44,
+        "y": 10
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-25",
+      "kind": "bush",
+      "position": {
+        "x": 46,
+        "y": 12
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-26",
+      "kind": "bush",
+      "position": {
+        "x": 43,
+        "y": 13
+      },
+      "radius": 1.0336061715468647
+    },
+    {
+      "id": "bush-27",
+      "kind": "bush",
+      "position": {
+        "x": 52,
+        "y": 18
+      },
+      "radius": 1.1018916125458527
+    },
+    {
+      "id": "bush-28",
+      "kind": "bush",
+      "position": {
+        "x": 55,
+        "y": 14
+      },
+      "radius": 1.3629324362423392
+    },
+    {
+      "id": "bush-29",
+      "kind": "bush",
+      "position": {
+        "x": 62,
+        "y": 15
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-30",
+      "kind": "bush",
+      "position": {
+        "x": 62,
+        "y": 17
+      },
+      "radius": 1.034614590079343
+    },
+    {
+      "id": "bush-31",
+      "kind": "bush",
+      "position": {
+        "x": 67,
+        "y": 21
+      },
+      "radius": 1.125537803371335
+    },
+    {
+      "id": "bush-32",
+      "kind": "bush",
+      "position": {
+        "x": 67,
+        "y": 27
+      },
+      "radius": 1.2805740940488815
+    },
+    {
+      "id": "bush-33",
+      "kind": "bush",
+      "position": {
+        "x": 66,
+        "y": 31
+      },
+      "radius": 1.116574583683572
+    },
+    {
+      "id": "bush-34",
+      "kind": "bush",
+      "position": {
+        "x": 67,
+        "y": 29
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-35",
+      "kind": "bush",
+      "position": {
+        "x": 58,
+        "y": 36
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "bush-36",
+      "kind": "bush",
+      "position": {
+        "x": 55,
+        "y": 35
+      },
+      "radius": 0.5
+    },
+    {
+      "id": "rock-1",
+      "kind": "rock",
+      "position": {
+        "x": 21,
+        "y": 17
+      },
+      "radius": 0.9884036930089296
+    },
+    {
+      "id": "rock-2",
+      "kind": "rock",
+      "position": {
+        "x": 23,
+        "y": 19
+      },
+      "radius": 0.6392799826519666
+    },
+    {
+      "id": "rock-3",
+      "kind": "rock",
+      "position": {
+        "x": 33,
+        "y": 16
+      },
+      "radius": 0.7137319324102396
+    },
+    {
+      "id": "rock-4",
+      "kind": "rock",
+      "position": {
+        "x": 21,
+        "y": 14
+      },
+      "radius": 1.0595693259950307
+    },
+    {
+      "id": "rock-5",
+      "kind": "rock",
+      "position": {
+        "x": 36,
+        "y": 18
+      },
+      "radius": 0.6276080777790558
+    },
+    {
+      "id": "rock-6",
+      "kind": "rock",
+      "position": {
+        "x": 37,
+        "y": 19
+      },
+      "radius": 0.7083169983579182
+    },
+    {
+      "id": "rock-7",
+      "kind": "rock",
+      "position": {
+        "x": 38,
+        "y": 21
+      },
+      "radius": 0.7999176963998463
+    },
+    {
+      "id": "rock-8",
+      "kind": "rock",
+      "position": {
+        "x": 40,
+        "y": 27
+      },
+      "radius": 0.7982032931967699
+    },
+    {
+      "id": "rock-9",
+      "kind": "rock",
+      "position": {
+        "x": 34,
+        "y": 20
+      },
+      "radius": 0.8504104676971963
+    },
+    {
+      "id": "rock-10",
+      "kind": "rock",
+      "position": {
+        "x": 37,
+        "y": 22
+      },
+      "radius": 0.7152554453226129
+    }
+  ],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [],
+  "fireCells": [],
+  "smokeCells": []
+}

@@ -104,7 +104,13 @@ export const createControlRoom = ({ id, origin, rotation = 0, terminal }: Contro
 
 const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 export const tacticalMovementEdgeKey = (first: GridPoint, second: GridPoint) => [pointKey(first), pointKey(second)].sort().join("|");
-export const tacticalTerrainBlockedCells = (objects: TacticalTerrainObject[]) => new Set(objects.filter((object): object is TacticalTerminal => object.kind === "terminal" && object.blocking).map((object) => pointKey(object.position)));
+export const tacticalTerrainBlockedCells = (
+  objects: TacticalTerrainObject[],
+  additionalBlockedCells: readonly GridPoint[] = [],
+) => new Set([
+  ...objects.filter((object): object is TacticalTerminal => object.kind === "terminal" && object.blocking).map((object) => pointKey(object.position)),
+  ...additionalBlockedCells.map(pointKey),
+]);
 export const tacticalTerrainBlockedEdges = (objects: TacticalTerrainObject[]) => new Set(objects.flatMap((object) => {
   if (!object.blocking) return [];
   if (object.kind === "wall") return [...tacticalWallBlockedMovementEdgeKeys(object.edge)];
