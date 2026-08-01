@@ -24,6 +24,137 @@ describe("tactical Control Room", () => {
     expect(([0, 90, 180, 270] as const).map(combatantFacingForTacticalRotation)).toEqual(["north", "east", "south", "west"]);
   });
 
+  it("resolves a circle primitive as raised terrain and preserves its curved playtest outline", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnTerrainPrimitives = [{
+      id: "circular-platform",
+      shape: "circle",
+      center: { x: 20.25, y: 20.5 },
+      radius: 3.25,
+      terrainType: "raised-area",
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
+
+    expect(terrain.elevationLevelByCell["20:20"]).toBe(1);
+    expect(terrain.drawnRaisedAreaLevels["circular-platform"]).toBe(1);
+    expect(terrain.drawnRaisedAreas[0]).toMatchObject({
+      id: "circular-platform",
+      segments: expect.any(Array),
+    });
+    expect(terrain.drawnRaisedAreas[0].segments).toHaveLength(8);
+    expect(scenario.drawnRaisedAreas).toEqual(terrain.drawnRaisedAreas);
+  });
+
+  it("resolves a wall circle as a closed blocking curved wall with an open interior", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnTerrainPrimitives = [{
+      id: "circular-bulkhead",
+      shape: "circle",
+      center: { x: 20, y: 20 },
+      radius: 3,
+      terrainType: "wall",
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
+    const blockedEdges = tacticalTerrainBlockedEdges(terrain.terrainObjects);
+
+    expect(terrain.walls.length).toBeGreaterThan(8);
+    expect(terrain.walls.every((wall) =>
+      wall.id.startsWith("circular-bulkhead:wall:"))).toBe(true);
+    expect(terrain.elevationLevelByCell["20:20"]).toBeUndefined();
+    expect(terrain.closeMachineryCells).not.toContainEqual({ x: 20, y: 20 });
+    expect(blockedEdges).toContain(
+      tacticalMovementEdgeKey({ x: 22, y: 20 }, { x: 23, y: 20 }),
+    );
+    expect(hasLineOfSight(scenario, { x: 20, y: 20 }, { x: 24, y: 20 }))
+      .toBe(false);
+  });
+
+  it("cuts doors and iris valves into circle walls and opens their sight line", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnTerrainPrimitives = [{
+      id: "portal-circle",
+      shape: "circle",
+      center: { x: 20, y: 20 },
+      radius: 3,
+      terrainType: "wall",
+      portals: [
+        { id: "circle-door", kind: "sliding-door", position: 0 },
+        { id: "circle-iris", kind: "iris-valve", position: 0.5 },
+      ],
+    }];
+
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
+
+    expect(scenario.doors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "circle-door", portalType: "sliding-door", open: false }),
+      expect.objectContaining({ id: "circle-iris", portalType: "iris-valve", open: false }),
+    ]));
+    expect(hasLineOfSight(scenario, { x: 20, y: 20 }, { x: 24, y: 20 }))
+      .toBe(false);
+    scenario.doors.find((door) => door.id === "circle-door")!.open = true;
+    expect(hasLineOfSight(scenario, { x: 20, y: 20 }, { x: 24, y: 20 }))
+      .toBe(true);
+  });
+
+  it("changes a circle primitive from machinery to liquid hydrogen without changing its geometry", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnTerrainPrimitives = [{
+      id: "circular-terrain",
+      shape: "circle",
+      center: { x: 20, y: 20 },
+      radius: 3,
+      terrainType: "close-machinery",
+    }];
+
+    const machinery = resolveTacticalScenarioTerrain(definition);
+    definition.drawnTerrainPrimitives[0] = {
+      ...definition.drawnTerrainPrimitives[0],
+      terrainType: "liquid-hydrogen",
+      settings: { filled: true },
+    };
+    const hydrogen = resolveTacticalScenarioTerrain(definition);
+
+    expect(machinery.closeMachineryCells).toContainEqual({ x: 20, y: 20 });
+    expect(machinery.drawnTerrainRegions[0]).toMatchObject({
+      id: "circular-terrain",
+      kind: "close-machinery",
+    });
+    expect(hydrogen.closeMachineryCells).not.toContainEqual({ x: 20, y: 20 });
+    expect(hydrogen.liquidHydrogenAreas[0]).toMatchObject({
+      id: "circular-terrain",
+      filled: true,
+    });
+    expect(hydrogen.drawnTerrainRegions[0].segments)
+      .toEqual(machinery.drawnTerrainRegions[0].segments);
+  });
+
+  it("rejects circle primitives with invalid radii or bounds", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnTerrainPrimitives = [{
+      id: "invalid-circle",
+      shape: "circle",
+      center: { x: 1, y: 1 },
+      radius: 2,
+      terrainType: "raised-area",
+    }];
+
+    expect(() => resolveTacticalScenarioTerrain(definition))
+      .toThrow("extends outside the map");
+
+    definition.drawnTerrainPrimitives[0].center = { x: 10, y: 10 };
+    definition.drawnTerrainPrimitives[0].radius = 0;
+    expect(() => resolveTacticalScenarioTerrain(definition))
+      .toThrow("requires a finite positive radius and center");
+  });
+
   it("corrects the interactive-human model's reversed forward direction", () => {
     expect(([0, 90, 180, 270] as const).map(interactiveHumanModelFacingForTacticalRotation)).toEqual(["south", "west", "north", "east"]);
   });
@@ -1009,6 +1140,54 @@ describe("tactical Control Room", () => {
       targetable: true,
     });
     expect(run?.edge).toEqual({ from: { x: 2, y: 2 }, to: { x: 7, y: 5 } });
+  });
+
+  it("preserves a freeform wall through resolution and blocks movement and sight", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnWalls = [{
+      id: "freeform-bulkhead",
+      from: { x: 1.2, y: 1.25 },
+      to: { x: 4.8, y: 1.25 },
+    }];
+
+    const resolved = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
+    const wall = scenario.walls.find((candidate) => candidate.id === "freeform-bulkhead");
+    const blockedEdges = tacticalTerrainBlockedEdges(resolved.terrainObjects);
+
+    expect(wall).toMatchObject(definition.drawnWalls[0]);
+    expect(blockedEdges).toContain(
+      tacticalMovementEdgeKey({ x: 2, y: 0 }, { x: 2, y: 1 }),
+    );
+    expect(hasLineOfSight(scenario, { x: 2, y: 0 }, { x: 2, y: 2 })).toBe(false);
+  });
+
+  it("places a freeform wall on a fractional raised-area footprint", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnRaisedAreas = [{
+      id: "fractional-wall-platform",
+      segments: [
+        { kind: "line", from: { x: 10.25, y: 10.25 }, to: { x: 20.75, y: 10.25 } },
+        { kind: "line", from: { x: 20.75, y: 10.25 }, to: { x: 20.75, y: 20.75 } },
+        { kind: "line", from: { x: 20.75, y: 20.75 }, to: { x: 10.25, y: 20.75 } },
+        { kind: "line", from: { x: 10.25, y: 20.75 }, to: { x: 10.25, y: 10.25 } },
+      ],
+    }];
+    definition.drawnWalls = [{
+      id: "fractional-elevated-bulkhead",
+      from: { x: 12.25, y: 14.25 },
+      to: { x: 18.75, y: 14.25 },
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(terrain.terrainObjects.find((object) =>
+      object.id === "fractional-elevated-bulkhead")).toMatchObject({
+      elevationLevel: 1,
+    });
+    expect(terrain.elevationLevelByCell["10:10"]).toBe(1);
+    expect(terrain.elevationLevelByCell["20:20"]).toBe(1);
   });
 
   it("places drawn walls and wall portals on their supporting raised level", () => {

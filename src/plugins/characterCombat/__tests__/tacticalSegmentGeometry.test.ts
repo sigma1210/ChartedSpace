@@ -39,6 +39,36 @@ describe("tactical segment geometry", () => {
     );
   });
 
+  it("blocks movement across a freeform wall without rounding its endpoints", () => {
+    const wall = {
+      from: { x: 0.2, y: 1.25 },
+      to: { x: 3.8, y: 1.25 },
+    };
+
+    expect(tacticalMovementStepCrossesWall(
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      wall,
+    )).toBe(true);
+    expect(tacticalMovementStepCrossesWall(
+      { x: 4, y: 0 },
+      { x: 4, y: 1 },
+      wall,
+    )).toBe(false);
+    expect(tacticalWallBlockedMovementEdgeKeys(wall)).toContain(
+      tacticalMovementEdgeKey({ x: 1, y: 0 }, { x: 1, y: 1 }),
+    );
+  });
+
+  it("tolerates floating-point drift where freeform segments meet", () => {
+    expect(tacticalSegmentsIntersect(
+      { x: 0.1, y: 0.1 },
+      { x: 2.3, y: 1.7 },
+      { x: 2.3 + 1e-12, y: 1.7 - 1e-12 },
+      { x: 4.6, y: 0.4 },
+    )).toBe(true);
+  });
+
   it("normalizes a wall independently of endpoint order", () => {
     expect(tacticalWallSegmentKey({
       from: { x: 2, y: 5 },

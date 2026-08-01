@@ -37,9 +37,9 @@ describe("tactical scenario files", () => {
       portals: [{ id: "diagonal-door", kind: "sliding-door", position: 0.5 }],
     }, {
       id: "curved-bulkhead",
-      from: { x: 12, y: 4 },
+      from: { x: 12.25, y: 4.5 },
       control: { x: 15.25, y: 9.5 },
-      to: { x: 20, y: 4 },
+      to: { x: 20.5, y: 4.25 },
     }];
     draft.drawnRaisedAreas = [{
       id: "raised-loading-platform",
@@ -54,10 +54,10 @@ describe("tactical scenario files", () => {
       id: "machinery-zone",
       kind: "close-machinery",
       segments: [
-        { kind: "line", from: { x: 20, y: 20 }, to: { x: 24, y: 20 } },
-        { kind: "line", from: { x: 24, y: 20 }, to: { x: 24, y: 24 } },
-        { kind: "line", from: { x: 24, y: 24 }, to: { x: 20, y: 24 } },
-        { kind: "line", from: { x: 20, y: 24 }, to: { x: 20, y: 20 } },
+        { kind: "line", from: { x: 20.25, y: 20.25 }, to: { x: 24.25, y: 20.25 } },
+        { kind: "line", from: { x: 24.25, y: 20.25 }, to: { x: 24.25, y: 24.25 } },
+        { kind: "line", from: { x: 24.25, y: 24.25 }, to: { x: 20.25, y: 24.25 } },
+        { kind: "line", from: { x: 20.25, y: 24.25 }, to: { x: 20.25, y: 20.25 } },
       ],
     }, {
       id: "hydrogen-pool",
@@ -73,6 +73,30 @@ describe("tactical scenario files", () => {
         },
         { kind: "line", from: { x: 34, y: 24 }, to: { x: 30, y: 24 } },
         { kind: "line", from: { x: 30, y: 24 }, to: { x: 30, y: 20 } },
+      ],
+    }];
+    draft.drawnTerrainPrimitives = [{
+      id: "circular-platform",
+      shape: "circle",
+      center: { x: 40.25, y: 30.5 },
+      radius: 2.75,
+      terrainType: "raised-area",
+    }, {
+      id: "circular-hydrogen",
+      shape: "circle",
+      center: { x: 50.5, y: 30.25 },
+      radius: 2.25,
+      terrainType: "liquid-hydrogen",
+      settings: { filled: false },
+    }, {
+      id: "circular-wall",
+      shape: "circle",
+      center: { x: 60, y: 10 },
+      radius: 2,
+      terrainType: "wall",
+      portals: [
+        { id: "circular-wall-door", kind: "sliding-door", position: 0.25 },
+        { id: "circular-wall-iris", kind: "iris-valve", position: 0.75 },
       ],
     }];
     draft.elevationTransitions = [{
@@ -103,6 +127,7 @@ describe("tactical scenario files", () => {
     expect(loaded.drawnWalls).toEqual(draft.drawnWalls);
     expect(loaded.drawnRaisedAreas).toEqual(draft.drawnRaisedAreas);
     expect(loaded.drawnTerrainRegions).toEqual(draft.drawnTerrainRegions);
+    expect(loaded.drawnTerrainPrimitives).toEqual(draft.drawnTerrainPrimitives);
     expect(loaded.elevationTransitions).toEqual(draft.elevationTransitions);
     expect(loaded.tracingTemplate).toEqual(draft.tracingTemplate);
     expect(source).toContain('\n  "schemaVersion": 1,');

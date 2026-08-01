@@ -1,5 +1,10 @@
 import type { CombatScenario, DoorSegment, GridPoint, WallSegment } from "./types";
-import { tacticalCellsSeparatedBySegment, tacticalMovementStepCrossesWall, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
+import {
+  tacticalCellsSeparatedBySegment,
+  tacticalMovementStepCrossesWall,
+  tacticalSegmentsIntersect,
+  tacticalWallSegmentKey,
+} from "./tacticalSegmentGeometry";
 
 export interface ScenarioValidationError { code: string; message: string }
 
@@ -11,6 +16,18 @@ const validSegment = (segment: WallSegment) => segment.from.x !== segment.to.x |
 const doorCells = (door: DoorSegment): GridPoint[] => {
   const separated = tacticalCellsSeparatedBySegment(door);
   return [separated.first, separated.second];
+};
+const wallCoversDoorInterior = (door: DoorSegment, wall: WallSegment) => {
+  const trim = 0.001;
+  const interiorFrom = {
+    x: door.from.x + (door.to.x - door.from.x) * trim,
+    y: door.from.y + (door.to.y - door.from.y) * trim,
+  };
+  const interiorTo = {
+    x: door.to.x + (door.from.x - door.to.x) * trim,
+    y: door.to.y + (door.from.y - door.to.y) * trim,
+  };
+  return tacticalSegmentsIntersect(interiorFrom, interiorTo, wall.from, wall.to);
 };
 
 export const validateCombatScenario = (scenario: CombatScenario): ScenarioValidationError[] => {
@@ -33,7 +50,7 @@ export const validateCombatScenario = (scenario: CombatScenario): ScenarioValida
   scenario.doors.forEach((door) => {
     const cells = doorCells(door);
     if (cells.some((cell) => !inCellBounds(scenario, cell))) add("door-cells", `${door.id} does not connect two valid deck cells.`);
-    if (scenario.walls.some((wall) => cells.length === 2 && wallBlocksStep(cells[0], cells[1], wall))) add("door-covered", `${door.id} is covered by a wall segment.`);
+    if (scenario.walls.some((wall) => wallCoversDoorInterior(door, wall))) add("door-covered", `${door.id} is covered by a wall segment.`);
   });
 
   const occupied = new Map<string, string>();

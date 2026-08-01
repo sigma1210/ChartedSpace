@@ -65,14 +65,14 @@ const tracingTemplateSchema = z.object({
 const areaOutlineSegmentSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("line"),
-    from: gridPointSchema,
-    to: gridPointSchema,
+    from: finitePointSchema,
+    to: finitePointSchema,
   }).strict(),
   z.object({
     kind: z.literal("quadratic"),
-    from: gridPointSchema,
+    from: finitePointSchema,
     control: finitePointSchema,
-    to: gridPointSchema,
+    to: finitePointSchema,
   }).strict(),
 ]);
 const areaOutlineSchema = z.array(areaOutlineSegmentSchema).min(3);
@@ -92,8 +92,8 @@ const scenarioSchema = z.object({
   terrainPlacements: z.array(placementSchema),
   drawnWalls: z.array(z.object({
     id: z.string().min(1),
-    from: gridPointSchema,
-    to: gridPointSchema,
+    from: finitePointSchema,
+    to: finitePointSchema,
     control: finitePointSchema.optional(),
     portals: z.array(z.object({
       id: z.string().min(1),
@@ -122,6 +122,23 @@ const scenarioSchema = z.object({
       settings: z.object({
         filled: z.boolean().optional(),
       }).strict().optional(),
+    }).strict(),
+  ])).optional(),
+  drawnTerrainPrimitives: z.array(z.discriminatedUnion("shape", [
+    z.object({
+      id: z.string().min(1),
+      shape: z.literal("circle"),
+      center: finitePointSchema,
+      radius: z.number().finite().positive(),
+      terrainType: z.enum(["wall", "raised-area", "close-machinery", "liquid-hydrogen"]),
+      settings: z.object({
+        filled: z.boolean().optional(),
+      }).strict().optional(),
+      portals: z.array(z.object({
+        id: z.string().min(1),
+        kind: z.enum(["sliding-door", "iris-valve"]),
+        position: z.number().min(0).max(1),
+      }).strict()).optional(),
     }).strict(),
   ])).optional(),
   elevationTransitions: z.array(z.object({

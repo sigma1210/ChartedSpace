@@ -40,7 +40,7 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     objects: terrain.objects,
     ...(resolvedConsoleVictory ? { consoleVictory: resolvedConsoleVictory } : {}),
     terrainObjects: terrain.terrainObjects,
-    drawnRaisedAreas: definition.drawnRaisedAreas?.map((area) => ({
+    drawnRaisedAreas: terrain.drawnRaisedAreas.map((area) => ({
       id: area.id,
       segments: area.segments.map((segment) => ({
         ...segment,

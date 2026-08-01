@@ -2,16 +2,17 @@ import type { GridPoint, WallSegment } from "./types";
 
 const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 const movementEdgeKey = (first: GridPoint, second: GridPoint) => [pointKey(first), pointKey(second)].sort().join("|");
+const EPSILON = 1e-9;
 
 const crossProduct = (first: GridPoint, second: GridPoint, third: GridPoint) =>
   (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x);
 
 const pointOnSegment = (point: GridPoint, from: GridPoint, to: GridPoint) =>
-  crossProduct(from, to, point) === 0
-  && point.x >= Math.min(from.x, to.x)
-  && point.x <= Math.max(from.x, to.x)
-  && point.y >= Math.min(from.y, to.y)
-  && point.y <= Math.max(from.y, to.y);
+  Math.abs(crossProduct(from, to, point)) <= EPSILON
+  && point.x >= Math.min(from.x, to.x) - EPSILON
+  && point.x <= Math.max(from.x, to.x) + EPSILON
+  && point.y >= Math.min(from.y, to.y) - EPSILON
+  && point.y <= Math.max(from.y, to.y) + EPSILON;
 
 export const tacticalSegmentsIntersect = (
   firstFrom: GridPoint,
@@ -24,8 +25,8 @@ export const tacticalSegmentsIntersect = (
   const secondStart = crossProduct(secondFrom, secondTo, firstFrom);
   const secondEnd = crossProduct(secondFrom, secondTo, firstTo);
   if (
-    ((firstStart > 0 && firstEnd < 0) || (firstStart < 0 && firstEnd > 0))
-    && ((secondStart > 0 && secondEnd < 0) || (secondStart < 0 && secondEnd > 0))
+    ((firstStart > EPSILON && firstEnd < -EPSILON) || (firstStart < -EPSILON && firstEnd > EPSILON))
+    && ((secondStart > EPSILON && secondEnd < -EPSILON) || (secondStart < -EPSILON && secondEnd > EPSILON))
   ) return true;
   return pointOnSegment(secondFrom, firstFrom, firstTo)
     || pointOnSegment(secondTo, firstFrom, firstTo)

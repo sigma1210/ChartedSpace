@@ -16,6 +16,7 @@ import deploymentZone9x9DefinitionJson from "./terrainDefinitions/deployment-zon
 import defaultScenarioDefinitionJson from "./scenarioDefinitions/default-tactical-control-room.json";
 import type { CombatScenario, GridPoint, MapObject, TacticalBridge, TacticalElevationTransition, TacticalElevationTransitionKind, TacticalLadderMount, TacticalLightSource, TacticalLiquidHydrogenArea, TerrainType, WallSegment } from "./types";
 import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacticalSegmentGeometry";
+import { tacticalCirclePrimitiveOutline, tacticalCircleWallBoundary } from "./tacticalTerrainPrimitives";
 import { tacticalQuadraticBezierWallSegments } from "./tacticalBezierWalls";
 import { tacticalDrawnRaisedAreaCells } from "./tacticalDrawnRaisedAreas";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
@@ -119,6 +120,28 @@ export type TacticalDrawnTerrainRegion = {
   settings?: { filled?: boolean };
 };
 
+export type TacticalTerrainPrimitiveType =
+  | "wall"
+  | "raised-area"
+  | "close-machinery"
+  | "liquid-hydrogen";
+
+export interface TacticalDrawnCirclePrimitive {
+  id: string;
+  shape: "circle";
+  center: GridPoint;
+  radius: number;
+  terrainType: TacticalTerrainPrimitiveType;
+  settings?: { filled?: boolean };
+  portals?: {
+    id: string;
+    kind: "sliding-door" | "iris-valve";
+    position: number;
+  }[];
+}
+
+export type TacticalDrawnTerrainPrimitive = TacticalDrawnCirclePrimitive;
+
 export interface TacticalElevationTransitionDefinition {
   id: string;
   kind: TacticalElevationTransitionKind;
@@ -153,6 +176,7 @@ export interface TacticalScenarioDefinitionFile {
   drawnWalls?: TacticalDrawnWall[];
   drawnRaisedAreas?: TacticalDrawnRaisedArea[];
   drawnTerrainRegions?: TacticalDrawnTerrainRegion[];
+  drawnTerrainPrimitives?: TacticalDrawnTerrainPrimitive[];
   elevationTransitions?: TacticalElevationTransitionDefinition[];
   deploymentEdges?: TacticalDeploymentEdge[];
   enemyPlacements?: TacticalEnemyPlacement[];
@@ -170,6 +194,7 @@ export interface ResolvedTacticalScenarioTerrain {
   terrainByCell: Record<string, TerrainType>;
   elevationLevelByCell: Record<string, number>;
   drawnRaisedAreaLevels: Record<string, number>;
+  drawnRaisedAreas: TacticalDrawnRaisedArea[];
   drawnTerrainRegions: TacticalDrawnTerrainRegion[];
   elevationTransitions: TacticalElevationTransition[];
   closeMachineryCells: GridPoint[];
@@ -389,8 +414,99 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     drawnWallIds.add(wall.id);
     drawnWallSegments.add(key);
   });
+  type ResolvedPrimitiveArea =
+    | { target: "wall"; circle: TacticalDrawnCirclePrimitive }
+    | { target: "raised-area"; area: TacticalDrawnRaisedArea }
+    | { target: "terrain-region"; region: TacticalDrawnTerrainRegion };
+  const primitiveAreas = (scenario.drawnTerrainPrimitives ?? []).map((primitive): ResolvedPrimitiveArea => {
+    if (!primitive.id.trim()) throw new Error("A drawn terrain primitive requires an ID.");
+    if (
+      !Number.isFinite(primitive.center.x)
+      || !Number.isFinite(primitive.center.y)
+      || !Number.isFinite(primitive.radius)
+      || primitive.radius <= 0
+    ) {
+      throw new Error(`Circle primitive ${primitive.id} requires a finite positive radius and center.`);
+    }
+    if (
+      primitive.center.x - primitive.radius < 0
+      || primitive.center.y - primitive.radius < 0
+      || primitive.center.x + primitive.radius > scenario.map.width
+      || primitive.center.y + primitive.radius > scenario.map.height
+    ) {
+      throw new Error(`Circle primitive ${primitive.id} extends outside the map.`);
+    }
+    const segments = tacticalCirclePrimitiveOutline(primitive);
+    if (primitive.terrainType !== "wall" && (primitive.portals?.length ?? 0) > 0) {
+      throw new Error(`Circle primitive ${primitive.id} can only contain portals when its terrain type is wall.`);
+    }
+    if (primitive.terrainType === "wall") {
+      if (drawnObjectIds.has(primitive.id)) {
+        throw new Error(`Duplicate drawn terrain ID: ${primitive.id}.`);
+      }
+      drawnObjectIds.add(primitive.id);
+      const circumference = Math.PI * 2 * primitive.radius;
+      const portalIds = new Set<string>();
+      (primitive.portals ?? []).forEach((portal, index, portals) => {
+        if (!portal.id.trim()) {
+          throw new Error(`A portal on circle wall ${primitive.id} requires an ID.`);
+        }
+        if (portalIds.has(portal.id) || drawnObjectIds.has(portal.id)) {
+          throw new Error(`Duplicate drawn terrain ID: ${portal.id}.`);
+        }
+        if (!Number.isFinite(portal.position) || portal.position < 0 || portal.position > 1) {
+          throw new Error(`Portal ${portal.id} must have a position between 0 and 1.`);
+        }
+        if (circumference < 2) {
+          throw new Error(`Circle wall ${primitive.id} is too small to contain a portal.`);
+        }
+        if (portals.some((candidate, candidateIndex) =>
+          candidateIndex < index
+          && Math.min(
+            Math.abs(candidate.position - portal.position),
+            1 - Math.abs(candidate.position - portal.position),
+          ) * circumference < 1 - 1e-9)) {
+          throw new Error(`Portal ${portal.id} overlaps another portal on circle wall ${primitive.id}.`);
+        }
+        portalIds.add(portal.id);
+        drawnObjectIds.add(portal.id);
+      });
+      const boundary = tacticalCircleWallBoundary(primitive);
+      boundary.walls.forEach((wall) => {
+        if (drawnObjectIds.has(wall.id)) throw new Error(`Duplicate drawn terrain ID: ${wall.id}.`);
+        drawnObjectIds.add(wall.id);
+      });
+      return {
+        target: "wall",
+        circle: primitive,
+      };
+    }
+    return primitive.terrainType === "raised-area"
+      ? {
+        target: "raised-area",
+        area: { id: primitive.id, segments },
+      }
+      : {
+        target: "terrain-region",
+        region: primitive.terrainType === "close-machinery"
+          ? {
+            id: primitive.id,
+            kind: "close-machinery" as const,
+            segments,
+          }
+          : {
+            id: primitive.id,
+            kind: "liquid-hydrogen" as const,
+            segments,
+            ...(primitive.settings ? { settings: { ...primitive.settings } } : {}),
+          },
+      };
+  });
   const drawnRaisedAreaIds = new Set<string>();
-  const drawnRaisedAreas = (scenario.drawnRaisedAreas ?? []).map((area) => {
+  const drawnRaisedAreas = [
+    ...(scenario.drawnRaisedAreas ?? []),
+    ...primitiveAreas.flatMap((resolved) => resolved.target === "raised-area" ? [resolved.area] : []),
+  ].map((area) => {
     if (drawnRaisedAreaIds.has(area.id)) {
       throw new Error(`Duplicate drawn raised area ID: ${area.id}.`);
     }
@@ -408,7 +524,10 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       ),
     };
   });
-  const drawnTerrainRegions = (scenario.drawnTerrainRegions ?? []).map((region) => {
+  const drawnTerrainRegions = [
+    ...(scenario.drawnTerrainRegions ?? []),
+    ...primitiveAreas.flatMap((resolved) => resolved.target === "terrain-region" ? [resolved.region] : []),
+  ].map((region) => {
     if (drawnObjectIds.has(region.id)) {
       throw new Error(`Duplicate drawn terrain ID: ${region.id}.`);
     }
@@ -918,7 +1037,41 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       ? { ...object, elevationLevel }
       : object);
   });
-  const mergedTerrainObjects = [...generatedTerrainObjects, ...drawnWallObjects];
+  const circleWallObjects = primitiveAreas.flatMap((resolved): TacticalTerrainObject[] => {
+    if (resolved.target !== "wall") return [];
+    const boundary = tacticalCircleWallBoundary(resolved.circle);
+    const elevationLevel = boundaryElevationLevel(
+      resolved.circle.id,
+      [
+        ...boundary.walls.map((wall) => ({ from: wall.from, to: wall.to })),
+        ...boundary.portals.map((portal) => ({ from: portal.from, to: portal.to })),
+      ],
+    );
+    return [
+      ...boundary.walls.map((wall): TacticalTerrainObject => ({
+        id: wall.id,
+        kind: "wall",
+        edge: { from: { ...wall.from }, to: { ...wall.to } },
+        blocking: true,
+        targetable: true,
+        integrity: 3,
+        elevationLevel,
+      })),
+      ...boundary.portals.map((portal): TacticalTerrainObject => ({
+        id: portal.id,
+        kind: "door",
+        edge: { from: { ...portal.from }, to: { ...portal.to } },
+        separates: tacticalCellsSeparatedBySegment(portal),
+        blocking: true,
+        targetable: true,
+        integrity: 2,
+        open: false,
+        portalType: portal.kind,
+        elevationLevel,
+      })),
+    ];
+  });
+  const mergedTerrainObjects = [...generatedTerrainObjects, ...drawnWallObjects, ...circleWallObjects];
   mergedTerrainObjects.forEach((object) => {
     if (object.kind === "wall") walls.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to } });
     else if (object.kind === "door") doors.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to }, open: object.open, portalType: object.portalType ?? "sliding-door" });
@@ -937,6 +1090,15 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     terrainByCell,
     elevationLevelByCell,
     drawnRaisedAreaLevels,
+    drawnRaisedAreas: drawnRaisedAreas.map(({ area }) => ({
+      id: area.id,
+      segments: area.segments.map((segment) => ({
+        ...segment,
+        from: { ...segment.from },
+        to: { ...segment.to },
+        ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+      })),
+    })),
     drawnTerrainRegions: drawnTerrainRegions.map(({ region }) => ({
       ...region,
       segments: region.segments.map((segment) => ({

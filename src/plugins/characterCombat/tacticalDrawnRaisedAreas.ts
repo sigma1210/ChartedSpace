@@ -106,12 +106,6 @@ const validateOutline = (
     ) {
       throw new Error(`Drawn raised area ${area.id} extends outside the map.`);
     }
-    if (!Number.isInteger(segment.from.x)
-      || !Number.isInteger(segment.from.y)
-      || !Number.isInteger(segment.to.x)
-      || !Number.isInteger(segment.to.y)) {
-      throw new Error(`Drawn raised area ${area.id} endpoints must snap to the grid.`);
-    }
     if (samePoint(segment.from, segment.to)) {
       throw new Error(`Drawn raised area ${area.id} contains an empty segment.`);
     }

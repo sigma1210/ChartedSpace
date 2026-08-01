@@ -5,6 +5,7 @@ import {
   FloatingPluginHud,
   type FloatingPluginHudLayout,
 } from "@/components/hud/FloatingPluginHud";
+import { useTacticalEditorViewport } from "./editor/TacticalEditorViewport";
 
 type TacticalNavigationMode = "tactical" | "editor" | "playtest";
 
@@ -18,8 +19,9 @@ export const TacticalNavigationHud = ({
   mode: TacticalNavigationMode;
   onLayoutChange: (layout: FloatingPluginHudLayout) => void;
   onReturnToEditor?: () => void;
-}) => (
-  <FloatingPluginHud
+}) => {
+  const editorViewport = useTacticalEditorViewport();
+  return <FloatingPluginHud
     title="Navigation"
     layout={layout}
     onLayoutChange={onLayoutChange}
@@ -36,12 +38,22 @@ export const TacticalNavigationHud = ({
         </button>
       )}
       {mode === "editor" && (
-        <Link
-          href="/system/tactical"
-          className="border border-cyan-400/70 px-3 py-2 text-center font-bold text-cyan-100 hover:bg-cyan-950"
-        >
-          Return to tactical map
-        </Link>
+        <>
+          {editorViewport && <div className="grid grid-cols-2 gap-1 border-b border-cyan-900 pb-2">
+            <button type="button" onClick={editorViewport.zoomIn} className="border border-cyan-500/70 px-2 py-2 font-bold text-cyan-100 hover:bg-cyan-950">Zoom in</button>
+            <button type="button" onClick={editorViewport.zoomOut} className="border border-cyan-500/70 px-2 py-2 font-bold text-cyan-100 hover:bg-cyan-950">Zoom out</button>
+            <button type="button" onClick={editorViewport.fitMap} className="border border-cyan-500/70 px-2 py-2 font-bold text-cyan-100 hover:bg-cyan-950">Fit map</button>
+            <button type="button" onClick={editorViewport.resetView} className="border border-cyan-500/70 px-2 py-2 font-bold text-cyan-100 hover:bg-cyan-950">Reset view</button>
+            <div className="col-span-2 text-center text-cyan-200" aria-label="Editor map zoom">{editorViewport.zoomPercent}%</div>
+            <div className="col-span-2 normal-case text-(--hud-text-dim)">Wheel to zoom · middle-drag or Space + drag to pan</div>
+          </div>}
+          <Link
+            href="/system/tactical"
+            className="border border-cyan-400/70 px-3 py-2 text-center font-bold text-cyan-100 hover:bg-cyan-950"
+          >
+            Return to tactical map
+          </Link>
+        </>
       )}
       {mode === "tactical" && (
         <>
@@ -60,5 +72,5 @@ export const TacticalNavigationHud = ({
         </>
       )}
     </div>
-  </FloatingPluginHud>
-);
+  </FloatingPluginHud>;
+};

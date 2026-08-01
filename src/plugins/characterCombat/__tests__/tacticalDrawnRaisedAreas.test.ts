@@ -49,6 +49,27 @@ describe("drawn tactical raised areas", () => {
     expect(cells).not.toContainEqual({ x: 4, y: 4 });
   });
 
+  it("rasterizes a freeform outline from cell centers without rounding vertices", () => {
+    const area: TacticalDrawnRaisedArea = {
+      id: "fractional-platform",
+      segments: [
+        line({ x: 1.25, y: 1.25 }, { x: 4.75, y: 1.25 }),
+        line({ x: 4.75, y: 1.25 }, { x: 4.75, y: 4.75 }),
+        line({ x: 4.75, y: 4.75 }, { x: 1.25, y: 4.75 }),
+        line({ x: 1.25, y: 4.75 }, { x: 1.25, y: 1.25 }),
+      ],
+    };
+
+    const cells = tacticalDrawnRaisedAreaCells(area, 8, 8);
+
+    expect(cells).toHaveLength(16);
+    expect(cells).toEqual(expect.arrayContaining([
+      { x: 1, y: 1 },
+      { x: 4, y: 4 },
+    ]));
+    expect(cells).not.toContainEqual({ x: 5, y: 4 });
+  });
+
   it("flattens quadratic segments and fills beneath the curve", () => {
     const area: TacticalDrawnRaisedArea = {
       id: "curved-platform",

@@ -54,6 +54,10 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain(">Curved Wall</button>");
     expect(markup).toContain(">Raised Area</button>");
     expect(markup).toContain(">Raised Curve</button>");
+    expect(markup).toContain(">Draw Circle</button>");
+    expect(markup).toContain('aria-label="Circle type Wall"');
+    expect(markup).toContain('aria-label="Circle type Raised"');
+    expect(markup).toContain("Drawing precision");
     expect(markup).toContain(">Draw Machinery</button>");
     expect(markup).toContain(">Machinery Curve</button>");
     expect(markup).toContain(">Draw Liquid H₂</button>");
@@ -83,6 +87,44 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain("Crew deployment edges");
     expect(markup).not.toContain("<title>");
     expect(markup).toContain('aria-label="Gang Member 1 · facing North"');
+  });
+
+  it("zooms the editor map toward the pointer and restores the fitted view", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    expect(preview.getAttribute("viewBox")).toBe("0 0 72 48");
+    fireEvent.wheel(preview, { clientX: 54, clientY: 12, deltaX: 0, deltaY: -350 });
+    const zoomedView = preview.getAttribute("viewBox")!.split(" ").map(Number);
+    expect(zoomedView[0]).toBeGreaterThan(0);
+    expect(zoomedView[1]).toBeGreaterThan(0);
+    expect(zoomedView[2]).toBeLessThan(72);
+    expect(preview.getAttribute("data-zoom-percent")).not.toBe("100");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit map" }));
+    expect(preview.getAttribute("viewBox")).toBe("0 0 72 48");
+    expect(preview.getAttribute("data-zoom-percent")).toBe("100");
+  });
+
+  it("uses Space + drag to pan without activating the selected drawing tool", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    jest.spyOn(preview, "getBoundingClientRect").mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 720, bottom: 480, width: 720, height: 480, toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fire" }));
+    const before = preview.getAttribute("viewBox")!.split(" ").map(Number);
+
+    fireEvent.keyDown(window, { code: "Space" });
+    fireEvent.pointerDown(preview, { button: 0, clientX: 360, clientY: 240, pointerId: 120 });
+    fireEvent.pointerMove(preview, { button: 0, clientX: 260, clientY: 240, pointerId: 120 });
+    fireEvent.pointerUp(preview, { button: 0, clientX: 260, clientY: 240, pointerId: 120 });
+    fireEvent.keyUp(window, { code: "Space" });
+
+    const after = preview.getAttribute("viewBox")!.split(" ").map(Number);
+    expect(after[0]).toBeGreaterThan(before[0]);
+    expect(screen.queryByText("Selected fire")).toBeNull();
   });
 
   it.each(["stairs", "ladder"] as const)("places a %s across the selected edge between adjacent levels", (kind) => {
@@ -450,6 +492,155 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.queryByTestId("drawn-wall-drawn-wall-1")).toBeNull();
   });
 
+  it("uses the selected drawing precision for wall vertices", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.change(screen.getByLabelText("Drawing precision"), { target: { value: "half-grid" } });
+    fireEvent.click(screen.getByRole("button", { name: "Wall" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.pointerDown(preview, { clientX: 5.2, clientY: 6.3, pointerId: 45 });
+    fireEvent.pointerMove(preview, { clientX: 10.7, clientY: 9.2, pointerId: 45 });
+    fireEvent.pointerUp(preview, { clientX: 10.7, clientY: 9.2, pointerId: 45 });
+
+    const wall = screen.getByTestId("drawn-wall-drawn-wall-1");
+    expect(wall.getAttribute("x1")).toBe("5");
+    expect(wall.getAttribute("y1")).toBe("6.5");
+    expect(wall.getAttribute("x2")).toBe("10.5");
+    expect(wall.getAttribute("y2")).toBe("9");
+  });
+
+  it("draws, moves, resizes, retypes, and deletes a circle primitive", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.change(screen.getByLabelText("Drawing precision"), {
+      target: { value: "quarter-grid" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Circle type Raised" }));
+    fireEvent.click(screen.getByRole("button", { name: "Draw Circle" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.pointerDown(preview, {
+      clientX: 10.2,
+      clientY: 10.3,
+      pointerId: 46,
+    });
+    fireEvent.pointerMove(preview, {
+      clientX: 14.4,
+      clientY: 10.3,
+      pointerId: 46,
+    });
+    expect(screen.getByTestId("circle-draft-preview")).toBeTruthy();
+    fireEvent.pointerUp(preview, {
+      clientX: 14.4,
+      clientY: 10.3,
+      pointerId: 46,
+    });
+
+    const circle = screen.getByTestId("terrain-circle-terrain-circle-1")
+      .querySelector("circle")!;
+    expect(circle.getAttribute("cx")).toBe("10.25");
+    expect(circle.getAttribute("cy")).toBe("10.25");
+    expect(circle.getAttribute("r")).toBe("4.25");
+    expect(screen.getByText("Circle · terrain-circle-1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Circle type Raised" })
+      .getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Circle type Wall" }));
+    expect(screen.getByRole("button", { name: "Circle type Wall" })
+      .getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("terrain-circle-terrain-circle-1")
+      .querySelector("circle")?.getAttribute("fill-opacity")).toBe("0");
+
+    fireEvent.click(screen.getByRole("button", { name: "Circle type Machinery" }));
+    expect(screen.getByRole("button", { name: "Circle type Machinery" })
+      .getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.pointerDown(
+      screen.getByTestId("terrain-circle-terrain-circle-1-center-handle"),
+      { clientX: 10.25, clientY: 10.25, pointerId: 47 },
+    );
+    fireEvent.pointerMove(preview, {
+      clientX: 20.2,
+      clientY: 10.3,
+      pointerId: 47,
+    });
+    fireEvent.pointerUp(preview, {
+      clientX: 20.2,
+      clientY: 10.3,
+      pointerId: 47,
+    });
+    expect(screen.getByTestId("terrain-circle-terrain-circle-1")
+      .querySelector("circle")?.getAttribute("cx")).toBe("20.25");
+
+    fireEvent.pointerDown(
+      screen.getByTestId("terrain-circle-terrain-circle-1-radius-handle"),
+      { clientX: 24.5, clientY: 10.25, pointerId: 48 },
+    );
+    fireEvent.pointerMove(preview, {
+      clientX: 25.2,
+      clientY: 10.3,
+      pointerId: 48,
+    });
+    fireEvent.pointerUp(preview, {
+      clientX: 25.2,
+      clientY: 10.3,
+      pointerId: 48,
+    });
+    expect(screen.getByTestId("terrain-circle-terrain-circle-1")
+      .querySelector("circle")?.getAttribute("r")).toBe("5");
+
+    fireEvent.click(screen.getByRole("button", { name: "Circle type Liquid H₂" }));
+    expect(screen.getByLabelText("Circle liquid hydrogen filled")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Circle liquid hydrogen filled"));
+    expect((screen.getByLabelText("Circle liquid hydrogen filled") as HTMLInputElement).checked)
+      .toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Circle" }));
+    expect(screen.queryByTestId("terrain-circle-terrain-circle-1")).toBeNull();
+  });
+
+  it("places, moves, and deletes doors and iris valves on a circle wall", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Circle type Wall" }));
+    fireEvent.click(screen.getByRole("button", { name: "Draw Circle" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 70 });
+    fireEvent.pointerMove(preview, { clientX: 14, clientY: 10, pointerId: 70 });
+    fireEvent.pointerUp(preview, { clientX: 14, clientY: 10, pointerId: 70 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Door" }));
+    fireEvent.pointerMove(preview, { clientX: 14, clientY: 10, pointerId: 71 });
+    expect(screen.getByTestId("wall-portal-preview")).toBeTruthy();
+    fireEvent.pointerDown(preview, { clientX: 14, clientY: 10, pointerId: 71 });
+    expect(screen.getByTestId("wall-portal-wall-door-1")).toBeTruthy();
+    expect(screen.getByText("Door on terrain-circle-1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Wall Iris Valve" }));
+    fireEvent.pointerMove(preview, { clientX: 6, clientY: 10, pointerId: 72 });
+    fireEvent.pointerDown(preview, { clientX: 6, clientY: 10, pointerId: 72 });
+    expect(screen.getByTestId("wall-portal-wall-iris-valve-1")).toBeTruthy();
+    expect(screen.getByText("Wall Iris Valve on terrain-circle-1")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    const door = screen.getByTestId("wall-portal-wall-door-1");
+    const originalCenterY = (
+      Number(door.getAttribute("y1")) + Number(door.getAttribute("y2"))
+    ) / 2;
+    fireEvent.pointerDown(door, { clientX: 14, clientY: 10, pointerId: 73 });
+    fireEvent.pointerMove(preview, { clientX: 10, clientY: 6, pointerId: 73 });
+    fireEvent.pointerUp(preview, { clientX: 10, clientY: 6, pointerId: 73 });
+    const movedDoor = screen.getByTestId("wall-portal-wall-door-1");
+    const movedCenterY = (
+      Number(movedDoor.getAttribute("y1")) + Number(movedDoor.getAttribute("y2"))
+    ) / 2;
+    expect(movedCenterY).toBeLessThan(originalCenterY);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete portal" }));
+    expect(screen.queryByTestId("wall-portal-wall-door-1")).toBeNull();
+    expect(screen.getByTestId("wall-portal-wall-iris-valve-1")).toBeTruthy();
+    expect(screen.getByTestId("terrain-circle-terrain-circle-1")).toBeTruthy();
+  });
+
   it("draws and closes a raised area with a live enclosed-cell preview", () => {
     render(<TacticalScenarioEditorClient />);
     fireEvent.click(screen.getByRole("button", { name: "Raised Area" }));
@@ -564,6 +755,25 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(filled);
     expect(filled.checked).toBe(false);
     expect(screen.getByText("Liquid hydrogen · empty")).toBeTruthy();
+  });
+
+  it("closes a freeform terrain outline when the pointer returns near its starting point", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.change(screen.getByLabelText("Drawing precision"), { target: { value: "freeform" } });
+    fireEvent.click(screen.getByRole("button", { name: "Draw Machinery" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+    fireEvent.pointerDown(preview, { clientX: 20.13, clientY: 20.17, pointerId: 100 });
+    fireEvent.pointerDown(preview, { clientX: 25.31, clientY: 20.22, pointerId: 101 });
+    fireEvent.pointerDown(preview, { clientX: 25.26, clientY: 25.44, pointerId: 102 });
+    fireEvent.pointerDown(preview, { clientX: 20.18, clientY: 25.39, pointerId: 103 });
+    fireEvent.pointerDown(preview, { clientX: 20.2, clientY: 20.21, pointerId: 104 });
+
+    expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
+    const firstSegment = screen.getByTestId("drawn-terrain-region-drawn-close-machinery-1-segment-0");
+    expect(firstSegment.getAttribute("x1")).toBe("20.13");
+    expect(firstSegment.getAttribute("y1")).toBe("20.17");
+    expect(firstSegment.getAttribute("x2")).toBe("25.31");
+    expect(firstSegment.getAttribute("y2")).toBe("20.22");
   });
 
   it("lets enemy-tool clicks pass through raised terrain and fire markers", () => {
