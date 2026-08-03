@@ -1,4 +1,4 @@
-import TacticalMapPageClient from "./TacticalMapPageClient";
+import TacticalMapPageClient from "@/plugins/characterCombat/TacticalMapPageClient";
 
 const TacticalMapPage = () => <TacticalMapPageClient />;
 

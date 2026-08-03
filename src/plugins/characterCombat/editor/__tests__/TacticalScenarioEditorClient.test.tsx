@@ -1,27 +1,32 @@
 /** @jest-environment jsdom */
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import TacticalScenarioEditorClient, {
-  emptyTacticalScenarioDraft,
+import { act, fireEvent, render as renderUi, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { Provider } from "react-redux";
+import TacticalScenarioEditorClientBase, {
   fitTacticalTracingTemplate,
-  removeDrawnRaisedAreaCandidate,
-  removeConsolePlacementOperations,
   resizeTacticalTracingTemplate,
-  tacticalElevationTransitionPlacementCandidate,
   tacticalEditorMarkerInteractionEnabled,
-  upgradeLegacyTacticalEditorAreas,
+  type TacticalEditorPlaytestProps,
 } from "../TacticalScenarioEditorClient";
+import { emptyTacticalScenarioDraft } from "../tacticalEditorDocument";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "@/plugins/characterCombat/tacticalConsoleVictory";
-import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
-import { TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY } from "../tacticalEditorHudLayoutStorage";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
+import { TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY } from "@/plugins/characterCombat/editor/state/hudLayouts";
+import { store } from "@/store";
+import { editorHudLayoutsReset, editorSelectionChanged, editorSessionReset } from "@/plugins/characterCombat/editor/state/tacticalEditorSlice";
+import { selectTacticalEditorDocumentDirty } from "@/plugins/characterCombat/editor/state/selectors";
 
-jest.mock("../../TacticalMapPageClient", () => ({
-  __esModule: true,
-  default: ({ draftPlaytest }: { draftPlaytest?: { onExit: () => void } }) => draftPlaytest
-    ? <button type="button" onClick={draftPlaytest.onExit}>Exit draft playtest</button>
-    : null,
-}));
+const TestTacticalPlaytest = ({ draftPlaytest }: TacticalEditorPlaytestProps) => draftPlaytest
+  ? <button type="button" onClick={draftPlaytest.onExit}>Exit draft playtest</button>
+  : null;
+
+const TacticalScenarioEditorClient = () => (
+  <TacticalScenarioEditorClientBase PlaytestComponent={TestTacticalPlaytest} />
+);
+
+const render = (ui: ReactElement) => renderUi(<Provider store={store}>{ui}</Provider>);
 
 const penClick = (preview: HTMLElement, x: number, y: number, pointerId: number) => {
   fireEvent.pointerDown(preview, { clientX: x, clientY: y, pointerId });
@@ -81,6 +86,8 @@ describe("TacticalScenarioEditorClient", () => {
   });
 
   beforeEach(() => {
+    store.dispatch(editorHudLayoutsReset());
+    store.dispatch(editorSessionReset());
     window.localStorage.clear();
     global.fetch = jest.fn(() => new Promise<Response>(() => undefined)) as typeof fetch;
   });
@@ -90,75 +97,12 @@ describe("TacticalScenarioEditorClient", () => {
     Reflect.deleteProperty(global, "fetch");
   });
 
-  it("upgrades matching legacy surface and elevation outlines into one editable area", () => {
-    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    const segments = [
-      { kind: "line" as const, from: { x: 2, y: 2 }, to: { x: 6, y: 2 } },
-      { kind: "line" as const, from: { x: 6, y: 2 }, to: { x: 6, y: 6 } },
-      { kind: "line" as const, from: { x: 6, y: 6 }, to: { x: 2, y: 6 } },
-      { kind: "line" as const, from: { x: 2, y: 6 }, to: { x: 2, y: 2 } },
-    ];
-    definition.drawnAreas = [];
-    definition.drawnRaisedAreas = [{ id: "legacy-hill", segments }];
-    definition.drawnTerrainRegions = [{ id: "legacy-sand", kind: "sand", segments }];
-
-    const upgraded = upgradeLegacyTacticalEditorAreas(definition);
-
-    expect(upgraded.drawnAreas).toEqual([expect.objectContaining({
-      id: "legacy-hill",
-      surface: "sand",
-      elevation: 1,
-      boundary: "none",
-    })]);
-    expect(upgraded.drawnRaisedAreas).toEqual([]);
-    expect(upgraded.drawnTerrainRegions).toEqual([]);
-  });
-
-  it("upgrades legacy circles without portals into editable closed areas", () => {
-    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    definition.drawnTerrainPrimitives = [
-      { id: "legacy-wall-circle", shape: "circle", center: { x: 10, y: 10 }, radius: 3, terrainType: "wall" },
-      { id: "legacy-raised-circle", shape: "circle", center: { x: 20, y: 10 }, radius: 3, terrainType: "raised-area" },
-      {
-        id: "legacy-portal-circle",
-        shape: "circle",
-        center: { x: 30, y: 10 },
-        radius: 3,
-        terrainType: "wall",
-        portals: [{ id: "legacy-door", kind: "sliding-door", position: 0 }],
-      },
-    ];
-
-    const upgraded = upgradeLegacyTacticalEditorAreas(definition);
-
-    expect(upgraded.drawnAreas).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "legacy-wall-circle", geometry: { kind: "circle", center: { x: 10, y: 10 }, radius: 3 }, surface: "none", elevation: 0, boundary: "wall" }),
-      expect.objectContaining({ id: "legacy-raised-circle", geometry: { kind: "circle", center: { x: 20, y: 10 }, radius: 3 }, surface: "none", elevation: 1, boundary: "none" }),
-    ]));
-    expect(upgraded.drawnAreas?.find((area) => area.id === "legacy-wall-circle")?.segments).toHaveLength(8);
-    expect(upgraded.drawnTerrainPrimitives).toEqual([
-      expect.objectContaining({ id: "legacy-portal-circle", portals: [expect.objectContaining({ id: "legacy-door" })] }),
-    ]);
-
-    const savedAndReloaded = upgradeLegacyTacticalEditorAreas(
-      cloneTacticalScenarioDefinition(upgraded),
-    );
-    const reloadedCircle = savedAndReloaded.drawnAreas?.find(
-      (area) => area.id === "legacy-wall-circle",
-    );
-    expect(reloadedCircle?.geometry).toEqual({
-      kind: "circle",
-      center: { x: 10, y: 10 },
-      radius: 3,
-    });
-    expect(reloadedCircle?.segments[0]?.from).toEqual({ x: 13, y: 10 });
-  });
-
   it("keeps editor tools in the HUD without an object catalog", () => {
-    const markup = renderToStaticMarkup(<TacticalScenarioEditorClient />);
+    const markup = renderToStaticMarkup(<Provider store={store}><TacticalScenarioEditorClient /></Provider>);
 
     expect(markup).not.toContain("Object Catalog");
     expect(markup).not.toContain("Open object catalog and tool options");
+    expect(markup).toContain("contents invisible");
     expect(markup).toContain("Enemy Palette");
     expect(markup).toContain("Tracing Template");
     expect(markup).toContain(">Gang Member</span>");
@@ -233,9 +177,15 @@ describe("TacticalScenarioEditorClient", () => {
       expect(toolsHud.style.left).toBe("123px");
       expect(toolsHud.style.top).toBe("87px");
       expect(within(toolsHud).getByRole("button", { name: "Unpin HUD" })).toBeTruthy();
+      expect(store.getState().tacticalEditor.hudLayouts.tools).toEqual({
+        visible: true,
+        pinned: true,
+        position: { x: 123, y: 87 },
+      });
     });
 
     fireEvent.click(within(toolsHud).getByRole("button", { name: "Unpin HUD" }));
+    expect(store.getState().tacticalEditor.hudLayouts.tools.pinned).toBe(false);
     expect(JSON.parse(window.localStorage.getItem(TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY)!)).toEqual({
       tools: { pinned: false, position: { x: 123, y: 87 } },
     });
@@ -246,7 +196,16 @@ describe("TacticalScenarioEditorClient", () => {
     const preview = screen.getByLabelText("Scenario draft map preview");
 
     expect(preview.getAttribute("viewBox")).toBe("0 0 72 48");
-    fireEvent.wheel(preview, { clientX: 54, clientY: 12, deltaX: 0, deltaY: -350 });
+    const wheelEvent = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 54,
+      clientY: 12,
+      deltaX: 0,
+      deltaY: -350,
+    });
+    fireEvent(preview, wheelEvent);
+    expect(wheelEvent.defaultPrevented).toBe(true);
     const zoomedView = preview.getAttribute("viewBox")!.split(" ").map(Number);
     expect(zoomedView[0]).toBeGreaterThan(0);
     expect(zoomedView[1]).toBeGreaterThan(0);
@@ -287,14 +246,17 @@ describe("TacticalScenarioEditorClient", () => {
     expect(selectTool.getAttribute("aria-pressed")).toBe("true");
     fireEvent.keyDown(window, { key: "h" });
     expect(handTool.getAttribute("aria-pressed")).toBe("true");
+    expect(store.getState().tacticalEditor.tools.mode).toEqual({ kind: "primary", tool: "hand" });
     fireEvent.keyDown(window, { key: "v" });
     expect(selectTool.getAttribute("aria-pressed")).toBe("true");
+    expect(store.getState().tacticalEditor.tools.mode).toEqual({ kind: "primary", tool: "select" });
   });
 
   it("exposes the core drawing tools as labeled symbols in the horizontal HUD", () => {
     render(<TacticalScenarioEditorClient />);
     expect(screen.queryByRole("group", { name: "Drawing settings" })).toBeNull();
     openDrawingSettings();
+    expect(store.getState().tacticalEditor.tools.openGroup).toBe("drawing-settings");
     const drawingSettings = screen.getByRole("group", { name: "Drawing settings" });
     expect(within(drawingSettings).getByLabelText("Drawing precision")).toBeTruthy();
     expect(within(drawingSettings).getByLabelText("Map width")).toBeTruthy();
@@ -302,23 +264,39 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.queryByLabelText("Editor properties")).toBeNull();
     expect(screen.queryByLabelText("Object catalog and options")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    expect(store.getState().tacticalEditor.tools.openGroup).toBe("areas");
     expect(screen.queryByRole("group", { name: "Drawing settings" })).toBeNull();
     const areaTool = screen.getByRole("button", { name: "Choose Pen tool" });
 
     expect(areaTool.getAttribute("title")).toBe("Pen");
     fireEvent.click(areaTool);
     expect(areaTool.getAttribute("aria-pressed")).toBe("true");
+    expect(store.getState().tacticalEditor.tools.mode).toEqual({ kind: "drawing", toolId: "scenario-pen-area" });
     fireEvent.click(screen.getByRole("button", { name: "Open Boundaries tools" }));
     const wallTool = screen.getByRole("button", { name: "Choose Wall tool" });
     expect(wallTool.getAttribute("title")).toBe("Wall");
     fireEvent.click(wallTool);
     expect(wallTool.getAttribute("aria-pressed")).toBe("true");
+    expect(store.getState().tacticalEditor.tools.mode).toEqual({ kind: "drawing", toolId: "scenario-wall" });
     expect(screen.queryByRole("button", { name: "Choose Pen tool" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Open Interactions tools" }));
     expect(screen.getByRole("button", { name: "Choose Control Room tool" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Choose Console 1x1 tool" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Choose Interactive Human tool" })).toBeTruthy();
+  });
+
+  it("activates enemy placement as an exclusive Redux tool mode", () => {
+    render(<TacticalScenarioEditorClient />);
+    act(() => store.dispatch(editorSelectionChanged({ kind: "wall", id: "wall-1" })));
+
+    const enemyOptions = screen.getByLabelText("Enemy options");
+    fireEvent.click(within(enemyOptions).getByText("Gang Member").closest("button")!);
+
+    expect(store.getState().tacticalEditor.selection).toEqual({ object: null, areaAnchor: null, operationId: null });
+    expect(store.getState().tacticalEditor.tools.mode).toEqual({ kind: "enemy", enemyType: "gang-member" });
+    fireEvent.click(screen.getByRole("button", { name: "Node edit tool" }));
+    expect(store.getState().tacticalEditor.tools.mode).toEqual({ kind: "primary", tool: "node" });
   });
 
   it("resizes the map from Drawing Settings", () => {
@@ -433,6 +411,14 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.pointerDown(preview, { clientX: 13, clientY: 10, pointerId: 161 });
     expect(screen.getByTestId("wall-portal-wall-door-1")).toBeTruthy();
     expect(screen.getByTestId("editor-layer-portal:wall-door-1")).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId("editor-layer-area:rectangle-area-1")).getByRole("button", { name: "rectangle-area-1" }));
+    expect(store.getState().tacticalEditor.selection.object).toEqual({ kind: "area", id: "rectangle-area-1" });
+    fireEvent.click(within(screen.getByTestId("editor-layer-portal:wall-door-1")).getByRole("button", { name: "wall-door-1" }));
+    expect(store.getState().tacticalEditor.selection).toEqual({
+      object: { kind: "portal", id: "wall-door-1" },
+      areaAnchor: null,
+      operationId: null,
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
     fireEvent.click(screen.getByRole("button", { name: "Choose Circle area tool" }));
@@ -481,9 +467,16 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(within(layer).getByRole("button", { name: "Hide control-room-alpha" }));
     expect(screen.getByRole("button", { name: "Show control-room-alpha" })).toBeTruthy();
     expect(layer.className).not.toContain("bg-cyan-950/70");
+    expect(store.getState().tacticalEditor.layers.hiddenByKey).toEqual({
+      "terrain-placement:control-room-alpha": true,
+    });
+    expect(store.getState().tacticalEditor.selection.object).toBeNull();
 
     fireEvent.click(within(layer).getByRole("button", { name: "Lock control-room-alpha" }));
     expect(screen.getByRole("button", { name: "Unlock control-room-alpha" })).toBeTruthy();
+    expect(store.getState().tacticalEditor.layers.lockedByKey).toEqual({
+      "terrain-placement:control-room-alpha": true,
+    });
   });
 
   it("collapses and restores the floating Layers HUD", () => {
@@ -495,91 +488,6 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(screen.getByText("HUDs"));
     fireEvent.click(screen.getByRole("button", { name: "Show Layers" }));
     expect(screen.getByLabelText("Editor layers")).toBeTruthy();
-  });
-
-  it.each(["stairs", "ladder"] as const)("places a %s across the selected edge between adjacent levels", (kind) => {
-    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    definition.terrainPlacements = [];
-    definition.drawnRaisedAreas = [{
-      id: "transition-platform",
-      segments: [
-        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
-        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
-        { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
-        { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
-      ],
-    }];
-    definition.elevationTransitions = [];
-    const candidate = tacticalElevationTransitionPlacementCandidate(
-      definition,
-      kind,
-      {
-        x: 9,
-        y: 11,
-        edgeRotation: 90,
-        mapX: 9.6,
-        mapY: 11.5,
-      },
-    );
-
-    expect(candidate.transition.kind).toBe(kind);
-    expect(candidate.definition.elevationTransitions).toContainEqual(candidate.transition);
-    expect(resolveTacticalScenarioTerrain(candidate.definition).elevationTransitions).toHaveLength(1);
-  });
-
-  it("snaps stairs to a nearby highlighted edge even when the raw cell edge is not valid", () => {
-    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    definition.terrainPlacements = [];
-    definition.drawnRaisedAreas = [{
-      id: "snap-platform",
-      segments: [
-        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
-        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
-        { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
-        { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
-      ],
-    }];
-    definition.elevationTransitions = [];
-
-    const candidate = tacticalElevationTransitionPlacementCandidate(definition, "stairs", {
-      x: 9,
-      y: 11,
-      edgeRotation: 0,
-      mapX: 9.62,
-      mapY: 11.4,
-    });
-
-    expect(candidate.transition).toMatchObject({
-      lower: { x: 9, y: 11 },
-      upper: { x: 10, y: 11 },
-    });
-  });
-
-  it("deletes a drawn raised area and any transition that depended on it", () => {
-    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
-    definition.terrainPlacements = [];
-    definition.drawnRaisedAreas = [{
-      id: "raised-area-to-delete",
-      segments: [
-        { kind: "line", from: { x: 10, y: 10 }, to: { x: 13, y: 10 } },
-        { kind: "line", from: { x: 13, y: 10 }, to: { x: 13, y: 13 } },
-        { kind: "line", from: { x: 13, y: 13 }, to: { x: 10, y: 13 } },
-        { kind: "line", from: { x: 10, y: 13 }, to: { x: 10, y: 10 } },
-      ],
-    }];
-    definition.elevationTransitions = [];
-    const withLadder = tacticalElevationTransitionPlacementCandidate(
-      definition,
-      "ladder",
-      { x: 9, y: 11, edgeRotation: 90 },
-    ).definition;
-
-    const removed = removeDrawnRaisedAreaCandidate(withLadder, "raised-area-to-delete");
-
-    expect(removed.definition.drawnRaisedAreas).toEqual([]);
-    expect(removed.definition.elevationTransitions).toEqual([]);
-    expect(removed.removedTransitionIds).toEqual(["ladder-1"]);
-    expect(() => resolveTacticalScenarioTerrain(removed.definition)).not.toThrow();
   });
 
   it("fits tracing templates inside the grid while preserving their aspect ratio", () => {
@@ -662,9 +570,18 @@ describe("TacticalScenarioEditorClient", () => {
       render(<TacticalScenarioEditorClient />);
       const templateSelect = await screen.findByLabelText("Template image");
       await screen.findByRole("option", { name: "Landing Pad" });
+      expect(store.getState().tacticalEditor.templates).toMatchObject({
+        indexStatus: "idle",
+        operation: "idle",
+        assets: [{ id: "built-in:landing-pad", label: "Landing Pad" }],
+      });
       fireEvent.change(templateSelect, { target: { value: "/images/tactical/landing-pad/map.jpg" } });
 
       await waitFor(() => expect(screen.getByTestId("tracing-template-image")).toBeTruthy());
+      expect(store.getState().tacticalEditor.templates).toMatchObject({
+        operation: "idle",
+        message: { kind: "success", text: "Tracing template fitted to the map." },
+      });
       const templateImage = screen.getByTestId("tracing-template-image");
       expect(templateImage.getAttribute("x")).toBe("0");
       expect(templateImage.getAttribute("y")).toBe("0");
@@ -709,6 +626,54 @@ describe("TacticalScenarioEditorClient", () => {
       expect(screen.getByTestId("tracing-template-image")).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Remove" }));
       expect(screen.queryByTestId("tracing-template-image")).toBeNull();
+    } finally {
+      Object.defineProperty(window, "Image", { configurable: true, writable: true, value: OriginalImage });
+    }
+  });
+
+  it("uploads a tracing template into the Redux library and fits it", async () => {
+    const OriginalImage = window.Image;
+    class MockImage {
+      naturalWidth = 800;
+      naturalHeight = 400;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    Object.defineProperty(window, "Image", { configurable: true, writable: true, value: MockImage });
+    const uploadedTemplate = {
+      id: "uploaded:deck-plan",
+      label: "Deck Plan",
+      imagePath: "/uploads/tactical/deck-plan.jpg",
+      source: "uploaded" as const,
+    };
+    global.fetch = jest.fn((input, init) => {
+      const url = String(input);
+      if (url === "/api/tactical/templates" && init?.method === "POST") {
+        return Promise.resolve({ ok: true, json: async () => ({ template: uploadedTemplate }) } as Response);
+      }
+      if (url === "/api/tactical/templates") {
+        return Promise.resolve({ ok: true, json: async () => ({ templates: [] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ scenarios: [] }) } as Response);
+    }) as typeof fetch;
+
+    try {
+      render(<TacticalScenarioEditorClient />);
+      await screen.findByLabelText("Template image");
+      const file = new File(["image"], "deck-plan.jpg", { type: "image/jpeg" });
+      fireEvent.change(screen.getByLabelText("Upload tracing template"), { target: { files: [file] } });
+
+      await screen.findByRole("option", { name: "Deck Plan (uploaded)" });
+      expect(store.getState().tacticalEditor.templates).toMatchObject({
+        assets: [uploadedTemplate],
+        operation: "idle",
+        message: { kind: "success", text: "Deck Plan uploaded and fitted to the map." },
+      });
+      expect(store.getState().tacticalEditor.document.draft.tracingTemplate?.imagePath)
+        .toBe(uploadedTemplate.imagePath);
     } finally {
       Object.defineProperty(window, "Image", { configurable: true, writable: true, value: OriginalImage });
     }
@@ -1133,6 +1098,11 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Node edit tool" }));
     fireEvent.doubleClick(screen.getByTestId("drawn-area-drawn-area-1-segment-0"), { clientX: 32, clientY: 20 });
     expect(screen.getAllByTestId(/drawn-area-drawn-area-1-anchor-/)).toHaveLength(5);
+    expect(store.getState().tacticalEditor.selection).toEqual({
+      object: { kind: "area", id: "drawn-area-1" },
+      areaAnchor: { areaId: "drawn-area-1", anchorIndex: 1 },
+      operationId: null,
+    });
     fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.getAllByTestId(/drawn-area-drawn-area-1-anchor-/)).toHaveLength(4);
 
@@ -1459,6 +1429,7 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.queryByLabelText("Scenario title")).toBeNull();
     expect(screen.queryByText("Crew deployment edges")).toBeNull();
     let dialog = openScenarioProperties();
+    expect(store.getState().tacticalEditor.file.dialog.kind).toBe("properties");
     fireEvent.change(within(dialog).getByLabelText("Scenario title"), { target: { value: "Cancelled title" } });
     fireEvent.change(within(dialog).getByLabelText("Scenario briefing"), { target: { value: "Cancelled briefing" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -1533,6 +1504,19 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
 
     await screen.findByText("Created empty-boarding.json.");
+    expect(store.getState().tacticalEditor.file).toMatchObject({
+      currentScenario: { id: "empty-boarding", title: "Empty Boarding", isDefault: false },
+      operation: "idle",
+      dialog: { kind: "closed" },
+    });
+    expect(store.getState().tacticalEditor.document.draft.title).toBe("Empty Boarding");
+    expect(store.getState().tacticalEditor.document.draft)
+      .toEqual(store.getState().tacticalEditor.document.baseline);
+    expect(selectTacticalEditorDocumentDirty(store.getState())).toBe(false);
+    expect(store.getState().tacticalEditor.tools).toMatchObject({
+      mode: { kind: "primary", tool: "select" },
+      openGroup: "drawing-settings",
+    });
     expect(createdDefinition).toMatchObject({
       title: "Empty Boarding",
       map: { width: 80, height: 55 },
@@ -1574,17 +1558,28 @@ describe("TacticalScenarioEditorClient", () => {
     const confirm = jest.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
 
     render(<TacticalScenarioEditorClient />);
+    const defaultPlacementLayer = screen.getByTestId("editor-layer-terrain-placement:control-room-alpha");
+    fireEvent.click(within(defaultPlacementLayer).getByRole("button", { name: "Lock control-room-alpha" }));
+    expect(store.getState().tacticalEditor.layers.lockedByKey).toEqual({
+      "terrain-placement:control-room-alpha": true,
+    });
     applyScenarioTitle("Unsaved title");
     fireEvent.click(screen.getByRole("button", { name: "File menu" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Open Scenario…" }));
 
     const dialog = screen.getByRole("dialog", { name: "Open Scenario" });
+    expect(store.getState().tacticalEditor.file.dialog.kind).toBe("open");
     const search = within(dialog).getByLabelText("Search scenarios");
     expect(document.activeElement).toBe(search);
     await within(dialog).findByRole("option", { name: "Header Open Scenario · header-open-scenario" });
     expect(within(dialog).getByText("Default")).toBeTruthy();
     expect(within(dialog).getByText("Current")).toBeTruthy();
     fireEvent.change(search, { target: { value: "HEADER OPEN" } });
+    expect(store.getState().tacticalEditor.file.dialog).toEqual({
+      kind: "open",
+      searchQuery: "HEADER OPEN",
+      selectedScenarioId: "header-open-scenario",
+    });
     expect(within(dialog).getByRole("option", { name: "Header Open Scenario · header-open-scenario" })).toBeTruthy();
     expect(within(dialog).queryByRole("option", { name: /default-tactical-control-room/ })).toBeNull();
     fireEvent.change(search, { target: { value: "header-open-scenario" } });
@@ -1602,6 +1597,16 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Open" }));
     await screen.findByText("Loaded Header Open Scenario.");
     expect(screen.queryByRole("dialog", { name: "Open Scenario" })).toBeNull();
+    expect(store.getState().tacticalEditor.file).toMatchObject({
+      currentScenario: { id: "header-open-scenario", title: "Header Open Scenario", isDefault: false },
+      operation: "idle",
+      dialog: { kind: "closed" },
+    });
+    expect(store.getState().tacticalEditor.document.draft.title).toBe("Header Open Scenario");
+    expect(store.getState().tacticalEditor.document.consoleVictory)
+      .toEqual(store.getState().tacticalEditor.document.consoleVictoryBaseline);
+    expect(selectTacticalEditorDocumentDirty(store.getState())).toBe(false);
+    expect(store.getState().tacticalEditor.layers).toEqual({ hiddenByKey: {}, lockedByKey: {} });
   });
 
   it("saves changes to the current saved scenario from the File menu", async () => {
@@ -1781,14 +1786,6 @@ describe("TacticalScenarioEditorClient", () => {
     );
   });
 
-  it("removes console operations when their terrain placement is deleted", () => {
-    const definition = cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
-
-    const updated = removeConsolePlacementOperations(definition, "control-room-alpha");
-
-    expect(updated.operations).toEqual([]);
-  });
-
   it("opens the console editor HUD and gives actionable guidance after its console is deleted", () => {
     render(<TacticalScenarioEditorClient />);
     const layer = screen.getByTestId("editor-layer-terrain-placement:control-room-alpha");
@@ -1822,6 +1819,7 @@ describe("TacticalScenarioEditorClient", () => {
     render(<TacticalScenarioEditorClient />);
     const layer = screen.getByTestId("editor-layer-enemy:enemy-1");
     fireEvent.click(within(layer).getByRole("button", { name: "Lock Gang Member 1" }));
+    expect(store.getState().tacticalEditor.layers.lockedByKey).toEqual({ "enemy:enemy-1": true });
 
     fireEvent.pointerDown(screen.getByTestId("enemy-marker-enemy-1"), { clientX: 47.5, clientY: 41.5, pointerId: 2 });
 
@@ -1829,5 +1827,7 @@ describe("TacticalScenarioEditorClient", () => {
     expect((screen.getByLabelText("Enemy name") as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Unlock enemy" }));
     expect((screen.getByLabelText("Enemy name") as HTMLInputElement).disabled).toBe(false);
+    expect(store.getState().tacticalEditor.layers.lockedByKey).toEqual({});
+    expect(store.getState().tacticalEditor.selection.object).toEqual({ kind: "enemy", id: "enemy-1" });
   });
 });

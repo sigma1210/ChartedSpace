@@ -24,7 +24,7 @@ import { TacticalEnemyRosterHud } from "./TacticalEnemyRosterHud";
 import { TacticalEventsHud } from "./TacticalEventsHud";
 import { TacticalHudLayer } from "./TacticalHudLayer";
 import { TacticalMapLifecycle } from "./TacticalMapLifecycle";
-import { TacticalNavigationHud } from "./TacticalNavigationHud";
+import { TacticalNavigationHud } from "@/plugins/characterCombat/TacticalNavigationHud";
 import { DEFAULT_TACTICAL_SCENARIO_HUD_LAYOUT, TacticalScenarioHud } from "./TacticalScenarioHud";
 import { TacticalScene } from "./TacticalScene";
 import { DEFAULT_TACTICAL_MAP } from "./tacticalMapDefaults";

@@ -1,5 +1,3 @@
-import type { FloatingPluginHudLayout, PluginHudPoint } from "@/components/hud/FloatingPluginHud";
-
 export const TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY = "charted-space:tactical-editor-hud-layouts:v1";
 
 export const tacticalEditorHudIds = [
@@ -16,12 +14,31 @@ export const tacticalEditorHudIds = [
 ] as const;
 
 export type TacticalEditorHudId = typeof tacticalEditorHudIds[number];
+export interface TacticalEditorHudPoint { x: number; y: number }
+export interface TacticalEditorHudLayout {
+  visible: boolean;
+  pinned: boolean;
+  position: TacticalEditorHudPoint;
+}
+export type TacticalEditorHudLayouts = Record<TacticalEditorHudId, TacticalEditorHudLayout>;
+
+export const defaultTacticalEditorHudLayouts: TacticalEditorHudLayouts = {
+  "circle-properties": { visible: true, pinned: false, position: { x: 24, y: 64 } },
+  "enemy-palette": { visible: true, pinned: false, position: { x: 24, y: 310 } },
+  "console-editor": { visible: true, pinned: false, position: { x: 280, y: 64 } },
+  "enemy-editor": { visible: true, pinned: false, position: { x: 280, y: 310 } },
+  navigation: { visible: true, pinned: false, position: { x: 720, y: 24 } },
+  "tracing-template": { visible: true, pinned: false, position: { x: 720, y: 180 } },
+  tools: { visible: true, pinned: false, position: { x: 300, y: 12 } },
+  layers: { visible: true, pinned: false, position: { x: 760, y: 64 } },
+  "area-properties": { visible: false, pinned: false, position: { x: 420, y: 160 } },
+  "object-properties": { visible: true, pinned: false, position: { x: 420, y: 310 } },
+};
 
 export interface StoredTacticalEditorHudLayout {
   pinned: boolean;
-  position: PluginHudPoint;
+  position: TacticalEditorHudPoint;
 }
-
 export type StoredTacticalEditorHudLayouts = Partial<Record<TacticalEditorHudId, StoredTacticalEditorHudLayout>>;
 
 const emptyStoredLayouts: StoredTacticalEditorHudLayouts = {};
@@ -83,15 +100,15 @@ export const subscribeToTacticalEditorHudLayouts = (onStoreChange: () => void): 
 };
 
 export const applyStoredTacticalEditorHudLayout = (
-  layout: FloatingPluginHudLayout,
+  layout: TacticalEditorHudLayout,
   stored: StoredTacticalEditorHudLayout | undefined,
-): FloatingPluginHudLayout => stored ? {
+): TacticalEditorHudLayout => stored ? {
   ...layout,
   pinned: stored.pinned,
   position: { ...stored.position },
 } : layout;
 
-export const saveTacticalEditorHudLayout = (id: TacticalEditorHudId, layout: FloatingPluginHudLayout): void => {
+export const saveTacticalEditorHudLayout = (id: TacticalEditorHudId, layout: TacticalEditorHudLayout): void => {
   if (typeof window === "undefined") return;
   try {
     const layouts = loadStoredTacticalEditorHudLayouts();

@@ -6,7 +6,7 @@ import {
   loadStoredTacticalEditorHudLayouts,
   parseStoredTacticalEditorHudLayouts,
   saveTacticalEditorHudLayout,
-} from "../tacticalEditorHudLayoutStorage";
+} from "../hudLayouts";
 
 describe("tactical editor HUD layout storage", () => {
   beforeEach(() => window.localStorage.clear());

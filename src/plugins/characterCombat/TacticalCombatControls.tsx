@@ -177,4 +177,3 @@ export const TacticalCombatControls = ({
             {selectedWeapon && selectedAmmunition < (selectedWeapon.magazineSize ?? 12) && selectedActionPoints >= 3 && <button type="button" onClick={() => dispatch(reloadTacticalWeapon())} className="h-7 w-full border border-sky-300 px-2 text-[8px] font-bold uppercase tracking-wider text-sky-100">Reload · 3 AP</button>}
   </>;
 };
-

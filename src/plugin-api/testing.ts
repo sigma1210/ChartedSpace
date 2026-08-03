@@ -10,6 +10,7 @@ import { initialNavigationState } from "../plugins/navigation";
 import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLocationSlice";
 import { initialTradeState } from "../plugins/trade/tradeSlice";
 import { initialEquipmentCatalogState } from "../plugins/equipmentCatalog";
+import { initialTacticalEditorState } from "@/plugins/characterCombat/editor/state/tacticalEditorSlice";
 
 export interface PluginTestRootStateOptions {
   currentTurn?: number;
@@ -28,6 +29,7 @@ export const createPluginTestRootState = ({
   system: {} as RootState["system"],
   systemScene: {} as RootState["systemScene"],
   hud: {} as RootState["hud"],
+  tacticalEditor: initialTacticalEditorState,
   plugins: {
     characterCombat: initialCharacterCombatState,
     characters: {

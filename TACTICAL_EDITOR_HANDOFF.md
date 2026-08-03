@@ -18,6 +18,7 @@ Method Draw is the reference:
 
 ## Current implementation
 
+- The scenario editor implementation, state, viewport, layers, HUD persistence, and tests are owned by `src/plugins/characterCombat/editor`; `app/system/tactical/editor` contains only the required Next.js route and playtest composition adapter.
 - Pen supports straight and curved closed paths, post-close node editing, point insertion/deletion, and curve handles.
 - Rectangle uses constrained movement and corner resizing.
 - Circle uses constrained center and radius handles.
@@ -78,15 +79,18 @@ The Enemy Palette remains separate because enemy types are not ordinary terrain/
 
 ## Main files
 
-- `src/app/system/tactical/editor/TacticalScenarioEditorClient.tsx`
-- `src/app/system/tactical/editor/__tests__/TacticalScenarioEditorClient.test.tsx`
+- `src/plugins/characterCombat/editor/TacticalScenarioEditorClient.tsx`
+- `src/plugins/characterCombat/editor/__tests__/TacticalScenarioEditorClient.test.tsx`
+- `src/plugins/characterCombat/editor/state/tacticalEditorSlice.ts`
+- `src/plugins/characterCombat/editor/state/selectors.ts`
+- `src/app/system/tactical/editor/page.tsx` (thin Next.js route adapter)
 - `src/plugins/characterCombat/tacticalScenarioDefinitions.ts`
 - `src/plugins/characterCombat/geometry.ts`
 - `src/plugins/characterCombat/tacticalEnemyMovement.ts`
 - `src/plugins/characterCombat/tacticalEnemyPhaseReducers.ts`
 - `src/plugins/characterCombat/tacticalObservation.ts`
-- `src/app/system/tactical/editor/tacticalEditorLayers.ts`
-- `src/app/system/tactical/editor/TacticalEditorLayersPanel.tsx`
+- `src/plugins/characterCombat/editor/tacticalEditorLayers.ts`
+- `src/plugins/characterCombat/editor/TacticalEditorLayersPanel.tsx`
 
 ## Verification status
 

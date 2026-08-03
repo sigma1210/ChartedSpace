@@ -5,7 +5,7 @@ import {
   FloatingPluginHud,
   type FloatingPluginHudLayout,
 } from "@/components/hud/FloatingPluginHud";
-import { useTacticalEditorViewport } from "./editor/TacticalEditorViewport";
+import { useTacticalEditorViewport } from "@/plugins/characterCombat/editor/TacticalEditorViewport";
 
 type TacticalNavigationMode = "tactical" | "editor" | "playtest";
 

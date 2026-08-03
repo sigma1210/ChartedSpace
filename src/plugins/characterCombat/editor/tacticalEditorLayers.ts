@@ -221,6 +221,9 @@ export const tacticalEditorLayerGroups = (
   ];
 };
 
+export const tacticalEditorLayerKeys = (definition: TacticalScenarioDefinitionFile) =>
+  tacticalEditorLayerGroups(definition).flatMap((group) => group.objects.map((object) => object.key));
+
 export const moveTacticalEditorLayerObject = <T,>(
   items: readonly T[],
   index: number,

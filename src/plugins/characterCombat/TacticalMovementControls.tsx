@@ -100,4 +100,3 @@ export const TacticalMovementControls = ({
             <button type="button" onClick={() => dispatch(finishTacticalActivation())} className="h-7 w-full border border-(--hud-border) px-2 text-[8px] font-bold uppercase tracking-wider text-(--hud-text-dim) transition-colors">Finish Activation · retain {selectedActionPoints} AP for reactions</button>
   </>;
 };
-
