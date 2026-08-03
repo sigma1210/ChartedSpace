@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "test-1",
+  "consoleVictoryDefinitionId": "test-1",
+  "title": "test 1",
+  "briefing": "",
+  "objective": "",
+  "map": {
+    "width": 72,
+    "height": 48
+  },
+  "terrainPlacements": [],
+  "drawnWalls": [],
+  "drawnRaisedAreas": [],
+  "drawnTerrainRegions": [],
+  "drawnAreas": [],
+  "drawnTerrainPrimitives": [],
+  "naturalTerrainPlacements": [],
+  "elevationTransitions": [],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [],
+  "fireCells": [],
+  "smokeCells": []
+}

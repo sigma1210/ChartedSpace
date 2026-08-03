@@ -35,6 +35,7 @@ import {
   tacticalDrawnRaisedAreaGridLinePositions,
   tacticalDrawnRaisedAreaLevelsByCell,
   tacticalDrawnRaisedAreaShape,
+  tacticalFrontmostContainedAreaHoles,
   tacticalOutlineInteriorDetailScale,
 } from "./tacticalDrawnRaisedAreaGeometry";
 import { tacticalDeploymentAreaScenarioEqual } from "./tacticalStaticLayerMemo";
@@ -124,26 +125,56 @@ const TacticalElevationTerrain = ({
     () => scenario.drawnRaisedAreas ?? [],
     [scenario.drawnRaisedAreas],
   );
-  const drawnRaisedAreaLevelsByCell = useMemo(
-    () => tacticalDrawnRaisedAreaLevelsByCell(
-      drawnRaisedAreas,
-      scenario.drawnRaisedAreaLevels ?? {},
-      scenario.width,
-      scenario.height,
-    ),
-    [drawnRaisedAreas, scenario.drawnRaisedAreaLevels, scenario.height, scenario.width],
+  const unifiedAreas = useMemo(() => scenario.drawnAreas ?? [], [scenario.drawnAreas]);
+  const unifiedAreaIds = useMemo(() => new Set(unifiedAreas.map((area) => area.id)), [unifiedAreas]);
+  const legacyRaisedAreas = useMemo(
+    () => drawnRaisedAreas.filter((area) => !unifiedAreaIds.has(area.id)),
+    [drawnRaisedAreas, unifiedAreaIds],
   );
-  const drawnRaisedAreaShapes = useMemo(
-    () => drawnRaisedAreas.map((area) => ({
-      id: area.id,
-      level: scenario.drawnRaisedAreaLevels?.[area.id] ?? 1,
-      shape: tacticalDrawnRaisedAreaShape(
-        area,
+  const unifiedAreaHoles = useMemo(
+    () => tacticalFrontmostContainedAreaHoles(unifiedAreas, scenario.width, scenario.height),
+    [scenario.height, scenario.width, unifiedAreas],
+  );
+  const drawnRaisedAreaLevelsByCell = useMemo(
+    () => {
+      const levels = tacticalDrawnRaisedAreaLevelsByCell(
+        drawnRaisedAreas,
+        scenario.drawnRaisedAreaLevels ?? {},
         scenario.width,
         scenario.height,
-      ),
-    })),
-    [drawnRaisedAreas, scenario.drawnRaisedAreaLevels, scenario.height, scenario.width],
+      );
+      unifiedAreas.forEach((area) => {
+        tacticalDrawnRaisedAreaCells(area, scenario.width, scenario.height).forEach((point) => {
+          const cellLevels = levels.get(pointKey(point)) ?? new Set<number>();
+          for (let level = 1; level <= area.elevation; level += 1) cellLevels.add(level);
+          levels.set(pointKey(point), cellLevels);
+        });
+      });
+      return levels;
+    },
+    [drawnRaisedAreas, scenario.drawnRaisedAreaLevels, scenario.height, scenario.width, unifiedAreas],
+  );
+  const drawnRaisedAreaShapes = useMemo(
+    () => [
+      ...legacyRaisedAreas.map((area) => ({
+        id: area.id,
+        level: scenario.drawnRaisedAreaLevels?.[area.id] ?? 1,
+        depth: TACTICAL_WALL_HEIGHT,
+        shape: tacticalDrawnRaisedAreaShape(area, scenario.width, scenario.height),
+      })),
+      ...unifiedAreas.map((area, index) => ({
+        id: area.id,
+        level: area.elevation,
+        depth: area.elevation * TACTICAL_WALL_HEIGHT,
+        shape: tacticalDrawnRaisedAreaShape(
+          area,
+          scenario.width,
+          scenario.height,
+          unifiedAreaHoles[index],
+        ),
+      })),
+    ].filter(({ level }) => level > 0),
+    [legacyRaisedAreas, scenario.drawnRaisedAreaLevels, scenario.height, scenario.width, unifiedAreaHoles, unifiedAreas],
   );
   const explicitStairCells = useMemo(
     () => new Set((scenario.elevationTransitions ?? [])
@@ -168,18 +199,29 @@ const TacticalElevationTerrain = ({
     ],
   );
   const drawnRaisedGridPositions = useMemo(
-    () => new Float32Array(drawnRaisedAreas.flatMap((area) =>
-      Array.from(tacticalDrawnRaisedAreaGridLinePositions(
+    () => new Float32Array([
+      ...legacyRaisedAreas.flatMap((area) => Array.from(tacticalDrawnRaisedAreaGridLinePositions(
         area,
         scenario.drawnRaisedAreaLevels?.[area.id] ?? 1,
         scenario.width,
         scenario.height,
-      )))),
+      ))),
+      ...unifiedAreas.flatMap((area, index) => area.elevation > 0 && unifiedAreaHoles[index]?.length === 0
+        ? Array.from(tacticalDrawnRaisedAreaGridLinePositions(
+          area,
+          area.elevation,
+          scenario.width,
+          scenario.height,
+        ))
+        : []),
+    ]),
     [
-      drawnRaisedAreas,
+      legacyRaisedAreas,
       scenario.drawnRaisedAreaLevels,
       scenario.height,
       scenario.width,
+      unifiedAreaHoles,
+      unifiedAreas,
     ],
   );
 
@@ -216,7 +258,7 @@ const TacticalElevationTerrain = ({
         </group>
       );
       })}
-      {drawnRaisedAreaShapes.map(({ id, level, shape }) => (
+      {drawnRaisedAreaShapes.map(({ id, level, depth, shape }) => (
         <mesh
           key={`drawn-raised-area:${id}`}
           data-testid={`drawn-raised-area-mesh-${id}`}
@@ -233,7 +275,7 @@ const TacticalElevationTerrain = ({
           }}
         >
           <extrudeGeometry args={[shape, {
-            depth: TACTICAL_WALL_HEIGHT,
+            depth,
             bevelEnabled: false,
             curveSegments: 32,
           }]} />
@@ -417,16 +459,36 @@ const TacticalFlatNaturalTerrain = ({
   scenario: CombatScenario;
   onSelectCell: (point: { x: number; y: number }) => void;
 }) => {
-  const regions = useMemo(() => (scenario.drawnTerrainRegions ?? [])
-    .filter((region) => region.kind === "grass" || region.kind === "sand" || region.kind === "water")
-    .map((region) => {
+  const regions = useMemo(() => {
+    const unifiedAreas = scenario.drawnAreas ?? [];
+    const unifiedIds = new Set(unifiedAreas.map((area) => area.id));
+    const unifiedHoles = tacticalFrontmostContainedAreaHoles(unifiedAreas, scenario.width, scenario.height);
+    const legacyRegions = (scenario.drawnTerrainRegions ?? [])
+      .filter((region) => !unifiedIds.has(region.id))
+      .filter((region) => region.kind === "grass" || region.kind === "sand" || region.kind === "water")
+      .map((region) => {
       const cells = tacticalDrawnRaisedAreaCells(region, scenario.width, scenario.height);
       return {
         region,
         shape: tacticalDrawnRaisedAreaShape(region, scenario.width, scenario.height),
         elevation: cells.length > 0 ? tacticalVisualHeightAt(scenario, cells[0]) : 0,
       };
-    }), [scenario]);
+    });
+    const unifiedRegions = unifiedAreas.flatMap((area, index) =>
+      area.surface === "grass" || area.surface === "sand" || area.surface === "water"
+        ? [{
+          region: { ...area, kind: area.surface },
+          shape: tacticalDrawnRaisedAreaShape(
+            area,
+            scenario.width,
+            scenario.height,
+            unifiedHoles[index],
+          ),
+          elevation: area.elevation * TACTICAL_WALL_HEIGHT,
+        }]
+        : []);
+    return [...legacyRegions, ...unifiedRegions];
+  }, [scenario]);
 
   return <>
     {regions.map(({ region, shape, elevation }) => {

@@ -1,13 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Aperture, BrickWall, Circle, DoorOpen, Flame, Gem, Hand, LandPlot, Layers3, ListStart, MessagesSquare, MonitorCog, MousePointer2, MoveUpRight, RectangleHorizontal, RotateCw, Settings2, Shrub, Spline, TreePine, TriangleRight, UserRound } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Provider } from "react-redux";
 import { FloatingPluginHud, type FloatingPluginHudLayout } from "@/components/hud/FloatingPluginHud";
 import { PluginHudLayer } from "@/components/hud/PluginHudLayer";
 import TacticalMapPageClient from "../TacticalMapPageClient";
 import { TacticalNavigationHud } from "../TacticalNavigationHud";
-import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalDeploymentEdge, type TacticalDrawnCirclePrimitive, type TacticalDrawnRaisedArea, type TacticalDrawnTerrainRegion, type TacticalDrawnWall, type TacticalElevationTransitionDefinition, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalNaturalTerrainPlacement, type TacticalRaisedAreaOutlineSegment, type TacticalScenarioDefinitionFile, type TacticalScenarioTracingTemplate, type TacticalTerrainPlacement, type TacticalTerrainPrimitiveType } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalClosedAreaGeometrySegments, tacticalPlacementSupportsConsoleOperations, tacticalTerrainPalette, type TacticalClosedAreaGeometry, type TacticalDeploymentEdge, type TacticalDrawnCirclePrimitive, type TacticalDrawnWall, type TacticalElevationTransitionDefinition, type TacticalEnemyPlacement, type TacticalEnemyType, type TacticalNaturalTerrainPlacement, type TacticalRaisedAreaOutlineSegment, type TacticalScenarioDefinitionFile, type TacticalScenarioTracingTemplate, type TacticalTerrainPlacement, type TacticalTerrainPrimitiveType } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import { tacticalDrawnRaisedAreaCells } from "@/plugins/characterCombat/tacticalDrawnRaisedAreas";
 import { tacticalElevationEdgeCandidates, tacticalLadderMountForEdge, tacticalNearestElevationEdgeCandidate, tacticalRampPlacementCandidate, tacticalRampPlacementPreview, type TacticalElevationEdgeCandidate, type TacticalElevationEdgePointer } from "@/plugins/characterCombat/tacticalElevationTransitions";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition, TRAVELLER_TASK_DIFFICULTIES, validateTacticalConsoleVictoryDefinition, type TacticalConsoleOperation, type TacticalConsoleVictoryDefinitionFile, type TravellerTaskDifficulty } from "@/plugins/characterCombat/tacticalConsoleVictory";
@@ -16,13 +17,170 @@ import type { TacticalTerminalKind } from "@/plugins/characterCombat/tacticalTer
 import { defaultTacticalInteractiveHumanCombatProfile, tacticalHumanArmorOptions, tacticalHumanWeaponOptions, validateTacticalInteractiveHumanCombatProfile, type TacticalInteractiveHumanCombatProfile, type TacticalHumanArmorId, type TacticalHumanWeaponId } from "@/plugins/characterCombat/tacticalInteractiveHuman";
 import { buildDefaultTacticalScenario } from "@/plugins/characterCombat/defaultTacticalScenario";
 import { tacticalWallPortalPlacementCandidate, tacticalWallPortalRepositionCandidate, type TacticalWallPortalKind } from "@/plugins/characterCombat/tacticalWallPortals";
-import { tacticalCirclePortalPlacementCandidate, tacticalCirclePortalRepositionCandidate } from "@/plugins/characterCombat/tacticalTerrainPrimitives";
+import { tacticalCirclePortalPlacementCandidate, tacticalCirclePortalRepositionCandidate, tacticalCirclePrimitiveOutline } from "@/plugins/characterCombat/tacticalTerrainPrimitives";
 import { tacticalNaturalTerrainFootprintCells } from "@/plugins/characterCombat/tacticalNaturalTerrain";
+import { tacticalAreaBoundaryPortalPlacementCandidate, tacticalAreaBoundaryPortalRepositionCandidate } from "@/plugins/characterCombat/tacticalAreaBoundaryPortals";
 import { createAppStore, store, type AppStore } from "@/store";
 import { TacticalEditorViewportProvider, panTacticalEditorCamera, snapTacticalEditorPoint, useTacticalEditorViewport, type TacticalEditorCamera } from "./TacticalEditorViewport";
+import { TacticalEditorLayersPanel } from "./TacticalEditorLayersPanel";
+import {
+  moveTacticalEditorLayerObject,
+  tacticalEditorLayerGroups,
+  tacticalEditorLayerKey,
+  tacticalEditorVisibleDefinition,
+  type TacticalEditorLayerObject,
+} from "./tacticalEditorLayers";
+import {
+  applyStoredTacticalEditorHudLayout,
+  loadStoredTacticalEditorHudLayouts,
+  saveTacticalEditorHudLayout,
+  serverTacticalEditorHudLayouts,
+  subscribeToTacticalEditorHudLayouts,
+  type TacticalEditorHudId,
+} from "./tacticalEditorHudLayoutStorage";
 
-const freshDefaultDraft = () => cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+const usePersistentTacticalEditorHudLayout = (id: TacticalEditorHudId, initialLayout: FloatingPluginHudLayout) => {
+  const [layout, setLayout] = useState<FloatingPluginHudLayout>(initialLayout);
+  const storedLayouts = useSyncExternalStore(
+    subscribeToTacticalEditorHudLayouts,
+    loadStoredTacticalEditorHudLayouts,
+    serverTacticalEditorHudLayouts,
+  );
+  const setAndPersistLayout = useCallback((nextLayout: FloatingPluginHudLayout) => {
+    setLayout(nextLayout);
+    saveTacticalEditorHudLayout(id, nextLayout);
+  }, [id]);
+  return [applyStoredTacticalEditorHudLayout(layout, storedLayouts[id]), setLayout, setAndPersistLayout] as const;
+};
+
+const cloneEditorAreaSegments = (segments: TacticalRaisedAreaOutlineSegment[]) => segments.map((segment) => ({
+  ...segment,
+  from: { ...segment.from },
+  to: { ...segment.to },
+  ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+  ...(segment.kind === "cubic" ? { control1: { ...segment.control1 }, control2: { ...segment.control2 } } : {}),
+}));
+const inferredConstrainedAreaGeometry = (
+  id: string,
+  segments: TacticalRaisedAreaOutlineSegment[],
+): TacticalClosedAreaGeometry | null => {
+  if (id.startsWith("rectangle-area-") && segments.length === 4 && segments.every((segment) => segment.kind === "line")) {
+    const xs = segments.flatMap((segment) => [segment.from.x, segment.to.x]);
+    const ys = segments.flatMap((segment) => [segment.from.y, segment.to.y]);
+    const left = Math.min(...xs);
+    const right = Math.max(...xs);
+    const top = Math.min(...ys);
+    const bottom = Math.max(...ys);
+    const corners = new Set(segments.flatMap((segment) => [segment.from, segment.to]).map((point) => `${point.x}:${point.y}`));
+    if (corners.size === 4 && [...corners].every((corner) => {
+      const [x, y] = corner.split(":").map(Number);
+      return (x === left || x === right) && (y === top || y === bottom);
+    })) return { kind: "rectangle", x: left, y: top, width: right - left, height: bottom - top };
+  }
+  if (id.startsWith("circle-area-") && segments.length >= 3) {
+    const anchors = segments.map((segment) => segment.from);
+    const left = Math.min(...anchors.map((point) => point.x));
+    const right = Math.max(...anchors.map((point) => point.x));
+    const top = Math.min(...anchors.map((point) => point.y));
+    const bottom = Math.max(...anchors.map((point) => point.y));
+    const center = { x: (left + right) / 2, y: (top + bottom) / 2 };
+    const radius = (right - left + bottom - top) / 4;
+    if (radius > 0) return { kind: "circle", center, radius };
+  }
+  return null;
+};
+
+export const upgradeLegacyTacticalEditorAreas = (definition: TacticalScenarioDefinitionFile): TacticalScenarioDefinitionFile => {
+  const legacyRaisedAreas = definition.drawnRaisedAreas ?? [];
+  const legacyRegions = definition.drawnTerrainRegions ?? [];
+  const legacyCircles = (definition.drawnTerrainPrimitives ?? [])
+    .filter((primitive) => (primitive.portals?.length ?? 0) === 0);
+  let constrainedExistingArea = false;
+  const existingAreas = (definition.drawnAreas ?? []).map((area) => {
+    const geometry = area.geometry ?? inferredConstrainedAreaGeometry(area.id, area.segments);
+    if (!geometry) return area;
+    constrainedExistingArea = true;
+    return { ...area, geometry, segments: tacticalClosedAreaGeometrySegments(geometry) };
+  });
+  if (legacyRaisedAreas.length === 0 && legacyRegions.length === 0 && legacyCircles.length === 0 && !constrainedExistingArea) return definition;
+  const consumedRaisedIndexes = new Set<number>();
+  const migratedRegions: NonNullable<TacticalScenarioDefinitionFile["drawnAreas"]> = legacyRegions.map((region) => {
+    const shapeKey = JSON.stringify(region.segments);
+    const matchingRaisedIndex = legacyRaisedAreas.findIndex((area, index) =>
+      !consumedRaisedIndexes.has(index) && JSON.stringify(area.segments) === shapeKey);
+    const matchingRaised = matchingRaisedIndex >= 0 ? legacyRaisedAreas[matchingRaisedIndex] : null;
+    if (matchingRaised) consumedRaisedIndexes.add(matchingRaisedIndex);
+    return {
+      id: matchingRaised?.id ?? region.id,
+      segments: cloneEditorAreaSegments(region.segments),
+      surface: region.kind,
+      elevation: matchingRaised ? 1 : 0,
+      boundary: "none",
+      ...(region.kind === "liquid-hydrogen" && region.settings ? { settings: { ...region.settings } } : {}),
+    };
+  });
+  const migratedRaisedAreas: NonNullable<TacticalScenarioDefinitionFile["drawnAreas"]> = legacyRaisedAreas
+    .filter((_area, index) => !consumedRaisedIndexes.has(index))
+    .map((area) => ({
+      id: area.id,
+      segments: cloneEditorAreaSegments(area.segments),
+      surface: "none",
+      elevation: 1,
+      boundary: "none",
+    }));
+  const migratedCircles: NonNullable<TacticalScenarioDefinitionFile["drawnAreas"]> = legacyCircles.map((circle) => ({
+    id: circle.id,
+    geometry: { kind: "circle", center: { ...circle.center }, radius: circle.radius },
+    segments: cloneEditorAreaSegments(tacticalCirclePrimitiveOutline(circle)),
+    surface: circle.terrainType === "close-machinery" || circle.terrainType === "liquid-hydrogen"
+      ? circle.terrainType
+      : "none",
+    elevation: circle.terrainType === "raised-area" ? 1 : 0,
+    boundary: circle.terrainType === "wall" ? "wall" : "none",
+    ...(circle.terrainType === "liquid-hydrogen" && circle.settings ? { settings: { ...circle.settings } } : {}),
+  }));
+  const migratedCircleIds = new Set(legacyCircles.map((circle) => circle.id));
+  return {
+    ...definition,
+    drawnAreas: [
+      ...migratedRegions,
+      ...migratedRaisedAreas,
+      ...migratedCircles,
+      ...existingAreas,
+    ],
+    drawnRaisedAreas: [],
+    drawnTerrainRegions: [],
+    drawnTerrainPrimitives: (definition.drawnTerrainPrimitives ?? [])
+      .filter((primitive) => !migratedCircleIds.has(primitive.id)),
+  };
+};
+
+const freshDefaultDraft = () => upgradeLegacyTacticalEditorAreas(cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition));
 const freshDefaultConsoleVictory = () => cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
+export const emptyTacticalScenarioDraft = (
+  source: TacticalScenarioDefinitionFile,
+  title: string,
+): TacticalScenarioDefinitionFile => ({
+  schemaVersion: 1,
+  id: source.id,
+  consoleVictoryDefinitionId: source.consoleVictoryDefinitionId ?? source.id,
+  title: title.trim(),
+  briefing: "",
+  objective: "",
+  map: { width: source.map.width, height: source.map.height },
+  deploymentEdges: ["south"],
+  terrainPlacements: [],
+  drawnWalls: [],
+  drawnRaisedAreas: [],
+  drawnTerrainRegions: [],
+  drawnAreas: [],
+  drawnTerrainPrimitives: [],
+  naturalTerrainPlacements: [],
+  elevationTransitions: [],
+  enemyPlacements: [],
+  fireCells: [],
+  smokeCells: [],
+});
 const definitionsMatch = (first: TacticalScenarioDefinitionFile, second: TacticalScenarioDefinitionFile) => JSON.stringify(first) === JSON.stringify(second);
 export const removeConsolePlacementOperations = (definition: TacticalConsoleVictoryDefinitionFile, placementId: string): TacticalConsoleVictoryDefinitionFile => {
   const removedOperationIds = new Set(definition.operations.filter((operation) => operation.consolePlacementId === placementId).map((operation) => operation.id));
@@ -37,6 +195,12 @@ export const removeConsolePlacementOperations = (definition: TacticalConsoleVict
   };
 };
 type ScenarioSummary = { id: string; title: string; isDefault: boolean };
+type ScenarioPropertiesDraft = {
+  title: string;
+  briefing: string;
+  objective: string;
+  deploymentEdges: TacticalDeploymentEdge[];
+};
 type TacticalTemplateAsset = { id: string; label: string; imagePath: string; source: "built-in" | "uploaded" };
 const fetchScenarioList = async () => {
   const response = await fetch("/api/tactical/scenarios", { cache: "no-store" });
@@ -47,27 +211,76 @@ const fetchScenarioList = async () => {
 const FIRE_TOOL_ID = "scenario-fire";
 const WALL_TOOL_ID = "scenario-wall";
 const CURVED_WALL_TOOL_ID = "scenario-curved-wall";
-const RAISED_AREA_TOOL_ID = "scenario-raised-area";
-const RAISED_AREA_CURVE_TOOL_ID = "scenario-raised-area-curve";
-const MACHINERY_AREA_TOOL_ID = "scenario-machinery-area";
-const MACHINERY_CURVE_TOOL_ID = "scenario-machinery-area-curve";
-const LIQUID_HYDROGEN_AREA_TOOL_ID = "scenario-liquid-hydrogen-area";
-const LIQUID_HYDROGEN_CURVE_TOOL_ID = "scenario-liquid-hydrogen-area-curve";
-const GRASS_AREA_TOOL_ID = "scenario-grass-area";
-const GRASS_CURVE_TOOL_ID = "scenario-grass-area-curve";
-const SAND_AREA_TOOL_ID = "scenario-sand-area";
-const SAND_CURVE_TOOL_ID = "scenario-sand-area-curve";
-const WATER_AREA_TOOL_ID = "scenario-water-area";
-const WATER_CURVE_TOOL_ID = "scenario-water-area-curve";
+const PEN_AREA_TOOL_ID = "scenario-pen-area";
+const RECTANGLE_AREA_TOOL_ID = "scenario-rectangle-area";
 const TREE_TOOL_ID = "scenario-tree";
 const BUSH_TOOL_ID = "scenario-bush";
 const ROCK_TOOL_ID = "scenario-rock";
 const CIRCLE_TOOL_ID = "scenario-circle";
+const CIRCLE_AREA_TOOL_ID = "scenario-circle-area";
 const DOOR_TOOL_ID = "scenario-wall-door";
 const WALL_IRIS_TOOL_ID = "scenario-wall-iris-valve";
 const STAIRS_TOOL_ID = "scenario-stairs";
 const LADDER_TOOL_ID = "scenario-ladder";
 const RAMP_TOOL_ID = "scenario-ramp";
+const CONTROL_ROOM_TOOL_ID = "control-room";
+const CONSOLE_TOOL_ID = "console-1x1";
+const INTERACTIVE_HUMAN_TOOL_ID = "interactive-human";
+const EDITOR_DRAWING_TOOL_GROUPS = [
+  {
+    id: "boundaries",
+    label: "Boundaries",
+    icon: BrickWall,
+    tools: [
+    { id: WALL_TOOL_ID, label: "Wall", icon: BrickWall },
+    { id: CURVED_WALL_TOOL_ID, label: "Curved wall", icon: Spline },
+    { id: DOOR_TOOL_ID, label: "Door", icon: DoorOpen },
+    { id: WALL_IRIS_TOOL_ID, label: "Wall iris valve", icon: Aperture },
+    { id: CIRCLE_TOOL_ID, label: "Legacy circle wall", icon: Circle },
+    ],
+  },
+  {
+    id: "areas",
+    label: "Areas",
+    icon: LandPlot,
+    tools: [
+    { id: RECTANGLE_AREA_TOOL_ID, label: "Rectangle area", icon: RectangleHorizontal },
+    { id: CIRCLE_AREA_TOOL_ID, label: "Circle area", icon: Circle },
+    { id: PEN_AREA_TOOL_ID, label: "Pen", icon: Spline },
+    ],
+  },
+  {
+    id: "nature",
+    label: "Nature & effects",
+    icon: TreePine,
+    tools: [
+    { id: TREE_TOOL_ID, label: "Tree", icon: TreePine },
+    { id: BUSH_TOOL_ID, label: "Bush", icon: Shrub },
+    { id: ROCK_TOOL_ID, label: "Rock", icon: Gem },
+    { id: FIRE_TOOL_ID, label: "Fire", icon: Flame },
+    ],
+  },
+  {
+    id: "elevation",
+    label: "Elevation",
+    icon: MoveUpRight,
+    tools: [
+    { id: STAIRS_TOOL_ID, label: "Stairs", icon: ListStart },
+    { id: LADDER_TOOL_ID, label: "Ladder", icon: MoveUpRight },
+    { id: RAMP_TOOL_ID, label: "Ramp", icon: TriangleRight },
+    ],
+  },
+  {
+    id: "interactions",
+    label: "Interactions",
+    icon: MessagesSquare,
+    tools: [
+    { id: CONTROL_ROOM_TOOL_ID, label: "Control Room", icon: MessagesSquare },
+    { id: CONSOLE_TOOL_ID, label: "Console 1x1", icon: MonitorCog },
+    { id: INTERACTIVE_HUMAN_TOOL_ID, label: "Interactive Human", icon: UserRound },
+    ],
+  },
+] as const;
 const wallPortalKindForTool = (tool: string | null): TacticalWallPortalKind | null =>
   tool === DOOR_TOOL_ID ? "sliding-door" : tool === WALL_IRIS_TOOL_ID ? "iris-valve" : null;
 const elevationTransitionKindForTool = (tool: string | null): TacticalElevationTransitionDefinition["kind"] | null =>
@@ -278,22 +491,40 @@ type WallMoveDrag = {
 };
 type WallControlDrag = { id: string; original: { x: number; y: number } };
 type WallPortalDrag = {
-  ownerKind: "wall" | "circle";
+  ownerKind: "wall" | "circle" | "area";
   ownerId: string;
   portalId: string;
   originalPosition: number;
 };
 type RaisedAreaDraft = {
-  target: "raised" | TacticalDrawnTerrainRegion["kind"];
+  target: "area";
   start: { x: number; y: number };
   current: { x: number; y: number };
   hover: { x: number; y: number };
   segments: TacticalRaisedAreaOutlineSegment[];
+  outgoingControl: { x: number; y: number } | null;
 };
 type RaisedAreaControlDrag = {
-  owner: { kind: "draft" } | { kind: "raised"; id: string } | { kind: "terrain-region"; id: string };
+  owner: { kind: "draft" } | { kind: "area"; id: string } | { kind: "raised"; id: string } | { kind: "terrain-region"; id: string };
   segmentIndex: number;
   original: { x: number; y: number };
+};
+type AreaAnchorDrag = {
+  id: string;
+  anchorIndex: number;
+  originalSegments: TacticalRaisedAreaOutlineSegment[];
+};
+type AreaCubicControlDrag = {
+  id: string;
+  segmentIndex: number;
+  control: "control1" | "control2";
+  original: { x: number; y: number };
+};
+type ConstrainedAreaDrag = {
+  id: string;
+  kind: "circle-center" | "circle-radius" | "rectangle-center" | "rectangle-top-left" | "rectangle-top-right" | "rectangle-bottom-right" | "rectangle-bottom-left";
+  start: { x: number; y: number };
+  original: TacticalClosedAreaGeometry;
 };
 type RampDraft = { edge: TacticalElevationEdgeCandidate };
 type CircleDraft = { center: { x: number; y: number }; radius: number };
@@ -313,27 +544,9 @@ type EditorPanDrag = {
   viewport: { width: number; height: number };
 };
 const areaTargetForTool = (tool: string | null): RaisedAreaDraft["target"] | null => {
-  if (tool === RAISED_AREA_TOOL_ID || tool === RAISED_AREA_CURVE_TOOL_ID) return "raised";
-  if (tool === MACHINERY_AREA_TOOL_ID || tool === MACHINERY_CURVE_TOOL_ID) return "close-machinery";
-  if (tool === LIQUID_HYDROGEN_AREA_TOOL_ID || tool === LIQUID_HYDROGEN_CURVE_TOOL_ID) return "liquid-hydrogen";
-  if (tool === GRASS_AREA_TOOL_ID || tool === GRASS_CURVE_TOOL_ID) return "grass";
-  if (tool === SAND_AREA_TOOL_ID || tool === SAND_CURVE_TOOL_ID) return "sand";
-  if (tool === WATER_AREA_TOOL_ID || tool === WATER_CURVE_TOOL_ID) return "water";
-  return null;
+  return tool === PEN_AREA_TOOL_ID ? "area" : null;
 };
 const isAreaTool = (tool: string | null) => areaTargetForTool(tool) !== null;
-const isCurvedAreaTool = (tool: string | null) =>
-  tool === RAISED_AREA_CURVE_TOOL_ID
-  || tool === MACHINERY_CURVE_TOOL_ID
-  || tool === LIQUID_HYDROGEN_CURVE_TOOL_ID
-  || tool === GRASS_CURVE_TOOL_ID
-  || tool === SAND_CURVE_TOOL_ID
-  || tool === WATER_CURVE_TOOL_ID;
-const areaTargetLabel = (target: RaisedAreaDraft["target"]) =>
-  target === "raised" ? "raised area"
-    : target === "close-machinery" ? "closed machinery"
-    : target === "liquid-hydrogen" ? "liquid hydrogen"
-    : target;
 const naturalTerrainKindForTool = (tool: string | null): TacticalNaturalTerrainPlacement["kind"] | null =>
   tool === TREE_TOOL_ID ? "tree" : tool === BUSH_TOOL_ID ? "bush" : tool === ROCK_TOOL_ID ? "rock" : null;
 const defaultNaturalTerrainRadius = (kind: TacticalNaturalTerrainPlacement["kind"]) => kind === "tree" ? 1.5 : 0.5;
@@ -346,25 +559,116 @@ const naturalTerrainEditorColor = (kind: TacticalNaturalTerrainPlacement["kind"]
       ? { footprint: "#65a30d", fill: "#4d7c0f", stroke: "#a3e635", marker: "B" }
       : { footprint: "#78716c", fill: "#57534e", stroke: "#d6d3d1", marker: "R" };
 const sameGridPoint = (first: { x: number; y: number }, second: { x: number; y: number }) => first.x === second.x && first.y === second.y;
-const raisedAreaSegment = (
+const penAreaSegment = (
   from: { x: number; y: number },
   to: { x: number; y: number },
-  curved: boolean,
-  map: { width: number; height: number },
+  outgoingControl: { x: number; y: number } | null,
+  incomingControl: { x: number; y: number } | null,
+): TacticalRaisedAreaOutlineSegment => outgoingControl || incomingControl ? {
+  kind: "cubic",
+  from: gridPoint(from),
+  control1: gridPoint(outgoingControl ?? from),
+  control2: gridPoint(incomingControl ?? to),
+  to: gridPoint(to),
+} : { kind: "line", from: gridPoint(from), to: gridPoint(to) };
+const lerpPoint = (from: { x: number; y: number }, to: { x: number; y: number }, progress: number) => ({
+  x: from.x + (to.x - from.x) * progress,
+  y: from.y + (to.y - from.y) * progress,
+});
+const areaSegmentPoint = (segment: TacticalRaisedAreaOutlineSegment, progress: number) => {
+  if (segment.kind === "line") return lerpPoint(segment.from, segment.to, progress);
+  if (segment.kind === "quadratic") {
+    return lerpPoint(
+      lerpPoint(segment.from, segment.control, progress),
+      lerpPoint(segment.control, segment.to, progress),
+      progress,
+    );
+  }
+  const first = lerpPoint(segment.from, segment.control1, progress);
+  const second = lerpPoint(segment.control1, segment.control2, progress);
+  const third = lerpPoint(segment.control2, segment.to, progress);
+  return lerpPoint(lerpPoint(first, second, progress), lerpPoint(second, third, progress), progress);
+};
+const closestAreaSegmentProgress = (segment: TacticalRaisedAreaOutlineSegment, point: { x: number; y: number }) => {
+  if (segment.kind === "line") {
+    const dx = segment.to.x - segment.from.x;
+    const dy = segment.to.y - segment.from.y;
+    const lengthSquared = dx * dx + dy * dy;
+    return lengthSquared === 0 ? 0.5 : Math.max(0.02, Math.min(0.98,
+      ((point.x - segment.from.x) * dx + (point.y - segment.from.y) * dy) / lengthSquared));
+  }
+  let closest = 0.5;
+  let distance = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < 100; index += 1) {
+    const progress = index / 100;
+    const candidate = areaSegmentPoint(segment, progress);
+    const candidateDistance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
+    if (candidateDistance < distance) {
+      closest = progress;
+      distance = candidateDistance;
+    }
+  }
+  return closest;
+};
+const splitAreaSegment = (segment: TacticalRaisedAreaOutlineSegment, point: { x: number; y: number }): [TacticalRaisedAreaOutlineSegment, TacticalRaisedAreaOutlineSegment] => {
+  const progress = closestAreaSegmentProgress(segment, point);
+  if (segment.kind === "line") {
+    const split = gridPoint(areaSegmentPoint(segment, progress));
+    return [
+      { kind: "line", from: { ...segment.from }, to: split },
+      { kind: "line", from: split, to: { ...segment.to } },
+    ];
+  }
+  if (segment.kind === "quadratic") {
+    const firstControl = lerpPoint(segment.from, segment.control, progress);
+    const secondControl = lerpPoint(segment.control, segment.to, progress);
+    const split = lerpPoint(firstControl, secondControl, progress);
+    return [
+      { kind: "quadratic", from: { ...segment.from }, control: firstControl, to: split },
+      { kind: "quadratic", from: split, control: secondControl, to: { ...segment.to } },
+    ];
+  }
+  const first = lerpPoint(segment.from, segment.control1, progress);
+  const second = lerpPoint(segment.control1, segment.control2, progress);
+  const third = lerpPoint(segment.control2, segment.to, progress);
+  const firstMiddle = lerpPoint(first, second, progress);
+  const secondMiddle = lerpPoint(second, third, progress);
+  const split = lerpPoint(firstMiddle, secondMiddle, progress);
+  return [
+    { kind: "cubic", from: { ...segment.from }, control1: first, control2: firstMiddle, to: split },
+    { kind: "cubic", from: split, control1: secondMiddle, control2: third, to: { ...segment.to } },
+  ];
+};
+const mergeAreaSegmentsAcrossAnchor = (
+  previous: TacticalRaisedAreaOutlineSegment,
+  next: TacticalRaisedAreaOutlineSegment,
 ): TacticalRaisedAreaOutlineSegment => {
-  if (!curved) return { kind: "line", from: gridPoint(from), to: gridPoint(to) };
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
+  if (previous.kind === "line" && next.kind === "line") {
+    return { kind: "line", from: { ...previous.from }, to: { ...next.to } };
+  }
+  const control1 = previous.kind === "cubic"
+    ? previous.control1
+    : previous.kind === "quadratic"
+      ? lerpPoint(previous.from, previous.control, 2 / 3)
+      : previous.from;
+  const control2 = next.kind === "cubic"
+    ? next.control2
+    : next.kind === "quadratic"
+      ? lerpPoint(next.to, next.control, 2 / 3)
+      : next.to;
   return {
-    kind: "quadratic",
-    from: gridPoint(from),
-    control: {
-      x: Math.max(0, Math.min(map.width, (from.x + to.x) / 2 - dy * 0.25)),
-      y: Math.max(0, Math.min(map.height, (from.y + to.y) / 2 + dx * 0.25)),
-    },
-    to: gridPoint(to),
+    kind: "cubic",
+    from: { ...previous.from },
+    control1: { ...control1 },
+    control2: { ...control2 },
+    to: { ...next.to },
   };
 };
+const areaSegmentSvgPath = (segment: TacticalRaisedAreaOutlineSegment) => segment.kind === "quadratic"
+  ? `M ${segment.from.x} ${segment.from.y} Q ${segment.control.x} ${segment.control.y} ${segment.to.x} ${segment.to.y}`
+  : segment.kind === "cubic"
+    ? `M ${segment.from.x} ${segment.from.y} C ${segment.control1.x} ${segment.control1.y} ${segment.control2.x} ${segment.control2.y} ${segment.to.x} ${segment.to.y}`
+    : `M ${segment.from.x} ${segment.from.y} L ${segment.to.x} ${segment.to.y}`;
 export const tacticalEditorMarkerInteractionEnabled = (
   placementKind: string | null,
   enemyKind: TacticalEnemyType | null,
@@ -397,12 +701,12 @@ const placementCandidates = (terrainDefinitionId: string, anchor: EditorMapPoint
 const TacticalDrawingPrecisionControl = () => {
   const editorViewport = useTacticalEditorViewport();
   if (!editorViewport) throw new Error("Drawing precision requires an editor viewport provider.");
-  return <label className="col-span-2 border border-cyan-900 p-2 font-bold text-cyan-200">Drawing precision
+  return <label className="block font-bold text-cyan-200">Precision
     <select
-      aria-label="Palette drawing precision"
+      aria-label="Drawing precision"
       value={editorViewport.snapMode}
       onChange={(event) => editorViewport.setSnapMode(event.target.value as typeof editorViewport.snapMode)}
-      className="mt-1 h-8 w-full border border-cyan-700 bg-slate-950 px-2 text-[8px] text-cyan-50"
+      className="mt-1 h-8 w-full border border-cyan-700 bg-slate-950 px-2 text-[9px] normal-case tracking-normal text-cyan-50"
     >
       <option value="grid">Grid · 1 square</option>
       <option value="half-grid">Half grid · 0.5</option>
@@ -420,13 +724,17 @@ const tacticalEditorPortalPlacementCandidate = (
   const candidates = [
     tacticalWallPortalPlacementCandidate(definition.drawnWalls ?? [], point, kind),
     tacticalCirclePortalPlacementCandidate(definition.drawnTerrainPrimitives ?? [], point, kind),
+    tacticalAreaBoundaryPortalPlacementCandidate(definition.drawnAreas ?? [], point, kind),
   ].filter((candidate) => candidate !== null);
   return candidates.sort((first, second) =>
     first.distanceFromWall - second.distanceFromWall)[0] ?? null;
 };
 
-const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, selectedWallId, selectedRaisedAreaId, selectedPrimitiveId, selectedNaturalTerrainId, selectedElevationTransitionId, selectedPortalId, selectedFire, placementKind, enemyKind, placementHover, enemyHover, portalHover, wallDraft, raisedAreaDraft, circleDraft, rampDraft, dragRaisedAreaControl, dragCirclePrimitive, dragNaturalTerrain, dragWallEndpoint, dragWallMove, dragWallControl, dragWallPortal, dragTracingTemplate, tracingTemplateEditing, dragPlacement, dragEnemy, selectPlacement, selectEnemy, selectWall, selectRaisedArea, selectPrimitive, selectNaturalTerrain, selectElevationTransition, selectPortal, selectFire, hoverPlacement, hoverEnemy, hoverPortal, beginWall, updateWall, finishWall, finishWallInteraction, cancelWall, beginCircle, updateCircle, finishCircle, cancelCircle, beginCirclePrimitiveDrag, updateCirclePrimitiveDrag, finishCirclePrimitiveDrag, beginNaturalTerrainDrag, updateNaturalTerrainDrag, finishNaturalTerrainDrag, addRaisedAreaVertex, hoverRaisedArea, beginOrFinishRamp, beginRaisedAreaControlDrag, reshapeRaisedAreaControl, finishRaisedAreaControlDrag, cancelRaisedAreaControlDrag, placeWallPortal, beginWallEndpointDrag, resizeWallEndpoint, finishWallEndpointDrag, cancelWallEndpointDrag, beginWallMove, moveWall, finishWallMove, cancelWallMove, beginWallControlDrag, reshapeWallControl, finishWallControlDrag, cancelWallControlDrag, beginWallPortalDrag, moveWallPortal, finishWallPortalDrag, cancelWallPortalDrag, beginTracingTemplateDrag, transformTracingTemplate, finishTracingTemplateDrag, cancelTracingTemplateDrag, beginDrag, beginEnemyDrag, endDrag, placeTerrain, placeEnemy, moveTerrain, moveEnemy }: {
+const DraftPreview = ({ definition, handToolActive, nodeEditActive, selectedAreaAnchor, selectedPlacementId, selectedEnemyId, selectedWallId, selectedRaisedAreaId, selectedPrimitiveId, selectedNaturalTerrainId, selectedElevationTransitionId, selectedPortalId, selectedFire, placementKind, enemyKind, placementHover, enemyHover, portalHover, wallDraft, raisedAreaDraft, circleDraft, rampDraft, dragRaisedAreaControl, dragAreaAnchor, dragAreaCubicControl, dragConstrainedArea, dragCirclePrimitive, dragNaturalTerrain, dragWallEndpoint, dragWallMove, dragWallControl, dragWallPortal, dragTracingTemplate, tracingTemplateEditing, dragPlacement, dragEnemy, selectPlacement, selectEnemy, selectWall, selectRaisedArea, selectAreaAnchor, insertAreaAnchor, selectPrimitive, selectNaturalTerrain, selectElevationTransition, selectPortal, selectFire, hoverPlacement, hoverEnemy, hoverPortal, beginWall, updateWall, finishWall, finishWallInteraction, cancelWall, beginCircle, updateCircle, finishCircle, cancelCircle, beginCirclePrimitiveDrag, updateCirclePrimitiveDrag, finishCirclePrimitiveDrag, beginNaturalTerrainDrag, updateNaturalTerrainDrag, finishNaturalTerrainDrag, createRectangleArea, commitPenNode, closePenArea, hoverRaisedArea, beginOrFinishRamp, beginRaisedAreaControlDrag, reshapeRaisedAreaControl, finishRaisedAreaControlDrag, cancelRaisedAreaControlDrag, beginAreaAnchorDrag, moveAreaAnchor, finishAreaAnchorDrag, cancelAreaAnchorDrag, beginAreaCubicControlDrag, moveAreaCubicControl, finishAreaCubicControlDrag, cancelAreaCubicControlDrag, beginConstrainedAreaDrag, updateConstrainedAreaDrag, finishConstrainedAreaDrag, cancelConstrainedAreaDrag, placeWallPortal, beginWallEndpointDrag, resizeWallEndpoint, finishWallEndpointDrag, cancelWallEndpointDrag, beginWallMove, moveWall, finishWallMove, cancelWallMove, beginWallControlDrag, reshapeWallControl, finishWallControlDrag, cancelWallControlDrag, beginWallPortalDrag, moveWallPortal, finishWallPortalDrag, cancelWallPortalDrag, beginTracingTemplateDrag, transformTracingTemplate, finishTracingTemplateDrag, cancelTracingTemplateDrag, beginDrag, beginEnemyDrag, endDrag, placeTerrain, placeEnemy, moveTerrain, moveEnemy }: {
   definition: TacticalScenarioDefinitionFile;
+  handToolActive: boolean;
+  nodeEditActive: boolean;
+  selectedAreaAnchor: { areaId: string; anchorIndex: number } | null;
   selectedPlacementId: string | null;
   selectedEnemyId: string | null;
   selectedWallId: string | null;
@@ -446,6 +754,9 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   circleDraft: CircleDraft | null;
   rampDraft: RampDraft | null;
   dragRaisedAreaControl: RaisedAreaControlDrag | null;
+  dragAreaAnchor: AreaAnchorDrag | null;
+  dragAreaCubicControl: AreaCubicControlDrag | null;
+  dragConstrainedArea: ConstrainedAreaDrag | null;
   dragCirclePrimitive: CirclePrimitiveDrag | null;
   dragNaturalTerrain: NaturalTerrainDrag | null;
   dragWallEndpoint: WallEndpointDrag | null;
@@ -460,6 +771,8 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   selectEnemy: (id: string | null) => void;
   selectWall: (id: string | null) => void;
   selectRaisedArea: (id: string | null) => void;
+  selectAreaAnchor: (selection: { areaId: string; anchorIndex: number } | null) => void;
+  insertAreaAnchor: (areaId: string, segmentIndex: number, point: { x: number; y: number }) => void;
   selectPrimitive: (id: string | null) => void;
   selectNaturalTerrain: (id: string | null) => void;
   selectElevationTransition: (id: string | null) => void;
@@ -483,13 +796,27 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   beginNaturalTerrainDrag: (id: string, kind: NaturalTerrainDrag["kind"], point?: { x: number; y: number }) => void;
   updateNaturalTerrainDrag: (point: { x: number; y: number }) => void;
   finishNaturalTerrainDrag: () => void;
-  addRaisedAreaVertex: (point: { x: number; y: number }) => void;
+  createRectangleArea: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
+  commitPenNode: (anchor: { x: number; y: number }, handle: { x: number; y: number }) => void;
+  closePenArea: () => void;
   hoverRaisedArea: (point: { x: number; y: number }) => void;
   beginOrFinishRamp: (point: EditorMapPoint) => void;
   beginRaisedAreaControlDrag: (owner: RaisedAreaControlDrag["owner"], segmentIndex: number) => void;
   reshapeRaisedAreaControl: (point: { x: number; y: number }) => void;
   finishRaisedAreaControlDrag: () => void;
   cancelRaisedAreaControlDrag: () => void;
+  beginAreaAnchorDrag: (id: string, anchorIndex: number) => void;
+  moveAreaAnchor: (point: { x: number; y: number }) => void;
+  finishAreaAnchorDrag: () => void;
+  cancelAreaAnchorDrag: () => void;
+  beginAreaCubicControlDrag: (id: string, segmentIndex: number, control: AreaCubicControlDrag["control"]) => void;
+  moveAreaCubicControl: (point: { x: number; y: number }) => void;
+  finishAreaCubicControlDrag: () => void;
+  cancelAreaCubicControlDrag: () => void;
+  beginConstrainedAreaDrag: (id: string, kind: ConstrainedAreaDrag["kind"], point: { x: number; y: number }) => void;
+  updateConstrainedAreaDrag: (point: { x: number; y: number }) => void;
+  finishConstrainedAreaDrag: () => void;
+  cancelConstrainedAreaDrag: () => void;
   placeWallPortal: (point: { x: number; y: number }) => void;
   beginWallEndpointDrag: (id: string, endpoint: WallEndpoint) => void;
   resizeWallEndpoint: (point: { x: number; y: number }) => void;
@@ -521,6 +848,8 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
 }) => {
   const editorViewport = useTacticalEditorViewport();
   const [panDrag, setPanDrag] = useState<EditorPanDrag | null>(null);
+  const [rectangleDraft, setRectangleDraft] = useState<{ pointerId: number; start: { x: number; y: number }; current: { x: number; y: number } } | null>(null);
+  const [penNodeDrag, setPenNodeDrag] = useState<{ pointerId: number; anchor: { x: number; y: number }; handle: { x: number; y: number } } | null>(null);
   const [spacePressed, setSpacePressed] = useState(false);
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
@@ -605,17 +934,30 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     }
     return snapTacticalEditorPoint(local, editorViewport.snapMode, definition.map);
   };
+  const rectangleEndPoint = (start: { x: number; y: number }, point: { x: number; y: number }, constrain: boolean) => {
+    if (!constrain) return point;
+    const size = Math.max(Math.abs(point.x - start.x), Math.abs(point.y - start.y));
+    return {
+      x: Math.max(0, Math.min(definition.map.width, start.x + (point.x < start.x ? -size : size))),
+      y: Math.max(0, Math.min(definition.map.height, start.y + (point.y < start.y ? -size : size))),
+    };
+  };
   const raisedAreaPreview = (() => {
-    if (!raisedAreaDraft || sameGridPoint(raisedAreaDraft.current, raisedAreaDraft.hover)) return { segment: null, cells: [] };
-    const segment = raisedAreaSegment(
-      raisedAreaDraft.current,
-      raisedAreaDraft.hover,
-      isCurvedAreaTool(placementKind),
-      definition.map,
-    );
+    if (!raisedAreaDraft) return { segment: null, cells: [] };
+    const anchor = penNodeDrag?.anchor ?? raisedAreaDraft.hover;
+    if (sameGridPoint(raisedAreaDraft.current, anchor)) return { segment: null, cells: [] };
+    const draggedHandle = penNodeDrag && Math.hypot(
+      penNodeDrag.handle.x - penNodeDrag.anchor.x,
+      penNodeDrag.handle.y - penNodeDrag.anchor.y,
+    ) >= 0.1;
+    const incomingControl = draggedHandle && penNodeDrag ? {
+      x: penNodeDrag.anchor.x * 2 - penNodeDrag.handle.x,
+      y: penNodeDrag.anchor.y * 2 - penNodeDrag.handle.y,
+    } : null;
+    const segment = penAreaSegment(raisedAreaDraft.current, anchor, raisedAreaDraft.outgoingControl, incomingControl);
     const segments = [...raisedAreaDraft.segments, segment];
-    if (!sameGridPoint(raisedAreaDraft.hover, raisedAreaDraft.start)) {
-      segments.push({ kind: "line", from: gridPoint(raisedAreaDraft.hover), to: gridPoint(raisedAreaDraft.start) });
+    if (!sameGridPoint(anchor, raisedAreaDraft.start)) {
+      segments.push({ kind: "line", from: gridPoint(anchor), to: gridPoint(raisedAreaDraft.start) });
     }
     try {
       return {
@@ -694,6 +1036,8 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     const previewId = "__wall-portal-preview__";
     const circleOwner = (definition.drawnTerrainPrimitives ?? [])
       .some((primitive) => primitive.id === candidate.wallId);
+    const areaOwner = (definition.drawnAreas ?? [])
+      .some((area) => area.id === candidate.wallId);
     const previewDefinition: TacticalScenarioDefinitionFile = {
       ...definition,
       ...(circleOwner
@@ -703,6 +1047,12 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
               ? { ...primitive, portals: [...(primitive.portals ?? []), { id: previewId, kind: portalKind, position: candidate.position }] }
               : primitive),
         }
+        : areaOwner
+          ? {
+            drawnAreas: (definition.drawnAreas ?? []).map((area) => area.id === candidate.wallId
+              ? { ...area, portals: [...(area.portals ?? []), { id: previewId, kind: portalKind, position: candidate.position }] }
+              : area),
+          }
         : {
           drawnWalls: (definition.drawnWalls ?? []).map((wall) => wall.id === candidate.wallId
             ? { ...wall, portals: [...(wall.portals ?? []), { id: previewId, kind: portalKind, position: candidate.position }] }
@@ -726,6 +1076,7 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
   });
   const drawnPortalIds = new Set([
     ...(definition.drawnWalls ?? []).flatMap((wall) => (wall.portals ?? []).map((portal) => portal.id)),
+    ...(definition.drawnAreas ?? []).flatMap((area) => (area.portals ?? []).map((portal) => portal.id)),
     ...(definition.drawnTerrainPrimitives ?? []).flatMap((primitive) => (primitive.portals ?? []).map((portal) => portal.id)),
   ]);
   const templateCorners = definition.tracingTemplate
@@ -741,10 +1092,16 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     const offset = rotateOffset({ x: 0, y: -definition.tracingTemplate.height / 2 - 1.5 }, tracingTemplateRotation(definition.tracingTemplate));
     return { x: center.x + offset.x, y: center.y + offset.y };
   })() : null;
+  const rectanglePreview = rectangleDraft ? {
+    x: Math.min(rectangleDraft.start.x, rectangleDraft.current.x),
+    y: Math.min(rectangleDraft.start.y, rectangleDraft.current.y),
+    width: Math.abs(rectangleDraft.current.x - rectangleDraft.start.x),
+    height: Math.abs(rectangleDraft.current.y - rectangleDraft.start.y),
+  } : null;
   return <svg
     viewBox={`${editorViewport.viewBox.x} ${editorViewport.viewBox.y} ${editorViewport.viewBox.width} ${editorViewport.viewBox.height}`}
     preserveAspectRatio="xMidYMid meet"
-    className={`h-full w-full touch-none bg-[#050a12] ${panDrag || spacePressed ? "cursor-grab" : placementKind || enemyKind ? "cursor-crosshair" : ""}`}
+    className={`h-full w-full touch-none bg-[#050a12] ${panDrag || spacePressed || handToolActive ? "cursor-grab" : placementKind || enemyKind ? "cursor-crosshair" : ""}`}
     aria-label="Scenario draft map preview"
     data-zoom-percent={editorViewport.zoomPercent}
     onWheel={(event) => {
@@ -763,7 +1120,7 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       if (anchor) editorViewport.zoomAt(anchor, Math.exp(-event.deltaY * 0.002));
     }}
     onPointerDown={(event) => {
-      if (event.button === 1 || (event.button === 0 && spacePressed)) {
+      if (event.button === 1 || (event.button === 0 && (spacePressed || handToolActive))) {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -780,12 +1137,21 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         if (local) placeWallPortal({ x: local.x, y: local.y });
         return;
       }
-      if (isAreaTool(placementKind)) {
+      if (placementKind === RECTANGLE_AREA_TOOL_ID) {
         const vertex = mapVertex(event);
-        if (vertex) addRaisedAreaVertex(vertex);
+        if (!vertex) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setRectangleDraft({ pointerId: event.pointerId, start: vertex, current: vertex });
         return;
       }
-      if (placementKind === CIRCLE_TOOL_ID) {
+      if (isAreaTool(placementKind)) {
+        const vertex = mapVertex(event);
+        if (!vertex) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setPenNodeDrag({ pointerId: event.pointerId, anchor: vertex, handle: vertex });
+        return;
+      }
+      if (placementKind === CIRCLE_TOOL_ID || placementKind === CIRCLE_AREA_TOOL_ID) {
         const vertex = mapVertex(event);
         if (!vertex) return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -839,9 +1205,24 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         if (local) transformTracingTemplate({ x: local.x, y: local.y });
         return;
       }
+      if (dragConstrainedArea) {
+        const vertex = mapVertex(event);
+        if (vertex) updateConstrainedAreaDrag(vertex);
+        return;
+      }
       if (dragRaisedAreaControl) {
         const local = localMapPoint(event);
         if (local) reshapeRaisedAreaControl({ x: local.x, y: local.y });
+        return;
+      }
+      if (dragAreaAnchor) {
+        const vertex = mapVertex(event);
+        if (vertex) moveAreaAnchor(vertex);
+        return;
+      }
+      if (dragAreaCubicControl) {
+        const local = localMapPoint(event);
+        if (local) moveAreaCubicControl({ x: local.x, y: local.y });
         return;
       }
       if (dragCirclePrimitive) {
@@ -879,6 +1260,19 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         if (vertex) updateWall(vertex);
         return;
       }
+      if (rectangleDraft && event.pointerId === rectangleDraft.pointerId) {
+        const vertex = mapVertex(event);
+        if (vertex) setRectangleDraft({
+          ...rectangleDraft,
+          current: rectangleEndPoint(rectangleDraft.start, vertex, event.shiftKey),
+        });
+        return;
+      }
+      if (penNodeDrag && event.pointerId === penNodeDrag.pointerId) {
+        const local = localMapPoint(event);
+        if (local) setPenNodeDrag({ ...penNodeDrag, handle: { x: local.x, y: local.y } });
+        return;
+      }
       if (circleDraft) {
         const vertex = mapVertex(event);
         if (vertex) updateCircle(vertex);
@@ -911,10 +1305,28 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         finishTracingTemplateDrag();
         return;
       }
+      if (dragConstrainedArea) {
+        const vertex = mapVertex(event);
+        if (vertex) updateConstrainedAreaDrag(vertex);
+        finishConstrainedAreaDrag();
+        return;
+      }
       if (dragRaisedAreaControl) {
         const local = localMapPoint(event);
         if (local) reshapeRaisedAreaControl({ x: local.x, y: local.y });
         finishRaisedAreaControlDrag();
+        return;
+      }
+      if (dragAreaAnchor) {
+        const vertex = mapVertex(event);
+        if (vertex) moveAreaAnchor(vertex);
+        finishAreaAnchorDrag();
+        return;
+      }
+      if (dragAreaCubicControl) {
+        const local = localMapPoint(event);
+        if (local) moveAreaCubicControl({ x: local.x, y: local.y });
+        finishAreaCubicControlDrag();
         return;
       }
       if (dragCirclePrimitive) {
@@ -959,6 +1371,19 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         else cancelWall();
         return;
       }
+      if (rectangleDraft && event.pointerId === rectangleDraft.pointerId) {
+        const vertex = mapVertex(event);
+        const end = vertex ? rectangleEndPoint(rectangleDraft.start, vertex, event.shiftKey) : rectangleDraft.current;
+        createRectangleArea(rectangleDraft.start, end);
+        setRectangleDraft(null);
+        return;
+      }
+      if (penNodeDrag && event.pointerId === penNodeDrag.pointerId) {
+        const local = localMapPoint(event);
+        commitPenNode(penNodeDrag.anchor, local ? { x: local.x, y: local.y } : penNodeDrag.handle);
+        setPenNodeDrag(null);
+        return;
+      }
       if (circleDraft) {
         const vertex = mapVertex(event);
         if (vertex) finishCircle(vertex);
@@ -966,7 +1391,12 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         return;
       }
       endDrag();
-    }} onPointerCancel={() => { setPanDrag(null); cancelTracingTemplateDrag(); cancelRaisedAreaControlDrag(); finishCirclePrimitiveDrag(); finishNaturalTerrainDrag(); cancelCircle(); cancelWallControlDrag(); cancelWallPortalDrag(); cancelWallMove(); cancelWallEndpointDrag(); cancelWall(); endDrag(); }}>
+    }} onDoubleClick={(event) => {
+      if (placementKind !== PEN_AREA_TOOL_ID || !raisedAreaDraft) return;
+      event.preventDefault();
+      closePenArea();
+      setPenNodeDrag(null);
+    }} onPointerCancel={() => { setPanDrag(null); setRectangleDraft(null); setPenNodeDrag(null); cancelTracingTemplateDrag(); cancelConstrainedAreaDrag(); cancelRaisedAreaControlDrag(); cancelAreaAnchorDrag(); cancelAreaCubicControlDrag(); finishCirclePrimitiveDrag(); finishNaturalTerrainDrag(); cancelCircle(); cancelWallControlDrag(); cancelWallPortalDrag(); cancelWallMove(); cancelWallEndpointDrag(); cancelWall(); endDrag(); }}>
     <defs>
       <pattern id="draft-grid" width="1" height="1" patternUnits="userSpaceOnUse">
         <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#29434d" strokeWidth="0.04" />
@@ -985,6 +1415,10 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       pointerEvents="none"
     />}
     <rect x="0" y="0" width={definition.map.width} height={definition.map.height} fill="url(#draft-grid)" />
+    {rectanglePreview && <g data-testid="rectangle-area-draft-preview" pointerEvents="none">
+      <rect x={rectanglePreview.x} y={rectanglePreview.y} width={rectanglePreview.width} height={rectanglePreview.height} fill="#22d3ee" fillOpacity="0.16" stroke="#fef08a" strokeWidth="0.24" strokeDasharray="0.5 0.25" />
+      <text x={rectanglePreview.x + rectanglePreview.width / 2} y={rectanglePreview.y + rectanglePreview.height / 2} textAnchor="middle" dominantBaseline="middle" fill="#fef08a" fontSize="0.5" fontWeight="bold">{rectanglePreview.width.toFixed(1)} × {rectanglePreview.height.toFixed(1)}</text>
+    </g>}
     {terrain.deploymentCells.map((cell) => <rect key={`deployment:${cell.x}:${cell.y}`} x={cell.x + 0.05} y={cell.y + 0.05} width="0.9" height="0.9" fill="#22c55e" fillOpacity="0.18" stroke="#86efac" strokeWidth="0.04" pointerEvents="none" />)}
     {terrain.interiorCells.map((cell) => <rect key={`interior:${cell.x}:${cell.y}`} x={cell.x} y={cell.y} width="1" height="1" fill="#164e63" opacity="0.28" />)}
     {Object.entries(terrain.terrainByCell).map(([key, terrainType]) => {
@@ -1269,6 +1703,208 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         </>}
       </g>;
     })}
+    {(definition.drawnAreas ?? []).map((area) => {
+      const selected = area.id === selectedRaisedAreaId;
+      const areaGeometry = area.geometry;
+      const fill = area.surface === "grass" ? "#3f7d20"
+        : area.surface === "sand" ? "#c2a15a"
+        : area.surface === "water" ? "#2563a8"
+        : area.surface === "close-machinery" ? "#b45309"
+        : area.surface === "liquid-hydrogen" ? "#0284c7"
+        : "transparent";
+      const outline = selected ? "#fef08a" : area.boundary === "wall" ? "#e2e8f0" : "#67e8f9";
+      let cells: { x: number; y: number }[] = [];
+      try {
+        cells = tacticalDrawnRaisedAreaCells(area, definition.map.width, definition.map.height);
+      } catch {
+        // The resolver reports the validation error while the outline remains editable.
+      }
+      const selectArea = (event: ReactPointerEvent<SVGElement>) => {
+        if (placementKind || enemyKind) return;
+        event.stopPropagation();
+        selectPlacement(null);
+        selectEnemy(null);
+        selectWall(null);
+        selectPortal(null);
+        selectFire(null);
+        selectRaisedArea(area.id);
+      };
+      const insertAnchor = (event: ReactMouseEvent<SVGElement>, segmentIndex: number) => {
+        if (!nodeEditActive || !selected || areaGeometry) return;
+        const point = localMapPoint(event);
+        if (!point) return;
+        event.preventDefault();
+        event.stopPropagation();
+        insertAreaAnchor(area.id, segmentIndex, point);
+      };
+      return <g key={area.id} data-testid={`drawn-area-${area.id}`} data-elevation-level={area.elevation} data-boundary={area.boundary} data-deployment={area.deployment ? "crew" : "none"}>
+        {area.surface !== "none" && cells.map((cell) => <rect
+          key={cellKey(cell)}
+          x={cell.x}
+          y={cell.y}
+          width="1"
+          height="1"
+          fill={fill}
+          fillOpacity={area.surface === "liquid-hydrogen" && area.settings?.filled === false ? "0.08" : "0.3"}
+          pointerEvents="none"
+        />)}
+        {area.segments.map((segment, index) => segment.kind !== "line"
+          ? <g key={index}>
+            <path data-testid={`drawn-area-${area.id}-segment-${index}`} d={areaSegmentSvgPath(segment)} fill="none" stroke={outline} strokeWidth={selected ? "0.38" : area.boundary === "wall" ? "0.32" : "0.2"} className={placementKind || enemyKind ? undefined : "cursor-pointer"} onPointerDown={selectArea} onDoubleClick={(event) => insertAnchor(event, index)} />
+            {selected && !areaGeometry && segment.kind === "quadratic" && <circle
+              data-testid={`drawn-area-${area.id}-segment-${index}-control-handle`}
+              aria-label={`Reshape ${area.id} curve ${index + 1}`}
+              cx={segment.control.x}
+              cy={segment.control.y}
+              r="0.32"
+              fill="#7c3aed"
+              stroke="#ede9fe"
+              strokeWidth="0.1"
+              className="cursor-move"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                beginRaisedAreaControlDrag({ kind: "area", id: area.id }, index);
+              }}
+            />}
+            {selected && !areaGeometry && segment.kind === "cubic" && <g>
+              <line x1={segment.from.x} y1={segment.from.y} x2={segment.control1.x} y2={segment.control1.y} stroke="#a78bfa" strokeWidth="0.1" strokeDasharray="0.3 0.2" pointerEvents="none" />
+              <line x1={segment.to.x} y1={segment.to.y} x2={segment.control2.x} y2={segment.control2.y} stroke="#a78bfa" strokeWidth="0.1" strokeDasharray="0.3 0.2" pointerEvents="none" />
+              {(["control1", "control2"] as const).map((control) => <circle
+                key={control}
+                data-testid={`drawn-area-${area.id}-segment-${index}-${control}-handle`}
+                aria-label={`Move ${area.id} curve ${index + 1} ${control === "control1" ? "outgoing" : "incoming"} handle`}
+                cx={segment[control].x}
+                cy={segment[control].y}
+                r="0.28"
+                fill="#7c3aed"
+                stroke="#ede9fe"
+                strokeWidth="0.1"
+                className="cursor-move"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  beginAreaCubicControlDrag(area.id, index, control);
+                }}
+              />)}
+            </g>}
+          </g>
+          : <line key={index} data-testid={`drawn-area-${area.id}-segment-${index}`} x1={segment.from.x} y1={segment.from.y} x2={segment.to.x} y2={segment.to.y} stroke={outline} strokeWidth={selected ? "0.38" : area.boundary === "wall" ? "0.32" : "0.2"} className={placementKind || enemyKind ? undefined : "cursor-pointer"} onPointerDown={selectArea} onDoubleClick={(event) => insertAnchor(event, index)} />)}
+        {selected && !areaGeometry && area.segments.map((segment, index) => {
+          const anchorSelected = nodeEditActive && selectedAreaAnchor?.areaId === area.id && selectedAreaAnchor.anchorIndex === index;
+          return <circle
+          key={`anchor:${index}`}
+          data-testid={`drawn-area-${area.id}-anchor-${index}`}
+          aria-label={`Move ${area.id} point ${index + 1}`}
+          cx={segment.from.x}
+          cy={segment.from.y}
+          r="0.3"
+          fill={anchorSelected ? "#f59e0b" : "#0891b2"}
+          stroke={anchorSelected ? "#fef3c7" : "#ecfeff"}
+          strokeWidth={anchorSelected ? "0.16" : "0.1"}
+          className="cursor-move"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            if (nodeEditActive) selectAreaAnchor({ areaId: area.id, anchorIndex: index });
+            beginAreaAnchorDrag(area.id, index);
+          }}
+        />;})}
+        {selected && areaGeometry?.kind === "circle" && <>
+          <line
+            x1={areaGeometry.center.x}
+            y1={areaGeometry.center.y}
+            x2={areaGeometry.center.x + areaGeometry.radius}
+            y2={areaGeometry.center.y}
+            stroke="#fef08a"
+            strokeWidth="0.1"
+            strokeDasharray="0.3 0.2"
+            pointerEvents="none"
+          />
+          <circle
+            data-testid={`drawn-area-${area.id}-circle-center-handle`}
+            aria-label={`Move ${area.id} circle`}
+            cx={areaGeometry.center.x}
+            cy={areaGeometry.center.y}
+            r="0.32"
+            fill="#0891b2"
+            stroke="#ecfeff"
+            strokeWidth="0.1"
+            className="cursor-move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              beginConstrainedAreaDrag(area.id, "circle-center", areaGeometry.center);
+            }}
+          />
+          <circle
+            data-testid={`drawn-area-${area.id}-circle-radius-handle`}
+            aria-label={`Resize ${area.id} circle`}
+            cx={areaGeometry.center.x + areaGeometry.radius}
+            cy={areaGeometry.center.y}
+            r="0.32"
+            fill="#d97706"
+            stroke="#fef3c7"
+            strokeWidth="0.1"
+            className="cursor-ew-resize"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              beginConstrainedAreaDrag(area.id, "circle-radius", { x: areaGeometry.center.x + areaGeometry.radius, y: areaGeometry.center.y });
+            }}
+          />
+        </>}
+        {selected && areaGeometry?.kind === "rectangle" && <>
+          <circle
+            data-testid={`drawn-area-${area.id}-rectangle-center-handle`}
+            aria-label={`Move ${area.id} rectangle`}
+            cx={areaGeometry.x + areaGeometry.width / 2}
+            cy={areaGeometry.y + areaGeometry.height / 2}
+            r="0.32"
+            fill="#0891b2"
+            stroke="#ecfeff"
+            strokeWidth="0.1"
+            className="cursor-move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              beginConstrainedAreaDrag(area.id, "rectangle-center", { x: areaGeometry.x + areaGeometry.width / 2, y: areaGeometry.y + areaGeometry.height / 2 });
+            }}
+          />
+          {([
+            ["top-left", areaGeometry.x, areaGeometry.y],
+            ["top-right", areaGeometry.x + areaGeometry.width, areaGeometry.y],
+            ["bottom-right", areaGeometry.x + areaGeometry.width, areaGeometry.y + areaGeometry.height],
+            ["bottom-left", areaGeometry.x, areaGeometry.y + areaGeometry.height],
+          ] as const).map(([corner, x, y]) => <rect
+            key={corner}
+            data-testid={`drawn-area-${area.id}-rectangle-${corner}-handle`}
+            aria-label={`Resize ${area.id} rectangle ${corner}`}
+            x={x - 0.28}
+            y={y - 0.28}
+            width="0.56"
+            height="0.56"
+            fill="#d97706"
+            stroke="#fef3c7"
+            strokeWidth="0.1"
+            className="cursor-nwse-resize"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              beginConstrainedAreaDrag(area.id, `rectangle-${corner}` as ConstrainedAreaDrag["kind"], { x, y });
+            }}
+          />)}
+        </>}
+        {selected && <text x={area.segments[0]?.from.x ?? 0} y={(area.segments[0]?.from.y ?? 0) - 0.45} fill="#fef08a" fontSize="0.42" fontWeight="bold" pointerEvents="none">{area.surface} · level {area.elevation} · {area.boundary}</text>}
+      </g>;
+    })}
     {(definition.drawnRaisedAreas ?? []).map((area) => {
       const selected = area.id === selectedRaisedAreaId;
       const level = terrain.drawnRaisedAreaLevels[area.id] ?? 1;
@@ -1284,10 +1920,10 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
         selectRaisedArea(area.id);
       };
       return <g key={area.id} data-elevation-level={level}>
-        {area.segments.map((segment, index) => segment.kind === "quadratic"
+        {area.segments.map((segment, index) => segment.kind !== "line"
           ? <g key={index}>
-            <path data-testid={`drawn-raised-area-${area.id}-segment-${index}`} d={`M ${segment.from.x} ${segment.from.y} Q ${segment.control.x} ${segment.control.y} ${segment.to.x} ${segment.to.y}`} fill="none" stroke={selected ? "#fef08a" : outlineColor} strokeWidth={selected ? "0.34" : "0.24"} className={placementKind || enemyKind ? undefined : "cursor-pointer"} onPointerDown={selectArea} />
-            {selected && <>
+            <path data-testid={`drawn-raised-area-${area.id}-segment-${index}`} d={areaSegmentSvgPath(segment)} fill="none" stroke={selected ? "#fef08a" : outlineColor} strokeWidth={selected ? "0.34" : "0.24"} className={placementKind || enemyKind ? undefined : "cursor-pointer"} onPointerDown={selectArea} />
+            {selected && segment.kind === "quadratic" && <>
               <line x1={segment.from.x} y1={segment.from.y} x2={segment.control.x} y2={segment.control.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
               <line x1={segment.control.x} y1={segment.control.y} x2={segment.to.x} y2={segment.to.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
               <circle
@@ -1361,10 +1997,10 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
           strokeWidth={flatSurface ? "0" : "0.04"}
           pointerEvents="none"
         />)}
-        {region.segments.map((segment, index) => segment.kind === "quadratic"
+        {region.segments.map((segment, index) => segment.kind !== "line"
           ? <g key={index}>
-            <path data-testid={`drawn-terrain-region-${region.id}-segment-${index}`} d={`M ${segment.from.x} ${segment.from.y} Q ${segment.control.x} ${segment.control.y} ${segment.to.x} ${segment.to.y}`} fill="none" stroke={selected ? "#fef08a" : outline} strokeWidth={selected ? "0.34" : "0.24"} className={placementKind || enemyKind ? undefined : "cursor-pointer"} onPointerDown={selectRegion} />
-            {selected && <>
+            <path data-testid={`drawn-terrain-region-${region.id}-segment-${index}`} d={areaSegmentSvgPath(segment)} fill="none" stroke={selected ? "#fef08a" : outline} strokeWidth={selected ? "0.34" : "0.24"} className={placementKind || enemyKind ? undefined : "cursor-pointer"} onPointerDown={selectRegion} />
+            {selected && segment.kind === "quadratic" && <>
               <line x1={segment.from.x} y1={segment.from.y} x2={segment.control.x} y2={segment.control.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
               <line x1={segment.control.x} y1={segment.control.y} x2={segment.to.x} y2={segment.to.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
               <circle
@@ -1649,8 +2285,15 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
     </g>}
     {raisedAreaDraft && <g data-testid="raised-area-draft-preview">
       {raisedAreaPreview.cells.map((cell) => <rect key={cellKey(cell)} x={cell.x + 0.04} y={cell.y + 0.04} width="0.92" height="0.92" fill="#06b6d4" fillOpacity="0.34" stroke="#67e8f9" strokeWidth="0.06" pointerEvents="none" />)}
-      {raisedAreaDraft.segments.map((segment, index) => segment.kind === "quadratic"
+      {raisedAreaDraft.segments.map((segment, index) => segment.kind === "cubic"
         ? <g key={index}>
+          <path data-testid={`raised-area-draft-segment-${index}`} d={areaSegmentSvgPath(segment)} fill="none" stroke="#fef08a" strokeWidth="0.28" pointerEvents="none" />
+          <line x1={segment.from.x} y1={segment.from.y} x2={segment.control1.x} y2={segment.control1.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
+          <line x1={segment.control2.x} y1={segment.control2.y} x2={segment.to.x} y2={segment.to.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
+          <circle cx={segment.control1.x} cy={segment.control1.y} r="0.22" fill="#7c3aed" stroke="#ede9fe" strokeWidth="0.08" pointerEvents="none" />
+          <circle cx={segment.control2.x} cy={segment.control2.y} r="0.22" fill="#7c3aed" stroke="#ede9fe" strokeWidth="0.08" pointerEvents="none" />
+        </g>
+        : segment.kind === "quadratic" ? <g key={index}>
           <path data-testid={`raised-area-draft-segment-${index}`} d={`M ${segment.from.x} ${segment.from.y} Q ${segment.control.x} ${segment.control.y} ${segment.to.x} ${segment.to.y}`} fill="none" stroke="#fef08a" strokeWidth="0.28" pointerEvents="none" />
           <line x1={segment.from.x} y1={segment.from.y} x2={segment.control.x} y2={segment.control.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
           <line x1={segment.control.x} y1={segment.control.y} x2={segment.to.x} y2={segment.to.y} stroke="#a78bfa" strokeWidth="0.08" strokeDasharray="0.3 0.2" pointerEvents="none" />
@@ -1673,16 +2316,21 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
           />
         </g>
         : <line key={index} data-testid={`raised-area-draft-segment-${index}`} x1={segment.from.x} y1={segment.from.y} x2={segment.to.x} y2={segment.to.y} stroke="#fef08a" strokeWidth="0.28" pointerEvents="none" />)}
-      {raisedAreaPreview.segment && (raisedAreaPreview.segment.kind === "quadratic"
-        ? <path d={`M ${raisedAreaPreview.segment.from.x} ${raisedAreaPreview.segment.from.y} Q ${raisedAreaPreview.segment.control.x} ${raisedAreaPreview.segment.control.y} ${raisedAreaPreview.segment.to.x} ${raisedAreaPreview.segment.to.y}`} fill="none" stroke="#fef08a" strokeWidth="0.28" strokeDasharray="0.35 0.2" pointerEvents="none" />
+      {raisedAreaPreview.segment && (raisedAreaPreview.segment.kind !== "line"
+        ? <path d={areaSegmentSvgPath(raisedAreaPreview.segment)} fill="none" stroke="#fef08a" strokeWidth="0.28" strokeDasharray="0.35 0.2" pointerEvents="none" />
         : <line x1={raisedAreaPreview.segment.from.x} y1={raisedAreaPreview.segment.from.y} x2={raisedAreaPreview.segment.to.x} y2={raisedAreaPreview.segment.to.y} stroke="#fef08a" strokeWidth="0.28" strokeDasharray="0.35 0.2" pointerEvents="none" />)}
+      {penNodeDrag && Math.hypot(penNodeDrag.handle.x - penNodeDrag.anchor.x, penNodeDrag.handle.y - penNodeDrag.anchor.y) >= 0.1 && <g pointerEvents="none">
+        <line x1={penNodeDrag.anchor.x * 2 - penNodeDrag.handle.x} y1={penNodeDrag.anchor.y * 2 - penNodeDrag.handle.y} x2={penNodeDrag.handle.x} y2={penNodeDrag.handle.y} stroke="#a78bfa" strokeWidth="0.1" strokeDasharray="0.3 0.2" />
+        <circle cx={penNodeDrag.handle.x} cy={penNodeDrag.handle.y} r="0.22" fill="#7c3aed" stroke="#ede9fe" strokeWidth="0.08" />
+        <circle cx={penNodeDrag.anchor.x * 2 - penNodeDrag.handle.x} cy={penNodeDrag.anchor.y * 2 - penNodeDrag.handle.y} r="0.22" fill="#7c3aed" stroke="#ede9fe" strokeWidth="0.08" />
+      </g>}
       <circle cx={raisedAreaDraft.start.x} cy={raisedAreaDraft.start.y} r="0.3" fill="#22d3ee" stroke="#ecfeff" strokeWidth="0.1" pointerEvents="none" />
       <circle cx={raisedAreaDraft.current.x} cy={raisedAreaDraft.current.y} r="0.22" fill="#f59e0b" stroke="#fef3c7" strokeWidth="0.08" pointerEvents="none" />
     </g>}
     {orderedPlacements.map((placement) => {
       const size = placementSize(placement);
       const selected = placement.id === selectedPlacementId;
-      return <rect key={`placement-control:${placement.id}`} x={placement.origin.x} y={placement.origin.y} width={size.width} height={size.height}
+      return <rect key={`placement-control:${placement.id}`} data-testid={`terrain-placement-control-${placement.id}`} data-rotation={placement.rotation} x={placement.origin.x} y={placement.origin.y} width={size.width} height={size.height}
         fill={selected ? "#22d3ee" : "transparent"} fillOpacity={selected ? 0.16 : 0} stroke={selected ? "#fef08a" : "transparent"} strokeOpacity={selected ? 1 : 0.72} strokeWidth={selected ? "0.24" : "0.12"}
         className={tacticalEditorMarkerInteractionEnabled(placementKind, enemyKind) ? "cursor-move" : undefined} onPointerDown={(event) => {
           if (!tacticalEditorMarkerInteractionEnabled(placementKind, enemyKind)) return;
@@ -1718,14 +2366,15 @@ const DraftPreview = ({ definition, selectedPlacementId, selectedEnemyId, select
       return <g key={enemy.id} data-testid={`enemy-marker-${enemy.id}`} aria-label={`${enemy.name} · facing ${facingName(enemy.facing ?? "north")}`} className={placementKind || enemyKind ? undefined : "cursor-move"} onPointerDown={(event) => {
         if (placementKind || enemyKind) return;
         event.stopPropagation();
-        const point = mapPoint(event);
-        if (!point) return;
         selectPlacement(null);
         selectFire(null);
         selectEnemy(enemy.id);
+        const point = mapPoint(event);
+        if (!point) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         beginEnemyDrag({ id: enemy.id, offset: { x: point.x - enemy.position.x, y: point.y - enemy.position.y } });
       }}>
+        <circle cx={enemy.position.x + 0.5} cy={enemy.position.y + 0.5} r="0.58" fill="transparent" pointerEvents="all" />
         <circle cx={enemy.position.x + 0.5} cy={enemy.position.y + 0.5} r="0.38" fill="#7f1d1d" stroke={selected ? "#fef08a" : "#f87171"} strokeWidth={selected ? "0.18" : "0.1"} />
         <text x={enemy.position.x + 0.5} y={enemy.position.y + 0.62} textAnchor="middle" fill="#fee2e2" fontSize="0.34" fontWeight="bold">E</text>
         <line x1={enemy.position.x + 0.5} y1={enemy.position.y + 0.5} x2={enemy.position.x + 0.5 + direction.x * 0.4} y2={enemy.position.y + 0.5 + direction.y * 0.4} stroke="#fef08a" strokeWidth="0.1" />
@@ -1805,7 +2454,17 @@ const TacticalScenarioEditorClient = () => {
   const [scenarioToLoad, setScenarioToLoad] = useState(defaultTacticalScenarioDefinition.id);
   const [saveAsName, setSaveAsName] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
+  const [scenarioListBusy, setScenarioListBusy] = useState(true);
   const [fileMessage, setFileMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const [openHeaderMenu, setOpenHeaderMenu] = useState<"file" | "scenario" | null>(null);
+  const [openScenarioDialog, setOpenScenarioDialog] = useState(false);
+  const [scenarioPropertiesDraft, setScenarioPropertiesDraft] = useState<ScenarioPropertiesDraft | null>(null);
+  const [scenarioPropertiesError, setScenarioPropertiesError] = useState<string | null>(null);
+  const [newScenarioDialogOpen, setNewScenarioDialogOpen] = useState(false);
+  const [newScenarioName, setNewScenarioName] = useState("");
+  const [saveAsDialogOpen, setSaveAsDialogOpen] = useState(false);
+  const [scenarioSearchQuery, setScenarioSearchQuery] = useState("");
   const [templateBusy, setTemplateBusy] = useState(false);
   const [templateMessage, setTemplateMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [playtest, setPlaytest] = useState<{ definition: TacticalScenarioDefinitionFile; consoleVictory: TacticalConsoleVictoryDefinitionFile; sandbox: AppStore } | null>(null);
@@ -1814,6 +2473,7 @@ const TacticalScenarioEditorClient = () => {
   const [selectedEnemyId, setSelectedEnemyId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [selectedRaisedAreaId, setSelectedRaisedAreaId] = useState<string | null>(null);
+  const [selectedAreaAnchor, setSelectedAreaAnchor] = useState<{ areaId: string; anchorIndex: number } | null>(null);
   const [selectedTerrainRegionId, setSelectedTerrainRegionId] = useState<string | null>(null);
   const [selectedPrimitiveId, setSelectedPrimitiveId] = useState<string | null>(null);
   const [selectedNaturalTerrainId, setSelectedNaturalTerrainId] = useState<string | null>(null);
@@ -1831,6 +2491,9 @@ const TacticalScenarioEditorClient = () => {
   const [circleDraft, setCircleDraft] = useState<CircleDraft | null>(null);
   const [rampDraft, setRampDraft] = useState<RampDraft | null>(null);
   const [dragRaisedAreaControl, setDragRaisedAreaControl] = useState<RaisedAreaControlDrag | null>(null);
+  const [dragAreaAnchor, setDragAreaAnchor] = useState<AreaAnchorDrag | null>(null);
+  const [dragAreaCubicControl, setDragAreaCubicControl] = useState<AreaCubicControlDrag | null>(null);
+  const [dragConstrainedArea, setDragConstrainedArea] = useState<ConstrainedAreaDrag | null>(null);
   const [dragCirclePrimitive, setDragCirclePrimitive] = useState<CirclePrimitiveDrag | null>(null);
   const [dragNaturalTerrain, setDragNaturalTerrain] = useState<NaturalTerrainDrag | null>(null);
   const [dragWallEndpoint, setDragWallEndpoint] = useState<WallEndpointDrag | null>(null);
@@ -1842,17 +2505,29 @@ const TacticalScenarioEditorClient = () => {
   const [dragPlacement, setDragPlacement] = useState<{ id: string; offset: { x: number; y: number } } | null>(null);
   const [dragEnemy, setDragEnemy] = useState<{ id: string; offset: { x: number; y: number } } | null>(null);
   const [placementError, setPlacementError] = useState<string | null>(null);
-  const [terrainPaletteLayout, setTerrainPaletteLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 24, y: 64 } });
-  const [enemyPaletteLayout, setEnemyPaletteLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 24, y: 310 } });
-  const [consoleEditorLayout, setConsoleEditorLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 280, y: 64 } });
-  const [enemyEditorLayout, setEnemyEditorLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 280, y: 310 } });
-  const [navigationLayout, setNavigationLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 720, y: 24 } });
-  const [tracingTemplateLayout, setTracingTemplateLayout] = useState<FloatingPluginHudLayout>({ visible: true, pinned: false, position: { x: 720, y: 180 } });
+  const [circlePropertiesLayout, setCirclePropertiesLayout, persistCirclePropertiesLayout] = usePersistentTacticalEditorHudLayout("circle-properties", { visible: true, pinned: false, position: { x: 24, y: 64 } });
+  const [enemyPaletteLayout, setEnemyPaletteLayout, persistEnemyPaletteLayout] = usePersistentTacticalEditorHudLayout("enemy-palette", { visible: true, pinned: false, position: { x: 24, y: 310 } });
+  const [consoleEditorLayout, setConsoleEditorLayout, persistConsoleEditorLayout] = usePersistentTacticalEditorHudLayout("console-editor", { visible: true, pinned: false, position: { x: 280, y: 64 } });
+  const [enemyEditorLayout, setEnemyEditorLayout, persistEnemyEditorLayout] = usePersistentTacticalEditorHudLayout("enemy-editor", { visible: true, pinned: false, position: { x: 280, y: 310 } });
+  const [navigationLayout, setNavigationLayout, persistNavigationLayout] = usePersistentTacticalEditorHudLayout("navigation", { visible: true, pinned: false, position: { x: 720, y: 24 } });
+  const [tracingTemplateLayout, setTracingTemplateLayout, persistTracingTemplateLayout] = usePersistentTacticalEditorHudLayout("tracing-template", { visible: true, pinned: false, position: { x: 720, y: 180 } });
+  const [toolsLayout, setToolsLayout, persistToolsLayout] = usePersistentTacticalEditorHudLayout("tools", { visible: true, pinned: false, position: { x: 300, y: 12 } });
+  const [layersLayout, setLayersLayout, persistLayersLayout] = usePersistentTacticalEditorHudLayout("layers", { visible: true, pinned: false, position: { x: 760, y: 64 } });
+  const [areaPropertiesLayout, setAreaPropertiesLayout, persistAreaPropertiesLayout] = usePersistentTacticalEditorHudLayout("area-properties", { visible: false, pinned: false, position: { x: 420, y: 160 } });
+  const [objectPropertiesLayout, setObjectPropertiesLayout, persistObjectPropertiesLayout] = usePersistentTacticalEditorHudLayout("object-properties", { visible: true, pinned: false, position: { x: 420, y: 310 } });
+  const [primaryTool, setPrimaryTool] = useState<"select" | "node" | "hand">("select");
+  const [openToolGroup, setOpenToolGroup] = useState<string | null>(null);
+  const [hiddenLayerKeys, setHiddenLayerKeys] = useState<Set<string>>(new Set());
+  const [lockedLayerKeys, setLockedLayerKeys] = useState<Set<string>>(new Set());
   const dirty = !definitionsMatch(draft, baseline) || JSON.stringify(consoleVictory) !== JSON.stringify(consoleVictoryBaseline);
   const refreshScenarioList = useCallback(async () => {
-    const scenarios = await fetchScenarioList();
-    setAvailableScenarios(scenarios);
-    setScenarioToLoad((current) => scenarios.some((scenario) => scenario.id === current) ? current : scenarios[0]?.id ?? "");
+    try {
+      const scenarios = await fetchScenarioList();
+      setAvailableScenarios(scenarios);
+      setScenarioToLoad((current) => scenarios.some((scenario) => scenario.id === current) ? current : scenarios[0]?.id ?? "");
+    } finally {
+      setScenarioListBusy(false);
+    }
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -1862,6 +2537,8 @@ const TacticalScenarioEditorClient = () => {
       setScenarioToLoad((current) => scenarios.some((scenario) => scenario.id === current) ? current : scenarios[0]?.id ?? "");
     }).catch((error) => {
       if (!cancelled) setFileMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not list scenario files." });
+    }).finally(() => {
+      if (!cancelled) setScenarioListBusy(false);
     });
     return () => { cancelled = true; };
   }, []);
@@ -1994,7 +2671,7 @@ const TacticalScenarioEditorClient = () => {
     try {
       const terrain = resolveTacticalScenarioTerrain(draft);
       terrain.terrainObjects.filter((object) => object.kind === "terminal" && object.visualKind === "human").forEach((human) => validateTacticalInteractiveHumanCombatProfile(human.kind === "terminal" ? human.combatProfile ?? defaultTacticalInteractiveHumanCombatProfile : defaultTacticalInteractiveHumanCombatProfile));
-      if (terrain.deploymentCells.length < 2) throw new Error("Define a crew deployment edge or place a Deployment Zone 9x9 before saving or playtesting.");
+      if (terrain.deploymentCells.length < 2) throw new Error("Define a crew deployment edge or designate a drawn area for crew deployment before saving or playtesting.");
       const enemyIds = new Set<string>();
       const enemyCells = new Set<string>();
       (draft.enemyPlacements ?? []).forEach((enemy) => {
@@ -2016,25 +2693,32 @@ const TacticalScenarioEditorClient = () => {
     }
   }, [consoleVictory, draft]);
   const victoryTaskRequired = consoleVictory.operations.length === 0;
-  const draftBlocked = Boolean(resolutionError) || victoryTaskRequired;
-  const updateText = (field: "title" | "briefing" | "objective", value: string) => setDraft((current) => ({ ...current, [field]: value }));
+  const draftBlocked = Boolean(resolutionError);
+  const playtestBlocked = draftBlocked || victoryTaskRequired;
+  const editorIssues = [
+    ...(placementError ? [{ severity: "warning" as const, message: placementError }] : []),
+    ...(victoryTaskRequired ? [{ severity: "warning" as const, message: "This scenario has no victory task. It can be saved, but add a console or interactive human and a victory task before playtesting." }] : []),
+    ...(resolutionError ? [{ severity: "error" as const, message: resolutionError }] : []),
+  ];
   const updateDimension = (field: "width" | "height", value: string) => {
     const parsed = Number.parseInt(value, 10);
     setDraft((current) => ({ ...current, map: { ...current.map, [field]: Number.isFinite(parsed) ? parsed : 0 } }));
   };
-  const toggleDeploymentEdge = (edge: TacticalDeploymentEdge) => {
-    const currentEdges = draft.deploymentEdges ?? ["south"];
-    const deploymentEdges = currentEdges.includes(edge) ? currentEdges.filter((item) => item !== edge) : [...currentEdges, edge];
-    const candidate = { ...draft, deploymentEdges };
+  const applyScenarioProperties = () => {
+    if (!scenarioPropertiesDraft) return;
+    const candidate = { ...draft, ...scenarioPropertiesDraft };
     try {
       const terrain = resolveTacticalScenarioTerrain(candidate);
+      if (terrain.deploymentCells.length < 2) throw new Error("Define a crew deployment edge or designate a drawn area for crew deployment before saving or playtesting.");
       const deploymentCells = new Set(terrain.deploymentCells.map(cellKey));
       const enemy = (candidate.enemyPlacements ?? []).find((item) => deploymentCells.has(cellKey(item.position)));
       if (enemy) throw new Error(`Enemy ${enemy.name} cannot occupy the crew deployment zone at ${cellKey(enemy.position)}.`);
       setDraft(candidate);
+      setScenarioPropertiesDraft(null);
+      setScenarioPropertiesError(null);
       setPlacementError(null);
     } catch (error) {
-      setPlacementError(error instanceof Error ? error.message : "That deployment edge is not valid.");
+      setScenarioPropertiesError(error instanceof Error ? error.message : "Those scenario properties are not valid.");
     }
   };
   const updatePlacements = (placements: TacticalTerrainPlacement[]) => {
@@ -2119,6 +2803,7 @@ const TacticalScenarioEditorClient = () => {
     setSelectedEnemyId(null);
     setSelectedWallId(null);
     setSelectedRaisedAreaId(null);
+    setSelectedAreaAnchor(null);
     setSelectedTerrainRegionId(null);
     setSelectedPrimitiveId(null);
     setSelectedElevationTransitionId(null);
@@ -2142,16 +2827,49 @@ const TacticalScenarioEditorClient = () => {
     const usedIds = new Set([
       ...draft.terrainPlacements.map((placement) => placement.id),
       ...(draft.drawnWalls ?? []).map((wall) => wall.id),
+      ...(draft.drawnAreas ?? []).map((area) => area.id),
       ...(draft.drawnRaisedAreas ?? []).map((area) => area.id),
       ...(draft.drawnTerrainRegions ?? []).map((region) => region.id),
       ...(draft.drawnTerrainPrimitives ?? []).map((primitive) => primitive.id),
       ...(draft.naturalTerrainPlacements ?? []).map((placement) => placement.id),
     ]);
     let suffix = 1;
-    let id = `terrain-circle-${suffix}`;
+    const unifiedArea = placementKind === CIRCLE_AREA_TOOL_ID;
+    const idPrefix = unifiedArea ? "circle-area" : "terrain-circle";
+    let id = `${idPrefix}-${suffix}`;
     while (usedIds.has(id)) {
       suffix += 1;
-      id = `terrain-circle-${suffix}`;
+      id = `${idPrefix}-${suffix}`;
+    }
+    if (unifiedArea) {
+      const geometry: TacticalClosedAreaGeometry = {
+        kind: "circle",
+        center: gridPoint(circleDraft.center),
+        radius,
+      };
+      const candidate: TacticalScenarioDefinitionFile = {
+        ...draft,
+        drawnAreas: [...(draft.drawnAreas ?? []), {
+          id,
+          geometry,
+          segments: tacticalClosedAreaGeometrySegments(geometry),
+          surface: "none",
+          elevation: 0,
+          boundary: "none",
+        }],
+      };
+      try {
+        resolveTacticalScenarioTerrain(candidate);
+        setDraft(candidate);
+        setSelectedRaisedAreaId(id);
+        setSelectedTerrainRegionId(null);
+        setAreaPropertiesLayout((current) => ({ ...current, visible: true }));
+        setPlacementKind(null);
+        setPlacementError(null);
+      } catch (error) {
+        setPlacementError(error instanceof Error ? error.message : "That circle area is not valid.");
+      }
+      return;
     }
     const primitive: TacticalDrawnCirclePrimitive = {
       id,
@@ -2257,13 +2975,122 @@ const TacticalScenarioEditorClient = () => {
       setPlacementError(error instanceof Error ? error.message : "That natural terrain position is not valid.");
     }
   };
-  const addRaisedAreaVertex = (point: { x: number; y: number }) => {
-    const snapped = gridPoint(point);
-    const target = areaTargetForTool(placementKind);
-    if (!target) return;
-    if (!raisedAreaDraft) {
+  const createRectangleArea = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    const left = Math.min(from.x, to.x);
+    const right = Math.max(from.x, to.x);
+    const top = Math.min(from.y, to.y);
+    const bottom = Math.max(from.y, to.y);
+    if (right - left < 0.25 || bottom - top < 0.25) {
+      setPlacementError("Drag a rectangle with both width and height.");
+      return;
+    }
+    const usedIds = new Set([
+      ...draft.terrainPlacements.map((placement) => placement.id),
+      ...(draft.drawnWalls ?? []).map((wall) => wall.id),
+      ...(draft.drawnRaisedAreas ?? []).map((area) => area.id),
+      ...(draft.drawnTerrainRegions ?? []).map((region) => region.id),
+      ...(draft.drawnAreas ?? []).map((area) => area.id),
+      ...(draft.drawnTerrainPrimitives ?? []).map((primitive) => primitive.id),
+    ]);
+    let suffix = 1;
+    let id = `rectangle-area-${suffix}`;
+    while (usedIds.has(id)) {
+      suffix += 1;
+      id = `rectangle-area-${suffix}`;
+    }
+    const geometry: TacticalClosedAreaGeometry = {
+      kind: "rectangle",
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    };
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnAreas: [...(draft.drawnAreas ?? []), {
+        id,
+        geometry,
+        segments: tacticalClosedAreaGeometrySegments(geometry),
+        surface: "none",
+        elevation: 0,
+        boundary: "none",
+      }],
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setSelectedRaisedAreaId(id);
+      setSelectedTerrainRegionId(null);
+      setAreaPropertiesLayout((current) => ({ ...current, visible: true }));
+      setPlacementKind(null);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That rectangle is not valid.");
+    }
+  };
+  const finishPenArea = (segments: TacticalRaisedAreaOutlineSegment[]) => {
+    if (segments.length < 3) {
+      setPlacementError("A Pen area needs at least three boundary segments.");
+      return;
+    }
+    const usedIds = new Set([
+      ...draft.terrainPlacements.map((placement) => placement.id),
+      ...(draft.drawnWalls ?? []).map((wall) => wall.id),
+      ...(draft.drawnRaisedAreas ?? []).map((area) => area.id),
+      ...(draft.drawnTerrainRegions ?? []).map((region) => region.id),
+      ...(draft.drawnAreas ?? []).map((area) => area.id),
+      ...(draft.drawnTerrainPrimitives ?? []).map((primitive) => primitive.id),
+    ]);
+    let suffix = 1;
+    const idPrefix = "drawn-area";
+    let id = `${idPrefix}-${suffix}`;
+    while (usedIds.has(id)) {
+      suffix += 1;
+      id = `${idPrefix}-${suffix}`;
+    }
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnAreas: [...(draft.drawnAreas ?? []), {
+        id,
+        segments,
+        surface: "none",
+        elevation: 0,
+        boundary: "none",
+      }],
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setRaisedAreaDraft(null);
       setDragRaisedAreaControl(null);
-      setRaisedAreaDraft({ target, start: snapped, current: snapped, hover: snapped, segments: [] });
+      setSelectedRaisedAreaId(id);
+      setSelectedTerrainRegionId(null);
+      setAreaPropertiesLayout((current) => ({ ...current, visible: true }));
+      setPlacementKind(null);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That Pen outline is not valid.");
+    }
+  };
+  const closePenArea = () => {
+    if (!raisedAreaDraft || sameGridPoint(raisedAreaDraft.current, raisedAreaDraft.start)) return;
+    finishPenArea([
+      ...raisedAreaDraft.segments,
+      penAreaSegment(raisedAreaDraft.current, raisedAreaDraft.start, raisedAreaDraft.outgoingControl, null),
+    ]);
+  };
+  const commitPenNode = (anchor: { x: number; y: number }, handle: { x: number; y: number }) => {
+    if (placementKind !== PEN_AREA_TOOL_ID) return;
+    const dragged = Math.hypot(handle.x - anchor.x, handle.y - anchor.y) >= 0.1;
+    const outgoingControl = dragged ? gridPoint(handle) : null;
+    const incomingControl = dragged ? {
+      x: anchor.x * 2 - handle.x,
+      y: anchor.y * 2 - handle.y,
+    } : null;
+    if (!raisedAreaDraft) {
+      const snapped = gridPoint(anchor);
+      setDragRaisedAreaControl(null);
+      setRaisedAreaDraft({ target: "area", start: snapped, current: snapped, hover: snapped, segments: [], outgoingControl });
       setSelectedPlacementId(null);
       setSelectedEnemyId(null);
       setSelectedWallId(null);
@@ -2276,74 +3103,274 @@ const TacticalScenarioEditorClient = () => {
       setPlacementError(null);
       return;
     }
-    if (sameGridPoint(snapped, raisedAreaDraft.current)) {
-      if (sameGridPoint(snapped, raisedAreaDraft.start)) setPlacementError(`Add at least three boundary segments before closing the ${areaTargetLabel(raisedAreaDraft.target)}.`);
-      return;
-    }
-    const segment = raisedAreaSegment(
-      raisedAreaDraft.current,
-      snapped,
-      isCurvedAreaTool(placementKind),
-      draft.map,
-    );
+    if (sameGridPoint(anchor, raisedAreaDraft.current)) return;
+    const segment = penAreaSegment(raisedAreaDraft.current, anchor, raisedAreaDraft.outgoingControl, incomingControl);
     const segments = [...raisedAreaDraft.segments, segment];
-    if (!sameGridPoint(snapped, raisedAreaDraft.start)) {
-      setRaisedAreaDraft({ ...raisedAreaDraft, current: snapped, hover: snapped, segments });
-      setPlacementError(null);
+    if (sameGridPoint(anchor, raisedAreaDraft.start)) {
+      finishPenArea(segments);
       return;
     }
-    if (segments.length < 3) {
-      setPlacementError(`A ${areaTargetLabel(raisedAreaDraft.target)} needs at least three boundary segments.`);
-      return;
-    }
-    const usedIds = new Set([
-      ...draft.terrainPlacements.map((placement) => placement.id),
-      ...(draft.drawnWalls ?? []).map((wall) => wall.id),
-      ...(draft.drawnRaisedAreas ?? []).map((area) => area.id),
-      ...(draft.drawnTerrainRegions ?? []).map((region) => region.id),
-      ...(draft.drawnTerrainPrimitives ?? []).map((primitive) => primitive.id),
-    ]);
-    let suffix = 1;
-    const idPrefix = raisedAreaDraft.target === "raised" ? "drawn-raised-area" : `drawn-${raisedAreaDraft.target}`;
-    let id = `${idPrefix}-${suffix}`;
-    while (usedIds.has(id)) {
-      suffix += 1;
-      id = `${idPrefix}-${suffix}`;
-    }
-    const candidate: TacticalScenarioDefinitionFile = raisedAreaDraft.target === "raised"
-      ? {
-        ...draft,
-        drawnRaisedAreas: [...(draft.drawnRaisedAreas ?? []), { id, segments } satisfies TacticalDrawnRaisedArea],
-      }
-      : {
-        ...draft,
-        drawnTerrainRegions: [
-          ...(draft.drawnTerrainRegions ?? []),
-          raisedAreaDraft.target === "close-machinery"
-            ? { id, kind: "close-machinery", segments }
-            : raisedAreaDraft.target === "liquid-hydrogen"
-              ? { id, kind: "liquid-hydrogen", segments, settings: { filled: true } }
-              : { id, kind: raisedAreaDraft.target, segments },
-        ],
-      };
-    try {
-      resolveTacticalScenarioTerrain(candidate);
-      setDraft(candidate);
-      setRaisedAreaDraft(null);
-      setDragRaisedAreaControl(null);
-      setSelectedRaisedAreaId(id);
-      if (raisedAreaDraft.target !== "raised") setSelectedTerrainRegionId(id);
-      setPlacementKind(null);
-      setPlacementError(null);
-    } catch (error) {
-      setPlacementError(error instanceof Error ? error.message : `That ${areaTargetLabel(raisedAreaDraft.target)} outline is not valid.`);
-    }
+    setRaisedAreaDraft({
+      ...raisedAreaDraft,
+      current: gridPoint(anchor),
+      hover: gridPoint(anchor),
+      segments,
+      outgoingControl,
+    });
+    setPlacementError(null);
   };
   const hoverRaisedArea = (point: { x: number; y: number }) => {
     setRaisedAreaDraft((current) => current ? { ...current, hover: gridPoint(point) } : null);
   };
+  const applyCompletedAreaSegments = (areaId: string, segments: TacticalRaisedAreaOutlineSegment[], fallbackMessage: string) => {
+    if ((draft.drawnAreas ?? []).find((area) => area.id === areaId)?.geometry) return;
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnAreas: (draft.drawnAreas ?? []).map((area) => area.id === areaId
+        ? { ...area, segments }
+        : area),
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : fallbackMessage);
+    }
+  };
+  const insertCompletedAreaAnchor = (areaId: string, segmentIndex: number, point: { x: number; y: number }) => {
+    const area = (draft.drawnAreas ?? []).find((candidate) => candidate.id === areaId);
+    const segment = area?.segments[segmentIndex];
+    if (!area || area.geometry || !segment) return;
+    const split = splitAreaSegment(segment, point);
+    const segments = [
+      ...area.segments.slice(0, segmentIndex),
+      ...split,
+      ...area.segments.slice(segmentIndex + 1),
+    ];
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnAreas: (draft.drawnAreas ?? []).map((item) => item.id === areaId ? { ...item, segments } : item),
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setSelectedAreaAnchor({ areaId, anchorIndex: segmentIndex + 1 });
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That new area point is not valid.");
+    }
+  };
+  const deleteSelectedAreaAnchor = () => {
+    if (!selectedAreaAnchor) return false;
+    const area = (draft.drawnAreas ?? []).find((candidate) => candidate.id === selectedAreaAnchor.areaId);
+    if (!area || area.geometry) return false;
+    if (area.segments.length <= 3) {
+      setPlacementError("A closed area needs at least three points.");
+      return true;
+    }
+    const anchorIndex = selectedAreaAnchor.anchorIndex;
+    const previousIndex = (anchorIndex - 1 + area.segments.length) % area.segments.length;
+    const merged = mergeAreaSegmentsAcrossAnchor(area.segments[previousIndex]!, area.segments[anchorIndex]!);
+    const segments = anchorIndex === 0
+      ? [...area.segments.slice(1, -1), merged]
+      : [
+        ...area.segments.slice(0, previousIndex),
+        merged,
+        ...area.segments.slice(anchorIndex + 1),
+      ];
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnAreas: (draft.drawnAreas ?? []).map((item) => item.id === area.id ? { ...item, segments } : item),
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setSelectedAreaAnchor(null);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That area point cannot be deleted.");
+    }
+    return true;
+  };
+  const beginAreaAnchorDrag = (id: string, anchorIndex: number) => {
+    const area = (draft.drawnAreas ?? []).find((candidate) => candidate.id === id);
+    if (!area || area.geometry || anchorIndex < 0 || anchorIndex >= area.segments.length) return;
+    setDragAreaAnchor({ id, anchorIndex, originalSegments: cloneEditorAreaSegments(area.segments) });
+    setPlacementError(null);
+  };
+  const moveAreaAnchor = (point: { x: number; y: number }) => {
+    if (!dragAreaAnchor) return;
+    const { id, anchorIndex, originalSegments } = dragAreaAnchor;
+    const anchor = originalSegments[anchorIndex]?.from;
+    if (!anchor) return;
+    const moved = {
+      x: Math.max(0, Math.min(draft.map.width, point.x)),
+      y: Math.max(0, Math.min(draft.map.height, point.y)),
+    };
+    const delta = { x: moved.x - anchor.x, y: moved.y - anchor.y };
+    const previousIndex = (anchorIndex - 1 + originalSegments.length) % originalSegments.length;
+    const segments = originalSegments.map((segment, index): TacticalRaisedAreaOutlineSegment => {
+      const from = index === anchorIndex ? moved : { ...segment.from };
+      const to = index === previousIndex ? moved : { ...segment.to };
+      if (segment.kind === "cubic") return {
+        ...segment,
+        from,
+        to,
+        control1: index === anchorIndex
+          ? { x: segment.control1.x + delta.x, y: segment.control1.y + delta.y }
+          : { ...segment.control1 },
+        control2: index === previousIndex
+          ? { x: segment.control2.x + delta.x, y: segment.control2.y + delta.y }
+          : { ...segment.control2 },
+      };
+      if (segment.kind === "quadratic") return { ...segment, from, to, control: { ...segment.control } };
+      return { ...segment, from, to };
+    });
+    applyCompletedAreaSegments(id, segments, "That area point position is not valid.");
+  };
+  const cancelAreaAnchorDrag = () => {
+    if (!dragAreaAnchor) return;
+    setDraft((current) => ({
+      ...current,
+      drawnAreas: (current.drawnAreas ?? []).map((area) => area.id === dragAreaAnchor.id
+        ? { ...area, segments: cloneEditorAreaSegments(dragAreaAnchor.originalSegments) }
+        : area),
+    }));
+    setDragAreaAnchor(null);
+    setPlacementError(null);
+  };
+  const beginAreaCubicControlDrag = (id: string, segmentIndex: number, control: AreaCubicControlDrag["control"]) => {
+    const area = (draft.drawnAreas ?? []).find((candidate) => candidate.id === id);
+    const segment = area?.segments[segmentIndex];
+    if (area?.geometry) return;
+    if (segment?.kind !== "cubic") return;
+    setDragAreaCubicControl({ id, segmentIndex, control, original: { ...segment[control] } });
+    setPlacementError(null);
+  };
+  const moveAreaCubicControl = (point: { x: number; y: number }) => {
+    if (!dragAreaCubicControl) return;
+    const control = {
+      x: Math.max(0, Math.min(draft.map.width, point.x)),
+      y: Math.max(0, Math.min(draft.map.height, point.y)),
+    };
+    const segments = cloneEditorAreaSegments(
+      (draft.drawnAreas ?? []).find((area) => area.id === dragAreaCubicControl.id)?.segments ?? [],
+    ).map((segment, index): TacticalRaisedAreaOutlineSegment => index === dragAreaCubicControl.segmentIndex && segment.kind === "cubic"
+      ? { ...segment, [dragAreaCubicControl.control]: control }
+      : segment);
+    applyCompletedAreaSegments(dragAreaCubicControl.id, segments, "That area curve position is not valid.");
+  };
+  const cancelAreaCubicControlDrag = () => {
+    if (!dragAreaCubicControl) return;
+    const { id, segmentIndex, control, original } = dragAreaCubicControl;
+    setDraft((current) => ({
+      ...current,
+      drawnAreas: (current.drawnAreas ?? []).map((area) => area.id === id
+        ? {
+          ...area,
+          segments: area.segments.map((segment, index) => index === segmentIndex && segment.kind === "cubic"
+            ? { ...segment, [control]: { ...original } }
+            : segment),
+        }
+        : area),
+    }));
+    setDragAreaCubicControl(null);
+    setPlacementError(null);
+  };
+  const beginConstrainedAreaDrag = (
+    id: string,
+    kind: ConstrainedAreaDrag["kind"],
+    point: { x: number; y: number },
+  ) => {
+    const geometry = (draft.drawnAreas ?? []).find((area) => area.id === id)?.geometry;
+    if (!geometry) return;
+    const original = geometry.kind === "circle"
+      ? { ...geometry, center: { ...geometry.center } }
+      : { ...geometry };
+    setDragConstrainedArea({ id, kind, start: { ...point }, original });
+    setPlacementError(null);
+  };
+  const applyConstrainedAreaGeometry = (id: string, geometry: TacticalClosedAreaGeometry, fallbackMessage: string) => {
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnAreas: (draft.drawnAreas ?? []).map((area) => area.id === id
+        ? { ...area, geometry, segments: tacticalClosedAreaGeometrySegments(geometry) }
+        : area),
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setPlacementError(null);
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : fallbackMessage);
+    }
+  };
+  const updateConstrainedAreaDrag = (point: { x: number; y: number }) => {
+    if (!dragConstrainedArea) return;
+    const bounded = {
+      x: Math.max(0, Math.min(draft.map.width, point.x)),
+      y: Math.max(0, Math.min(draft.map.height, point.y)),
+    };
+    const { id, kind, start, original } = dragConstrainedArea;
+    if (original.kind === "circle") {
+      const geometry: TacticalClosedAreaGeometry = kind === "circle-center"
+        ? {
+          ...original,
+          center: {
+            x: original.center.x + bounded.x - start.x,
+            y: original.center.y + bounded.y - start.y,
+          },
+        }
+        : { ...original, radius: Math.hypot(bounded.x - original.center.x, bounded.y - original.center.y) };
+      applyConstrainedAreaGeometry(id, geometry, "That circle position is not valid.");
+      return;
+    }
+    if (kind === "rectangle-center") {
+      applyConstrainedAreaGeometry(id, {
+        ...original,
+        x: original.x + bounded.x - start.x,
+        y: original.y + bounded.y - start.y,
+      }, "That rectangle position is not valid.");
+      return;
+    }
+    const opposite = kind === "rectangle-top-left"
+      ? { x: original.x + original.width, y: original.y + original.height }
+      : kind === "rectangle-top-right"
+        ? { x: original.x, y: original.y + original.height }
+        : kind === "rectangle-bottom-right"
+          ? { x: original.x, y: original.y }
+          : { x: original.x + original.width, y: original.y };
+    const geometry: TacticalClosedAreaGeometry = {
+      kind: "rectangle",
+      x: Math.min(bounded.x, opposite.x),
+      y: Math.min(bounded.y, opposite.y),
+      width: Math.abs(bounded.x - opposite.x),
+      height: Math.abs(bounded.y - opposite.y),
+    };
+    if (geometry.width < 0.25 || geometry.height < 0.25) {
+      setPlacementError("A rectangle must have positive width and height.");
+      return;
+    }
+    applyConstrainedAreaGeometry(id, geometry, "That rectangle size is not valid.");
+  };
+  const cancelConstrainedAreaDrag = () => {
+    if (!dragConstrainedArea) return;
+    const { id, original } = dragConstrainedArea;
+    setDraft((current) => ({
+      ...current,
+      drawnAreas: (current.drawnAreas ?? []).map((area) => area.id === id
+        ? { ...area, geometry: original, segments: tacticalClosedAreaGeometrySegments(original) }
+        : area),
+    }));
+    setDragConstrainedArea(null);
+    setPlacementError(null);
+  };
   const beginRaisedAreaControlDrag = (owner: RaisedAreaControlDrag["owner"], segmentIndex: number) => {
-    const segment = owner.kind === "raised"
+    if (owner.kind === "area" && (draft.drawnAreas ?? []).find((area) => area.id === owner.id)?.geometry) return;
+    const segment = owner.kind === "area"
+      ? (draft.drawnAreas ?? []).find((area) => area.id === owner.id)?.segments[segmentIndex]
+      : owner.kind === "raised"
       ? (draft.drawnRaisedAreas ?? []).find((area) => area.id === owner.id)?.segments[segmentIndex]
       : owner.kind === "terrain-region"
         ? (draft.drawnTerrainRegions ?? []).find((region) => region.id === owner.id)?.segments[segmentIndex]
@@ -2358,7 +3385,23 @@ const TacticalScenarioEditorClient = () => {
       x: Math.max(0, Math.min(draft.map.width, point.x)),
       y: Math.max(0, Math.min(draft.map.height, point.y)),
     };
-    if (dragRaisedAreaControl.owner.kind === "raised") {
+    if (dragRaisedAreaControl.owner.kind === "area") {
+      const ownerId = dragRaisedAreaControl.owner.id;
+      const segmentIndex = dragRaisedAreaControl.segmentIndex;
+      const candidate: TacticalScenarioDefinitionFile = {
+        ...draft,
+        drawnAreas: (draft.drawnAreas ?? []).map((area) => area.id === ownerId
+          ? { ...area, segments: area.segments.map((segment, index) => index === segmentIndex && segment.kind === "quadratic" ? { ...segment, control } : segment) }
+          : area),
+      };
+      try {
+        resolveTacticalScenarioTerrain(candidate);
+        setDraft(candidate);
+        setPlacementError(null);
+      } catch (error) {
+        setPlacementError(error instanceof Error ? error.message : "That area curve position is not valid.");
+      }
+    } else if (dragRaisedAreaControl.owner.kind === "raised") {
       const ownerId = dragRaisedAreaControl.owner.id;
       const segmentIndex = dragRaisedAreaControl.segmentIndex;
       const candidate: TacticalScenarioDefinitionFile = {
@@ -2411,7 +3454,17 @@ const TacticalScenarioEditorClient = () => {
   };
   const cancelRaisedAreaControlDrag = () => {
     if (!dragRaisedAreaControl) return;
-    if (dragRaisedAreaControl.owner.kind === "raised") {
+    if (dragRaisedAreaControl.owner.kind === "area") {
+      const ownerId = dragRaisedAreaControl.owner.id;
+      const segmentIndex = dragRaisedAreaControl.segmentIndex;
+      const original = dragRaisedAreaControl.original;
+      setDraft((current) => ({
+        ...current,
+        drawnAreas: (current.drawnAreas ?? []).map((area) => area.id === ownerId
+          ? { ...area, segments: area.segments.map((segment, index) => index === segmentIndex && segment.kind === "quadratic" ? { ...segment, control: { ...original } } : segment) }
+          : area),
+      }));
+    } else if (dragRaisedAreaControl.owner.kind === "raised") {
       const ownerId = dragRaisedAreaControl.owner.id;
       const segmentIndex = dragRaisedAreaControl.segmentIndex;
       const original = dragRaisedAreaControl.original;
@@ -2450,6 +3503,9 @@ const TacticalScenarioEditorClient = () => {
       } : null);
     }
     setDragRaisedAreaControl(null);
+    setDragAreaAnchor(null);
+    setDragAreaCubicControl(null);
+    setDragConstrainedArea(null);
     setPlacementError(null);
   };
   const placeWallPortal = (point: { x: number; y: number }) => {
@@ -2467,6 +3523,7 @@ const TacticalScenarioEditorClient = () => {
     const prefix = kind === "iris-valve" ? "wall-iris-valve" : "wall-door";
     const existingIds = new Set([
       ...(draft.drawnWalls ?? []).flatMap((wall) => (wall.portals ?? []).map((portal) => portal.id)),
+      ...(draft.drawnAreas ?? []).flatMap((area) => (area.portals ?? []).map((portal) => portal.id)),
       ...(draft.drawnTerrainPrimitives ?? []).flatMap((primitive) => (primitive.portals ?? []).map((portal) => portal.id)),
     ]);
     let suffix = 1;
@@ -2477,6 +3534,8 @@ const TacticalScenarioEditorClient = () => {
     }
     const circleOwner = (draft.drawnTerrainPrimitives ?? [])
       .some((primitive) => primitive.id === placement.wallId);
+    const areaOwner = (draft.drawnAreas ?? [])
+      .some((area) => area.id === placement.wallId);
     const candidate: TacticalScenarioDefinitionFile = circleOwner
       ? {
         ...draft,
@@ -2485,6 +3544,13 @@ const TacticalScenarioEditorClient = () => {
             ? { ...primitive, portals: [...(primitive.portals ?? []), { id, kind, position: placement.position }] }
             : primitive),
       }
+      : areaOwner
+        ? {
+          ...draft,
+          drawnAreas: (draft.drawnAreas ?? []).map((area) => area.id === placement.wallId
+            ? { ...area, portals: [...(area.portals ?? []), { id, kind, position: placement.position }] }
+            : area),
+        }
       : {
         ...draft,
         drawnWalls: (draft.drawnWalls ?? []).map((wall) => wall.id === placement.wallId
@@ -2665,7 +3731,9 @@ const TacticalScenarioEditorClient = () => {
     const wall = (draft.drawnWalls ?? []).find((candidate) => (candidate.portals ?? []).some((portal) => portal.id === portalId));
     const circle = (draft.drawnTerrainPrimitives ?? []).find((candidate) =>
       (candidate.portals ?? []).some((portal) => portal.id === portalId));
-    const owner = wall ?? circle;
+    const area = (draft.drawnAreas ?? []).find((candidate) =>
+      (candidate.portals ?? []).some((portal) => portal.id === portalId));
+    const owner = wall ?? circle ?? area;
     const portal = owner?.portals?.find((candidate) => candidate.id === portalId);
     if (!owner || !portal) return;
     setSelectedWallId(null);
@@ -2673,7 +3741,7 @@ const TacticalScenarioEditorClient = () => {
     setSelectedPrimitiveId(null);
     setSelectedPortalId(portalId);
     setDragWallPortal({
-      ownerKind: wall ? "wall" : "circle",
+      ownerKind: wall ? "wall" : circle ? "circle" : "area",
       ownerId: owner.id,
       portalId,
       originalPosition: portal.position,
@@ -2689,19 +3757,28 @@ const TacticalScenarioEditorClient = () => {
         dragWallPortal.portalId,
         point,
       )
-      : tacticalCirclePortalRepositionCandidate(
-        draft.drawnTerrainPrimitives ?? [],
-        dragWallPortal.ownerId,
-        dragWallPortal.portalId,
-        point,
-      );
+      : dragWallPortal.ownerKind === "circle"
+        ? tacticalCirclePortalRepositionCandidate(
+          draft.drawnTerrainPrimitives ?? [],
+          dragWallPortal.ownerId,
+          dragWallPortal.portalId,
+          point,
+        )
+        : tacticalAreaBoundaryPortalRepositionCandidate(
+          draft.drawnAreas ?? [],
+          dragWallPortal.ownerId,
+          dragWallPortal.portalId,
+          point,
+        );
     if (!placement || !placement.available) {
       setPlacementError("Keep the portal on an open one-square position on its wall.");
       return;
     }
     const owner = dragWallPortal.ownerKind === "wall"
       ? (draft.drawnWalls ?? []).find((candidate) => candidate.id === dragWallPortal.ownerId)
-      : (draft.drawnTerrainPrimitives ?? []).find((candidate) => candidate.id === dragWallPortal.ownerId);
+      : dragWallPortal.ownerKind === "circle"
+        ? (draft.drawnTerrainPrimitives ?? []).find((candidate) => candidate.id === dragWallPortal.ownerId)
+        : (draft.drawnAreas ?? []).find((candidate) => candidate.id === dragWallPortal.ownerId);
     const portal = owner?.portals?.find((candidate) => candidate.id === dragWallPortal.portalId);
     if (!portal || Math.abs(portal.position - placement.position) < 1e-9) {
       setPlacementError(null);
@@ -2720,7 +3797,7 @@ const TacticalScenarioEditorClient = () => {
             }
             : candidateWall),
         }
-        : {
+        : dragWallPortal.ownerKind === "circle" ? {
           drawnTerrainPrimitives: (draft.drawnTerrainPrimitives ?? []).map((circle) => circle.id === dragWallPortal.ownerId
             ? {
               ...circle,
@@ -2729,6 +3806,15 @@ const TacticalScenarioEditorClient = () => {
                 : candidatePortal),
             }
             : circle),
+        } : {
+          drawnAreas: (draft.drawnAreas ?? []).map((area) => area.id === dragWallPortal.ownerId
+            ? {
+              ...area,
+              portals: (area.portals ?? []).map((candidatePortal) => candidatePortal.id === dragWallPortal.portalId
+                ? { ...candidatePortal, position: placement.position }
+                : candidatePortal),
+            }
+            : area),
         }),
     };
     try {
@@ -2754,7 +3840,7 @@ const TacticalScenarioEditorClient = () => {
             }
             : wall),
         }
-        : {
+        : dragWallPortal.ownerKind === "circle" ? {
           drawnTerrainPrimitives: (current.drawnTerrainPrimitives ?? []).map((circle) => circle.id === dragWallPortal.ownerId
             ? {
               ...circle,
@@ -2763,6 +3849,15 @@ const TacticalScenarioEditorClient = () => {
                 : portal),
             }
             : circle),
+        } : {
+          drawnAreas: (current.drawnAreas ?? []).map((area) => area.id === dragWallPortal.ownerId
+            ? {
+              ...area,
+              portals: (area.portals ?? []).map((portal) => portal.id === dragWallPortal.portalId
+                ? { ...portal, position: dragWallPortal.originalPosition }
+                : portal),
+            }
+            : area),
         }),
     }));
     setDragWallPortal(null);
@@ -2869,6 +3964,7 @@ const TacticalScenarioEditorClient = () => {
         }
         setDraft(candidate);
         setSelectedNaturalTerrainId(id);
+        setObjectPropertiesLayout((current) => ({ ...current, visible: true }));
         setSelectedPlacementId(null);
         setSelectedEnemyId(null);
         setPlacementError(null);
@@ -2941,26 +4037,52 @@ const TacticalScenarioEditorClient = () => {
   };
   const selectedPlacement = draft.terrainPlacements.find((placement) => placement.id === selectedPlacementId) ?? null;
   const selectedEnemy = (draft.enemyPlacements ?? []).find((enemy) => enemy.id === selectedEnemyId) ?? null;
+  const selectedEnemyLocked = Boolean(selectedEnemyId && lockedLayerKeys.has(tacticalEditorLayerKey("enemy", selectedEnemyId)));
   const selectedWall = (draft.drawnWalls ?? []).find((wall) => wall.id === selectedWallId) ?? null;
+  const selectedArea = (draft.drawnAreas ?? []).find((area) => area.id === selectedRaisedAreaId) ?? null;
   const selectedRaisedArea = (draft.drawnRaisedAreas ?? []).find((area) => area.id === selectedRaisedAreaId) ?? null;
   const selectedTerrainRegion = (draft.drawnTerrainRegions ?? []).find((region) => region.id === (selectedTerrainRegionId ?? selectedRaisedAreaId)) ?? null;
   const selectedPrimitive = (draft.drawnTerrainPrimitives ?? [])
     .find((primitive) => primitive.id === selectedPrimitiveId) ?? null;
   const selectedNaturalTerrain = (draft.naturalTerrainPlacements ?? [])
     .find((placement) => placement.id === selectedNaturalTerrainId) ?? null;
+  const editableObjectProperties = Boolean(selectedNaturalTerrain || selectedTerrainRegion?.kind === "liquid-hydrogen");
   const selectedElevationTransition = (draft.elevationTransitions ?? []).find((transition) => transition.id === selectedElevationTransitionId) ?? null;
   const selectedPortalWall = (draft.drawnWalls ?? []).find((wall) => (wall.portals ?? []).some((portal) => portal.id === selectedPortalId)) ?? null;
   const selectedPortalCircle = (draft.drawnTerrainPrimitives ?? []).find((primitive) =>
     (primitive.portals ?? []).some((portal) => portal.id === selectedPortalId)) ?? null;
-  const selectedPortalOwner = selectedPortalWall ?? selectedPortalCircle;
+  const selectedPortalArea = (draft.drawnAreas ?? []).find((area) =>
+    (area.portals ?? []).some((portal) => portal.id === selectedPortalId)) ?? null;
+  const selectedPortalOwner = selectedPortalWall ?? selectedPortalCircle ?? selectedPortalArea;
   const selectedPortal = selectedPortalOwner?.portals?.find((portal) => portal.id === selectedPortalId) ?? null;
   const selectedHasTerminal = Boolean(selectedPlacement && tacticalPlacementSupportsConsoleOperations(selectedPlacement));
   const selectedIsInteractiveHuman = selectedPlacement?.terrainDefinitionId === "interactive-human";
-  useEffect(() => {
-    setSelectedTerrainRegionId((draft.drawnTerrainRegions ?? []).some((region) => region.id === selectedRaisedAreaId)
-      ? selectedRaisedAreaId
-      : null);
-  }, [draft.drawnTerrainRegions, selectedRaisedAreaId]);
+  const layerGroups = useMemo(() => tacticalEditorLayerGroups(draft), [draft]);
+  const previewDefinition = useMemo(
+    () => tacticalEditorVisibleDefinition(draft, hiddenLayerKeys),
+    [draft, hiddenLayerKeys],
+  );
+  const selectedLayerKey = selectedPortalId
+    ? tacticalEditorLayerKey("portal", selectedPortalId)
+    : selectedPlacementId
+      ? tacticalEditorLayerKey("terrain-placement", selectedPlacementId)
+      : selectedEnemyId
+        ? tacticalEditorLayerKey("enemy", selectedEnemyId)
+        : selectedWallId
+          ? tacticalEditorLayerKey("wall", selectedWallId)
+          : selectedTerrainRegionId
+            ? tacticalEditorLayerKey("terrain-region", selectedTerrainRegionId)
+            : selectedRaisedAreaId
+              ? tacticalEditorLayerKey(selectedArea ? "area" : "raised-area", selectedRaisedAreaId)
+              : selectedPrimitiveId
+                ? tacticalEditorLayerKey("primitive", selectedPrimitiveId)
+                : selectedNaturalTerrainId
+                  ? tacticalEditorLayerKey("natural-terrain", selectedNaturalTerrainId)
+                  : selectedElevationTransitionId
+                    ? tacticalEditorLayerKey("elevation-transition", selectedElevationTransitionId)
+                    : selectedFire
+                      ? tacticalEditorLayerKey("fire", `${selectedFire.x}:${selectedFire.y}`)
+                      : null;
   const selectTerrainPlacement = (id: string | null) => {
     setSelectedPlacementId(id);
     if (id) setSelectedEnemyId(null);
@@ -2997,7 +4119,10 @@ const TacticalScenarioEditorClient = () => {
     if (!id) return;
     const primitive = (draft.drawnTerrainPrimitives ?? [])
       .find((candidate) => candidate.id === id);
-    if (primitive) setCircleTerrainType(primitive.terrainType);
+    if (primitive) {
+      setCircleTerrainType(primitive.terrainType);
+      setCirclePropertiesLayout((current) => ({ ...current, visible: true }));
+    }
     setSelectedPlacementId(null);
     setSelectedOperationId(null);
     setSelectedEnemyId(null);
@@ -3012,6 +4137,7 @@ const TacticalScenarioEditorClient = () => {
   const selectNaturalTerrain = (id: string | null) => {
     setSelectedNaturalTerrainId(id);
     if (!id) return;
+    setObjectPropertiesLayout((current) => ({ ...current, visible: true }));
     setSelectedPlacementId(null);
     setSelectedOperationId(null);
     setSelectedEnemyId(null);
@@ -3081,66 +4207,44 @@ const TacticalScenarioEditorClient = () => {
     setConsoleVictory((current) => removeConsolePlacementOperations(current, placementId));
     setSelectedOperationId(null);
   }, []);
-  const deleteSelectedPlacement = () => {
-    if (!selectedPlacement) return;
-    if (updatePlacements(draft.terrainPlacements.filter((placement) => placement.id !== selectedPlacement.id))) {
-      removePlacementConsoleOperations(selectedPlacement.id);
-      setSelectedPlacementId(null);
-    }
-  };
-  const deleteSelectedFire = () => {
-    if (!selectedFire) return;
-    setDraft((current) => ({ ...current, fireCells: current.fireCells.filter((cell) => cellKey(cell) !== cellKey(selectedFire)) }));
-    setSelectedFire(null);
-    setPlacementError(null);
-  };
   const updateSelectedEnemyName = (name: string) => {
-    if (!selectedEnemy) return;
+    if (!selectedEnemy || selectedEnemyLocked) return;
     setDraft((current) => ({ ...current, enemyPlacements: (current.enemyPlacements ?? []).map((enemy) => enemy.id === selectedEnemy.id ? { ...enemy, name } : enemy) }));
   };
   const rotateSelectedEnemy = () => {
-    if (!selectedEnemy) return;
+    if (!selectedEnemy || selectedEnemyLocked) return;
     const facings = ["north", "east", "south", "west"] as const;
     const facing = facings[(facings.indexOf(selectedEnemy.facing ?? "north") + 1) % facings.length];
     setDraft((current) => ({ ...current, enemyPlacements: (current.enemyPlacements ?? []).map((enemy) => enemy.id === selectedEnemy.id ? { ...enemy, facing } : enemy) }));
   };
   const deleteSelectedEnemy = () => {
-    if (!selectedEnemy) return;
+    if (!selectedEnemy || selectedEnemyLocked) return;
     setDraft((current) => ({ ...current, enemyPlacements: (current.enemyPlacements ?? []).filter((enemy) => enemy.id !== selectedEnemy.id) }));
     setSelectedEnemyId(null);
     setPlacementError(null);
   };
-  const deleteSelectedWall = () => {
-    if (!selectedWall) return;
+  const updateSelectedArea = (updates: Partial<NonNullable<TacticalScenarioDefinitionFile["drawnAreas"]>[number]>) => {
+    if (!selectedArea) return;
+    const normalizedUpdates = updates.boundary === "none"
+      ? { ...updates, portals: undefined }
+      : updates;
     const candidate = {
       ...draft,
-      drawnWalls: (draft.drawnWalls ?? []).filter((wall) => wall.id !== selectedWall.id),
+      drawnAreas: (draft.drawnAreas ?? []).map((area) => area.id === selectedArea.id ? { ...area, ...normalizedUpdates } : area),
     };
     try {
       resolveTacticalScenarioTerrain(candidate);
       setDraft(candidate);
-      setSelectedWallId(null);
-      setDragWallEndpoint(null);
-      setDragWallMove(null);
-      setDragWallControl(null);
       setPlacementError(null);
     } catch (error) {
-      setPlacementError(error instanceof Error ? error.message : "That wall cannot be deleted.");
+      setPlacementError(error instanceof Error ? error.message : "That area configuration is invalid.");
     }
   };
-  const deleteSelectedRaisedArea = () => {
-    if (!selectedRaisedArea) return;
-    try {
-      const candidate = removeDrawnRaisedAreaCandidate(draft, selectedRaisedArea.id);
-      setDraft(candidate.definition);
-      setSelectedRaisedAreaId(null);
-      setDragRaisedAreaControl(null);
-      setPlacementError(candidate.removedTransitionIds.length > 0
-        ? `Deleted the raised area and ${candidate.removedTransitionIds.length} attached elevation ${candidate.removedTransitionIds.length === 1 ? "transition" : "transitions"}.`
-        : null);
-    } catch (error) {
-      setPlacementError(error instanceof Error ? error.message : "That raised area cannot be deleted.");
-    }
+  const deleteSelectedArea = () => {
+    if (!selectedArea) return;
+    setDraft((current) => ({ ...current, drawnAreas: (current.drawnAreas ?? []).filter((area) => area.id !== selectedArea.id) }));
+    setSelectedRaisedAreaId(null);
+    setPlacementError(null);
   };
   const deleteSelectedTerrainRegion = () => {
     if (!selectedTerrainRegion) return;
@@ -3251,51 +4355,17 @@ const TacticalScenarioEditorClient = () => {
       setPlacementError(error instanceof Error ? error.message : "That circle cannot be deleted.");
     }
   };
-  const deleteSelectedPortal = () => {
-    if (!selectedPortal || !selectedPortalOwner) return;
-    const candidate = {
-      ...draft,
-      ...(selectedPortalWall
-        ? {
-          drawnWalls: (draft.drawnWalls ?? []).map((wall) => wall.id === selectedPortalWall.id
-            ? { ...wall, portals: (wall.portals ?? []).filter((portal) => portal.id !== selectedPortal.id) }
-            : wall),
-        }
-        : {
-          drawnTerrainPrimitives: (draft.drawnTerrainPrimitives ?? []).map((circle) => circle.id === selectedPortalCircle?.id
-            ? { ...circle, portals: (circle.portals ?? []).filter((portal) => portal.id !== selectedPortal.id) }
-            : circle),
-        }),
-    };
-    try {
-      resolveTacticalScenarioTerrain(candidate);
-      setDraft(candidate);
-      setSelectedPortalId(null);
-      setPlacementError(null);
-    } catch (error) {
-      setPlacementError(error instanceof Error ? error.message : "That portal cannot be deleted.");
-    }
-  };
-  const deleteSelectedElevationTransition = () => {
-    if (!selectedElevationTransition) return;
-    const candidate = {
-      ...draft,
-      elevationTransitions: (draft.elevationTransitions ?? []).filter((transition) => transition.id !== selectedElevationTransition.id),
-    };
-    try {
-      resolveTacticalScenarioTerrain(candidate);
-      setDraft(candidate);
-      setSelectedElevationTransitionId(null);
-      setPlacementError(null);
-    } catch (error) {
-      setPlacementError(error instanceof Error ? error.message : "That elevation transition cannot be deleted.");
-    }
-  };
   useEffect(() => {
     const deleteSelection = (event: KeyboardEvent) => {
-      if (event.key !== "Delete") return;
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (primaryTool === "node" && selectedAreaAnchor) {
+        deleteSelectedAreaAnchor();
+        event.preventDefault();
+        return;
+      }
+      if (event.key !== "Delete" && !selectedPlacement) return;
       if (selectedPlacement) {
         const candidate = { ...draft, terrainPlacements: draft.terrainPlacements.filter((placement) => placement.id !== selectedPlacement.id) };
         try {
@@ -3308,6 +4378,7 @@ const TacticalScenarioEditorClient = () => {
           setPlacementError(error instanceof Error ? error.message : "That terrain placement cannot be deleted.");
         }
       } else if (selectedEnemy) {
+        if (selectedEnemyLocked) return;
         setDraft((current) => ({ ...current, enemyPlacements: (current.enemyPlacements ?? []).filter((enemy) => enemy.id !== selectedEnemy.id) }));
         setSelectedEnemyId(null);
         setPlacementError(null);
@@ -3338,6 +4409,10 @@ const TacticalScenarioEditorClient = () => {
         } catch (error) {
           setPlacementError(error instanceof Error ? error.message : "That circle cannot be deleted.");
         }
+      } else if (selectedArea) {
+        setDraft((current) => ({ ...current, drawnAreas: (current.drawnAreas ?? []).filter((area) => area.id !== selectedArea.id) }));
+        setSelectedRaisedAreaId(null);
+        setPlacementError(null);
       } else if (selectedRaisedArea) {
         try {
           const candidate = removeDrawnRaisedAreaCandidate(draft, selectedRaisedArea.id);
@@ -3423,18 +4498,39 @@ const TacticalScenarioEditorClient = () => {
     };
     window.addEventListener("keydown", deleteSelection);
     return () => window.removeEventListener("keydown", deleteSelection);
-  }, [draft, removePlacementConsoleOperations, selectedElevationTransition, selectedEnemy, selectedFire, selectedNaturalTerrain, selectedPlacement, selectedPortal, selectedPortalCircle, selectedPortalOwner, selectedPortalWall, selectedPrimitive, selectedRaisedArea, selectedTerrainRegion, selectedWall]);
+  // The selected draft values refresh this listener whenever node geometry changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, primaryTool, removePlacementConsoleOperations, selectedArea, selectedAreaAnchor, selectedElevationTransition, selectedEnemy, selectedEnemyLocked, selectedFire, selectedNaturalTerrain, selectedPlacement, selectedPortal, selectedPortalArea, selectedPortalCircle, selectedPortalOwner, selectedPortalWall, selectedPrimitive, selectedRaisedArea, selectedTerrainRegion, selectedWall]);
   useEffect(() => {
     if (!raisedAreaDraft) return;
-    const cancelRaisedArea = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setRaisedAreaDraft(null);
-      setDragRaisedAreaControl(null);
-      setPlacementError(null);
+    const handlePenKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Enter") {
+        closePenArea();
+      } else if (event.key === "Backspace") {
+        setRaisedAreaDraft((current) => {
+          if (!current) return null;
+          const removed = current.segments.at(-1);
+          if (!removed) return null;
+          return {
+            ...current,
+            segments: current.segments.slice(0, -1),
+            current: gridPoint(removed.from),
+            hover: gridPoint(removed.from),
+            outgoingControl: removed.kind === "cubic" ? gridPoint(removed.control1) : null,
+          };
+        });
+        setPlacementError(null);
+      } else if (event.key === "Escape") {
+        setRaisedAreaDraft(null);
+        setDragRaisedAreaControl(null);
+        setPlacementError(null);
+      } else return;
       event.preventDefault();
     };
-    window.addEventListener("keydown", cancelRaisedArea);
-    return () => window.removeEventListener("keydown", cancelRaisedArea);
+    window.addEventListener("keydown", handlePenKeyboard);
+    return () => window.removeEventListener("keydown", handlePenKeyboard);
+  // raisedAreaDraft refreshes this listener after each committed node.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raisedAreaDraft]);
   useEffect(() => {
     if (!rampDraft) return;
@@ -3458,18 +4554,8 @@ const TacticalScenarioEditorClient = () => {
     window.addEventListener("keydown", cancelCircleDrawing);
     return () => window.removeEventListener("keydown", cancelCircleDrawing);
   }, [circleDraft]);
-  useEffect(() => {
-    const target = areaTargetForTool(placementKind);
-    if (!target || (raisedAreaDraft && raisedAreaDraft.target !== target)) {
-      setRaisedAreaDraft(null);
-      setDragRaisedAreaControl(null);
-    }
-  }, [placementKind, raisedAreaDraft]);
-  useEffect(() => {
-    if (placementKind !== RAMP_TOOL_ID) setRampDraft(null);
-  }, [placementKind]);
   const beginPlaytest = () => {
-    if (draftBlocked || draft.map.width < 1 || draft.map.height < 1) return;
+    if (playtestBlocked || draft.map.width < 1 || draft.map.height < 1) return;
     setPlaytest({ definition: cloneTacticalScenarioDefinition(draft), consoleVictory: cloneTacticalConsoleVictoryDefinition(consoleVictory), sandbox: createAppStore(store.getState()) });
   };
   const clearEditorSelection = () => {
@@ -3478,6 +4564,7 @@ const TacticalScenarioEditorClient = () => {
     setSelectedEnemyId(null);
     setSelectedWallId(null);
     setSelectedRaisedAreaId(null);
+    setSelectedAreaAnchor(null);
     setSelectedTerrainRegionId(null);
     setSelectedPrimitiveId(null);
     setSelectedNaturalTerrainId(null);
@@ -3494,6 +4581,9 @@ const TacticalScenarioEditorClient = () => {
     setCircleDraft(null);
     setRampDraft(null);
     setDragRaisedAreaControl(null);
+    setDragAreaAnchor(null);
+    setDragAreaCubicControl(null);
+    setDragConstrainedArea(null);
     setDragCirclePrimitive(null);
     setDragNaturalTerrain(null);
     setDragWallEndpoint(null);
@@ -3506,16 +4596,168 @@ const TacticalScenarioEditorClient = () => {
     setDragEnemy(null);
     setPlacementError(null);
   };
-  const loadScenario = async () => {
-    if (!scenarioToLoad || fileBusy) return;
+  const discardDraftChanges = () => {
+    if (!dirty || !window.confirm("Discard all unsaved changes and return to the last loaded or saved version?")) return;
+    setDraft(cloneTacticalScenarioDefinition(baseline));
+    setConsoleVictory(cloneTacticalConsoleVictoryDefinition(consoleVictoryBaseline));
+    clearEditorSelection();
+    setFileMessage({ kind: "success", text: "Discarded unsaved draft changes." });
+  };
+  const activatePrimaryTool = (tool: "select" | "node" | "hand") => {
+    setPrimaryTool(tool);
+    if (tool !== "node") setSelectedAreaAnchor(null);
+    setPlacementKind(null);
+    setEnemyKind(null);
+    setPlacementHover(null);
+    setEnemyHover(null);
+    setPortalHover(null);
+    setWallDraft(null);
+    setRaisedAreaDraft(null);
+    setCircleDraft(null);
+    setRampDraft(null);
+    setPlacementError(null);
+  };
+  const activateDrawingTool = (tool: string) => {
+    const nextAreaTarget = areaTargetForTool(tool);
+    setPrimaryTool("select");
+    setPlacementKind(tool);
+    setEnemyKind(null);
+    setSelectedPlacementId(null);
+    setSelectedOperationId(null);
+    setSelectedEnemyId(null);
+    setSelectedWallId(null);
+    setSelectedRaisedAreaId(null);
+    setSelectedAreaAnchor(null);
+    setSelectedTerrainRegionId(null);
+    setSelectedPrimitiveId(null);
+    setSelectedNaturalTerrainId(null);
+    setSelectedElevationTransitionId(null);
+    setSelectedPortalId(null);
+    setSelectedFire(null);
+    setPlacementHover(null);
+    setEnemyHover(null);
+    setPortalHover(null);
+    setWallDraft(null);
+    setCircleDraft(null);
+    setRampDraft(null);
+    if (!nextAreaTarget || raisedAreaDraft?.target !== nextAreaTarget) {
+      setRaisedAreaDraft(null);
+      setDragRaisedAreaControl(null);
+    }
+    setPlacementError(null);
+    if (tool === CIRCLE_TOOL_ID) {
+      setCirclePropertiesLayout((current) => ({ ...current, visible: true }));
+    }
+  };
+  const selectEditorLayerObject = (object: TacticalEditorLayerObject) => {
+    if (lockedLayerKeys.has(object.key) && object.kind !== "enemy") return;
+    clearEditorSelection();
+    setPrimaryTool("select");
+    if (object.kind === "terrain-placement") selectTerrainPlacement(object.id);
+    else if (object.kind === "enemy") selectEnemy(object.id);
+    else if (object.kind === "wall") setSelectedWallId(object.id);
+    else if (object.kind === "area" || object.kind === "raised-area") {
+      setSelectedRaisedAreaId(object.id);
+      if (object.kind === "area") setAreaPropertiesLayout((current) => ({ ...current, visible: true }));
+    }
+    else if (object.kind === "terrain-region") {
+      setSelectedRaisedAreaId(object.id);
+      setSelectedTerrainRegionId(object.id);
+      setObjectPropertiesLayout((current) => ({ ...current, visible: true }));
+    } else if (object.kind === "primitive") selectTerrainPrimitive(object.id);
+    else if (object.kind === "natural-terrain") selectNaturalTerrain(object.id);
+    else if (object.kind === "elevation-transition") setSelectedElevationTransitionId(object.id);
+    else if (object.kind === "portal") setSelectedPortalId(object.id);
+    else if (object.kind === "fire") {
+      const [x, y] = object.id.split(":").map(Number);
+      setSelectedFire({ x, y });
+    }
+  };
+  const toggleEditorLayerSet = (
+    setter: typeof setHiddenLayerKeys,
+    object: TacticalEditorLayerObject,
+  ) => setter((current) => {
+    const next = new Set(current);
+    if (next.has(object.key)) next.delete(object.key);
+    else next.add(object.key);
+    return next;
+  });
+  const moveEditorLayerObject = (object: TacticalEditorLayerObject, direction: -1 | 1) => {
+    setDraft((current) => {
+      if (object.kind === "terrain-placement") {
+        const index = current.terrainPlacements.findIndex((item) => item.id === object.id);
+        return { ...current, terrainPlacements: moveTacticalEditorLayerObject(current.terrainPlacements, index, direction) };
+      }
+      if (object.kind === "area") {
+        const items = current.drawnAreas ?? [];
+        return { ...current, drawnAreas: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "enemy") {
+        const items = current.enemyPlacements ?? [];
+        return { ...current, enemyPlacements: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "wall") {
+        const items = current.drawnWalls ?? [];
+        return { ...current, drawnWalls: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "raised-area") {
+        const items = current.drawnRaisedAreas ?? [];
+        return { ...current, drawnRaisedAreas: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "terrain-region") {
+        const items = current.drawnTerrainRegions ?? [];
+        return { ...current, drawnTerrainRegions: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "primitive") {
+        const items = current.drawnTerrainPrimitives ?? [];
+        return { ...current, drawnTerrainPrimitives: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "natural-terrain") {
+        const items = current.naturalTerrainPlacements ?? [];
+        return { ...current, naturalTerrainPlacements: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "elevation-transition") {
+        const items = current.elevationTransitions ?? [];
+        return { ...current, elevationTransitions: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+      }
+      if (object.kind === "fire") {
+        const index = current.fireCells.findIndex((point) => `${point.x}:${point.y}` === object.id);
+        return { ...current, fireCells: moveTacticalEditorLayerObject(current.fireCells, index, direction) };
+      }
+      return current;
+    });
+  };
+  useEffect(() => {
+    const choosePrimaryTool = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (event.key.toLowerCase() === "v") {
+        activatePrimaryTool("select");
+        event.preventDefault();
+      } else if (event.key.toLowerCase() === "n") {
+        activatePrimaryTool("node");
+        event.preventDefault();
+      } else if (event.key.toLowerCase() === "h") {
+        activatePrimaryTool("hand");
+        event.preventDefault();
+      } else if (event.key.toLowerCase() === "r" && selectedPlacement) {
+        rotateSelectedPlacement();
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", choosePrimaryTool);
+    return () => window.removeEventListener("keydown", choosePrimaryTool);
+  });
+  const loadScenario = async (scenarioId = scenarioToLoad) => {
+    if (!scenarioId || fileBusy) return;
     if (dirty && !window.confirm("Load another scenario and discard the unsaved changes in this draft?")) return;
     setFileBusy(true);
     setFileMessage(null);
     try {
-      const response = await fetch(`/api/tactical/scenarios/${encodeURIComponent(scenarioToLoad)}`, { cache: "no-store" });
+      const response = await fetch(`/api/tactical/scenarios/${encodeURIComponent(scenarioId)}`, { cache: "no-store" });
       const body = await response.json() as { definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile; error?: string };
       if (!response.ok || !body.definition || !body.consoleVictory) throw new Error(body.error ?? "Could not load the scenario.");
-      const loaded = cloneTacticalScenarioDefinition(body.definition);
+      const loaded = upgradeLegacyTacticalEditorAreas(cloneTacticalScenarioDefinition(body.definition));
       const loadedConsoleVictory = cloneTacticalConsoleVictoryDefinition(body.consoleVictory);
       resolveTacticalScenarioTerrain(loaded);
       validateTacticalConsoleVictoryDefinition(loadedConsoleVictory, loaded.terrainPlacements.filter(tacticalPlacementSupportsConsoleOperations).map((placement) => placement.id), loaded.terrainPlacements.filter((placement) => placement.terrainDefinitionId === "interactive-human").map((placement) => placement.id));
@@ -3526,9 +4768,53 @@ const TacticalScenarioEditorClient = () => {
       setConsoleVictoryBaseline(cloneTacticalConsoleVictoryDefinition(loadedConsoleVictory));
       setCurrentScenario(summary);
       clearEditorSelection();
+      setHiddenLayerKeys(new Set());
+      setLockedLayerKeys(new Set());
       setFileMessage({ kind: "success", text: `Loaded ${loaded.title}.` });
+      setOpenScenarioDialog(false);
     } catch (error) {
       setFileMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not load the scenario." });
+    } finally {
+      setFileBusy(false);
+    }
+  };
+  const createNewScenario = async () => {
+    if (!newScenarioName.trim() || fileBusy || draft.map.width < 1 || draft.map.height < 1) return;
+    setFileBusy(true);
+    setFileMessage(null);
+    try {
+      const definition = emptyTacticalScenarioDraft(draft, newScenarioName);
+      const emptyConsoleVictory: TacticalConsoleVictoryDefinitionFile = {
+        schemaVersion: 1,
+        id: definition.consoleVictoryDefinitionId ?? definition.id,
+        scenarioId: definition.id,
+        operations: [],
+      };
+      const response = await fetch("/api/tactical/scenarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newScenarioName, definition, consoleVictory: emptyConsoleVictory }),
+      });
+      const body = await response.json() as { scenario?: ScenarioSummary; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile; error?: string };
+      if (!response.ok || !body.scenario || !body.definition || !body.consoleVictory) throw new Error(body.error ?? "Could not create the scenario.");
+      const saved = upgradeLegacyTacticalEditorAreas(cloneTacticalScenarioDefinition(body.definition));
+      const savedConsoleVictory = cloneTacticalConsoleVictoryDefinition(body.consoleVictory);
+      setDraft(saved);
+      setBaseline(cloneTacticalScenarioDefinition(saved));
+      setConsoleVictory(savedConsoleVictory);
+      setConsoleVictoryBaseline(cloneTacticalConsoleVictoryDefinition(savedConsoleVictory));
+      setCurrentScenario(body.scenario);
+      setNewScenarioName("");
+      setSaveAsName("");
+      clearEditorSelection();
+      setHiddenLayerKeys(new Set());
+      setLockedLayerKeys(new Set());
+      await refreshScenarioList();
+      setScenarioToLoad(body.scenario.id);
+      setFileMessage({ kind: "success", text: `Created ${body.scenario.id}.json.` });
+      setNewScenarioDialogOpen(false);
+    } catch (error) {
+      setFileMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not create the scenario." });
     } finally {
       setFileBusy(false);
     }
@@ -3551,17 +4837,18 @@ const TacticalScenarioEditorClient = () => {
       });
       const body = await response.json() as { scenario?: ScenarioSummary; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile; error?: string };
       if (!response.ok || !body.scenario || !body.definition || !body.consoleVictory) throw new Error(body.error ?? "Could not save the scenario.");
-      const saved = cloneTacticalScenarioDefinition(body.definition);
+      const saved = upgradeLegacyTacticalEditorAreas(cloneTacticalScenarioDefinition(body.definition));
       const savedConsoleVictory = cloneTacticalConsoleVictoryDefinition(body.consoleVictory);
       setDraft(saved);
       setBaseline(cloneTacticalScenarioDefinition(saved));
       setConsoleVictory(savedConsoleVictory);
       setConsoleVictoryBaseline(cloneTacticalConsoleVictoryDefinition(savedConsoleVictory));
       setCurrentScenario(body.scenario);
-      setScenarioToLoad(body.scenario.id);
       setSaveAsName("");
       await refreshScenarioList();
+      setScenarioToLoad(body.scenario.id);
       setFileMessage({ kind: "success", text: `Saved ${body.scenario.id}.json.` });
+      setSaveAsDialogOpen(false);
     } catch (error) {
       setFileMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not save the scenario." });
     } finally {
@@ -3586,7 +4873,7 @@ const TacticalScenarioEditorClient = () => {
       });
       const body = await response.json() as { scenario?: ScenarioSummary; definition?: TacticalScenarioDefinitionFile; consoleVictory?: TacticalConsoleVictoryDefinitionFile; error?: string };
       if (!response.ok || !body.scenario || !body.definition || !body.consoleVictory) throw new Error(body.error ?? "Could not save the scenario.");
-      const saved = cloneTacticalScenarioDefinition(body.definition);
+      const saved = upgradeLegacyTacticalEditorAreas(cloneTacticalScenarioDefinition(body.definition));
       const savedConsoleVictory = cloneTacticalConsoleVictoryDefinition(body.consoleVictory);
       setDraft(saved);
       setBaseline(cloneTacticalScenarioDefinition(saved));
@@ -3631,11 +4918,12 @@ const TacticalScenarioEditorClient = () => {
         title: defaultTacticalScenarioDefinition.title,
         isDefault: true,
       });
-      setAvailableScenarios((current) =>
-        current.filter((scenario) => scenario.id !== body.deleted!.id));
+      await refreshScenarioList();
       setScenarioToLoad(defaultTacticalScenarioDefinition.id);
       setSaveAsName("");
       clearEditorSelection();
+      setHiddenLayerKeys(new Set());
+      setLockedLayerKeys(new Set());
       setFileMessage({
         kind: "success",
         text: `Deleted ${body.deleted.id}.json and returned to the default scenario.`,
@@ -3652,200 +4940,322 @@ const TacticalScenarioEditorClient = () => {
     }
   };
 
+  const expandedToolGroup = EDITOR_DRAWING_TOOL_GROUPS.find((group) => group.id === openToolGroup) ?? null;
+  const normalizedScenarioSearch = scenarioSearchQuery.trim().toLowerCase();
+  const filteredScenarios = normalizedScenarioSearch
+    ? availableScenarios.filter((scenario) => scenario.title.toLowerCase().includes(normalizedScenarioSearch)
+      || scenario.id.toLowerCase().includes(normalizedScenarioSearch))
+    : availableScenarios;
+  const updateScenarioSearch = (value: string) => {
+    setScenarioSearchQuery(value);
+    const normalized = value.trim().toLowerCase();
+    const results = normalized
+      ? availableScenarios.filter((scenario) => scenario.title.toLowerCase().includes(normalized)
+        || scenario.id.toLowerCase().includes(normalized))
+      : availableScenarios;
+    if (!results.some((scenario) => scenario.id === scenarioToLoad)) setScenarioToLoad(results[0]?.id ?? "");
+  };
+
   if (playtest) return <Provider store={playtest.sandbox}>
     <TacticalMapPageClient draftPlaytest={{ definition: playtest.definition, consoleVictory: playtest.consoleVictory, onExit: () => setPlaytest(null) }} />
   </Provider>;
 
   return <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#050a12] font-mono text-slate-100">
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-cyan-800 bg-slate-950 px-5">
-      <div>
-        <div className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-100">Scenario Editor</div>
-        <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">{currentScenario.title} · {currentScenario.isDefault ? "immutable source" : "saved scenario"} · editable draft</div>
+    <header className="relative flex h-16 shrink-0 items-center justify-between gap-4 border-b border-cyan-800 bg-slate-950 px-4">
+      <div className="flex items-center gap-6">
+        <div>
+          <div className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-100">Scenario Editor</div>
+          <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">{currentScenario.title} · {currentScenario.isDefault ? "immutable source" : "saved scenario"} · editable draft</div>
+        </div>
+        <nav aria-label="Scenario editor menu bar" className="flex self-stretch">
+          <div className="relative h-full">
+            <button type="button" aria-label="File menu" aria-haspopup="menu" aria-expanded={openHeaderMenu === "file"} onClick={() => setOpenHeaderMenu((current) => current === "file" ? null : "file")} className={`h-full border-x px-4 text-[11px] font-bold uppercase tracking-wider ${openHeaderMenu === "file" ? "border-cyan-500 bg-cyan-950/70 text-cyan-50" : "border-transparent text-slate-300 hover:border-cyan-800 hover:bg-cyan-950/30 hover:text-cyan-100"}`}>File</button>
+            {openHeaderMenu === "file" && <div role="menu" aria-label="File" className="absolute left-0 top-full z-50 min-w-52 border border-cyan-700 bg-slate-950 p-1 shadow-2xl">
+            <button type="button" role="menuitem" disabled={fileBusy || draft.map.width < 1 || draft.map.height < 1} onClick={() => {
+              setOpenHeaderMenu(null);
+              if (dirty && !window.confirm("Create a new scenario and discard the unsaved changes in this draft?")) return;
+              setNewScenarioName("");
+              setFileMessage(null);
+              setNewScenarioDialogOpen(true);
+            }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-cyan-100 hover:bg-cyan-950 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">New Scenario…</button>
+            <button type="button" role="menuitem" onClick={() => {
+              setOpenHeaderMenu(null);
+              setOpenScenarioDialog(true);
+              setScenarioSearchQuery("");
+              setFileMessage(null);
+              if (availableScenarios.length === 0) setScenarioListBusy(true);
+              void refreshScenarioList().catch((error) => setFileMessage({ kind: "error", text: error instanceof Error ? error.message : "Could not list scenario files." }));
+            }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-cyan-100 hover:bg-cyan-950">Open Scenario…</button>
+            <div className="my-1 border-t border-slate-700" />
+            <button type="button" role="menuitem" disabled={fileBusy || currentScenario.isDefault || !dirty || draftBlocked} onClick={() => {
+              setOpenHeaderMenu(null);
+              void saveScenario();
+            }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-emerald-100 hover:bg-emerald-950/50 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">Save</button>
+            <button type="button" role="menuitem" disabled={fileBusy || draftBlocked} onClick={() => {
+              setOpenHeaderMenu(null);
+              setFileMessage(null);
+              setSaveAsDialogOpen(true);
+            }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-emerald-100 hover:bg-emerald-950/50 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">Save As…</button>
+            <div className="my-1 border-t border-slate-700" />
+            <button type="button" role="menuitem" disabled={fileBusy || currentScenario.isDefault} onClick={() => {
+              setOpenHeaderMenu(null);
+              void deleteScenario();
+            }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-red-200 hover:bg-red-950/50 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">Delete Scenario…</button>
+            </div>}
+          </div>
+          <div className="relative h-full">
+            <button type="button" aria-label="Scenario menu" aria-haspopup="menu" aria-expanded={openHeaderMenu === "scenario"} onClick={() => setOpenHeaderMenu((current) => current === "scenario" ? null : "scenario")} className={`h-full border-x px-4 text-[11px] font-bold uppercase tracking-wider ${openHeaderMenu === "scenario" ? "border-cyan-500 bg-cyan-950/70 text-cyan-50" : "border-transparent text-slate-300 hover:border-cyan-800 hover:bg-cyan-950/30 hover:text-cyan-100"}`}>Scenario</button>
+            {openHeaderMenu === "scenario" && <div role="menu" aria-label="Scenario" className="absolute left-0 top-full z-50 min-w-60 border border-cyan-700 bg-slate-950 p-1 shadow-2xl">
+              <button type="button" role="menuitem" onClick={() => {
+                setOpenHeaderMenu(null);
+                setScenarioPropertiesDraft({
+                  title: draft.title,
+                  briefing: draft.briefing,
+                  objective: draft.objective,
+                  deploymentEdges: [...(draft.deploymentEdges ?? ["south"])],
+                });
+                setScenarioPropertiesError(null);
+              }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-cyan-100 hover:bg-cyan-950">Scenario Properties…</button>
+              <div className="my-1 border-t border-slate-700" />
+              <button type="button" role="menuitem" disabled={playtestBlocked || draft.map.width < 1 || draft.map.height < 1} onClick={() => {
+                setOpenHeaderMenu(null);
+                beginPlaytest();
+              }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-emerald-100 hover:bg-emerald-950/50 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">Playtest Draft</button>
+              <div className="my-1 border-t border-slate-700" />
+              <button type="button" role="menuitem" disabled={!dirty} onClick={() => {
+                setOpenHeaderMenu(null);
+                discardDraftChanges();
+              }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-amber-100 hover:bg-amber-950/50 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">Discard Draft Changes…</button>
+            </div>}
+          </div>
+        </nav>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
+        {fileMessage && !openScenarioDialog && !scenarioPropertiesDraft && !newScenarioDialogOpen && !saveAsDialogOpen && <span role={fileMessage.kind === "error" ? "alert" : "status"} className={`max-w-96 truncate text-[10px] ${fileMessage.kind === "error" ? "text-red-300" : "text-emerald-300"}`}>{fileMessage.text}</span>}
+        {editorIssues.length > 0 && <button type="button" aria-label="Open editor issues" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((current) => !current)} className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${editorIssues.some((issue) => issue.severity === "error") ? "border-red-500 text-red-200" : "border-amber-500 text-amber-200"}`}>{editorIssues.length} {editorIssues.length === 1 ? "Issue" : "Issues"}</button>}
+        {issuesOpen && editorIssues.length > 0 && <div role="dialog" aria-label="Editor issues" className="absolute right-0 top-[calc(100%+1rem)] z-[90] w-96 border border-amber-600 bg-slate-950 p-3 shadow-2xl">
+          <div className="mb-2 flex items-center justify-between border-b border-slate-700 pb-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-100">Editor issues</div>
+            <button type="button" aria-label="Close editor issues" onClick={() => setIssuesOpen(false)} className="h-7 w-7 border border-slate-700 text-slate-300 hover:border-amber-500">×</button>
+          </div>
+          <div className="space-y-2">
+            {editorIssues.map((issue, index) => <div key={`${issue.severity}-${index}`} role={issue.severity === "error" ? "alert" : "status"} className={`border p-2 text-[10px] normal-case ${issue.severity === "error" ? "border-red-600/70 bg-red-950/50 text-red-100" : "border-amber-600/70 bg-amber-950/40 text-amber-100"}`}>{issue.message}</div>)}
+          </div>
+        </div>}
         <span className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${dirty ? "border-amber-400 text-amber-200" : "border-slate-600 text-slate-400"}`}>{dirty ? "Unsaved draft" : "Unchanged"}</span>
       </div>
     </header>
-    <div className="grid min-h-0 flex-1 grid-cols-[21rem_1fr]">
-      <aside className="overflow-y-auto border-r border-cyan-900 bg-[#071019] p-4">
-        <div className="mb-4 border border-slate-700 bg-slate-950/70 p-3 text-[10px] text-slate-400">
-          Changes exist only in this draft. Playtesting uses a separate temporary game store and cannot overwrite the active tactical session.
-        </div>
-        <div className="mb-4 border border-cyan-800 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">Scenario files</div>
-          <label className="mb-2 block text-[9px] font-bold uppercase tracking-wider text-slate-400">Load scenario
-            <select aria-label="Load scenario" value={scenarioToLoad} onChange={(event) => setScenarioToLoad(event.target.value)} disabled={fileBusy || availableScenarios.length === 0} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400 disabled:opacity-40">
-              {availableScenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.title}{scenario.isDefault ? " (default)" : ""}</option>)}
-            </select>
-          </label>
-          <button type="button" onClick={() => void loadScenario()} disabled={fileBusy || !scenarioToLoad} className="mb-3 h-8 w-full border border-cyan-500 text-[9px] font-bold uppercase tracking-wider text-cyan-100 disabled:opacity-40">Load scenario</button>
-          {currentScenario.isDefault && <div className="mb-3 text-[9px] text-amber-300">The default scenario cannot be overwritten. Use Save As.</div>}
-          <label className="mb-2 block text-[9px] font-bold uppercase tracking-wider text-slate-400">New scenario name
-            <input aria-label="New scenario name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} placeholder="Boarding action" className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-xs normal-case tracking-normal text-slate-100 outline-none placeholder:text-slate-700 focus:border-cyan-400" />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => void saveScenario()} disabled={fileBusy || currentScenario.isDefault || !dirty || draftBlocked} className="h-8 border border-emerald-400 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Save changes</button>
-            <button type="button" onClick={() => void saveScenarioAs()} disabled={fileBusy || !saveAsName.trim() || draftBlocked} className="h-8 border border-emerald-500 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:opacity-40">Save as new scenario</button>
+    {openScenarioDialog && <div role="presentation" className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-6" onPointerDown={(event) => {
+      if (event.target === event.currentTarget && !fileBusy) setOpenScenarioDialog(false);
+    }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="open-scenario-title" tabIndex={-1} onKeyDown={(event) => {
+        if (event.key === "Escape" && !fileBusy) setOpenScenarioDialog(false);
+      }} className="w-full max-w-xl border border-cyan-600 bg-slate-950 p-4 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-4 border-b border-cyan-900 pb-3">
+          <div>
+            <h2 id="open-scenario-title" className="text-sm font-bold uppercase tracking-[0.18em] text-cyan-100">Open Scenario</h2>
+            <div className="mt-1 text-[10px] text-slate-400">Choose a saved scenario or the immutable default.</div>
           </div>
-          <button type="button" onClick={() => void deleteScenario()} disabled={fileBusy || currentScenario.isDefault} className="mt-2 h-8 w-full border border-red-500 text-[9px] font-bold uppercase tracking-wider text-red-100 disabled:cursor-not-allowed disabled:opacity-40">Delete scenario</button>
-          <div className="mt-2 text-[9px] text-slate-500">Save As creates a new JSON file and never overwrites an existing scenario.</div>
-          {fileMessage && <div role="status" className={`mt-2 border p-2 text-[10px] ${fileMessage.kind === "error" ? "border-red-500/70 bg-red-950/60 text-red-100" : "border-emerald-500/70 bg-emerald-950/50 text-emerald-100"}`}>{fileMessage.text}</div>}
+          <button type="button" aria-label="Close Open Scenario" disabled={fileBusy} onClick={() => setOpenScenarioDialog(false)} className="h-8 w-8 border border-slate-700 text-slate-300 hover:border-cyan-500 hover:text-cyan-100 disabled:opacity-40">×</button>
+        </div>
+        <div className="mb-3 flex gap-2">
+          <label className="min-w-0 flex-1 text-[9px] font-bold uppercase tracking-wider text-cyan-200">Search scenarios
+            <input
+              autoFocus
+              aria-label="Search scenarios"
+              type="search"
+              value={scenarioSearchQuery}
+              onChange={(event) => updateScenarioSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                  if (filteredScenarios.length === 0) return;
+                  const selectedIndex = filteredScenarios.findIndex((scenario) => scenario.id === scenarioToLoad);
+                  const nextIndex = event.key === "ArrowDown"
+                    ? Math.min(filteredScenarios.length - 1, Math.max(0, selectedIndex + 1))
+                    : Math.max(0, selectedIndex < 0 ? 0 : selectedIndex - 1);
+                  setScenarioToLoad(filteredScenarios[nextIndex].id);
+                  event.preventDefault();
+                } else if (event.key === "Enter" && scenarioToLoad && filteredScenarios.some((scenario) => scenario.id === scenarioToLoad)) {
+                  void loadScenario();
+                  event.preventDefault();
+                }
+              }}
+              placeholder="Title or file ID"
+              className="mt-1 h-9 w-full border border-cyan-800 bg-[#071019] px-3 text-[11px] normal-case tracking-normal text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-400"
+            />
+          </label>
+          <button type="button" aria-label="Clear scenario search" disabled={!scenarioSearchQuery || fileBusy} onClick={() => updateScenarioSearch("")} className="mt-[1.15rem] h-9 border border-slate-700 px-3 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:border-cyan-600 hover:text-cyan-100 disabled:opacity-35">Clear</button>
+        </div>
+        <div role="listbox" aria-label="Available scenarios" className="max-h-[50vh] space-y-1 overflow-y-auto border border-slate-800 bg-[#071019] p-2">
+          {scenarioListBusy && <div className="p-4 text-center text-[10px] uppercase tracking-wider text-slate-400">Loading scenarios…</div>}
+          {!scenarioListBusy && availableScenarios.length === 0 && <div className="p-4 text-center text-[10px] text-slate-400">No scenarios are available.</div>}
+          {!scenarioListBusy && availableScenarios.length > 0 && filteredScenarios.length === 0 && <div className="p-4 text-center text-[10px] text-slate-400">No matching scenarios.</div>}
+          {!scenarioListBusy && filteredScenarios.map((scenario) => {
+            const selected = scenario.id === scenarioToLoad;
+            const current = scenario.id === currentScenario.id;
+            return <button
+              key={scenario.id}
+              type="button"
+              role="option"
+              aria-label={`${scenario.title} · ${scenario.id}`}
+              aria-selected={selected}
+              disabled={fileBusy}
+              onClick={() => setScenarioToLoad(scenario.id)}
+              onDoubleClick={() => void loadScenario(scenario.id)}
+              className={`flex min-h-14 w-full items-center justify-between gap-4 border px-3 py-2 text-left ${selected ? "border-cyan-300 bg-cyan-950/70" : "border-slate-700 bg-slate-950 hover:border-cyan-700"}`}
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-[11px] font-bold text-slate-100">{scenario.title}</span>
+                <span className="mt-1 block truncate text-[9px] text-slate-500">{scenario.id}</span>
+              </span>
+              <span className="flex shrink-0 gap-1 text-[8px] font-bold uppercase tracking-wider">
+                {scenario.isDefault && <span className="border border-amber-600 px-1.5 py-1 text-amber-200">Default</span>}
+                {!scenario.isDefault && <span className="border border-slate-600 px-1.5 py-1 text-slate-300">Saved</span>}
+                {current && <span className="border border-cyan-500 px-1.5 py-1 text-cyan-200">Current</span>}
+              </span>
+            </button>;
+          })}
+        </div>
+        {fileMessage?.kind === "error" && <div role="alert" className="mt-3 border border-red-600 bg-red-950/50 p-2 text-[10px] text-red-100">{fileMessage.text}</div>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={fileBusy} onClick={() => setOpenScenarioDialog(false)} className="h-9 border border-slate-600 px-4 text-[9px] font-bold uppercase tracking-wider text-slate-200 disabled:opacity-40">Cancel</button>
+          <button type="button" disabled={fileBusy || scenarioListBusy || !scenarioToLoad} onClick={() => void loadScenario()} className="h-9 border border-cyan-400 px-4 text-[9px] font-bold uppercase tracking-wider text-cyan-100 disabled:opacity-40">{fileBusy ? "Opening…" : "Open"}</button>
+        </div>
+      </div>
+    </div>}
+    {scenarioPropertiesDraft && <div role="presentation" className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-6" onPointerDown={(event) => {
+      if (event.target === event.currentTarget) setScenarioPropertiesDraft(null);
+    }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="scenario-properties-title" onKeyDown={(event) => {
+        if (event.key === "Escape") setScenarioPropertiesDraft(null);
+      }} className="w-full max-w-xl border border-cyan-600 bg-slate-950 p-4 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-4 border-b border-cyan-900 pb-3">
+          <div>
+            <h2 id="scenario-properties-title" className="text-sm font-bold uppercase tracking-[0.18em] text-cyan-100">Scenario Properties</h2>
+            <div className="mt-1 text-[10px] text-slate-400">Changes are staged until Apply is selected.</div>
+          </div>
+          <button type="button" aria-label="Close Scenario Properties" onClick={() => setScenarioPropertiesDraft(null)} className="h-8 w-8 border border-slate-700 text-slate-300 hover:border-cyan-500 hover:text-cyan-100">×</button>
         </div>
         <label className="mb-3 block text-[9px] font-bold uppercase tracking-wider text-cyan-200">Title
-          <input value={draft.title} onChange={(event) => updateText("title", event.target.value)} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400" />
+          <input autoFocus aria-label="Scenario title" value={scenarioPropertiesDraft.title} onChange={(event) => setScenarioPropertiesDraft((current) => current ? { ...current, title: event.target.value } : current)} className="mt-1 h-9 w-full border border-slate-600 bg-[#071019] px-3 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400" />
         </label>
         <label className="mb-3 block text-[9px] font-bold uppercase tracking-wider text-cyan-200">Briefing
-          <textarea value={draft.briefing} onChange={(event) => updateText("briefing", event.target.value)} rows={4} className="mt-1 w-full resize-none border border-slate-600 bg-slate-950 p-2 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400" />
+          <textarea aria-label="Scenario briefing" value={scenarioPropertiesDraft.briefing} onChange={(event) => setScenarioPropertiesDraft((current) => current ? { ...current, briefing: event.target.value } : current)} rows={4} className="mt-1 w-full resize-none border border-slate-600 bg-[#071019] p-3 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400" />
         </label>
         <label className="mb-3 block text-[9px] font-bold uppercase tracking-wider text-cyan-200">Objective
-          <textarea value={draft.objective} onChange={(event) => updateText("objective", event.target.value)} rows={3} className="mt-1 w-full resize-none border border-slate-600 bg-slate-950 p-2 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400" />
+          <textarea aria-label="Scenario objective" value={scenarioPropertiesDraft.objective} onChange={(event) => setScenarioPropertiesDraft((current) => current ? { ...current, objective: event.target.value } : current)} rows={3} className="mt-1 w-full resize-none border border-slate-600 bg-[#071019] p-3 text-xs normal-case tracking-normal text-slate-100 outline-none focus:border-cyan-400" />
         </label>
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <label className="text-[9px] font-bold uppercase tracking-wider text-cyan-200">Map width
-            <input type="number" min="1" value={draft.map.width} onChange={(event) => updateDimension("width", event.target.value)} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 outline-none focus:border-cyan-400" />
-          </label>
-          <label className="text-[9px] font-bold uppercase tracking-wider text-cyan-200">Map height
-            <input type="number" min="1" value={draft.map.height} onChange={(event) => updateDimension("height", event.target.value)} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 outline-none focus:border-cyan-400" />
-          </label>
-        </div>
-        <div className="mb-4 border-t border-slate-700 pt-3">
+        <div className="border-t border-slate-700 pt-3">
           <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-emerald-200">Crew deployment edges</div>
           <div className="mb-2 text-[9px] normal-case text-slate-500">Each selected edge allows setup within six squares of that edge.</div>
           <div className="grid grid-cols-4 gap-1">
             {(["north", "east", "south", "west"] as const).map((edge) => {
-              const selected = (draft.deploymentEdges ?? ["south"]).includes(edge);
-              return <button key={edge} type="button" aria-pressed={selected} onClick={() => toggleDeploymentEdge(edge)} className={`h-8 border text-[8px] font-bold uppercase ${selected ? "border-emerald-300 bg-emerald-300/20 text-emerald-50" : "border-slate-700 text-slate-400"}`}>{edge}</button>;
+              const selected = scenarioPropertiesDraft.deploymentEdges.includes(edge);
+              return <button key={edge} type="button" aria-label={`Allow ${edge} deployment`} aria-pressed={selected} onClick={() => setScenarioPropertiesDraft((current) => current ? {
+                ...current,
+                deploymentEdges: selected
+                  ? current.deploymentEdges.filter((item) => item !== edge)
+                  : [...current.deploymentEdges, edge],
+              } : current)} className={`h-8 border text-[8px] font-bold uppercase ${selected ? "border-emerald-300 bg-emerald-300/20 text-emerald-50" : "border-slate-700 text-slate-400"}`}>{edge}</button>;
             })}
           </div>
         </div>
-        <div className="mb-4 border-t border-slate-700 pt-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">Terrain placements</div>
-          {draft.terrainPlacements.map((placement) => <button type="button" key={placement.id} onClick={() => { selectTerrainPlacement(placement.id); setSelectedFire(null); setPlacementKind(null); setPlacementError(null); }} className={`mb-2 block w-full border p-2 text-left text-[10px] ${placement.id === selectedPlacementId ? "border-cyan-300 bg-cyan-950/60 text-cyan-100" : "border-slate-700 bg-slate-950/70 text-slate-300"}`}>
-            <div className="font-bold text-slate-100">{placement.id}</div>
-            <div>{placement.terrainDefinitionId} · {placement.origin.x},{placement.origin.y} · {placement.rotation}°</div>
-          </button>)}
-          {(draft.naturalTerrainPlacements ?? []).map((placement) => <button type="button" key={placement.id} onClick={() => { selectNaturalTerrain(placement.id); setPlacementKind(null); setPlacementError(null); }} className={`mb-2 block w-full border p-2 text-left text-[10px] ${placement.id === selectedNaturalTerrainId ? "border-lime-300 bg-lime-950/50 text-lime-100" : "border-slate-700 bg-slate-950/70 text-slate-300"}`}>
-            <div className="font-bold text-slate-100">{placement.id}</div>
-            <div>{placement.kind} · {placement.position.x},{placement.position.y} · radius {placement.radius.toFixed(2)}</div>
-          </button>)}
+        {scenarioPropertiesError && <div role="alert" className="mt-3 border border-red-500/70 bg-red-950/60 p-2 text-[10px] text-red-100">{scenarioPropertiesError}</div>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={() => setScenarioPropertiesDraft(null)} className="h-9 border border-slate-600 px-4 text-[9px] font-bold uppercase tracking-wider text-slate-200">Cancel</button>
+          <button type="button" onClick={applyScenarioProperties} className="h-9 border border-cyan-400 px-4 text-[9px] font-bold uppercase tracking-wider text-cyan-100">Apply</button>
         </div>
-        {selectedNaturalTerrain && <div className="mb-4 border border-lime-600 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-lime-200">Selected {selectedNaturalTerrain.kind}</div>
-          <div className="mb-1 text-[10px] font-bold text-slate-100">{selectedNaturalTerrain.id}</div>
-          <div className="mb-3 text-[10px] text-slate-400">
-            Center {selectedNaturalTerrain.position.x},{selectedNaturalTerrain.position.y} · {selectedNaturalTerrain.kind === "tree" ? "trunk blocks one square" : `${tacticalNaturalTerrainFootprintCells(selectedNaturalTerrain, draft.map.width, draft.map.height).length} cover squares${selectedNaturalTerrain.kind === "rock" ? " · 3 AP" : " · 2 AP"}`}
+      </div>
+    </div>}
+    {newScenarioDialogOpen && <div role="presentation" className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-6" onPointerDown={(event) => {
+      if (event.target === event.currentTarget && !fileBusy) setNewScenarioDialogOpen(false);
+    }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="new-scenario-title" onKeyDown={(event) => {
+        if (event.key === "Escape" && !fileBusy) setNewScenarioDialogOpen(false);
+      }} className="w-full max-w-md border border-cyan-600 bg-slate-950 p-4 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-4 border-b border-cyan-900 pb-3">
+          <div>
+            <h2 id="new-scenario-title" className="text-sm font-bold uppercase tracking-[0.18em] text-cyan-100">New Scenario</h2>
+            <div className="mt-1 text-[10px] text-slate-400">Create an empty {draft.map.width} × {draft.map.height} scenario with the current drawing precision.</div>
           </div>
-          <label className="mb-3 block text-[9px] font-bold uppercase tracking-wider text-lime-200">Radius
-            <input
-              aria-label={`${naturalTerrainLabel(selectedNaturalTerrain.kind)} radius`}
-              type="number"
-              min="0.25"
-              step="0.25"
-              value={selectedNaturalTerrain.radius}
-              onChange={(event) => updateSelectedNaturalTerrainRadius(Number.parseFloat(event.target.value))}
-              className="mt-1 h-8 w-full border border-lime-700 bg-slate-950 px-2 text-[10px] text-slate-100"
-            />
-          </label>
-          <div className="mb-3 text-[9px] normal-case text-lime-100/70">Use the map shape to move it and the yellow handle to resize it.</div>
-          <button type="button" onClick={deleteSelectedNaturalTerrain} className="h-8 w-full border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete {selectedNaturalTerrain.kind}</button>
-        </div>}
-        {selectedRaisedArea && <div className="mb-4 border border-cyan-600 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">Selected raised area</div>
-          <div className="mb-1 text-[10px] font-bold text-slate-100">{selectedRaisedArea.id}</div>
-          <div className="mb-3 text-[10px] text-slate-400">{selectedRaisedArea.segments.length} boundary segments</div>
-          <button type="button" onClick={deleteSelectedRaisedArea} className="h-8 w-full border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete raised area</button>
-        </div>}
-        {selectedTerrainRegion && <div className={`mb-4 border bg-slate-950/70 p-3 ${selectedTerrainRegion.kind === "close-machinery" ? "border-amber-600" : selectedTerrainRegion.kind === "grass" ? "border-lime-600" : selectedTerrainRegion.kind === "sand" ? "border-yellow-600" : "border-sky-500"}`}>
-          <div className={`mb-2 text-[9px] font-bold uppercase tracking-wider ${selectedTerrainRegion.kind === "close-machinery" ? "text-amber-200" : selectedTerrainRegion.kind === "grass" ? "text-lime-200" : selectedTerrainRegion.kind === "sand" ? "text-yellow-200" : "text-sky-200"}`}>Selected terrain region</div>
-          <div className="mb-1 text-[10px] font-bold text-slate-100">{selectedTerrainRegion.id}</div>
-          <div className="mb-3 text-[10px] text-slate-400">
-            {selectedTerrainRegion.kind === "close-machinery" ? "Closed machinery" : selectedTerrainRegion.kind === "liquid-hydrogen" ? "Liquid hydrogen" : selectedTerrainRegion.kind === "grass" ? "Grass" : selectedTerrainRegion.kind === "sand" ? "Sand" : "Water"} · {selectedTerrainRegion.segments.length} boundary segments
-          </div>
-          {selectedTerrainRegion.kind === "liquid-hydrogen" && <label className="mb-3 flex items-center gap-2 border-t border-slate-700 pt-3 text-[9px] font-bold uppercase tracking-wider text-sky-200">
-            <input aria-label="Liquid hydrogen region filled" type="checkbox" checked={selectedTerrainRegion.settings?.filled ?? true} onChange={(event) => updateSelectedTerrainRegionFilled(event.target.checked)} />
-            Filled with liquid hydrogen
-          </label>}
-          <button type="button" onClick={deleteSelectedTerrainRegion} className="h-8 w-full border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete terrain region</button>
-        </div>}
-        {selectedWall && <div className="mb-4 border border-amber-600 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-amber-200">Selected wall</div>
-          <div className="mb-1 text-[10px] font-bold text-slate-100">{selectedWall.id}</div>
-          <div className="mb-3 text-[10px] text-slate-400">
-            {selectedWall.from.x},{selectedWall.from.y} to {selectedWall.to.x},{selectedWall.to.y}
-          </div>
-          {(selectedWall.portals?.length ?? 0) > 0 && <div className="mb-3 border border-red-700/70 bg-red-950/40 p-2 text-[9px] text-red-200">
-            Deleting this wall also removes {selectedWall.portals?.length} attached {selectedWall.portals?.length === 1 ? "portal" : "portals"}.
-          </div>}
-          <button type="button" onClick={deleteSelectedWall} className="h-8 w-full border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete wall</button>
-        </div>}
-        {selectedPortal && selectedPortalOwner && <div className="mb-4 border border-amber-500 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-amber-200">Selected portal</div>
-          <div className="mb-1 text-[10px] font-bold text-slate-100">{selectedPortal.id}</div>
-          <div className="mb-3 text-[10px] text-slate-400">
-            {selectedPortal.kind === "iris-valve" ? "Wall Iris Valve" : "Door"} on {selectedPortalOwner.id}
-          </div>
-          <button type="button" onClick={deleteSelectedPortal} className="h-8 w-full border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete portal</button>
-        </div>}
-        {selectedElevationTransition && <div className="mb-4 border border-purple-500 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-purple-200">Selected elevation transition</div>
-          <div className="mb-1 text-[10px] font-bold text-slate-100">{selectedElevationTransition.id}</div>
-          <div className="mb-3 text-[10px] text-slate-400">
-            {selectedElevationTransition.kind} · lower {selectedElevationTransition.lower.x},{selectedElevationTransition.lower.y} · upper {selectedElevationTransition.upper.x},{selectedElevationTransition.upper.y}
-          </div>
-          <button type="button" onClick={deleteSelectedElevationTransition} className="h-8 w-full border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete transition</button>
-        </div>}
-        {selectedPlacement && <div className="mb-4 border border-cyan-700 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">Selected placement</div>
-          <div className="mb-2 text-[10px] text-slate-300">{selectedPlacement.id}</div>
-          <div className="mb-2 grid grid-cols-2 gap-2">
-            {(["x", "y"] as const).map((axis) => <label key={axis} className="text-[9px] font-bold uppercase tracking-wider text-cyan-200">{axis}
-              <input type="number" value={selectedPlacement.origin[axis]} onChange={(event) => moveTerrain(selectedPlacement.id, { ...selectedPlacement.origin, [axis]: Number.parseInt(event.target.value, 10) || 0 })} className="mt-1 h-8 w-full border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 outline-none focus:border-cyan-400" />
-            </label>)}
-          </div>
-          {selectedIsLiquidHydrogen && <div className="mb-3 border-t border-slate-700 pt-3">
-            <label className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-cyan-200">
-              <input type="checkbox" checked={selectedPlacement.terrainSettings?.filled ?? true} onChange={(event) => updateSelectedLiquidHydrogen(event.target.checked)} /> Filled with liquid hydrogen
-            </label>
-          </div>}
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={rotateSelectedPlacement} className="h-8 border border-amber-400 text-[9px] font-bold uppercase text-amber-100">Rotate 90°</button>
-            <button type="button" onClick={deleteSelectedPlacement} className="h-8 border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete</button>
-          </div>
-        </div>}
-        {selectedFire && <div className="mb-4 border border-orange-500 bg-slate-950/70 p-3">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-orange-200">Selected fire</div>
-          <div className="mb-3 text-[10px] text-slate-300">Square {selectedFire.x},{selectedFire.y}</div>
-          <button type="button" onClick={deleteSelectedFire} className="h-8 w-full border border-red-400 text-[9px] font-bold uppercase text-red-100">Delete fire</button>
-        </div>}
-        {placementError && <div className="mb-3 border border-amber-500/70 bg-amber-950/60 p-2 text-[10px] text-amber-100">{placementError}</div>}
-        {victoryTaskRequired && <div className="mb-3 border border-amber-500/70 bg-amber-950/60 p-2 text-[10px] text-amber-100">This draft has no victory task. Select a console and add a victory task before saving or playtesting.</div>}
-        {resolutionError && <div className="mb-3 border border-red-500/70 bg-red-950/60 p-2 text-[10px] text-red-100">{resolutionError}</div>}
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" disabled={!dirty} onClick={() => { setDraft(cloneTacticalScenarioDefinition(baseline)); setConsoleVictory(cloneTacticalConsoleVictoryDefinition(consoleVictoryBaseline)); clearEditorSelection(); }} className="h-9 border border-slate-500 text-[9px] font-bold uppercase tracking-wider text-slate-200 disabled:cursor-not-allowed disabled:opacity-40">Discard draft</button>
-          <button type="button" disabled={draftBlocked || draft.map.width < 1 || draft.map.height < 1} onClick={beginPlaytest} className="h-9 border border-emerald-400 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Playtest draft</button>
+          <button type="button" aria-label="Close New Scenario" disabled={fileBusy} onClick={() => setNewScenarioDialogOpen(false)} className="h-8 w-8 border border-slate-700 text-slate-300 hover:border-cyan-500 hover:text-cyan-100 disabled:opacity-40">×</button>
         </div>
-      </aside>
-      <section className="relative min-h-0 overflow-hidden">
+        <label className="block text-[9px] font-bold uppercase tracking-wider text-cyan-200">Scenario name
+          <input autoFocus aria-label="New scenario name" value={newScenarioName} onChange={(event) => setNewScenarioName(event.target.value)} onKeyDown={(event) => {
+            if (event.key === "Enter" && newScenarioName.trim() && !fileBusy && draft.map.width > 0 && draft.map.height > 0) {
+              void createNewScenario();
+              event.preventDefault();
+            }
+          }} placeholder="Boarding action" className="mt-1 h-9 w-full border border-cyan-800 bg-[#071019] px-3 text-xs normal-case tracking-normal text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-400" />
+        </label>
+        {fileMessage && <div role={fileMessage.kind === "error" ? "alert" : "status"} className={`mt-3 border p-2 text-[10px] ${fileMessage.kind === "error" ? "border-red-500/70 bg-red-950/60 text-red-100" : "border-emerald-500/70 bg-emerald-950/50 text-emerald-100"}`}>{fileMessage.text}</div>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={fileBusy} onClick={() => setNewScenarioDialogOpen(false)} className="h-9 border border-slate-600 px-4 text-[9px] font-bold uppercase tracking-wider text-slate-200 disabled:opacity-40">Cancel</button>
+          <button type="button" disabled={fileBusy || !newScenarioName.trim() || draft.map.width < 1 || draft.map.height < 1} onClick={() => void createNewScenario()} className="h-9 border border-cyan-400 px-4 text-[9px] font-bold uppercase tracking-wider text-cyan-100 disabled:opacity-40">{fileBusy ? "Creating…" : "Create"}</button>
+        </div>
+      </div>
+    </div>}
+    {saveAsDialogOpen && <div role="presentation" className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-6" onPointerDown={(event) => {
+      if (event.target === event.currentTarget && !fileBusy) setSaveAsDialogOpen(false);
+    }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="save-as-scenario-title" onKeyDown={(event) => {
+        if (event.key === "Escape" && !fileBusy) setSaveAsDialogOpen(false);
+      }} className="w-full max-w-md border border-emerald-600 bg-slate-950 p-4 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-4 border-b border-emerald-900 pb-3">
+          <div>
+            <h2 id="save-as-scenario-title" className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-100">Save Scenario As</h2>
+            <div className="mt-1 text-[10px] text-slate-400">Create a new scenario file without overwriting an existing scenario.</div>
+          </div>
+          <button type="button" aria-label="Close Save Scenario As" disabled={fileBusy} onClick={() => setSaveAsDialogOpen(false)} className="h-8 w-8 border border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-100 disabled:opacity-40">×</button>
+        </div>
+        <label className="block text-[9px] font-bold uppercase tracking-wider text-emerald-200">Scenario name
+          <input autoFocus aria-label="New scenario name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} onKeyDown={(event) => {
+            if (event.key === "Enter" && saveAsName.trim() && !fileBusy && !draftBlocked) {
+              void saveScenarioAs();
+              event.preventDefault();
+            }
+          }} placeholder="Boarding action" className="mt-1 h-9 w-full border border-emerald-800 bg-[#071019] px-3 text-xs normal-case tracking-normal text-slate-100 outline-none placeholder:text-slate-600 focus:border-emerald-400" />
+        </label>
+        {fileMessage && <div role={fileMessage.kind === "error" ? "alert" : "status"} className={`mt-3 border p-2 text-[10px] ${fileMessage.kind === "error" ? "border-red-500/70 bg-red-950/60 text-red-100" : "border-emerald-500/70 bg-emerald-950/50 text-emerald-100"}`}>{fileMessage.text}</div>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={fileBusy} onClick={() => setSaveAsDialogOpen(false)} className="h-9 border border-slate-600 px-4 text-[9px] font-bold uppercase tracking-wider text-slate-200 disabled:opacity-40">Cancel</button>
+          <button type="button" disabled={fileBusy || !saveAsName.trim() || draftBlocked} onClick={() => void saveScenarioAs()} className="h-9 border border-emerald-400 px-4 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:opacity-40">{fileBusy ? "Saving…" : "Save As"}</button>
+        </div>
+      </div>
+    </div>}
+    <div className="flex min-h-0 flex-1">
+      <section aria-label="Editor canvas" className="relative h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         <TacticalEditorViewportProvider key={`${draft.map.width}:${draft.map.height}`} map={draft.map}>
         <PluginHudLayer hiddenHuds={[
-          ...(terrainPaletteLayout.visible ? [] : [{ id: "terrain-palette", title: "Terrain Palette" }]),
+          ...((selectedPrimitive || placementKind === CIRCLE_TOOL_ID) && !circlePropertiesLayout.visible ? [{ id: "legacy-circle-properties", title: "Legacy Circle Properties" }] : []),
           ...(enemyPaletteLayout.visible ? [] : [{ id: "enemy-palette", title: "Enemy Palette" }]),
           ...(selectedHasTerminal && !consoleEditorLayout.visible ? [{ id: "console-editor", title: selectedIsInteractiveHuman ? "Human Interaction Editor" : "Console Editor" }] : []),
           ...(selectedEnemy && !enemyEditorLayout.visible ? [{ id: "enemy-editor", title: "Enemy Editor" }] : []),
           ...(navigationLayout.visible ? [] : [{ id: "navigation", title: "Navigation" }]),
           ...(tracingTemplateLayout.visible ? [] : [{ id: "tracing-template", title: "Tracing Template" }]),
+          ...(toolsLayout.visible ? [] : [{ id: "tools", title: "Tools" }]),
+          ...(layersLayout.visible ? [] : [{ id: "layers", title: "Layers" }]),
+          ...(selectedArea && !areaPropertiesLayout.visible ? [{ id: "area-properties", title: "Area Properties" }] : []),
+          ...(editableObjectProperties && !objectPropertiesLayout.visible ? [{ id: "object-properties", title: "Object Properties" }] : []),
         ]} onRestoreHud={(id) => {
           if (id === "console-editor") setConsoleEditorLayout((current) => ({ ...current, visible: true }));
           else if (id === "enemy-editor") setEnemyEditorLayout((current) => ({ ...current, visible: true }));
           else if (id === "enemy-palette") setEnemyPaletteLayout((current) => ({ ...current, visible: true }));
           else if (id === "navigation") setNavigationLayout((current) => ({ ...current, visible: true }));
           else if (id === "tracing-template") setTracingTemplateLayout((current) => ({ ...current, visible: true }));
-          else setTerrainPaletteLayout((current) => ({ ...current, visible: true }));
+          else if (id === "tools") setToolsLayout((current) => ({ ...current, visible: true }));
+          else if (id === "layers") setLayersLayout((current) => ({ ...current, visible: true }));
+          else if (id === "area-properties") setAreaPropertiesLayout((current) => ({ ...current, visible: true }));
+          else if (id === "object-properties") setObjectPropertiesLayout((current) => ({ ...current, visible: true }));
+          else if (id === "legacy-circle-properties") setCirclePropertiesLayout((current) => ({ ...current, visible: true }));
         }} className="p-5">
           <div className="absolute left-7 top-7 z-10 border border-cyan-700 bg-slate-950/90 px-3 py-2 text-[9px] uppercase tracking-wider text-cyan-100">Draft preview · {draft.map.width}×{draft.map.height}</div>
           <div className="h-full w-full overflow-hidden border border-cyan-900 bg-black shadow-[0_0_30px_rgba(8,145,178,0.12)]">
             <DraftPreview
-              definition={draft}
+              definition={previewDefinition}
+              handToolActive={primaryTool === "hand"}
+              nodeEditActive={primaryTool === "node"}
+              selectedAreaAnchor={selectedAreaAnchor}
               selectedPlacementId={selectedPlacementId}
               selectedEnemyId={selectedEnemyId}
               selectedWallId={selectedWallId}
@@ -3865,6 +5275,9 @@ const TacticalScenarioEditorClient = () => {
               circleDraft={circleDraft}
               rampDraft={rampDraft}
               dragRaisedAreaControl={dragRaisedAreaControl}
+              dragAreaAnchor={dragAreaAnchor}
+              dragAreaCubicControl={dragAreaCubicControl}
+              dragConstrainedArea={dragConstrainedArea}
               dragCirclePrimitive={dragCirclePrimitive}
               dragNaturalTerrain={dragNaturalTerrain}
               dragWallEndpoint={dragWallEndpoint}
@@ -3875,9 +5288,15 @@ const TacticalScenarioEditorClient = () => {
               tracingTemplateEditing={tracingTemplateEditing}
               dragPlacement={dragPlacement}
               dragEnemy={dragEnemy}
-              selectPlacement={selectTerrainPlacement}
-              selectEnemy={selectEnemy}
+              selectPlacement={(id) => {
+                if (id && lockedLayerKeys.has(tacticalEditorLayerKey("terrain-placement", id))) return;
+                selectTerrainPlacement(id);
+              }}
+              selectEnemy={(id) => {
+                selectEnemy(id);
+              }}
               selectWall={(id) => {
+                if (id && lockedLayerKeys.has(tacticalEditorLayerKey("wall", id))) return;
                 setSelectedWallId(id);
                 if (id) {
                   setSelectedRaisedAreaId(null);
@@ -3888,7 +5307,17 @@ const TacticalScenarioEditorClient = () => {
                 }
               }}
               selectRaisedArea={(id) => {
+                if (!id || selectedAreaAnchor?.areaId !== id) setSelectedAreaAnchor(null);
+                const kind = id && (draft.drawnAreas ?? []).some((area) => area.id === id)
+                  ? "area"
+                  : id && (draft.drawnTerrainRegions ?? []).some((region) => region.id === id)
+                    ? "terrain-region"
+                    : "raised-area";
+                if (id && lockedLayerKeys.has(tacticalEditorLayerKey(kind, id))) return;
                 setSelectedRaisedAreaId(id);
+                setSelectedTerrainRegionId(id && kind === "terrain-region" ? id : null);
+                if (id && kind === "area") setAreaPropertiesLayout((current) => ({ ...current, visible: true }));
+                if (id && kind === "terrain-region") setObjectPropertiesLayout((current) => ({ ...current, visible: true }));
                 if (id) {
                   setSelectedWallId(null);
                   setSelectedPrimitiveId(null);
@@ -3897,9 +5326,18 @@ const TacticalScenarioEditorClient = () => {
                   setSelectedPortalId(null);
                 }
               }}
-              selectPrimitive={selectTerrainPrimitive}
-              selectNaturalTerrain={selectNaturalTerrain}
+              selectAreaAnchor={setSelectedAreaAnchor}
+              insertAreaAnchor={insertCompletedAreaAnchor}
+              selectPrimitive={(id) => {
+                if (id && lockedLayerKeys.has(tacticalEditorLayerKey("primitive", id))) return;
+                selectTerrainPrimitive(id);
+              }}
+              selectNaturalTerrain={(id) => {
+                if (id && lockedLayerKeys.has(tacticalEditorLayerKey("natural-terrain", id))) return;
+                selectNaturalTerrain(id);
+              }}
               selectElevationTransition={(id) => {
+                if (id && lockedLayerKeys.has(tacticalEditorLayerKey("elevation-transition", id))) return;
                 setSelectedElevationTransitionId(id);
                 if (id) {
                   setSelectedWallId(null);
@@ -3909,8 +5347,14 @@ const TacticalScenarioEditorClient = () => {
                   setSelectedPortalId(null);
                 }
               }}
-              selectPortal={setSelectedPortalId}
-              selectFire={setSelectedFire}
+              selectPortal={(id) => {
+                if (id && lockedLayerKeys.has(tacticalEditorLayerKey("portal", id))) return;
+                setSelectedPortalId(id);
+              }}
+              selectFire={(point) => {
+                if (point && lockedLayerKeys.has(tacticalEditorLayerKey("fire", `${point.x}:${point.y}`))) return;
+                setSelectedFire(point);
+              }}
               hoverPlacement={setPlacementHover}
               hoverEnemy={setEnemyHover}
               hoverPortal={setPortalHover}
@@ -3923,33 +5367,80 @@ const TacticalScenarioEditorClient = () => {
               updateCircle={updateCircle}
               finishCircle={finishCircle}
               cancelCircle={() => setCircleDraft(null)}
-              beginCirclePrimitiveDrag={beginCirclePrimitiveDrag}
+              beginCirclePrimitiveDrag={(id, kind) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("primitive", id))) return;
+                beginCirclePrimitiveDrag(id, kind);
+              }}
               updateCirclePrimitiveDrag={updateCirclePrimitiveDrag}
               finishCirclePrimitiveDrag={() => setDragCirclePrimitive(null)}
-              beginNaturalTerrainDrag={beginNaturalTerrainDrag}
+              beginNaturalTerrainDrag={(id, kind, point) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("natural-terrain", id))) return;
+                beginNaturalTerrainDrag(id, kind, point);
+              }}
               updateNaturalTerrainDrag={updateNaturalTerrainDrag}
               finishNaturalTerrainDrag={() => setDragNaturalTerrain(null)}
-              addRaisedAreaVertex={addRaisedAreaVertex}
+              createRectangleArea={createRectangleArea}
+              commitPenNode={commitPenNode}
+              closePenArea={closePenArea}
               hoverRaisedArea={hoverRaisedArea}
               beginOrFinishRamp={beginOrFinishRamp}
-              beginRaisedAreaControlDrag={beginRaisedAreaControlDrag}
+              beginRaisedAreaControlDrag={(owner, index) => {
+                if (owner.kind !== "draft") {
+                  const kind = owner.kind === "area" ? "area" : owner.kind === "raised" ? "raised-area" : "terrain-region";
+                  if (lockedLayerKeys.has(tacticalEditorLayerKey(kind, owner.id))) return;
+                }
+                beginRaisedAreaControlDrag(owner, index);
+              }}
               reshapeRaisedAreaControl={reshapeRaisedAreaControl}
               finishRaisedAreaControlDrag={() => setDragRaisedAreaControl(null)}
               cancelRaisedAreaControlDrag={cancelRaisedAreaControlDrag}
+              beginAreaAnchorDrag={(id, index) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("area", id))) return;
+                beginAreaAnchorDrag(id, index);
+              }}
+              moveAreaAnchor={moveAreaAnchor}
+              finishAreaAnchorDrag={() => setDragAreaAnchor(null)}
+              cancelAreaAnchorDrag={cancelAreaAnchorDrag}
+              beginAreaCubicControlDrag={(id, index, control) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("area", id))) return;
+                beginAreaCubicControlDrag(id, index, control);
+              }}
+              moveAreaCubicControl={moveAreaCubicControl}
+              finishAreaCubicControlDrag={() => setDragAreaCubicControl(null)}
+              cancelAreaCubicControlDrag={cancelAreaCubicControlDrag}
+              beginConstrainedAreaDrag={(id, kind, point) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("area", id))) return;
+                beginConstrainedAreaDrag(id, kind, point);
+              }}
+              updateConstrainedAreaDrag={updateConstrainedAreaDrag}
+              finishConstrainedAreaDrag={() => setDragConstrainedArea(null)}
+              cancelConstrainedAreaDrag={cancelConstrainedAreaDrag}
               placeWallPortal={placeWallPortal}
-              beginWallEndpointDrag={beginWallEndpointDrag}
+              beginWallEndpointDrag={(id, endpoint) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("wall", id))) return;
+                beginWallEndpointDrag(id, endpoint);
+              }}
               resizeWallEndpoint={resizeWallEndpoint}
               finishWallEndpointDrag={() => setDragWallEndpoint(null)}
               cancelWallEndpointDrag={cancelWallEndpointDrag}
-              beginWallMove={beginWallMove}
+              beginWallMove={(id, point) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("wall", id))) return;
+                beginWallMove(id, point);
+              }}
               moveWall={moveWall}
               finishWallMove={() => setDragWallMove(null)}
               cancelWallMove={cancelWallMove}
-              beginWallControlDrag={beginWallControlDrag}
+              beginWallControlDrag={(id) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("wall", id))) return;
+                beginWallControlDrag(id);
+              }}
               reshapeWallControl={reshapeWallControl}
               finishWallControlDrag={() => setDragWallControl(null)}
               cancelWallControlDrag={cancelWallControlDrag}
-              beginWallPortalDrag={beginWallPortalDrag}
+              beginWallPortalDrag={(id) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("portal", id))) return;
+                beginWallPortalDrag(id);
+              }}
               moveWallPortal={moveWallPortal}
               finishWallPortalDrag={() => setDragWallPortal(null)}
               cancelWallPortalDrag={cancelWallPortalDrag}
@@ -3957,8 +5448,14 @@ const TacticalScenarioEditorClient = () => {
               transformTracingTemplate={transformTracingTemplate}
               finishTracingTemplateDrag={() => setDragTracingTemplate(null)}
               cancelTracingTemplateDrag={cancelTracingTemplateDrag}
-              beginDrag={setDragPlacement}
-              beginEnemyDrag={setDragEnemy}
+              beginDrag={(drag) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("terrain-placement", drag.id))) return;
+                setDragPlacement(drag);
+              }}
+              beginEnemyDrag={(drag) => {
+                if (lockedLayerKeys.has(tacticalEditorLayerKey("enemy", drag.id))) return;
+                setDragEnemy(drag);
+              }}
               endDrag={() => {
                 setDragPlacement(null);
                 setDragEnemy(null);
@@ -3969,8 +5466,231 @@ const TacticalScenarioEditorClient = () => {
               moveEnemy={moveEnemy}
             />
           </div>
-          <TacticalNavigationHud layout={navigationLayout} mode="editor" onLayoutChange={setNavigationLayout} />
-          <FloatingPluginHud title="Tracing Template" layout={tracingTemplateLayout} onLayoutChange={setTracingTemplateLayout} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+          <TacticalNavigationHud layout={navigationLayout} mode="editor" onLayoutChange={persistNavigationLayout} />
+          <FloatingPluginHud title="Tools" layout={toolsLayout} onLayoutChange={persistToolsLayout} className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+            <div role="toolbar" aria-label="Primary drawing tools" aria-orientation="horizontal" className="flex items-center gap-1 py-1">
+              <button
+                type="button"
+                aria-label="Select tool"
+                aria-pressed={primaryTool === "select" && placementKind === null && enemyKind === null}
+                onClick={() => { setOpenToolGroup(null); activatePrimaryTool("select"); }}
+                className={`group relative grid h-9 w-9 place-items-center border transition-colors ${primaryTool === "select" && placementKind === null && enemyKind === null ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-100"}`}
+              >
+                <MousePointer2 size={17} aria-hidden="true" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">Select · V</span>
+              </button>
+              <button
+                type="button"
+                aria-label="Node edit tool"
+                aria-pressed={primaryTool === "node"}
+                onClick={() => { setOpenToolGroup(null); activatePrimaryTool("node"); }}
+                className={`group relative grid h-9 w-9 place-items-center border transition-colors ${primaryTool === "node" ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-100"}`}
+              >
+                <Spline size={18} aria-hidden="true" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">Node edit · N</span>
+              </button>
+              <button
+                type="button"
+                aria-label="Hand tool"
+                aria-pressed={primaryTool === "hand"}
+                onClick={() => { setOpenToolGroup(null); activatePrimaryTool("hand"); }}
+                className={`group relative grid h-9 w-9 place-items-center border transition-colors ${primaryTool === "hand" ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-100"}`}
+              >
+                <Hand size={17} aria-hidden="true" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">Hand · H</span>
+              </button>
+              <button
+                type="button"
+                title="Drawing Settings"
+                aria-label="Open Drawing Settings"
+                aria-expanded={openToolGroup === "drawing-settings"}
+                onClick={() => setOpenToolGroup((current) => current === "drawing-settings" ? null : "drawing-settings")}
+                className={`group relative grid h-9 w-9 place-items-center border transition-colors ${openToolGroup === "drawing-settings" ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-100"}`}
+              >
+                <Settings2 size={17} aria-hidden="true" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">Drawing Settings</span>
+              </button>
+              <div className="mx-1 h-7 w-px bg-slate-700" aria-hidden="true" />
+              {EDITOR_DRAWING_TOOL_GROUPS.map((group) => {
+                const Icon = group.icon;
+                const expanded = openToolGroup === group.id;
+                const containsActiveTool = group.tools.some((tool) => tool.id === placementKind);
+                return <button
+                  key={group.id}
+                  type="button"
+                  title={group.label}
+                  aria-label={`Open ${group.label} tools`}
+                  aria-expanded={expanded}
+                  onClick={() => setOpenToolGroup((current) => current === group.id ? null : group.id)}
+                  className={`group relative grid h-9 w-9 place-items-center border transition-colors ${expanded || containsActiveTool ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-100"}`}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">{group.label}</span>
+                </button>;
+              })}
+              {selectedPlacement && <button
+                type="button"
+                title={`Rotate ${selectedPlacement.id} 90° · R`}
+                aria-label="Rotate selected placement 90 degrees"
+                onClick={rotateSelectedPlacement}
+                className="group relative grid h-9 w-9 place-items-center border border-amber-500 text-amber-200 transition-colors hover:border-amber-200 hover:bg-amber-300/20 hover:text-amber-50"
+              >
+                <RotateCw size={17} aria-hidden="true" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-amber-500 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-amber-50 shadow-xl group-hover:block group-focus-visible:block">Rotate selected · R</span>
+              </button>}
+              <div className="mx-1 h-7 w-px bg-slate-700" aria-hidden="true" />
+              <button
+                type="button"
+                aria-label="Open layers"
+                aria-pressed={layersLayout.visible}
+                onClick={() => setLayersLayout((current) => ({ ...current, visible: true }))}
+                className={`group relative grid h-9 w-9 place-items-center border transition-colors ${layersLayout.visible ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-100"}`}
+              >
+                <Layers3 size={17} aria-hidden="true" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">Layers</span>
+              </button>
+            </div>
+            {openToolGroup === "drawing-settings" && <div role="group" aria-label="Drawing settings" className="grid max-w-[36rem] grid-cols-[minmax(10rem,1fr)_6rem_6rem] gap-2 border-t border-slate-700 py-2">
+              <TacticalDrawingPrecisionControl />
+              <label className="block font-bold text-cyan-200">Map width
+                <input aria-label="Map width" type="number" min="1" value={draft.map.width} onChange={(event) => updateDimension("width", event.target.value)} className="mt-1 h-8 w-full border border-cyan-700 bg-slate-950 px-2 text-[9px] text-cyan-50 outline-none focus:border-cyan-400" />
+              </label>
+              <label className="block font-bold text-cyan-200">Map height
+                <input aria-label="Map height" type="number" min="1" value={draft.map.height} onChange={(event) => updateDimension("height", event.target.value)} className="mt-1 h-8 w-full border border-cyan-700 bg-slate-950 px-2 text-[9px] text-cyan-50 outline-none focus:border-cyan-400" />
+              </label>
+            </div>}
+            {selectedIsLiquidHydrogen && <div role="group" aria-label="Selected liquid hydrogen settings" className="max-w-[36rem] border-t border-sky-800 py-2">
+              <label className="flex h-8 items-center gap-2 border border-sky-700 px-2 font-bold text-sky-200">
+                <input aria-label="Filled with liquid hydrogen" type="checkbox" checked={selectedPlacement?.terrainSettings?.filled ?? true} onChange={(event) => updateSelectedLiquidHydrogen(event.target.checked)} /> Filled with liquid hydrogen
+              </label>
+            </div>}
+            {expandedToolGroup && <div className="border-t border-slate-700 py-1.5">
+              <div className="mb-1 px-1 text-[9px] normal-case tracking-normal text-slate-400">{expandedToolGroup.label}</div>
+              <div role="toolbar" aria-label={`${expandedToolGroup.label} tools`} aria-orientation="horizontal" className="flex max-w-[36rem] flex-wrap gap-1">
+                {expandedToolGroup.tools.map((tool) => {
+                  const Icon = tool.icon;
+                  const active = placementKind === tool.id;
+                  return <button
+                    key={tool.id}
+                    type="button"
+                    title={tool.label}
+                    aria-label={`Choose ${tool.label} tool`}
+                    aria-pressed={active}
+                    onClick={() => activateDrawingTool(tool.id)}
+                    className={`group relative grid h-9 w-9 place-items-center border transition-colors ${active ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-slate-700 text-slate-400 hover:border-cyan-500 hover:text-cyan-100"}`}
+                  >
+                    <Icon size={18} aria-hidden="true" />
+                    <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">{tool.label}</span>
+                  </button>;
+                })}
+              </div>
+            </div>}
+            {raisedAreaDraft && <div className="max-w-[36rem] border-t border-cyan-800 px-1 py-2 normal-case leading-relaxed tracking-normal text-cyan-100">
+              <div>Click for corners. Click and drag a point to create curve handles. Click the cyan start, double-click, or press Enter to close. Backspace removes the last point.</div>
+              <div className="mt-2 flex gap-2">
+                <button type="button" disabled={raisedAreaDraft.segments.length < 2} onClick={closePenArea} className="h-8 flex-1 border border-emerald-500 px-3 font-bold uppercase tracking-wider text-emerald-100 disabled:opacity-35">Finish area</button>
+                <button type="button" onClick={() => { setRaisedAreaDraft(null); setDragRaisedAreaControl(null); setPlacementError(null); }} className="h-8 flex-1 border border-red-500 px-3 font-bold uppercase tracking-wider text-red-100">Cancel outline</button>
+              </div>
+            </div>}
+            {placementKind === PEN_AREA_TOOL_ID && !raisedAreaDraft && <div className="max-w-[36rem] border-t border-cyan-800 px-2 py-2 text-[10px] normal-case leading-relaxed tracking-normal text-cyan-100">Click to begin a path. Click for straight corners; click and drag for curved points.</div>}
+            {placementKind === RECTANGLE_AREA_TOOL_ID && <div className="max-w-[36rem] border-t border-cyan-800 px-2 py-2 text-[10px] normal-case leading-relaxed tracking-normal text-cyan-100">Drag from one corner to the opposite corner. Hold Shift while dragging to draw a square.</div>}
+            {placementKind === CIRCLE_AREA_TOOL_ID && <div className="max-w-[36rem] border-t border-cyan-800 px-2 py-2 text-[10px] normal-case leading-relaxed tracking-normal text-cyan-100">Drag from the center to the radius. The completed circle remains circular and uses the standard Area Properties.</div>}
+            {rampDraft && <div className="max-w-[36rem] border-t border-purple-700 px-2 py-2 text-[10px] normal-case leading-relaxed tracking-normal text-purple-100">
+              Move straight outward over at least two squares. Finish on lower terrain for a ramp or on a matching raised platform for a flat bridge.
+              <button type="button" onClick={() => { setRampDraft(null); setPlacementError(null); }} className="mt-2 h-8 w-full border border-red-400 font-bold uppercase text-red-100">Cancel ramp</button>
+            </div>}
+          </FloatingPluginHud>
+          {selectedArea && <FloatingPluginHud title="Area Properties" layout={areaPropertiesLayout} onLayoutChange={persistAreaPropertiesLayout} className="w-80 font-mono text-[10px] uppercase tracking-wider text-(--hud-text)">
+            <div className="py-1">
+              <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-700 pb-2">
+                <div>
+                  <div className="font-bold text-cyan-100">{selectedArea.id}</div>
+                  <div className="mt-1 normal-case tracking-normal text-slate-400">Surface, level, boundary, and deployment use are independent.</div>
+                </div>
+                <LandPlot size={22} className="shrink-0 text-cyan-300" aria-hidden="true" />
+              </div>
+              <div className="mb-3 border border-cyan-900 bg-cyan-950/30 p-2 normal-case leading-relaxed tracking-normal text-cyan-100">{selectedArea.geometry?.kind === "circle"
+                ? "Drag the cyan center to move the circle or the orange radius handle to resize it. It always remains circular."
+                : selectedArea.geometry?.kind === "rectangle"
+                  ? "Drag the cyan center to move the rectangle or an orange corner to resize it. It always remains rectangular."
+                  : primaryTool === "node"
+                    ? "Drag cyan points to edit the Pen outline. Double-click a segment to add a point. Select an amber point and press Delete or Backspace to remove it."
+                    : "Drag cyan points or purple curve handles to reshape the Pen area. Choose Node Edit (N) to add or remove points."}</div>
+              <label className="mb-3 block font-bold text-cyan-200">Surface
+                <select aria-label="Area surface fill" value={selectedArea.surface} onChange={(event) => updateSelectedArea({ surface: event.target.value as NonNullable<TacticalScenarioDefinitionFile["drawnAreas"]>[number]["surface"] })} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-[11px] normal-case tracking-normal text-slate-100">
+                  <option value="none">None</option>
+                  <option value="grass">Grass</option>
+                  <option value="sand">Sand</option>
+                  <option value="water">Water</option>
+                  <option value="close-machinery">Closed machinery</option>
+                  <option value="liquid-hydrogen">Liquid hydrogen</option>
+                </select>
+              </label>
+              <div className="mb-3 grid grid-cols-[1fr_auto_auto] items-end gap-1">
+                <label className="block font-bold text-cyan-200">Level
+                  <input aria-label="Area elevation level" type="number" min="0" step="0.5" value={selectedArea.elevation} onChange={(event) => updateSelectedArea({ elevation: Number.parseFloat(event.target.value) })} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-[11px] text-slate-100" />
+                </label>
+                <button type="button" aria-label="Lower area by half level" disabled={selectedArea.elevation <= 0} onClick={() => updateSelectedArea({ elevation: Math.max(0, selectedArea.elevation - 0.5) })} className="h-9 w-9 border border-slate-600 text-lg text-cyan-100 disabled:opacity-35">−</button>
+                <button type="button" aria-label="Raise area by half level" onClick={() => updateSelectedArea({ elevation: selectedArea.elevation + 0.5 })} className="h-9 w-9 border border-slate-600 text-lg text-cyan-100">+</button>
+              </div>
+              <label className="mb-3 block font-bold text-cyan-200">Boundary
+                <select aria-label="Area boundary" value={selectedArea.boundary} onChange={(event) => updateSelectedArea({ boundary: event.target.value as NonNullable<TacticalScenarioDefinitionFile["drawnAreas"]>[number]["boundary"] })} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-[11px] normal-case tracking-normal text-slate-100">
+                  <option value="none">None</option>
+                  <option value="wall">Wall around boundary</option>
+                </select>
+              </label>
+              <label className="mb-3 block font-bold text-cyan-200">Area use
+                <select aria-label="Area use" value={selectedArea.deployment ? "crew-deployment" : "normal"} onChange={(event) => updateSelectedArea({ deployment: event.target.value === "crew-deployment" || undefined })} className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-[11px] normal-case tracking-normal text-slate-100">
+                  <option value="normal">Normal area</option>
+                  <option value="crew-deployment">Crew deployment area</option>
+                </select>
+              </label>
+              {selectedArea.surface === "liquid-hydrogen" && <label className="mb-3 flex h-9 items-center gap-2 border border-sky-700 px-2 font-bold text-sky-200">
+                <input aria-label="Area liquid hydrogen filled" type="checkbox" checked={selectedArea.settings?.filled ?? true} onChange={(event) => updateSelectedArea({ settings: { ...selectedArea.settings, filled: event.target.checked } })} /> Filled
+              </label>}
+              <div className="mb-3 border border-cyan-900 bg-cyan-950/30 p-2 normal-case leading-relaxed tracking-normal text-cyan-100/80">Changes apply immediately. Select this area again from the map or Layers panel to reopen these controls.</div>
+              <button type="button" onClick={deleteSelectedArea} className="h-9 w-full border border-red-500 font-bold text-red-100">Delete area</button>
+            </div>
+          </FloatingPluginHud>}
+          {editableObjectProperties && <FloatingPluginHud title="Object Properties" layout={objectPropertiesLayout} onLayoutChange={persistObjectPropertiesLayout} className="w-64 font-mono text-[9px] uppercase tracking-wider text-(--hud-text)">
+            <div className="max-h-[65vh] overflow-y-auto py-1 pr-1">
+              {selectedNaturalTerrain && <>
+                <div className="mb-2 font-bold text-lime-200">{naturalTerrainLabel(selectedNaturalTerrain.kind)}</div>
+                <div className="mb-3 normal-case text-(--hud-text-dim)">Center {selectedNaturalTerrain.position.x},{selectedNaturalTerrain.position.y} · {selectedNaturalTerrain.kind === "tree" ? "trunk blocks one square" : `${tacticalNaturalTerrainFootprintCells(selectedNaturalTerrain, draft.map.width, draft.map.height).length} cover squares${selectedNaturalTerrain.kind === "rock" ? " · 3 AP" : " · 2 AP"}`}</div>
+                <label className="mb-3 block font-bold text-lime-200">Radius
+                  <input aria-label={`${naturalTerrainLabel(selectedNaturalTerrain.kind)} radius`} type="number" min="0.25" step="0.25" value={selectedNaturalTerrain.radius} onChange={(event) => updateSelectedNaturalTerrainRadius(Number.parseFloat(event.target.value))} className="mt-1 h-8 w-full border border-lime-700 bg-slate-950 px-2 text-[10px] text-slate-100" />
+                </label>
+                <div className="mb-3 normal-case text-lime-100/70">Move and resize directly on the map. Delete or Backspace also removes the selection.</div>
+                <button type="button" onClick={deleteSelectedNaturalTerrain} className="h-8 w-full border border-red-500 font-bold text-red-100">Delete {selectedNaturalTerrain.kind}</button>
+              </>}
+              {selectedTerrainRegion?.kind === "liquid-hydrogen" && <>
+                <div className="mb-2 font-bold text-sky-200">Legacy liquid hydrogen region</div>
+                <label className="mb-3 flex h-8 items-center gap-2 border border-sky-700 px-2 font-bold text-sky-200">
+                  <input aria-label="Liquid hydrogen region filled" type="checkbox" checked={selectedTerrainRegion.settings?.filled ?? true} onChange={(event) => updateSelectedTerrainRegionFilled(event.target.checked)} /> Filled
+                </label>
+                <button type="button" onClick={deleteSelectedTerrainRegion} className="h-8 w-full border border-red-500 font-bold text-red-100">Delete terrain region</button>
+              </>}
+            </div>
+          </FloatingPluginHud>}
+          <FloatingPluginHud title="Layers" layout={layersLayout} onLayoutChange={persistLayersLayout} className="font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+            <TacticalEditorLayersPanel
+              groups={layerGroups}
+              selectedKey={selectedLayerKey}
+              hiddenKeys={hiddenLayerKeys}
+              lockedKeys={lockedLayerKeys}
+              onSelect={selectEditorLayerObject}
+              onToggleHidden={(object) => {
+                toggleEditorLayerSet(setHiddenLayerKeys, object);
+                if (selectedLayerKey === object.key) clearEditorSelection();
+              }}
+              onToggleLocked={(object) => {
+                toggleEditorLayerSet(setLockedLayerKeys, object);
+                if (selectedLayerKey === object.key) clearEditorSelection();
+              }}
+              onMove={moveEditorLayerObject}
+            />
+          </FloatingPluginHud>
+          <FloatingPluginHud title="Tracing Template" layout={tracingTemplateLayout} onLayoutChange={persistTracingTemplateLayout} className="w-72 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
             <div className="max-h-[70vh] overflow-y-auto py-1 pr-1">
               <div className="mb-2 normal-case text-(--hud-text-dim)">Editor-only reference image rendered beneath the grid.</div>
               <label className="mb-2 block font-bold text-cyan-200">Template image
@@ -4061,37 +5781,10 @@ const TacticalScenarioEditorClient = () => {
               {templateMessage && <div role="status" className={`mt-2 border p-2 normal-case ${templateMessage.kind === "error" ? "border-red-500/70 bg-red-950/60 text-red-100" : "border-emerald-500/70 bg-emerald-950/50 text-emerald-100"}`}>{templateMessage.text}</div>}
             </div>
           </FloatingPluginHud>
-          <FloatingPluginHud title="Terrain Palette" layout={terrainPaletteLayout} onLayoutChange={setTerrainPaletteLayout} className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
-            <div aria-label="Terrain options" className="grid max-h-[65vh] grid-cols-2 gap-1.5 overflow-y-auto overscroll-contain py-1 pr-1">
-              <TacticalDrawingPrecisionControl />
-              <button type="button" aria-pressed={placementKind === null && enemyKind === null} onClick={() => { setPlacementKind(null); setEnemyKind(null); setWallDraft(null); setRaisedAreaDraft(null); setCircleDraft(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === null && enemyKind === null ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-(--hud-border) text-(--hud-text) hover:border-(--hud-accent)"}`}>Pointer</button>
-              <button type="button" aria-pressed={placementKind === FIRE_TOOL_ID} onClick={() => { setPlacementKind(FIRE_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedFire(null); setRaisedAreaDraft(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === FIRE_TOOL_ID ? "border-orange-200 bg-orange-300/20 text-orange-50" : "border-(--hud-border) text-orange-200 hover:border-orange-300"}`}>Fire</button>
-              <div className="col-span-2 border border-violet-700 bg-violet-950/20 p-2">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="font-bold text-violet-200">{selectedPrimitive ? `Circle · ${selectedPrimitive.id}` : "Circle"}</span>
-                  <button
-                    type="button"
-                    aria-pressed={placementKind === CIRCLE_TOOL_ID}
-                    onClick={() => {
-                      setPlacementKind(CIRCLE_TOOL_ID);
-                      setEnemyKind(null);
-                      setSelectedPlacementId(null);
-                      setSelectedEnemyId(null);
-                      setSelectedWallId(null);
-                      setSelectedRaisedAreaId(null);
-                      setSelectedTerrainRegionId(null);
-                      setSelectedPrimitiveId(null);
-                      setSelectedElevationTransitionId(null);
-                      setSelectedPortalId(null);
-                      setSelectedFire(null);
-                      setWallDraft(null);
-                      setRaisedAreaDraft(null);
-                      setCircleDraft(null);
-                      setPlacementError(null);
-                    }}
-                    className={`h-8 border px-2 font-bold uppercase ${placementKind === CIRCLE_TOOL_ID ? "border-violet-200 bg-violet-300/20 text-violet-50" : "border-violet-500 text-violet-100"}`}
-                  >Draw Circle</button>
-                </div>
+          {(selectedPrimitive || placementKind === CIRCLE_TOOL_ID) && <FloatingPluginHud title="Legacy Circle Properties" layout={circlePropertiesLayout} onLayoutChange={persistCirclePropertiesLayout} className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+            <div aria-label="Legacy circle properties" className="py-1">
+              <div className="border border-violet-700 bg-violet-950/20 p-2">
+                <div className="mb-2 font-bold text-violet-200">{selectedPrimitive ? `Legacy circle · ${selectedPrimitive.id}` : "Legacy circle compatibility"}</div>
                 <div className="mb-2 grid grid-cols-2 gap-1">
                   {([
                     ["wall", "Wall"],
@@ -4116,7 +5809,7 @@ const TacticalScenarioEditorClient = () => {
                 <div className="mb-2 normal-case text-violet-200/70">
                   {selectedPrimitive
                     ? "Change type here. Use the handles on the map to move or resize."
-                    : `New circles will be ${circleTerrainType === "wall" ? "walls" : circleTerrainType === "raised-area" ? "raised areas" : circleTerrainType === "close-machinery" ? "machinery" : "liquid hydrogen"}.`}
+                    : `The Boundaries HUD activated this compatibility tool. Use Circle Area for ordinary circles. This legacy circle will be ${circleTerrainType === "wall" ? "a wall" : circleTerrainType === "raised-area" ? "a raised area" : circleTerrainType === "close-machinery" ? "machinery" : "liquid hydrogen"}.`}
                 </div>
                 {selectedPrimitive && <>
                   <div className="mb-2 grid grid-cols-3 gap-1">
@@ -4159,119 +5852,16 @@ const TacticalScenarioEditorClient = () => {
                   <button type="button" onClick={deleteSelectedPrimitive} className="h-7 w-full border border-red-500 font-bold uppercase text-red-100">Delete Circle</button>
                 </>}
               </div>
-              <button type="button" aria-pressed={placementKind === WALL_TOOL_ID} onClick={() => { setPlacementKind(WALL_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedFire(null); setWallDraft(null); setRaisedAreaDraft(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === WALL_TOOL_ID ? "border-slate-100 bg-slate-300/20 text-white" : "border-(--hud-border) text-slate-200 hover:border-slate-100"}`}>Wall</button>
-              <button type="button" aria-pressed={placementKind === CURVED_WALL_TOOL_ID} onClick={() => { setPlacementKind(CURVED_WALL_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setWallDraft(null); setRaisedAreaDraft(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === CURVED_WALL_TOOL_ID ? "border-purple-200 bg-purple-300/20 text-purple-50" : "border-(--hud-border) text-purple-200 hover:border-purple-200"}`}>Curved Wall</button>
-              <button type="button" aria-pressed={placementKind === RAISED_AREA_TOOL_ID} onClick={() => { setPlacementKind(RAISED_AREA_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setWallDraft(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === RAISED_AREA_TOOL_ID ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-(--hud-border) text-cyan-200 hover:border-cyan-200"}`}>Raised Area</button>
-              <button type="button" aria-pressed={placementKind === RAISED_AREA_CURVE_TOOL_ID} onClick={() => { setPlacementKind(RAISED_AREA_CURVE_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setWallDraft(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === RAISED_AREA_CURVE_TOOL_ID ? "border-purple-200 bg-purple-300/20 text-purple-50" : "border-(--hud-border) text-purple-200 hover:border-purple-200"}`}>Raised Curve</button>
-              {([
-                { id: MACHINERY_AREA_TOOL_ID, label: "Draw Machinery", color: "amber" },
-                { id: MACHINERY_CURVE_TOOL_ID, label: "Machinery Curve", color: "amber" },
-                { id: LIQUID_HYDROGEN_AREA_TOOL_ID, label: "Draw Liquid H₂", color: "sky" },
-                { id: LIQUID_HYDROGEN_CURVE_TOOL_ID, label: "Liquid H₂ Curve", color: "sky" },
-                { id: GRASS_AREA_TOOL_ID, label: "Draw Grass", color: "lime" },
-                { id: GRASS_CURVE_TOOL_ID, label: "Grass Curve", color: "lime" },
-                { id: SAND_AREA_TOOL_ID, label: "Draw Sand", color: "yellow" },
-                { id: SAND_CURVE_TOOL_ID, label: "Sand Curve", color: "yellow" },
-                { id: WATER_AREA_TOOL_ID, label: "Draw Water", color: "blue" },
-                { id: WATER_CURVE_TOOL_ID, label: "Water Curve", color: "blue" },
-              ] as const).map((tool) => <button
-                type="button"
-                key={tool.id}
-                aria-pressed={placementKind === tool.id}
-                onClick={() => {
-                  setPlacementKind(tool.id);
-                  setEnemyKind(null);
-                  setSelectedPlacementId(null);
-                  setSelectedEnemyId(null);
-                  setSelectedWallId(null);
-                  setSelectedRaisedAreaId(null);
-                  setSelectedTerrainRegionId(null);
-                  setSelectedNaturalTerrainId(null);
-                  setSelectedElevationTransitionId(null);
-                  setSelectedPortalId(null);
-                  setSelectedFire(null);
-                  setWallDraft(null);
-                  setPlacementError(null);
-                }}
-                className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === tool.id ? "border-white bg-white/15 text-white" : `border-(--hud-border) ${tool.color === "amber" ? "text-amber-200 hover:border-amber-200" : tool.color === "lime" ? "text-lime-200 hover:border-lime-200" : tool.color === "yellow" ? "text-yellow-200 hover:border-yellow-200" : tool.color === "blue" ? "text-blue-200 hover:border-blue-200" : "text-sky-200 hover:border-sky-200"}`}`}
-              >{tool.label}</button>)}
-              {raisedAreaDraft && <div className="col-span-2 border border-cyan-700 bg-cyan-950/40 p-2 normal-case leading-relaxed text-cyan-100">
-                Drawing {areaTargetLabel(raisedAreaDraft.target)}. Click grid vertices to continue, switch between its straight and curve tools for each segment, then click the cyan starting point to close.
-                <button type="button" onClick={() => { setRaisedAreaDraft(null); setDragRaisedAreaControl(null); setPlacementError(null); }} className="mt-2 h-7 w-full border border-red-400 font-bold uppercase text-red-100">Cancel outline</button>
-              </div>}
-              {([
-                { id: TREE_TOOL_ID, label: "Tree" },
-                { id: BUSH_TOOL_ID, label: "Bush" },
-                { id: ROCK_TOOL_ID, label: "Rock" },
-              ] as const).map((tool) => <button
-                type="button"
-                key={tool.id}
-                aria-pressed={placementKind === tool.id}
-                onClick={() => {
-                  setPlacementKind(tool.id);
-                  setEnemyKind(null);
-                  setSelectedPlacementId(null);
-                  setSelectedEnemyId(null);
-                  setSelectedWallId(null);
-                  setSelectedRaisedAreaId(null);
-                  setSelectedTerrainRegionId(null);
-                  setSelectedPrimitiveId(null);
-                  setSelectedNaturalTerrainId(null);
-                  setSelectedElevationTransitionId(null);
-                  setSelectedPortalId(null);
-                  setSelectedFire(null);
-                  setWallDraft(null);
-                  setRaisedAreaDraft(null);
-                  setPlacementHover(null);
-                  setPlacementError(null);
-                }}
-                className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === tool.id ? tool.id === ROCK_TOOL_ID ? "border-stone-100 bg-stone-300/20 text-stone-50" : "border-lime-100 bg-lime-300/20 text-lime-50" : tool.id === ROCK_TOOL_ID ? "border-(--hud-border) text-stone-200 hover:border-stone-200" : "border-(--hud-border) text-lime-200 hover:border-lime-200"}`}
-              >{tool.label}</button>)}
-              {([
-                { id: STAIRS_TOOL_ID, label: "Stairs", color: "cyan" },
-                { id: LADDER_TOOL_ID, label: "Ladder", color: "amber" },
-                { id: RAMP_TOOL_ID, label: "Ramp", color: "purple" },
-              ] as const).map((tool) => <button
-                type="button"
-                key={tool.id}
-                aria-pressed={placementKind === tool.id}
-                onClick={() => {
-                  setPlacementKind(tool.id);
-                  setEnemyKind(null);
-                  setSelectedPlacementId(null);
-                  setSelectedEnemyId(null);
-                  setSelectedWallId(null);
-                  setSelectedRaisedAreaId(null);
-                  setSelectedElevationTransitionId(null);
-                  setSelectedPortalId(null);
-                  setSelectedFire(null);
-                  setWallDraft(null);
-                  setRaisedAreaDraft(null);
-                  setRampDraft(null);
-                  setPlacementHover(null);
-                  setEnemyHover(null);
-                  setPlacementError(null);
-                }}
-                className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === tool.id ? "border-fuchsia-200 bg-fuchsia-300/20 text-fuchsia-50" : "border-(--hud-border) text-fuchsia-200 hover:border-fuchsia-200"}`}
-              >{tool.label}</button>)}
-              {rampDraft && <div className="col-span-2 border border-purple-600 bg-purple-950/40 p-2 normal-case leading-relaxed text-purple-100">
-                Move straight outward over at least two squares. Finish on lower terrain for a ramp or on a matching raised platform for a flat bridge.
-                <button type="button" onClick={() => { setRampDraft(null); setPlacementError(null); }} className="mt-2 h-7 w-full border border-red-400 font-bold uppercase text-red-100">Cancel ramp</button>
-              </div>}
-              <button type="button" aria-pressed={placementKind === DOOR_TOOL_ID} onClick={() => { setPlacementKind(DOOR_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setPortalHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === DOOR_TOOL_ID ? "border-emerald-200 bg-emerald-300/20 text-emerald-50" : "border-(--hud-border) text-emerald-200 hover:border-emerald-200"}`}>Door</button>
-              <button type="button" aria-pressed={placementKind === WALL_IRIS_TOOL_ID} onClick={() => { setPlacementKind(WALL_IRIS_TOOL_ID); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedWallId(null); setSelectedPortalId(null); setSelectedFire(null); setPortalHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === WALL_IRIS_TOOL_ID ? "border-amber-200 bg-amber-300/20 text-amber-50" : "border-(--hud-border) text-amber-200 hover:border-amber-200"}`}>Wall Iris Valve</button>
-              {tacticalTerrainPalette.map((item) => <button type="button" aria-pressed={placementKind === item.id} key={item.id} onClick={() => { setPlacementKind(item.id); setEnemyKind(null); setSelectedPlacementId(null); setSelectedEnemyId(null); setSelectedPortalId(null); setSelectedFire(null); setPlacementHover(null); setEnemyHover(null); setPortalHover(null); setPlacementError(null); }} className={`min-h-10 border px-2 py-2 text-[8px] font-bold uppercase tracking-wider ${placementKind === item.id ? "border-amber-200 bg-amber-300/20 text-amber-50" : "border-(--hud-border) text-(--hud-text) hover:border-(--hud-accent)"}`}>{item.label}</button>)}
             </div>
-          </FloatingPluginHud>
-          <FloatingPluginHud title="Enemy Palette" layout={enemyPaletteLayout} onLayoutChange={setEnemyPaletteLayout} className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
-            <div aria-label="Enemy options" className="grid grid-cols-1 gap-1.5 py-1">
-              <button type="button" aria-pressed={placementKind === null && enemyKind === null} onClick={() => { setPlacementKind(null); setEnemyKind(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-9 border px-2 py-2 font-bold ${placementKind === null && enemyKind === null ? "border-cyan-200 bg-cyan-300/20 text-cyan-50" : "border-(--hud-border) text-(--hud-text)"}`}>Pointer</button>
+          </FloatingPluginHud>}
+          <FloatingPluginHud title="Enemy Palette" layout={enemyPaletteLayout} onLayoutChange={persistEnemyPaletteLayout} className="w-56 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+            <div aria-label="Enemy options" onClickCapture={() => setPrimaryTool("select")} className="grid grid-cols-1 gap-1.5 py-1">
               {tacticalEnemyPalette.map((enemy) => <button type="button" key={enemy.id} aria-pressed={enemyKind === enemy.id} onClick={() => { setEnemyKind(enemy.id); setPlacementKind(null); setSelectedPlacementId(null); setSelectedOperationId(null); setSelectedEnemyId(null); setSelectedFire(null); setPlacementHover(null); setEnemyHover(null); setPlacementError(null); }} className={`min-h-11 border px-2 py-2 text-left ${enemyKind === enemy.id ? "border-red-200 bg-red-300/20 text-red-50" : "border-(--hud-border) text-(--hud-text) hover:border-red-300"}`}>
                 <span className="block font-bold">{enemy.label}</span><span className="mt-1 block normal-case text-(--hud-text-dim)">{enemy.equipment}</span>
               </button>)}
             </div>
           </FloatingPluginHud>
-          {selectedPlacement && selectedHasTerminal && <FloatingPluginHud title={selectedIsInteractiveHuman ? "Human Interaction Editor" : "Console Editor"} layout={consoleEditorLayout} onLayoutChange={setConsoleEditorLayout} className="w-80 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+          {selectedPlacement && selectedHasTerminal && <FloatingPluginHud title={selectedIsInteractiveHuman ? "Human Interaction Editor" : "Console Editor"} layout={consoleEditorLayout} onLayoutChange={persistConsoleEditorLayout} className="w-80 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
             <div className="max-h-[70vh] overflow-y-auto overscroll-contain py-1 pr-1">
               <div className="mb-2 text-[8px] text-(--hud-text-dim)">{selectedPlacement.id}</div>
               <label className="mb-2 block font-bold text-cyan-200">{selectedIsInteractiveHuman ? "Human name" : "Console name"}
@@ -4414,7 +6004,7 @@ const TacticalScenarioEditorClient = () => {
               <datalist id="interaction-skill-options">{INTERACTION_SKILLS.map((skill) => <option key={skill} value={skill} />)}</datalist>
             </div>
           </FloatingPluginHud>}
-          {selectedEnemy && <FloatingPluginHud title="Enemy Editor" layout={enemyEditorLayout} onLayoutChange={setEnemyEditorLayout} className="w-64 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
+          {selectedEnemy && <FloatingPluginHud title="Enemy Editor" layout={enemyEditorLayout} onLayoutChange={persistEnemyEditorLayout} className="w-64 font-mono text-[8px] uppercase tracking-wider text-(--hud-text)">
             <div className="py-1">
               <div className="mb-3 flex gap-2">
                 <div className="relative h-16 w-16 shrink-0 overflow-hidden border border-red-500/60 bg-black">
@@ -4426,11 +6016,19 @@ const TacticalScenarioEditorClient = () => {
                   <div className="mt-1 text-(--hud-text-dim)">Square {selectedEnemy.position.x}, {selectedEnemy.position.y}</div>
                 </div>
               </div>
+              {selectedEnemyLocked && <div className="mb-3 border border-amber-500/70 bg-amber-950/40 p-2 normal-case text-amber-100">
+                <div className="mb-2">This enemy is locked. It can be selected, but it cannot be moved or edited.</div>
+                <button type="button" onClick={() => setLockedLayerKeys((current) => {
+                  const next = new Set(current);
+                  next.delete(tacticalEditorLayerKey("enemy", selectedEnemy.id));
+                  return next;
+                })} className="h-7 w-full border border-amber-400 font-bold uppercase">Unlock enemy</button>
+              </div>}
               <label className="mb-3 block font-bold text-red-200">Enemy name
-                <input value={selectedEnemy.name} onChange={(event) => updateSelectedEnemyName(event.target.value)} className="mt-1 h-8 w-full border border-(--hud-border) bg-slate-950 px-2 text-[10px] normal-case text-slate-100 outline-none focus:border-red-400" />
+                <input disabled={selectedEnemyLocked} value={selectedEnemy.name} onChange={(event) => updateSelectedEnemyName(event.target.value)} className="mt-1 h-8 w-full border border-(--hud-border) bg-slate-950 px-2 text-[10px] normal-case text-slate-100 outline-none focus:border-red-400 disabled:cursor-not-allowed disabled:opacity-50" />
               </label>
-              <button type="button" aria-label="Rotate enemy 90 degrees" onClick={rotateSelectedEnemy} className="mb-3 h-8 w-full border border-amber-400 font-bold text-amber-100">Facing {facingName(selectedEnemy.facing ?? "north")} · Rotate 90°</button>
-              <button type="button" onClick={deleteSelectedEnemy} className="w-full border border-red-500 py-1.5 font-bold text-red-100">Delete enemy</button>
+              <button type="button" disabled={selectedEnemyLocked} aria-label="Rotate enemy 90 degrees" onClick={rotateSelectedEnemy} className="mb-3 h-8 w-full border border-amber-400 font-bold text-amber-100 disabled:cursor-not-allowed disabled:opacity-40">Facing {facingName(selectedEnemy.facing ?? "north")} · Rotate 90°</button>
+              <button type="button" disabled={selectedEnemyLocked} onClick={deleteSelectedEnemy} className="w-full border border-red-500 py-1.5 font-bold text-red-100 disabled:cursor-not-allowed disabled:opacity-40">Delete enemy</button>
               <div className="mt-2 normal-case text-(--hud-text-dim)">You can also press Delete while this enemy is selected.</div>
             </div>
           </FloatingPluginHud>}

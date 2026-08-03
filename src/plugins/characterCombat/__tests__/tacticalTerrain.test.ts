@@ -1,6 +1,6 @@
 import { coverAssessment, filledLiquidHydrogenCellKeys, hasLineOfSight, pointKey, reachableOpenMapMovement, scenarioAvoidingLiquidHydrogenForPathfinding, shortestPathToAny, sidestepAndBackstepMoves, tacticalOccupantCounts, terrainHeightAt } from "../geometry";
 import { buildDefaultTacticalScenario } from "../defaultTacticalScenario";
-import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalClosedAreaGeometrySegments, tacticalTerrainPalette } from "../tacticalScenarioDefinitions";
 import { combatantFacingForTacticalRotation, createControlRoom, interactiveHumanModelFacingForTacticalRotation, tacticalMovementEdgeKey, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges, tacticalWallCornerPoints, tacticalWallVisualRuns } from "../tacticalTerrain";
 
 const drawnRectangle = (
@@ -20,6 +20,98 @@ const drawnRectangle = (
 });
 
 describe("tactical Control Room", () => {
+  it("resolves independent surface, half-level elevation, and boundary wall on one closed area", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnWalls = [];
+    definition.drawnRaisedAreas = [];
+    definition.drawnTerrainRegions = [];
+    definition.drawnAreas = [{
+      ...drawnRectangle("sand-ridge", 10, 10, 4, 4),
+      surface: "sand",
+      elevation: 0.5,
+      boundary: "wall",
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const scenario = buildDefaultTacticalScenario(undefined, definition);
+
+    expect(terrain.terrainByCell["11:11"]).toBe("sand");
+    expect(terrain.elevationLevelByCell["11:11"]).toBe(0.5);
+    expect(terrain.drawnAreas).toEqual(definition.drawnAreas);
+    expect(scenario.drawnRaisedAreas).toContainEqual(expect.objectContaining({ id: "sand-ridge" }));
+    expect(scenario.drawnRaisedAreaLevels?.["sand-ridge"]).toBe(0.5);
+    expect(scenario.drawnTerrainRegions).toContainEqual(expect.objectContaining({
+      id: "sand-ridge",
+      kind: "sand",
+    }));
+    expect(terrain.walls.map((wall) => wall.id)).toEqual(expect.arrayContaining([
+      "sand-ridge:boundary:1",
+      "sand-ridge:boundary:4",
+    ]));
+  });
+
+  it("rejects closed-area elevations outside half-level increments", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnAreas = [{
+      ...drawnRectangle("bad-ridge", 10, 10, 4, 4),
+      surface: "grass",
+      elevation: 0.25,
+      boundary: "none",
+    }];
+
+    expect(() => resolveTacticalScenarioTerrain(definition)).toThrow("elevation must be a non-negative half level");
+  });
+
+  it("uses the frontmost nested area to create full- and half-level depressions", () => {
+    const outer = {
+      ...drawnRectangle("outer-plateau", 10, 10, 10, 10),
+      surface: "sand" as const,
+      elevation: 1,
+      boundary: "none" as const,
+    };
+    const inner = {
+      ...drawnRectangle("inner-depression", 13, 13, 4, 4),
+      surface: "grass" as const,
+      elevation: 0,
+      boundary: "none" as const,
+    };
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.terrainPlacements = [];
+    definition.drawnAreas = [outer, inner];
+
+    const depressed = resolveTacticalScenarioTerrain(definition);
+    expect(depressed.elevationLevelByCell["11:11"]).toBe(1);
+    expect(depressed.terrainByCell["11:11"]).toBe("sand");
+    expect(depressed.elevationLevelByCell["14:14"]).toBe(0);
+    expect(depressed.terrainByCell["14:14"]).toBe("grass");
+
+    definition.drawnAreas = [outer, { ...inner, elevation: 0.5 }];
+    const halfDepressed = resolveTacticalScenarioTerrain(definition);
+    expect(halfDepressed.elevationLevelByCell["14:14"]).toBe(0.5);
+    const halfLevelMoves = reachableOpenMapMovement({
+      width: definition.map.width,
+      height: definition.map.height,
+      origin: { x: 12, y: 14 },
+      originElevationLevel: 1,
+      facing: "east",
+      allowance: 2,
+      trotting: false,
+      elevationLevelByCell: halfDepressed.elevationLevelByCell,
+      terrainByCell: halfDepressed.terrainByCell,
+    });
+    expect(halfLevelMoves.get("13:14")).toMatchObject({
+      cost: 2,
+      finalElevationLevel: 0.5,
+    });
+
+    definition.drawnAreas = [inner, outer];
+    const outerBroughtForward = resolveTacticalScenarioTerrain(definition);
+    expect(outerBroughtForward.elevationLevelByCell["14:14"]).toBe(1);
+    expect(outerBroughtForward.terrainByCell["14:14"]).toBe("sand");
+  });
+
   it("maps editor rotations to combatant facing directions", () => {
     expect(([0, 90, 180, 270] as const).map(combatantFacingForTacticalRotation)).toEqual(["north", "east", "south", "west"]);
   });
@@ -310,6 +402,49 @@ describe("tactical Control Room", () => {
     expect(interior.deploymentCells).toEqual(expect.arrayContaining([{ x: 10, y: 12 }, { x: 18, y: 20 }]));
     expect(interior.terrainObjects).toEqual([]);
     expect(tacticalTerrainPalette.find((item) => item.id === "deployment-zone-9x9")).toMatchObject({ label: "Deployment Zone 9x9", size: { width: 9, height: 9 } });
+  });
+
+  it("uses Rectangle, Circle, and Pen interiors as independent crew deployment areas", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    const rectangle = { kind: "rectangle" as const, x: 8, y: 8, width: 4, height: 3 };
+    const circle = { kind: "circle" as const, center: { x: 20, y: 10 }, radius: 3 };
+    definition.deploymentEdges = [];
+    definition.terrainPlacements = [];
+    definition.enemyPlacements = [];
+    definition.drawnAreas = [{
+      id: "rectangle-deployment",
+      geometry: rectangle,
+      segments: tacticalClosedAreaGeometrySegments(rectangle),
+      surface: "sand",
+      elevation: 0.5,
+      boundary: "wall",
+      deployment: true,
+    }, {
+      id: "circle-deployment",
+      geometry: circle,
+      segments: tacticalClosedAreaGeometrySegments(circle),
+      surface: "none",
+      elevation: 0,
+      boundary: "none",
+      deployment: true,
+    }, {
+      ...drawnRectangle("pen-deployment", 28, 8, 4, 3),
+      surface: "grass",
+      elevation: 0,
+      boundary: "none",
+      deployment: true,
+    }];
+
+    const terrain = resolveTacticalScenarioTerrain(definition);
+
+    expect(terrain.deploymentCells).toEqual(expect.arrayContaining([
+      { x: 9, y: 9 },
+      { x: 20, y: 10 },
+      { x: 29, y: 9 },
+    ]));
+    expect(terrain.deploymentCells).not.toContainEqual({ x: 7, y: 9 });
+    expect(terrain.terrainByCell["9:9"]).toBe("sand");
+    expect(terrain.elevationLevelByCell["9:9"]).toBe(0.5);
   });
   it("clones an editable scenario draft without changing the immutable base definition", () => {
     const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
@@ -716,6 +851,32 @@ describe("tactical Control Room", () => {
     const route = shortestPathToAny(scenarioAvoidingLiquidHydrogenForPathfinding(filledScenario), enemy.id, [{ x: 13, y: 10 }]);
     expect(route).not.toBeNull();
     expect(route?.some((point) => filledLiquidHydrogenCellKeys(filledScenario).has(pointKey(point)))).toBe(false);
+  });
+
+  it("keeps enemy pathfinding responsive with one thousand wall segments", () => {
+    const scenario = buildDefaultTacticalScenario();
+    const enemy = scenario.combatants.find((unit) => unit.side === "enemy")!;
+    const player = scenario.combatants.find((unit) => unit.side === "player")!;
+    const goals = [{ x: player.position.x + 1, y: player.position.y }];
+    const baselineRoute = shortestPathToAny(scenario, enemy.id, goals);
+    const terrainHeavyScenario = {
+      ...scenario,
+      walls: [
+        ...scenario.walls,
+        ...Array.from({ length: 1_000 }, (_, index) => ({
+          id: `performance-wall-${index}`,
+          from: { x: -1_000 - index, y: -1_000 },
+          to: { x: -1_000 - index, y: -999 },
+        })),
+      ],
+    };
+
+    const startedAt = performance.now();
+    const route = shortestPathToAny(terrainHeavyScenario, enemy.id, goals);
+    const elapsed = performance.now() - startedAt;
+
+    expect(route).toEqual(baselineRoute);
+    expect(elapsed).toBeLessThan(250);
   });
 
   it("resolves a curved drawn close-machinery region into gameplay cells", () => {

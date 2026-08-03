@@ -1,5 +1,5 @@
 import { current, type Draft, type PayloadAction } from "@reduxjs/toolkit";
-import { pointKey, scenarioAvoidingLiquidHydrogenForPathfinding } from "./geometry";
+import { pointKey, prepareTacticalPathfindingContext, prepareTacticalVisibilityContext, scenarioAvoidingLiquidHydrogenForPathfinding, tacticalRangedEnemies } from "./geometry";
 import { resolveTacticalCoveringFire } from "./tacticalCoveringFire";
 import { resolveTacticalEnemyMeleeAction, resolveTacticalEnemyRangedAction } from "./tacticalEnemyActions";
 import { planTacticalEnemyMovement } from "./tacticalEnemyMovement";
@@ -26,34 +26,40 @@ export const tacticalEnemyPhaseReducers = {
     if (!playerPhaseComplete) return;
 
     const scenario = map.scenario;
-    resolveTacticalCoweringRecovery(map, "enemy", action.payload.coweringRecoveryRolls ?? {});
-    resolveTacticalCasualtyMoraleChecks(map, "enemy", action.payload.casualtyMoraleRolls ?? {});
-    resolveTacticalUnexpectedFireMoraleChecks(map, "enemy", action.payload.unexpectedFireMoraleRolls ?? {});
-    resolveTacticalPanicFlight(map, "enemy");
-    map.visibleHostileIdsAtPhaseStartByCombatantId = tacticalVisibilitySnapshot(map.scenario);
-    for (const lane of [...map.coveringFireLanes]) {
-      const attacker = tacticalCombatant(map, lane.attackerId);
-      const occupants = scenario.combatants.filter((unit) => unit.id !== attacker?.id
-        && !unit.defeated
-        && lane.cells.some((cell) => pointKey(cell) === pointKey(unit.position)));
-      const primary = occupants[0];
-      if (!primary) continue;
-      const fallbackRolls = Object.fromEntries(occupants.flatMap((unit) => action.payload.enemyRolls[unit.id]
-        ? [[unit.id, action.payload.enemyRolls[unit.id]]]
-        : []));
-      resolveTacticalCoveringFire(
-        map,
-        primary,
-        lane,
-        action.payload.coveringFireRolls?.[lane.attackerId] ?? fallbackRolls,
-        false,
-      );
-      if (map.scenarioStatus !== "active") return;
+    const startingEnemyPhase = map.processedEnemyPhaseCombatantIds.length === 0;
+    if (startingEnemyPhase) {
+      resolveTacticalCoweringRecovery(map, "enemy", action.payload.coweringRecoveryRolls ?? {});
+      resolveTacticalCasualtyMoraleChecks(map, "enemy", action.payload.casualtyMoraleRolls ?? {});
+      resolveTacticalUnexpectedFireMoraleChecks(map, "enemy", action.payload.unexpectedFireMoraleRolls ?? {});
+      resolveTacticalPanicFlight(map, "enemy");
+      map.visibleHostileIdsAtPhaseStartByCombatantId = tacticalVisibilitySnapshot(map.scenario);
+      for (const lane of [...map.coveringFireLanes]) {
+        const attacker = tacticalCombatant(map, lane.attackerId);
+        const occupants = scenario.combatants.filter((unit) => unit.id !== attacker?.id
+          && !unit.defeated
+          && lane.cells.some((cell) => pointKey(cell) === pointKey(unit.position)));
+        const primary = occupants[0];
+        if (!primary) continue;
+        const fallbackRolls = Object.fromEntries(occupants.flatMap((unit) => action.payload.enemyRolls[unit.id]
+          ? [[unit.id, action.payload.enemyRolls[unit.id]]]
+          : []));
+        resolveTacticalCoveringFire(
+          map,
+          primary,
+          lane,
+          action.payload.coveringFireRolls?.[lane.attackerId] ?? fallbackRolls,
+          false,
+        );
+        if (map.scenarioStatus !== "active") return;
+      }
     }
     const enemies = scenario.combatants.filter((unit) => unit.side === "enemy"
       && !unit.defeated
       && !(map.coweringCombatantIds ?? []).includes(unit.id)
       && !(map.panickedCombatantIds ?? []).includes(unit.id));
+    let routeScenario = scenarioAvoidingLiquidHydrogenForPathfinding(current(map.scenario));
+    let routeDoorState = routeScenario.doors.map((door) => `${door.id}:${door.open}`).join("|");
+    let pathfinding = prepareTacticalPathfindingContext(routeScenario);
     const coveringFireLeadershipResults = new Map<string, boolean>();
     const movingAdjacentLeadershipResults = new Map<string, boolean>();
     for (const enemy of enemies) {
@@ -76,8 +82,15 @@ export const tacticalEnemyPhaseReducers = {
 
       if (resolveTacticalEnemyRangedAction(map, enemy, dice, action.payload.dangerSpaceRolls?.[enemy.id])) continue;
 
-      const routeScenario = scenarioAvoidingLiquidHydrogenForPathfinding(current(map.scenario));
-      const movementPlan = planTacticalEnemyMovement(map, enemy, livingPlayers, routeScenario);
+      routeScenario.combatants = current(map.scenario.combatants);
+      const currentDoors = current(map.scenario.doors);
+      const currentDoorState = currentDoors.map((door) => `${door.id}:${door.open}`).join("|");
+      if (currentDoorState !== routeDoorState) {
+        routeScenario = { ...routeScenario, doors: currentDoors };
+        routeDoorState = currentDoorState;
+        pathfinding = prepareTacticalPathfindingContext(routeScenario);
+      }
+      const movementPlan = planTacticalEnemyMovement(map, enemy, livingPlayers, routeScenario, pathfinding);
       if (movementPlan.status === "resolved") continue;
       if (resolveTacticalEnemyMovementReactions(
         map,
@@ -94,13 +107,17 @@ export const tacticalEnemyPhaseReducers = {
     resolveTacticalUnexpectedFireMoraleChecks(map, "enemy", action.payload.unexpectedFireMoraleRolls ?? {});
     if (map.scenarioStatus !== "active") return;
     map.coveringFireLanes = [];
+    const retainedSnapVisibility = map.coveringFireCommittedCombatantIds.length > 0
+      ? prepareTacticalVisibilityContext(map.scenario)
+      : undefined;
     map.pendingCoveringFireSnapIds = map.coveringFireCommittedCombatantIds.filter((id) => {
       const unit = tacticalCombatant(map, id);
       return Boolean(unit
         && !unit.defeated
         && !unit.weapon.highEnergy
         && (map.actionPointsByCharacterId[id] ?? 0) >= 3
-        && (map.ammunitionByCharacterId[id] ?? 0) >= 1);
+        && (map.ammunitionByCharacterId[id] ?? 0) >= 1
+        && tacticalRangedEnemies(map.scenario, id, retainedSnapVisibility).length > 0);
     });
     map.coveringFireCommittedCombatantIds = [];
     if (map.pendingCoveringFireSnapIds.length > 0) {

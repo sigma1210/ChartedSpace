@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "../tacticalScenarioDefinitions";
+import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, tacticalClosedAreaGeometrySegments } from "../tacticalScenarioDefinitions";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "../tacticalConsoleVictory";
 import { defaultTacticalInteractiveHumanCombatProfile } from "../tacticalInteractiveHuman";
 import {
@@ -148,6 +148,49 @@ describe("tactical scenario files", () => {
       visible: true,
       lockAspectRatio: true,
     };
+    const circleGeometry = {
+      kind: "circle" as const,
+      center: { x: 12.5, y: 32.25 },
+      radius: 2.25,
+    };
+    const rectangleGeometry = {
+      kind: "rectangle" as const,
+      x: 20.25,
+      y: 31.5,
+      width: 4.5,
+      height: 3.25,
+    };
+    draft.drawnAreas = [{
+      id: "raised-sand-yard",
+      segments: [
+        { kind: "cubic", from: { x: 40, y: 2 }, control1: { x: 41, y: 1 }, control2: { x: 43, y: 1 }, to: { x: 44, y: 2 } },
+        { kind: "line", from: { x: 44, y: 2 }, to: { x: 44, y: 6 } },
+        { kind: "line", from: { x: 44, y: 6 }, to: { x: 40, y: 6 } },
+        { kind: "line", from: { x: 40, y: 6 }, to: { x: 40, y: 2 } },
+      ],
+      surface: "sand",
+      elevation: 0.5,
+      boundary: "wall",
+      deployment: true,
+      portals: [
+        { id: "raised-sand-yard-door", kind: "sliding-door", position: 0.1 },
+        { id: "raised-sand-yard-iris", kind: "iris-valve", position: 0.6 },
+      ],
+    }, {
+      id: "constrained-circle",
+      geometry: circleGeometry,
+      segments: tacticalClosedAreaGeometrySegments(circleGeometry),
+      surface: "none",
+      elevation: 0,
+      boundary: "none",
+    }, {
+      id: "constrained-rectangle",
+      geometry: rectangleGeometry,
+      segments: tacticalClosedAreaGeometrySegments(rectangleGeometry),
+      surface: "grass",
+      elevation: 0,
+      boundary: "none",
+    }];
 
     const saved = await saveTacticalScenarioAs("Cargo Deck Assault", draft, directory);
     const loaded = await loadTacticalScenarioFile("cargo-deck-assault", directory);
@@ -159,6 +202,12 @@ describe("tactical scenario files", () => {
     expect(loaded.drawnWalls).toEqual(draft.drawnWalls);
     expect(loaded.drawnRaisedAreas).toEqual(draft.drawnRaisedAreas);
     expect(loaded.drawnTerrainRegions).toEqual(draft.drawnTerrainRegions);
+    expect(loaded.drawnAreas).toEqual(draft.drawnAreas);
+    expect(loaded.drawnAreas?.map((area) => area.geometry?.kind ?? "pen")).toEqual([
+      "pen",
+      "circle",
+      "rectangle",
+    ]);
     expect(loaded.drawnTerrainPrimitives).toEqual(draft.drawnTerrainPrimitives);
     expect(loaded.naturalTerrainPlacements).toEqual(draft.naturalTerrainPlacements);
     expect(loaded.elevationTransitions).toEqual(draft.elevationTransitions);
@@ -236,6 +285,20 @@ describe("tactical scenario files", () => {
 
     expect(saved.scenario.consoleVictoryDefinitionId).toBe("chained-console-test");
     expect(saved.consoleVictory).toMatchObject({ id: "chained-console-test", scenarioId: "chained-console-test" });
+    expect(loaded).toEqual(saved);
+  });
+
+  it("saves and loads a scenario with no console-victory operations", async () => {
+    const scenarioDirectory = path.join(directory, "scenarios");
+    const consoleDirectory = path.join(directory, "consoles");
+    const draft = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    const consoleVictory = cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
+    consoleVictory.operations = [];
+
+    const saved = await saveTacticalScenarioBundleAs("Empty Objective", draft, consoleVictory, scenarioDirectory, consoleDirectory);
+    const loaded = await loadTacticalScenarioBundle("empty-objective", scenarioDirectory, consoleDirectory);
+
+    expect(saved.consoleVictory.operations).toEqual([]);
     expect(loaded).toEqual(saved);
   });
 

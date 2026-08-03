@@ -37,105 +37,241 @@
           "label": "Lamont"
         }
       }
+    }
+  ],
+  "drawnAreas": [
+    {
+      "id": "drawn-area-1",
+      "segments": [
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 5,
+            "y": 14
+          },
+          "control1": {
+            "x": 6.201747894287109,
+            "y": 12.112943649291992
+          },
+          "control2": {
+            "x": 7.799859046936035,
+            "y": 12.656327247619629
+          },
+          "to": {
+            "x": 8,
+            "y": 13
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 8,
+            "y": 13
+          },
+          "control1": {
+            "x": 8.200140953063965,
+            "y": 13.343672752380371
+          },
+          "control2": {
+            "x": 9.31653881072998,
+            "y": 16.183862686157227
+          },
+          "to": {
+            "x": 9,
+            "y": 16
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 9,
+            "y": 16
+          },
+          "control1": {
+            "x": 8.68346118927002,
+            "y": 15.816137313842773
+          },
+          "control2": {
+            "x": 7.352738380432129,
+            "y": 18.143070220947266
+          },
+          "to": {
+            "x": 6,
+            "y": 17
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 6,
+            "y": 17
+          },
+          "control1": {
+            "x": 4.647261619567871,
+            "y": 15.856929779052734
+          },
+          "control2": {
+            "x": 5,
+            "y": 14
+          },
+          "to": {
+            "x": 5,
+            "y": 14
+          }
+        }
+      ],
+      "surface": "close-machinery",
+      "elevation": 0,
+      "boundary": "none"
     },
     {
-      "id": "close-machinery-2x2-1",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 15,
-        "y": 7
-      },
-      "rotation": 0
+      "id": "drawn-area-2",
+      "segments": [
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 15,
+            "y": 11
+          },
+          "control1": {
+            "x": 15.263249397277832,
+            "y": 13.627486228942871
+          },
+          "control2": {
+            "x": 13.359245300292969,
+            "y": 11.097249984741211
+          },
+          "to": {
+            "x": 15,
+            "y": 13
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 15,
+            "y": 13
+          },
+          "control1": {
+            "x": 16.64075469970703,
+            "y": 14.902750015258789
+          },
+          "control2": {
+            "x": 20.77286720275879,
+            "y": 12.015399932861328
+          },
+          "to": {
+            "x": 21,
+            "y": 12
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 21,
+            "y": 12
+          },
+          "control1": {
+            "x": 21.22713279724121,
+            "y": 11.984600067138672
+          },
+          "control2": {
+            "x": 14.952342987060547,
+            "y": 11.201489448547363
+          },
+          "to": {
+            "x": 15,
+            "y": 11
+          }
+        }
+      ],
+      "surface": "close-machinery",
+      "elevation": 0,
+      "boundary": "none"
     },
     {
-      "id": "close-machinery-2x2-2",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 20,
-        "y": 8
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-2x2-3",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 8,
-        "y": 7
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-2x2-4",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 5,
-        "y": 4
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-2x2-5",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 3,
-        "y": 9
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-2x2-6",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 11,
-        "y": 6
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-2x2-7",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 17,
-        "y": 4
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-2x2-8",
-      "terrainDefinitionId": "close-machinery-2x2",
-      "origin": {
-        "x": 21,
-        "y": 5
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-3x3-1",
-      "terrainDefinitionId": "close-machinery-3x3",
-      "origin": {
-        "x": 11,
-        "y": 2
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-3x3-2",
-      "terrainDefinitionId": "close-machinery-3x3",
-      "origin": {
-        "x": 1,
-        "y": 12
-      },
-      "rotation": 0
-    },
-    {
-      "id": "close-machinery-3x3-3",
-      "terrainDefinitionId": "close-machinery-3x3",
-      "origin": {
-        "x": 20,
-        "y": 11
-      },
-      "rotation": 0
+      "id": "drawn-area-3",
+      "segments": [
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 11,
+            "y": 3
+          },
+          "control1": {
+            "x": 9.01967716217041,
+            "y": 6.121273040771484
+          },
+          "control2": {
+            "x": 9.841266632080078,
+            "y": 7.641416549682617
+          },
+          "to": {
+            "x": 10,
+            "y": 8
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 10,
+            "y": 8
+          },
+          "control1": {
+            "x": 10.158733367919922,
+            "y": 8.358583450317383
+          },
+          "control2": {
+            "x": 14.63759994506836,
+            "y": 11.583649158477783
+          },
+          "to": {
+            "x": 16,
+            "y": 9
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 16,
+            "y": 9
+          },
+          "control1": {
+            "x": 17.36240005493164,
+            "y": 6.416350841522217
+          },
+          "control2": {
+            "x": 18.240031242370605,
+            "y": 7.05648136138916
+          },
+          "to": {
+            "x": 17,
+            "y": 5
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 17,
+            "y": 5
+          },
+          "control1": {
+            "x": 15.759968757629395,
+            "y": 2.94351863861084
+          },
+          "control2": {
+            "x": 11,
+            "y": 3
+          },
+          "to": {
+            "x": 11,
+            "y": 3
+          }
+        }
+      ],
+      "surface": "close-machinery",
+      "elevation": 0,
+      "boundary": "none"
     }
   ],
   "deploymentEdges": [

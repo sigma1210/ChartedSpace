@@ -1,4 +1,4 @@
-import { pathWithinMovementAllowance, routeAllowingClosedDoors, shortestPathToAny } from "./geometry";
+import { pathWithinMovementAllowance, routeAllowingClosedDoors, shortestPathToAny, type TacticalPathfindingContext } from "./geometry";
 import { irisValveAcrossPressureDifferential } from "./tacticalDoors";
 import { distanceBetween, facingTowardFieldOfFire } from "./enemyTactics";
 import { recordTacticalObservedEvent } from "./tacticalObservation";
@@ -8,13 +8,19 @@ export type TacticalEnemyMovementPlan =
   | { status: "resolved" }
   | { status: "move"; origin: GridPoint; path: GridPoint[]; trotting: boolean; finalFacing: Combatant["facing"] };
 
-export const planTacticalEnemyMovement = (map: TacticalMapState, enemy: Combatant, livingPlayers: Combatant[], routeScenario: CombatScenario): TacticalEnemyMovementPlan => {
+export const planTacticalEnemyMovement = (
+  map: TacticalMapState,
+  enemy: Combatant,
+  livingPlayers: Combatant[],
+  routeScenario: CombatScenario,
+  pathfinding?: TacticalPathfindingContext,
+): TacticalEnemyMovementPlan => {
   const target = [...livingPlayers].sort((a, b) => distanceBetween(enemy.position, a.position) - distanceBetween(enemy.position, b.position) || a.id.localeCompare(b.id))[0];
   const goals = [
     { x: target.position.x + 1, y: target.position.y }, { x: target.position.x, y: target.position.y + 1 },
     { x: target.position.x - 1, y: target.position.y }, { x: target.position.x, y: target.position.y - 1 },
   ].filter((point) => point.x >= 0 && point.y >= 0 && point.x < map.scenario.width && point.y < map.scenario.height);
-  let route = shortestPathToAny(routeScenario, enemy.id, goals);
+  let route = shortestPathToAny(routeScenario, enemy.id, goals, pathfinding);
   if (!route) {
     const doorRoute = routeAllowingClosedDoors(routeScenario, enemy.id, goals);
     if (doorRoute?.door && doorRoute.doorStepIndex === 0) {

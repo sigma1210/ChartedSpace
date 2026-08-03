@@ -1,6 +1,6 @@
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { resolveSnapShot, type DicePair } from "./combatResolution";
-import { coverProtection, pointKey, tacticalRangedEnemies, tacticalVisibilityAssessment } from "./geometry";
+import { coverProtection, pointKey, prepareTacticalVisibilityContext, tacticalRangedEnemies, tacticalVisibilityAssessment } from "./geometry";
 import { spendTacticalAmmunition } from "./tacticalAmmunition";
 import { resolveTacticalPendingDoorCommands } from "./tacticalDoors";
 import { tacticalHitRollEvent } from "./tacticalFire";
@@ -136,9 +136,17 @@ export const tacticalTurnLifecycleReducers = {
     map.pendingCoveringFireSnapIds.shift();
     map.plannedAttackTargetId = null;
     map.plannedAttackMode = null;
+    const retainedSnapVisibility = map.pendingCoveringFireSnapIds.length > 0
+      ? prepareTacticalVisibilityContext(map.scenario)
+      : undefined;
     const nextShooterId = map.pendingCoveringFireSnapIds.find((id) => {
       const unit = tacticalCombatant(map, id);
-      return Boolean(unit && !unit.defeated && !unit.weapon.highEnergy && (map.actionPointsByCharacterId[id] ?? 0) >= 3 && (map.ammunitionByCharacterId[id] ?? 0) >= 1);
+      return Boolean(unit
+        && !unit.defeated
+        && !unit.weapon.highEnergy
+        && (map.actionPointsByCharacterId[id] ?? 0) >= 3
+        && (map.ammunitionByCharacterId[id] ?? 0) >= 1
+        && tacticalRangedEnemies(map.scenario, id, retainedSnapVisibility).length > 0);
     });
     if (nextShooterId) {
       map.pendingCoveringFireSnapIds = map.pendingCoveringFireSnapIds.slice(map.pendingCoveringFireSnapIds.indexOf(nextShooterId));

@@ -19,7 +19,8 @@ import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacti
 import { tacticalCirclePrimitiveOutline, tacticalCircleWallBoundary } from "./tacticalTerrainPrimitives";
 import { tacticalNaturalTerrainFootprintCells } from "./tacticalNaturalTerrain";
 import { tacticalQuadraticBezierWallSegments } from "./tacticalBezierWalls";
-import { tacticalDrawnRaisedAreaCells } from "./tacticalDrawnRaisedAreas";
+import { tacticalDrawnAreaOwnerByCell, tacticalDrawnRaisedAreaCells, tacticalRaisedAreaOutlineLines } from "./tacticalDrawnRaisedAreas";
+import { tacticalAreaBoundaryPortalLayout } from "./tacticalAreaBoundaryPortals";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
 import type { TacticalInteractiveHumanCombatProfile } from "./tacticalInteractiveHuman";
 
@@ -101,6 +102,12 @@ export type TacticalAreaOutlineSegment = {
   from: GridPoint;
   control: GridPoint;
   to: GridPoint;
+} | {
+  kind: "cubic";
+  from: GridPoint;
+  control1: GridPoint;
+  control2: GridPoint;
+  to: GridPoint;
 };
 
 export type TacticalRaisedAreaOutlineSegment = TacticalAreaOutlineSegment;
@@ -123,6 +130,55 @@ export type TacticalDrawnTerrainRegion = {
   id: string;
   kind: "grass" | "sand" | "water";
   segments: TacticalAreaOutlineSegment[];
+};
+
+export type TacticalClosedAreaSurface = "none" | "grass" | "sand" | "water" | "close-machinery" | "liquid-hydrogen";
+export type TacticalClosedAreaBoundary = "none" | "wall";
+
+export type TacticalClosedAreaGeometry = {
+  kind: "rectangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | {
+  kind: "circle";
+  center: GridPoint;
+  radius: number;
+};
+
+export interface TacticalDrawnArea {
+  id: string;
+  segments: TacticalAreaOutlineSegment[];
+  geometry?: TacticalClosedAreaGeometry;
+  surface: TacticalClosedAreaSurface;
+  elevation: number;
+  boundary: TacticalClosedAreaBoundary;
+  deployment?: boolean;
+  settings?: { filled?: boolean };
+  portals?: {
+    id: string;
+    kind: "sliding-door" | "iris-valve";
+    position: number;
+  }[];
+}
+
+export const tacticalClosedAreaGeometrySegments = (
+  geometry: TacticalClosedAreaGeometry,
+): TacticalAreaOutlineSegment[] => {
+  if (geometry.kind === "circle") {
+    return tacticalCirclePrimitiveOutline({ center: geometry.center, radius: geometry.radius });
+  }
+  const topLeft = { x: geometry.x, y: geometry.y };
+  const topRight = { x: geometry.x + geometry.width, y: geometry.y };
+  const bottomRight = { x: geometry.x + geometry.width, y: geometry.y + geometry.height };
+  const bottomLeft = { x: geometry.x, y: geometry.y + geometry.height };
+  return [
+    { kind: "line", from: topLeft, to: topRight },
+    { kind: "line", from: topRight, to: bottomRight },
+    { kind: "line", from: bottomRight, to: bottomLeft },
+    { kind: "line", from: bottomLeft, to: topLeft },
+  ];
 };
 
 export type TacticalNaturalTerrainPlacement = {
@@ -188,6 +244,7 @@ export interface TacticalScenarioDefinitionFile {
   drawnWalls?: TacticalDrawnWall[];
   drawnRaisedAreas?: TacticalDrawnRaisedArea[];
   drawnTerrainRegions?: TacticalDrawnTerrainRegion[];
+  drawnAreas?: TacticalDrawnArea[];
   drawnTerrainPrimitives?: TacticalDrawnTerrainPrimitive[];
   naturalTerrainPlacements?: TacticalNaturalTerrainPlacement[];
   elevationTransitions?: TacticalElevationTransitionDefinition[];
@@ -209,6 +266,7 @@ export interface ResolvedTacticalScenarioTerrain {
   drawnRaisedAreaLevels: Record<string, number>;
   drawnRaisedAreas: TacticalDrawnRaisedArea[];
   drawnTerrainRegions: TacticalDrawnTerrainRegion[];
+  drawnAreas: TacticalDrawnArea[];
   naturalTerrainPlacements: TacticalNaturalTerrainPlacement[];
   treeTrunkCells: GridPoint[];
   bushCells: GridPoint[];
@@ -393,10 +451,67 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
   const validCell = (point: GridPoint) => point.x >= 0 && point.y >= 0 && point.x < scenario.map.width && point.y < scenario.map.height;
   const validVertex = (point: GridPoint) => point.x >= 0 && point.y >= 0 && point.x <= scenario.map.width && point.y <= scenario.map.height;
+  const drawnAreas = (scenario.drawnAreas ?? []).map((area) => {
+    if (!area.id.trim()) throw new Error("A drawn area requires an ID.");
+    if (!Number.isFinite(area.elevation) || area.elevation < 0 || !Number.isInteger(area.elevation * 2)) {
+      throw new Error(`Drawn area ${area.id} elevation must be a non-negative half level.`);
+    }
+    const normalizedArea = area.geometry
+      ? { ...area, segments: tacticalClosedAreaGeometrySegments(area.geometry) }
+      : area;
+    return {
+      area: normalizedArea,
+      cells: tacticalDrawnRaisedAreaCells(normalizedArea, scenario.map.width, scenario.map.height),
+    };
+  });
+  drawnAreas.forEach(({ area, cells }) => {
+    if (area.deployment) deploymentCells.push(...cells);
+  });
+  const drawnAreaOwnerByCell = tacticalDrawnAreaOwnerByCell(
+    drawnAreas.map(({ area }) => area),
+    scenario.map.width,
+    scenario.map.height,
+  );
+  const areaBoundaryElevationByWallId = new Map<string, number>();
+  const unifiedBoundaryWalls: TacticalDrawnWall[] = drawnAreas.flatMap(({ area }) =>
+    area.boundary === "wall" && (area.portals?.length ?? 0) === 0
+      ? area.segments.flatMap((segment, index) => segment.kind === "cubic"
+        ? tacticalRaisedAreaOutlineLines({ id: area.id, segments: [segment] }).map((line, lineIndex) => {
+          const wall = {
+            id: `${area.id}:boundary:${index + 1}:${lineIndex + 1}`,
+            from: { ...line.from },
+            to: { ...line.to },
+          };
+          areaBoundaryElevationByWallId.set(wall.id, area.elevation);
+          return wall;
+        })
+        : (() => {
+          const wall = {
+            id: `${area.id}:boundary:${index + 1}`,
+            from: { ...segment.from },
+            to: { ...segment.to },
+            ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+          };
+          areaBoundaryElevationByWallId.set(wall.id, area.elevation);
+          return [wall];
+        })())
+      : []);
+  const allDrawnWalls = [...(scenario.drawnWalls ?? []), ...unifiedBoundaryWalls];
   const drawnWallIds = new Set<string>();
   const drawnObjectIds = new Set<string>();
   const drawnWallSegments = new Set<string>();
-  (scenario.drawnWalls ?? []).forEach((wall) => {
+  drawnAreas.forEach(({ area }) => {
+    if (drawnObjectIds.has(area.id)) throw new Error(`Duplicate drawn terrain ID: ${area.id}.`);
+    drawnObjectIds.add(area.id);
+    if ((area.portals?.length ?? 0) > 0) {
+      const layout = tacticalAreaBoundaryPortalLayout(area);
+      [...layout.walls, ...layout.portals].forEach((item) => {
+        if (drawnObjectIds.has(item.id)) throw new Error(`Duplicate drawn terrain ID: ${item.id}.`);
+        drawnObjectIds.add(item.id);
+      });
+    }
+  });
+  allDrawnWalls.forEach((wall) => {
     if (!wall.id.trim()) throw new Error("A drawn wall requires an ID.");
     if (drawnWallIds.has(wall.id)) throw new Error(`Duplicate drawn wall ID: ${wall.id}.`);
     if (drawnObjectIds.has(wall.id)) throw new Error(`Duplicate drawn terrain ID: ${wall.id}.`);
@@ -706,12 +821,21 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       throw new Error(`Drawn raised area ${area.id} overlaps terrain placement ${existingTerrain} at ${key}.`);
     }
   }));
+  drawnAreaOwnerByCell.forEach((area, key) => {
+    elevationLevelByCell[key] = area.elevation;
+    if (area.elevation > 0) terrainByCell[key] = "elevated";
+    else if (terrainByCell[key] === "elevated") delete terrainByCell[key];
+  });
   (["grass", "sand", "water"] as const).forEach((kind) => {
     drawnTerrainRegions
       .filter(({ region }) => region.kind === kind)
       .forEach(({ cells }) => cells.forEach((point) => {
         terrainByCell[pointKey(point)] = kind;
       }));
+  });
+  drawnAreaOwnerByCell.forEach((area, key) => {
+    if (area.surface !== "grass" && area.surface !== "sand" && area.surface !== "water") return;
+    terrainByCell[key] = area.surface as TerrainType;
   });
   naturalTerrainPlacements.forEach((placement) => {
     const cells = tacticalNaturalTerrainFootprintCells(
@@ -861,6 +985,12 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     ...drawnTerrainRegions
       .filter(({ region }) => region.kind === "close-machinery")
       .map(({ region, cells }) => ({ id: region.id, cells })),
+    ...drawnAreas
+      .filter(({ area }) => area.surface === "close-machinery")
+      .map(({ area, cells }) => ({
+        id: area.id,
+        cells: cells.filter((point) => drawnAreaOwnerByCell.get(pointKey(point))?.id === area.id),
+      })),
   ];
   const machineryOwnerByCell = new Map<string, string>();
   closeMachineryPlacements.forEach(({ id, cells }) => {
@@ -934,7 +1064,14 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         cells,
         filled: region.kind === "liquid-hydrogen" && region.settings?.filled !== false,
       })),
-  ];
+    ...drawnAreas
+      .filter(({ area }) => area.surface === "liquid-hydrogen")
+      .map(({ area, cells }) => ({
+        id: area.id,
+        cells: cells.filter((point) => drawnAreaOwnerByCell.get(pointKey(point))?.id === area.id),
+        filled: area.settings?.filled !== false,
+      })),
+  ].filter((region) => region.cells.length > 0);
   liquidHydrogenRegions.forEach((region) => {
     const { cells } = region;
     cells.forEach((point) => {
@@ -1025,7 +1162,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   drawnObjectIds.forEach((id) => {
     if (generatedIds.has(id)) throw new Error(`Drawn terrain ID ${id} conflicts with generated terrain.`);
   });
-  const drawnWallObjects = (scenario.drawnWalls ?? []).flatMap((wall): TacticalTerrainObject[] => {
+  const drawnWallObjects = allDrawnWalls.flatMap((wall): TacticalTerrainObject[] => {
     const portals = [...(wall.portals ?? [])].sort((first, second) => first.position - second.position);
     if (wall.control) {
       const curvedObjects: TacticalTerrainObject[] = tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).map((segment) => ({
@@ -1036,7 +1173,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         targetable: true,
         integrity: 3,
       }));
-      const elevationLevel = boundaryElevationLevel(
+      const elevationLevel = areaBoundaryElevationByWallId.get(wall.id) ?? boundaryElevationLevel(
         wall.id,
         curvedObjects.flatMap((object) => object.kind === "wall" ? [object.edge] : []),
       );
@@ -1045,7 +1182,8 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         : object);
     }
     if (portals.length === 0) {
-      const elevationLevel = boundaryElevationLevel(wall.id, [{ from: wall.from, to: wall.to }]);
+      const elevationLevel = areaBoundaryElevationByWallId.get(wall.id)
+        ?? boundaryElevationLevel(wall.id, [{ from: wall.from, to: wall.to }]);
       return [{
         id: wall.id,
         kind: "wall",
@@ -1151,7 +1289,35 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       })),
     ];
   });
-  const mergedTerrainObjects = [...generatedTerrainObjects, ...drawnWallObjects, ...circleWallObjects];
+  const areaBoundaryPortalObjects = drawnAreas.flatMap(({ area }): TacticalTerrainObject[] => {
+    if (area.boundary !== "wall" || (area.portals?.length ?? 0) === 0) return [];
+    const layout = tacticalAreaBoundaryPortalLayout(area);
+    const elevationLevel = area.elevation;
+    return [
+      ...layout.walls.map((wall): TacticalTerrainObject => ({
+        id: wall.id,
+        kind: "wall",
+        edge: { from: { ...wall.from }, to: { ...wall.to } },
+        blocking: true,
+        targetable: true,
+        integrity: 3,
+        elevationLevel,
+      })),
+      ...layout.portals.map((portal): TacticalTerrainObject => ({
+        id: portal.id,
+        kind: "door",
+        edge: { from: { ...portal.from }, to: { ...portal.to } },
+        separates: tacticalCellsSeparatedBySegment(portal),
+        blocking: true,
+        targetable: true,
+        integrity: 2,
+        open: false,
+        portalType: portal.kind,
+        elevationLevel,
+      })),
+    ];
+  });
+  const mergedTerrainObjects = [...generatedTerrainObjects, ...drawnWallObjects, ...circleWallObjects, ...areaBoundaryPortalObjects];
   mergedTerrainObjects.forEach((object) => {
     if (object.kind === "wall") walls.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to } });
     else if (object.kind === "door") doors.push({ id: object.id, from: { ...object.edge.from }, to: { ...object.edge.to }, open: object.open, portalType: object.portalType ?? "sliding-door" });
@@ -1177,6 +1343,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         from: { ...segment.from },
         to: { ...segment.to },
         ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+        ...(segment.kind === "cubic" ? { control1: { ...segment.control1 }, control2: { ...segment.control2 } } : {}),
       })),
     })),
     drawnTerrainRegions: drawnTerrainRegions.map(({ region }) => ({
@@ -1186,10 +1353,22 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         from: { ...segment.from },
         to: { ...segment.to },
         ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+        ...(segment.kind === "cubic" ? { control1: { ...segment.control1 }, control2: { ...segment.control2 } } : {}),
       })),
       ...(region.kind === "liquid-hydrogen" && region.settings
         ? { settings: { ...region.settings } }
         : {}),
+    })),
+    drawnAreas: drawnAreas.map(({ area }) => ({
+      ...area,
+      segments: area.segments.map((segment) => ({
+        ...segment,
+        from: { ...segment.from },
+        to: { ...segment.to },
+        ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+        ...(segment.kind === "cubic" ? { control1: { ...segment.control1 }, control2: { ...segment.control2 } } : {}),
+      })),
+      ...(area.settings ? { settings: { ...area.settings } } : {}),
     })),
     naturalTerrainPlacements: naturalTerrainPlacements.map((placement) => ({
       ...placement,

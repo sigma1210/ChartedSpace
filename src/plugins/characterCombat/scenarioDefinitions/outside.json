@@ -25,10 +25,11 @@
       }
     }
   ],
-  "drawnTerrainRegions": [
+  "drawnRaisedAreas": [],
+  "drawnTerrainRegions": [],
+  "drawnAreas": [
     {
       "id": "drawn-grass-1",
-      "kind": "grass",
       "segments": [
         {
           "kind": "line",
@@ -74,11 +75,13 @@
             "y": 0
           }
         }
-      ]
+      ],
+      "surface": "grass",
+      "elevation": 0,
+      "boundary": "none"
     },
     {
       "id": "drawn-water-1",
-      "kind": "water",
       "segments": [
         {
           "kind": "quadratic",
@@ -236,6 +239,463 @@
             "x": 21,
             "y": 0
           }
+        }
+      ],
+      "surface": "water",
+      "elevation": 0,
+      "boundary": "none"
+    },
+    {
+      "id": "drawn-area-1",
+      "segments": [
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 4,
+            "y": 35
+          },
+          "control1": {
+            "x": 5.882634162902832,
+            "y": 23.781421661376953
+          },
+          "control2": {
+            "x": 13.848958969116211,
+            "y": 23.606595993041992
+          },
+          "to": {
+            "x": 14,
+            "y": 24
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 14,
+            "y": 24
+          },
+          "control1": {
+            "x": 14.151041030883789,
+            "y": 24.393404006958008
+          },
+          "control2": {
+            "x": 28.795503616333008,
+            "y": 24.105846405029297
+          },
+          "to": {
+            "x": 25,
+            "y": 28
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 25,
+            "y": 28
+          },
+          "control1": {
+            "x": 21.204496383666992,
+            "y": 31.894153594970703
+          },
+          "control2": {
+            "x": 14.337942123413086,
+            "y": 38.9554328918457
+          },
+          "to": {
+            "x": 14,
+            "y": 37
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 14,
+            "y": 37
+          },
+          "control1": {
+            "x": 13.662057876586914,
+            "y": 35.0445671081543
+          },
+          "control2": {
+            "x": 9.419442176818848,
+            "y": 41.9858512878418
+          },
+          "to": {
+            "x": 7,
+            "y": 40
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 7,
+            "y": 40
+          },
+          "control1": {
+            "x": 4.580557823181152,
+            "y": 38.0141487121582
+          },
+          "control2": {
+            "x": 4,
+            "y": 35
+          },
+          "to": {
+            "x": 4,
+            "y": 35
+          }
+        }
+      ],
+      "surface": "grass",
+      "elevation": 0.5,
+      "boundary": "none"
+    },
+    {
+      "id": "drawn-area-2",
+      "segments": [
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 8,
+            "y": 36
+          },
+          "control1": {
+            "x": 8.19858455657959,
+            "y": 30.370309829711914
+          },
+          "control2": {
+            "x": 12.012131214141846,
+            "y": 32.26183891296387
+          },
+          "to": {
+            "x": 8,
+            "y": 31
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 8,
+            "y": 31
+          },
+          "control1": {
+            "x": 3.9878687858581543,
+            "y": 29.738161087036133
+          },
+          "control2": {
+            "x": 8.684638977050781,
+            "y": 27.397111892700195
+          },
+          "to": {
+            "x": 12,
+            "y": 27
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 12,
+            "y": 27
+          },
+          "control1": {
+            "x": 15.315361022949219,
+            "y": 26.602888107299805
+          },
+          "control2": {
+            "x": 17.3474178314209,
+            "y": 24.819021224975586
+          },
+          "to": {
+            "x": 18,
+            "y": 28
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 18,
+            "y": 28
+          },
+          "control1": {
+            "x": 18.6525821685791,
+            "y": 31.180978775024414
+          },
+          "control2": {
+            "x": 18.114842414855957,
+            "y": 33.265079498291016
+          },
+          "to": {
+            "x": 16,
+            "y": 34
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 16,
+            "y": 34
+          },
+          "control1": {
+            "x": 13.885157585144043,
+            "y": 34.734920501708984
+          },
+          "control2": {
+            "x": 10.45121955871582,
+            "y": 37.75510787963867
+          },
+          "to": {
+            "x": 10,
+            "y": 37
+          }
+        },
+        {
+          "kind": "cubic",
+          "from": {
+            "x": 10,
+            "y": 37
+          },
+          "control1": {
+            "x": 9.54878044128418,
+            "y": 36.24489212036133
+          },
+          "control2": {
+            "x": 7.898842811584473,
+            "y": 35.894222259521484
+          },
+          "to": {
+            "x": 8,
+            "y": 36
+          }
+        }
+      ],
+      "surface": "grass",
+      "elevation": 1,
+      "boundary": "none"
+    },
+    {
+      "id": "rectangle-area-1",
+      "segments": [
+        {
+          "kind": "line",
+          "from": {
+            "x": 30,
+            "y": 32
+          },
+          "to": {
+            "x": 39,
+            "y": 32
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 39,
+            "y": 32
+          },
+          "to": {
+            "x": 39,
+            "y": 37
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 39,
+            "y": 37
+          },
+          "to": {
+            "x": 30,
+            "y": 37
+          }
+        },
+        {
+          "kind": "line",
+          "from": {
+            "x": 30,
+            "y": 37
+          },
+          "to": {
+            "x": 30,
+            "y": 32
+          }
+        }
+      ],
+      "geometry": {
+        "kind": "rectangle",
+        "x": 30,
+        "y": 32,
+        "width": 9,
+        "height": 5
+      },
+      "surface": "none",
+      "elevation": 0,
+      "boundary": "wall",
+      "portals": [
+        {
+          "id": "wall-door-1",
+          "kind": "sliding-door",
+          "position": 0.75
+        },
+        {
+          "id": "wall-door-2",
+          "kind": "sliding-door",
+          "position": 0.21428571428571427
+        }
+      ]
+    },
+    {
+      "id": "circle-area-1",
+      "segments": [
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 46.1623,
+            "y": 41
+          },
+          "control": {
+            "x": 46.1623,
+            "y": 42.30986754829244
+          },
+          "to": {
+            "x": 45.236083774146216,
+            "y": 43.236083774146216
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 45.236083774146216,
+            "y": 43.236083774146216
+          },
+          "control": {
+            "x": 44.30986754829244,
+            "y": 44.1623
+          },
+          "to": {
+            "x": 43,
+            "y": 44.1623
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 43,
+            "y": 44.1623
+          },
+          "control": {
+            "x": 41.69013245170756,
+            "y": 44.1623
+          },
+          "to": {
+            "x": 40.763916225853784,
+            "y": 43.236083774146216
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 40.763916225853784,
+            "y": 43.236083774146216
+          },
+          "control": {
+            "x": 39.8377,
+            "y": 42.30986754829244
+          },
+          "to": {
+            "x": 39.8377,
+            "y": 41
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 39.8377,
+            "y": 41
+          },
+          "control": {
+            "x": 39.8377,
+            "y": 39.69013245170756
+          },
+          "to": {
+            "x": 40.76391622585378,
+            "y": 38.763916225853784
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 40.76391622585378,
+            "y": 38.763916225853784
+          },
+          "control": {
+            "x": 41.69013245170756,
+            "y": 37.8377
+          },
+          "to": {
+            "x": 43,
+            "y": 37.8377
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 43,
+            "y": 37.8377
+          },
+          "control": {
+            "x": 44.30986754829244,
+            "y": 37.8377
+          },
+          "to": {
+            "x": 45.236083774146216,
+            "y": 38.76391622585378
+          }
+        },
+        {
+          "kind": "quadratic",
+          "from": {
+            "x": 45.236083774146216,
+            "y": 38.76391622585378
+          },
+          "control": {
+            "x": 46.1623,
+            "y": 39.69013245170756
+          },
+          "to": {
+            "x": 46.1623,
+            "y": 41
+          }
+        }
+      ],
+      "geometry": {
+        "kind": "circle",
+        "center": {
+          "x": 43,
+          "y": 41
+        },
+        "radius": 3.1623
+      },
+      "surface": "none",
+      "elevation": 0,
+      "boundary": "wall",
+      "portals": [
+        {
+          "id": "wall-door-3",
+          "kind": "sliding-door",
+          "position": 0.3517841282266891
+        },
+        {
+          "id": "wall-door-4",
+          "kind": "sliding-door",
+          "position": 0.9045877582972005
+        },
+        {
+          "id": "wall-door-5",
+          "kind": "sliding-door",
+          "position": 0.6533133809924225
+        },
+        {
+          "id": "wall-door-6",
+          "kind": "sliding-door",
+          "position": 0.15076462638286675
         }
       ]
     }
@@ -816,12 +1276,117 @@
         "y": 22
       },
       "radius": 0.7152554453226129
+    },
+    {
+      "id": "tree-19",
+      "kind": "tree",
+      "position": {
+        "x": 12,
+        "y": 31
+      },
+      "radius": 1.5
+    },
+    {
+      "id": "tree-20",
+      "kind": "tree",
+      "position": {
+        "x": 20,
+        "y": 27
+      },
+      "radius": 1.5
+    },
+    {
+      "id": "tree-21",
+      "kind": "tree",
+      "position": {
+        "x": 13,
+        "y": 27
+      },
+      "radius": 2.4779396889201024
     }
   ],
   "deploymentEdges": [
-    "south"
+    "west"
   ],
-  "enemyPlacements": [],
+  "enemyPlacements": [
+    {
+      "id": "gang-member-1",
+      "type": "gang-member",
+      "name": "Gang Member 1",
+      "position": {
+        "x": 20,
+        "y": 10
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-green-v1.png"
+    },
+    {
+      "id": "gang-leader-1",
+      "type": "gang-leader",
+      "name": "Gang Leader 1",
+      "position": {
+        "x": 28,
+        "y": 12
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-brown-v1.png"
+    },
+    {
+      "id": "gang-member-2",
+      "type": "gang-member",
+      "name": "Gang Member 2",
+      "position": {
+        "x": 41,
+        "y": 22
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-brown-v1.png"
+    },
+    {
+      "id": "gang-member-3",
+      "type": "gang-member",
+      "name": "Gang Member 3",
+      "position": {
+        "x": 49,
+        "y": 26
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-brown-v1.png"
+    },
+    {
+      "id": "gang-member-4",
+      "type": "gang-member",
+      "name": "Gang Member 4",
+      "position": {
+        "x": 45,
+        "y": 15
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v1.png"
+    },
+    {
+      "id": "gang-member-5",
+      "type": "gang-member",
+      "name": "Gang Member 5",
+      "position": {
+        "x": 27,
+        "y": 22
+      },
+      "facing": "north",
+      "avatarPath": "/generated/avatars/pool/male/male-athletic-black-black-blue-v2.png"
+    },
+    {
+      "id": "gang-member-6",
+      "type": "gang-member",
+      "name": "Gang Member 6",
+      "position": {
+        "x": 16,
+        "y": 27
+      },
+      "facing": "south",
+      "avatarPath": "/generated/avatars/pool/female/female-athletic-black-black-blue-v1.png"
+    }
+  ],
   "fireCells": [],
   "smokeCells": []
 }

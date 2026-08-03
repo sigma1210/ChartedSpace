@@ -1,7 +1,7 @@
 import type { CombatScenario, Combatant, DoorSegment, GridPoint, PlannedMove, TacticalLightSource, WallSegment } from "./types";
 import { distanceInSquares, snapShotTarget } from "./combatResolution";
 import { tacticalMovementEdgeKey } from "./tacticalTerrain";
-import { tacticalCellsSeparatedBySegment, tacticalMovementStepCrossesWall } from "./tacticalSegmentGeometry";
+import { tacticalCellsAlongWall, tacticalCellsSeparatedBySegment, tacticalMovementStepCrossesWall, tacticalWallBlockedMovementEdgeKeys } from "./tacticalSegmentGeometry";
 
 export const pointKey = (point: GridPoint) => `${point.x}:${point.y}`;
 export const activeOccupantCounts = (combatants: readonly Pick<Combatant, "id" | "position" | "defeated">[], excludedCombatantId?: string) => {
@@ -46,11 +46,21 @@ const doorAdjacentCells = (door: DoorSegment): GridPoint[] => {
   return [separated.first, separated.second];
 };
 
-const blockedCells = (scenario: CombatScenario, movingId: string) => new Set([
-  ...scenario.objects.filter((object) => object.kind === "cover").map((object) => pointKey(object.position)),
-  ...(scenario.treeTrunkCells ?? []).map(pointKey),
-  ...scenario.combatants.filter((unit) => unit.id !== movingId && !unit.defeated).map((unit) => pointKey(unit.position)),
-]);
+export type TacticalPathfindingContext = {
+  blockedTerrainCells: ReadonlySet<string>;
+  blockedEdges: ReadonlySet<string>;
+};
+
+export const prepareTacticalPathfindingContext = (scenario: CombatScenario): TacticalPathfindingContext => ({
+  blockedTerrainCells: new Set([
+    ...scenario.objects.filter((object) => object.kind === "cover").map((object) => pointKey(object.position)),
+    ...(scenario.treeTrunkCells ?? []).map(pointKey),
+  ]),
+  blockedEdges: new Set(
+    [...scenario.walls, ...scenario.doors.filter((door) => !door.open)]
+      .flatMap((segment) => [...tacticalWallBlockedMovementEdgeKeys(segment)]),
+  ),
+});
 
 export const meleeEnemies = (scenario: CombatScenario, combatantId: string) => {
   const unit = scenario.combatants.find((combatant) => combatant.id === combatantId && !combatant.defeated);
@@ -70,7 +80,17 @@ export const treatableAllies = (scenario: CombatScenario, combatantId: string) =
     && (patient.id === medic.id || Math.abs(patient.position.x - medic.position.x) + Math.abs(patient.position.y - medic.position.y) === 1));
 };
 
-const validStep = (scenario: CombatScenario, movingId: string, from: GridPoint, to: GridPoint, allowOccupiedDestination = false) => {
+const validStep = (
+  scenario: CombatScenario,
+  movingId: string,
+  from: GridPoint,
+  to: GridPoint,
+  allowOccupiedDestination = false,
+  pathfinding = prepareTacticalPathfindingContext(scenario),
+  occupiedCells = new Set(scenario.combatants
+    .filter((unit) => unit.id !== movingId && !unit.defeated)
+    .map((unit) => pointKey(unit.position))),
+) => {
   if (to.x < 0 || to.y < 0 || to.x >= scenario.width || to.y >= scenario.height) return false;
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
@@ -79,15 +99,16 @@ const validStep = (scenario: CombatScenario, movingId: string, from: GridPoint, 
   if (diagonal) {
     if (terrainHeightAt(scenario, from) !== terrainHeightAt(scenario, to)) return false;
     const corners = [{ x: to.x, y: from.y }, { x: from.x, y: to.y }];
-    if (corners.some((corner) => blockedCells(scenario, movingId).has(pointKey(corner)) || terrainHeightAt(scenario, corner) !== terrainHeightAt(scenario, from))) return false;
+    if (corners.some((corner) => pathfinding.blockedTerrainCells.has(pointKey(corner))
+      || occupiedCells.has(pointKey(corner))
+      || terrainHeightAt(scenario, corner) !== terrainHeightAt(scenario, from))) return false;
     const edges = [[from, corners[0]], [from, corners[1]], [corners[0], to], [corners[1], to]] as const;
-    if (edges.some(([start, end]) => scenario.walls.some((wall) => wallBlocksStep(start, end, wall)) || scenario.doors.some((door) => !door.open && wallBlocksStep(start, end, door)))) return false;
+    if (edges.some(([start, end]) => pathfinding.blockedEdges.has(tacticalMovementEdgeKey(start, end)))) return false;
   }
   const changesElevation = terrainHeightAt(scenario, from) !== terrainHeightAt(scenario, to);
   if (changesElevation && !(scenario.elevationAccessCells ?? []).some((point) => samePoint(point, from) || samePoint(point, to))) return false;
-  if (!allowOccupiedDestination && blockedCells(scenario, movingId).has(pointKey(to))) return false;
-  if (scenario.walls.some((segment) => wallBlocksStep(from, to, segment))) return false;
-  if (scenario.doors.some((door) => !door.open && wallBlocksStep(from, to, door))) return false;
+  if (!allowOccupiedDestination && (pathfinding.blockedTerrainCells.has(pointKey(to)) || occupiedCells.has(pointKey(to)))) return false;
+  if (pathfinding.blockedEdges.has(tacticalMovementEdgeKey(from, to))) return false;
   return true;
 };
 
@@ -170,8 +191,76 @@ export const pathWithinMovementAllowance = (scenario: Pick<CombatScenario, "terr
   return result;
 };
 
+type TacticalPathNode = {
+  point: GridPoint;
+  cost: number;
+  estimate: number;
+  order: number;
+  facing: Combatant["facing"];
+  parent: TacticalPathNode | null;
+};
+
+const compareTacticalPathNodes = (first: TacticalPathNode, second: TacticalPathNode) =>
+  first.estimate - second.estimate || first.cost - second.cost || first.order - second.order;
+
+class TacticalPathPriorityQueue {
+  private readonly nodes: TacticalPathNode[] = [];
+
+  get size() {
+    return this.nodes.length;
+  }
+
+  push(node: TacticalPathNode) {
+    this.nodes.push(node);
+    let index = this.nodes.length - 1;
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (compareTacticalPathNodes(this.nodes[parentIndex], node) <= 0) break;
+      this.nodes[index] = this.nodes[parentIndex];
+      index = parentIndex;
+    }
+    this.nodes[index] = node;
+  }
+
+  pop() {
+    const first = this.nodes[0];
+    const last = this.nodes.pop();
+    if (!first || !last || this.nodes.length === 0) return first;
+    let index = 0;
+    while (true) {
+      const leftIndex = index * 2 + 1;
+      const rightIndex = leftIndex + 1;
+      if (leftIndex >= this.nodes.length) break;
+      const childIndex = rightIndex < this.nodes.length
+        && compareTacticalPathNodes(this.nodes[rightIndex], this.nodes[leftIndex]) < 0
+        ? rightIndex
+        : leftIndex;
+      if (compareTacticalPathNodes(this.nodes[childIndex], last) >= 0) break;
+      this.nodes[index] = this.nodes[childIndex];
+      index = childIndex;
+    }
+    this.nodes[index] = last;
+    return first;
+  }
+}
+
+const tacticalPathForNode = (node: TacticalPathNode) => {
+  const path: GridPoint[] = [];
+  let current: TacticalPathNode | null = node;
+  while (current?.parent) {
+    path.push(current.point);
+    current = current.parent;
+  }
+  return path.reverse();
+};
+
 /** Returns the shortest legal path to any goal, excluding the combatant's starting cell. */
-export const shortestPathToAny = (scenario: CombatScenario, combatantId: string, goals: GridPoint[]) => {
+export const shortestPathToAny = (
+  scenario: CombatScenario,
+  combatantId: string,
+  goals: GridPoint[],
+  pathfinding = prepareTacticalPathfindingContext(scenario),
+) => {
   const unit = scenario.combatants.find((combatant) => combatant.id === combatantId && !combatant.defeated);
   if (!unit || goals.length === 0) return null;
   const goalKeys = new Set(goals.map(pointKey));
@@ -179,26 +268,27 @@ export const shortestPathToAny = (scenario: CombatScenario, combatantId: string,
 
   const heuristic = (point: GridPoint) => Math.min(...goals.map((goal) => Math.abs(goal.x - point.x) + Math.abs(goal.y - point.y)));
   const stateKey = (point: GridPoint, facing: Combatant["facing"]) => `${pointKey(point)}:${facing}`;
-  const open: { point: GridPoint; path: GridPoint[]; cost: number; estimate: number; order: number; facing: Combatant["facing"] }[] = [
-    { point: unit.position, path: [], cost: 0, estimate: heuristic(unit.position), order: 0, facing: unit.facing },
-  ];
+  const open = new TacticalPathPriorityQueue();
+  open.push({ point: unit.position, cost: 0, estimate: heuristic(unit.position), order: 0, facing: unit.facing, parent: null });
   const bestCost = new Map([[stateKey(unit.position, unit.facing), 0]]);
+  const occupiedCells = new Set(scenario.combatants
+    .filter((combatant) => combatant.id !== combatantId && !combatant.defeated)
+    .map((combatant) => pointKey(combatant.position)));
   let order = 1;
 
-  while (open.length > 0) {
-    open.sort((a, b) => a.estimate - b.estimate || a.cost - b.cost || a.order - b.order);
-    const current = open.shift()!;
+  while (open.size > 0) {
+    const current = open.pop()!;
     if (current.cost !== bestCost.get(stateKey(current.point, current.facing))) continue;
-    if (goalKeys.has(pointKey(current.point))) return current.path;
+    if (goalKeys.has(pointKey(current.point))) return tacticalPathForNode(current);
 
     for (const destination of movementNeighbors(current.point)) {
-      if (!validStep(scenario, combatantId, current.point, destination)) continue;
+      if (!validStep(scenario, combatantId, current.point, destination, false, pathfinding, occupiedCells)) continue;
       for (const nextFacing of movementFacingChoices(current.facing, current.point, destination, false)) {
         const cost = current.cost + turnDistance(current.facing, nextFacing) + movementStepCost(scenario, current.point, destination, nextFacing);
         const key = stateKey(destination, nextFacing);
         if (cost >= (bestCost.get(key) ?? Number.POSITIVE_INFINITY)) continue;
         bestCost.set(key, cost);
-        open.push({ point: destination, path: [...current.path, destination], cost, estimate: cost + heuristic(destination), order, facing: nextFacing });
+        open.push({ point: destination, cost, estimate: cost + heuristic(destination), order, facing: nextFacing, parent: current });
         order += 1;
       }
     }
@@ -414,16 +504,42 @@ export const tacticalLightingLevelAt = (scenario: CombatScenario, point: GridPoi
 
 const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
   const smoke = new Set((scenario.smokeCells ?? []).map(pointKey));
+  const treeTrunks = new Set((scenario.treeTrunkCells ?? []).map(pointKey));
   const closeMachinery = closeMachineryCellKeys(scenario);
   const blockingSegments: WallSegment[] = [
     ...scenario.walls,
     ...scenario.doors.filter((door) => !door.open),
   ];
-  const edgeClear = (from: GridPoint, to: GridPoint) => !blockingSegments.some((segment) => wallBlocksStep(from, to, segment));
+  const blockedEdges = new Set(blockingSegments.flatMap((segment) => [...tacticalWallBlockedMovementEdgeKeys(segment)]));
+  const blockingSegmentsByCell = new Map<string, WallSegment[]>();
+  blockingSegments.forEach((segment) => {
+    tacticalCellsAlongWall(segment).forEach((cell) => {
+      const key = pointKey(cell);
+      blockingSegmentsByCell.set(key, [...blockingSegmentsByCell.get(key) ?? [], segment]);
+    });
+  });
+  const candidateSegments = (from: GridPoint, to: GridPoint) => {
+    const candidates = new Set<WallSegment>();
+    const samples = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)) * 8;
+    for (let index = 0; index <= samples; index += 1) {
+      const point = samples === 0 ? from : {
+        x: Math.floor(from.x + 0.5 + (to.x - from.x) * index / samples),
+        y: Math.floor(from.y + 0.5 + (to.y - from.y) * index / samples),
+      };
+      for (let xOffset = -1; xOffset <= 1; xOffset += 1) {
+        for (let yOffset = -1; yOffset <= 1; yOffset += 1) {
+          blockingSegmentsByCell.get(pointKey({ x: point.x + xOffset, y: point.y + yOffset }))
+            ?.forEach((segment) => candidates.add(segment));
+        }
+      }
+    }
+    return candidates;
+  };
+  const edgeClear = (from: GridPoint, to: GridPoint) => !blockedEdges.has(tacticalMovementEdgeKey(from, to));
 
   return (from: GridPoint, to: GridPoint) => {
     if (smoke.has(pointKey(from)) || smoke.has(pointKey(to))) return false;
-    if (blockingSegments.some((segment) => wallBlocksStep(from, to, segment))) return false;
+    if ([...candidateSegments(from, to)].some((segment) => wallBlocksStep(from, to, segment))) return false;
     const highestEndpoint = Math.max(terrainHeightAt(scenario, from), terrainHeightAt(scenario, to));
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -434,6 +550,7 @@ const preparedTacticalLineOfSight = (scenario: CombatScenario) => {
       if (samePoint(next, cell)) continue;
       const nextKey = pointKey(next);
       if (smoke.has(nextKey)) return false;
+      if (treeTrunks.has(nextKey) && !samePoint(next, from) && !samePoint(next, to)) return false;
       if (!samePoint(next, to) && terrainHeightAt(scenario, next) > highestEndpoint) return false;
       if (closeMachinery.has(nextKey) && !samePoint(next, from) && !samePoint(next, to)) {
         const fromAdjacent = Math.max(Math.abs(from.x - next.x), Math.abs(from.y - next.y)) === 1;
@@ -480,12 +597,71 @@ export const tacticalCrewVisiblePointKeys = (
   return visible;
 };
 
-export const tacticalVisibilityAssessment = (scenario: CombatScenario, observer: Combatant, target: Combatant) => {
-  const observerLighting = tacticalLightingLevelAt(scenario, observer.position);
-  const targetLighting = tacticalLightingLevelAt(scenario, target.position);
+export type TacticalVisibilityContext = {
+  lightingLevelAt: (point: GridPoint) => ReturnType<typeof tacticalLightingLevelAt>;
+  lineOfSight: (from: GridPoint, to: GridPoint) => boolean;
+};
+
+export const prepareTacticalVisibilityContext = (scenario: CombatScenario): TacticalVisibilityContext => {
+  const lineOfSight = preparedTacticalLineOfSight(scenario);
+  const interior = new Set((scenario.interiorCells ?? []).map(pointKey));
+  const flares = new Set((scenario.flareCells ?? []).map(pointKey));
+  const sources = tacticalLightSources(scenario);
+  const lightingByCell = new Map<string, ReturnType<typeof tacticalLightingLevelAt>>();
+  const sourceReaches = (source: TacticalLightSource, point: GridPoint) => {
+    if (Math.max(Math.abs(source.position.x - point.x), Math.abs(source.position.y - point.y)) > source.range
+      || !lineOfSight(source.position, point)) return false;
+    const sourceInside = interior.has(pointKey(source.position));
+    const pointInside = interior.has(pointKey(point));
+    if (sourceInside === pointInside) return true;
+    return scenario.doors.some((door) => {
+      if (!door.open) return false;
+      const [first, second] = doorAdjacentCells(door);
+      const firstInside = interior.has(pointKey(first));
+      const secondInside = interior.has(pointKey(second));
+      if (firstInside === secondInside) return false;
+      const insideCell = firstInside ? first : second;
+      const outsideCell = firstInside ? second : first;
+      return samePoint(point, sourceInside ? outsideCell : insideCell);
+    });
+  };
+  const baseLightingLevelAt = (point: GridPoint) => {
+    if (!interior.has(pointKey(point))) return scenario.exteriorLighting ?? lightingLevelAt(scenario, point);
+    if (scenario.exteriorLighting === "illuminated" && scenario.doors.some((door) => {
+      if (!door.open) return false;
+      const [first, second] = doorAdjacentCells(door);
+      const firstInside = interior.has(pointKey(first));
+      const secondInside = interior.has(pointKey(second));
+      if (firstInside === secondInside) return false;
+      return samePoint(point, firstInside ? first : second);
+    })) return "illuminated" as const;
+    return "dark" as const;
+  };
+  const lightingLevelAtPoint = (point: GridPoint) => {
+    const key = pointKey(point);
+    const cached = lightingByCell.get(key);
+    if (cached) return cached;
+    const lighting = flares.has(key) || sources.some((source) => sourceReaches(source, point))
+      ? "illuminated" as const
+      : baseLightingLevelAt(point);
+    lightingByCell.set(key, lighting);
+    return lighting;
+  };
+  return { lightingLevelAt: lightingLevelAtPoint, lineOfSight };
+};
+
+export const tacticalVisibilityAssessment = (
+  scenario: CombatScenario,
+  observer: Combatant,
+  target: Combatant,
+  prepared?: TacticalVisibilityContext,
+) => {
+  const observerLighting = prepared?.lightingLevelAt(observer.position) ?? tacticalLightingLevelAt(scenario, observer.position);
+  const targetLighting = prepared?.lightingLevelAt(target.position) ?? tacticalLightingLevelAt(scenario, target.position);
   const range = distanceInSquares(observer, target);
   const visionEnhanced = observer.visionMode === "enhanced" || observer.weapon.enhancedVision === true;
-  const geometricLineOfSight = hasLineOfSight(scenario, observer.position, target.position);
+  const geometricLineOfSight = prepared?.lineOfSight(observer.position, target.position)
+    ?? hasLineOfSight(scenario, observer.position, target.position);
 
   if (target.concealed) return {
     observable: false,
@@ -671,11 +847,13 @@ export const grenadeThrowCoverModifier = (scenario: CombatScenario, throwerId: s
   return coverProtection(aimedScenario, sightSource.id, throwerId) > 0 ? -2 : 0;
 };
 
-export const tacticalRangedEnemies = (scenario: CombatScenario, combatantId: string) => {
+export const tacticalRangedEnemies = (scenario: CombatScenario, combatantId: string, visibility?: TacticalVisibilityContext) => {
   const attacker = scenario.combatants.find((unit) => unit.id === combatantId && !unit.defeated);
   if (!attacker) return [];
   return scenario.combatants.filter((target) => target.side !== attacker.side && !target.defeated
-    && inFieldOfFire(attacker, target.position) && snapShotTarget(attacker, target) && tacticalVisibilityAssessment(scenario, attacker, target).observable);
+    && inFieldOfFire(attacker, target.position)
+    && snapShotTarget(attacker, target)
+    && tacticalVisibilityAssessment(scenario, attacker, target, visibility).observable);
 };
 
 export const reachableOpenMapMovement = ({ width, height, origin, originElevationLevel, facing, allowance, trotting, blockedCells = new Set<string>(), blockedEdges = new Set<string>(), activeOccupantsByCell = new Map<string, number>(), terrainByCell = {}, elevationLevelByCell = {}, bridges = [], closeMachineryCells = [], elevationAccessCells = [], elevationTransitions = [] }: { width: number; height: number; origin: GridPoint; originElevationLevel?: number; facing: Combatant["facing"]; allowance: number; trotting: boolean; blockedCells?: ReadonlySet<string>; blockedEdges?: ReadonlySet<string>; activeOccupantsByCell?: ReadonlyMap<string, number>; terrainByCell?: CombatScenario["terrainByCell"]; elevationLevelByCell?: CombatScenario["elevationLevelByCell"]; bridges?: CombatScenario["bridges"]; closeMachineryCells?: GridPoint[]; elevationAccessCells?: GridPoint[]; elevationTransitions?: CombatScenario["elevationTransitions"] }) => {
@@ -776,6 +954,7 @@ export const reachableOpenMapMovement = ({ width, height, origin, originElevatio
       if (destination.x < 0 || destination.y < 0 || destination.x >= width || destination.y >= height) continue;
       if (blockedCells.has(pointKey(destination))) continue;
       const destinationLevels = availableLevels(destination).filter((destinationLevel) => destinationLevel === current.level
+        || Math.abs(destinationLevel - current.level) === 0.5
         || Boolean(transitionForStep(current.point, current.level, destination, destinationLevel))
         || (elevationAccess.has(pointKey(current.point)) || elevationAccess.has(pointKey(destination))))
         .filter((destinationLevel) =>

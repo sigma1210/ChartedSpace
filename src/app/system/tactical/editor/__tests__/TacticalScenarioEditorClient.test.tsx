@@ -1,19 +1,67 @@
 /** @jest-environment jsdom */
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import TacticalScenarioEditorClient, {
+  emptyTacticalScenarioDraft,
   fitTacticalTracingTemplate,
   removeDrawnRaisedAreaCandidate,
   removeConsolePlacementOperations,
   resizeTacticalTracingTemplate,
   tacticalElevationTransitionPlacementCandidate,
   tacticalEditorMarkerInteractionEnabled,
+  upgradeLegacyTacticalEditorAreas,
 } from "../TacticalScenarioEditorClient";
 import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDefinition } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
+import { TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY } from "../tacticalEditorHudLayoutStorage";
 
-jest.mock("../../TacticalMapPageClient", () => ({ __esModule: true, default: () => null }));
+jest.mock("../../TacticalMapPageClient", () => ({
+  __esModule: true,
+  default: ({ draftPlaytest }: { draftPlaytest?: { onExit: () => void } }) => draftPlaytest
+    ? <button type="button" onClick={draftPlaytest.onExit}>Exit draft playtest</button>
+    : null,
+}));
+
+const penClick = (preview: HTMLElement, x: number, y: number, pointerId: number) => {
+  fireEvent.pointerDown(preview, { clientX: x, clientY: y, pointerId });
+  fireEvent.pointerUp(preview, { clientX: x, clientY: y, pointerId });
+};
+
+const penDrag = (preview: HTMLElement, x: number, y: number, handleX: number, handleY: number, pointerId: number) => {
+  fireEvent.pointerDown(preview, { clientX: x, clientY: y, pointerId });
+  fireEvent.pointerMove(preview, { clientX: handleX, clientY: handleY, pointerId });
+  fireEvent.pointerUp(preview, { clientX: handleX, clientY: handleY, pointerId });
+};
+
+const chooseHudTool = (group: string, tool: string) => {
+  const groupButton = screen.getByRole("button", { name: `Open ${group} tools` });
+  if (groupButton.getAttribute("aria-expanded") !== "true") fireEvent.click(groupButton);
+  fireEvent.click(screen.getByRole("button", { name: `Choose ${tool} tool` }));
+};
+
+const openDrawingSettings = () => {
+  const button = screen.getByRole("button", { name: "Open Drawing Settings" });
+  if (button.getAttribute("aria-expanded") !== "true") fireEvent.click(button);
+};
+
+const openScenarioProperties = () => {
+  const menu = screen.getByRole("button", { name: "Scenario menu" });
+  if (menu.getAttribute("aria-expanded") !== "true") fireEvent.click(menu);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Scenario Properties…" }));
+  return screen.getByRole("dialog", { name: "Scenario Properties" });
+};
+
+const applyScenarioTitle = (title: string) => {
+  const dialog = openScenarioProperties();
+  fireEvent.change(within(dialog).getByLabelText("Scenario title"), { target: { value: title } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+};
+
+const openEditorIssues = () => {
+  fireEvent.click(screen.getByRole("button", { name: "Open editor issues" }));
+  return screen.getByRole("dialog", { name: "Editor issues" });
+};
 
 describe("TacticalScenarioEditorClient", () => {
   beforeAll(() => {
@@ -33,6 +81,7 @@ describe("TacticalScenarioEditorClient", () => {
   });
 
   beforeEach(() => {
+    window.localStorage.clear();
     global.fetch = jest.fn(() => new Promise<Response>(() => undefined)) as typeof fetch;
   });
 
@@ -41,40 +90,104 @@ describe("TacticalScenarioEditorClient", () => {
     Reflect.deleteProperty(global, "fetch");
   });
 
-  it("offers fire as a placement tool in the floating terrain palette", () => {
+  it("upgrades matching legacy surface and elevation outlines into one editable area", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    const segments = [
+      { kind: "line" as const, from: { x: 2, y: 2 }, to: { x: 6, y: 2 } },
+      { kind: "line" as const, from: { x: 6, y: 2 }, to: { x: 6, y: 6 } },
+      { kind: "line" as const, from: { x: 6, y: 6 }, to: { x: 2, y: 6 } },
+      { kind: "line" as const, from: { x: 2, y: 6 }, to: { x: 2, y: 2 } },
+    ];
+    definition.drawnAreas = [];
+    definition.drawnRaisedAreas = [{ id: "legacy-hill", segments }];
+    definition.drawnTerrainRegions = [{ id: "legacy-sand", kind: "sand", segments }];
+
+    const upgraded = upgradeLegacyTacticalEditorAreas(definition);
+
+    expect(upgraded.drawnAreas).toEqual([expect.objectContaining({
+      id: "legacy-hill",
+      surface: "sand",
+      elevation: 1,
+      boundary: "none",
+    })]);
+    expect(upgraded.drawnRaisedAreas).toEqual([]);
+    expect(upgraded.drawnTerrainRegions).toEqual([]);
+  });
+
+  it("upgrades legacy circles without portals into editable closed areas", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnTerrainPrimitives = [
+      { id: "legacy-wall-circle", shape: "circle", center: { x: 10, y: 10 }, radius: 3, terrainType: "wall" },
+      { id: "legacy-raised-circle", shape: "circle", center: { x: 20, y: 10 }, radius: 3, terrainType: "raised-area" },
+      {
+        id: "legacy-portal-circle",
+        shape: "circle",
+        center: { x: 30, y: 10 },
+        radius: 3,
+        terrainType: "wall",
+        portals: [{ id: "legacy-door", kind: "sliding-door", position: 0 }],
+      },
+    ];
+
+    const upgraded = upgradeLegacyTacticalEditorAreas(definition);
+
+    expect(upgraded.drawnAreas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "legacy-wall-circle", geometry: { kind: "circle", center: { x: 10, y: 10 }, radius: 3 }, surface: "none", elevation: 0, boundary: "wall" }),
+      expect.objectContaining({ id: "legacy-raised-circle", geometry: { kind: "circle", center: { x: 20, y: 10 }, radius: 3 }, surface: "none", elevation: 1, boundary: "none" }),
+    ]));
+    expect(upgraded.drawnAreas?.find((area) => area.id === "legacy-wall-circle")?.segments).toHaveLength(8);
+    expect(upgraded.drawnTerrainPrimitives).toEqual([
+      expect.objectContaining({ id: "legacy-portal-circle", portals: [expect.objectContaining({ id: "legacy-door" })] }),
+    ]);
+
+    const savedAndReloaded = upgradeLegacyTacticalEditorAreas(
+      cloneTacticalScenarioDefinition(upgraded),
+    );
+    const reloadedCircle = savedAndReloaded.drawnAreas?.find(
+      (area) => area.id === "legacy-wall-circle",
+    );
+    expect(reloadedCircle?.geometry).toEqual({
+      kind: "circle",
+      center: { x: 10, y: 10 },
+      radius: 3,
+    });
+    expect(reloadedCircle?.segments[0]?.from).toEqual({ x: 13, y: 10 });
+  });
+
+  it("keeps editor tools in the HUD without an object catalog", () => {
     const markup = renderToStaticMarkup(<TacticalScenarioEditorClient />);
 
-    expect(markup).toContain("Terrain Palette");
+    expect(markup).not.toContain("Object Catalog");
+    expect(markup).not.toContain("Open object catalog and tool options");
     expect(markup).toContain("Enemy Palette");
     expect(markup).toContain("Tracing Template");
     expect(markup).toContain(">Gang Member</span>");
     expect(markup).toContain(">Gang Leader</span>");
-    expect(markup).toContain(">Fire</button>");
-    expect(markup).toContain(">Wall</button>");
-    expect(markup).toContain(">Curved Wall</button>");
-    expect(markup).toContain(">Raised Area</button>");
-    expect(markup).toContain(">Raised Curve</button>");
-    expect(markup).toContain(">Draw Circle</button>");
-    expect(markup).toContain('aria-label="Circle type Wall"');
-    expect(markup).toContain('aria-label="Circle type Raised"');
-    expect(markup).toContain("Drawing precision");
-    expect(markup).toContain(">Draw Machinery</button>");
-    expect(markup).toContain(">Machinery Curve</button>");
-    expect(markup).toContain(">Draw Liquid H₂</button>");
-    expect(markup).toContain(">Liquid H₂ Curve</button>");
-    expect(markup).toContain(">Draw Grass</button>");
-    expect(markup).toContain(">Grass Curve</button>");
-    expect(markup).toContain(">Draw Water</button>");
-    expect(markup).toContain(">Water Curve</button>");
-    expect(markup).toContain(">Tree</button>");
-    expect(markup).toContain(">Bush</button>");
-    expect(markup).toContain(">Rock</button>");
-    expect(markup).toContain(">Stairs</button>");
-    expect(markup).toContain(">Ladder</button>");
-    expect(markup).toContain(">Ramp</button>");
-    expect(markup).toContain(">Door</button>");
-    expect(markup).toContain(">Wall Iris Valve</button>");
-    expect(markup).toContain(">Control Room</button>");
+    expect(markup).not.toContain(">Fire</button>");
+    expect(markup).not.toContain(">Wall</button>");
+    expect(markup).not.toContain(">Curved Wall</button>");
+    expect(markup).not.toContain(">Pen</button>");
+    expect(markup).not.toContain(">Draw Legacy Circle</button>");
+    expect(markup).not.toContain(">Circle</button>");
+    expect(markup).not.toContain('aria-label="Circle type Wall"');
+    expect(markup).not.toContain('aria-label="Circle type Raised"');
+    expect(markup).toContain("Open Drawing Settings");
+    expect(markup).not.toContain("Drawing precision");
+    expect(markup).not.toContain(">Draw Machinery</button>");
+    expect(markup).not.toContain(">Draw Liquid H₂</button>");
+    expect(markup).not.toContain(">Draw Grass</button>");
+    expect(markup).not.toContain(">Draw Sand</button>");
+    expect(markup).not.toContain(">Draw Water</button>");
+    expect(markup).not.toContain(">Tree</button>");
+    expect(markup).not.toContain(">Bush</button>");
+    expect(markup).not.toContain(">Rock</button>");
+    expect(markup).not.toContain("Wheel zoom · Space drag pan");
+    expect(markup).not.toContain(">Stairs</button>");
+    expect(markup).not.toContain(">Ladder</button>");
+    expect(markup).not.toContain(">Ramp</button>");
+    expect(markup).not.toContain(">Door</button>");
+    expect(markup).not.toContain(">Wall Iris Valve</button>");
+    expect(markup).not.toContain(">Control Room</button>");
     expect(markup).not.toContain(">Room 3x3</button>");
     expect(markup).not.toContain(">Room 3x5</button>");
     expect(markup).not.toContain(">Room 3x7</button>");
@@ -85,15 +198,47 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).not.toContain(">Raised Area 5x5</button>");
     expect(markup).not.toContain(">Raised Area 7x7</button>");
     expect(markup).not.toContain(">Legacy Iris Valve</button>");
-    expect(markup).toContain(">Hatch 1x1</button>");
-    expect(markup).toContain(">Liquid Hydrogen 2x2</button>");
-    expect(markup).toContain(">Liquid Hydrogen 3x3</button>");
-    expect(markup).toContain(">Liquid Hydrogen 4x4</button>");
-    expect(markup).toContain(">Interactive Human</button>");
-    expect(markup).toContain(">Deployment Zone 9x9</button>");
-    expect(markup).toContain("Crew deployment edges");
+    expect(markup).not.toContain(">Hatch 1x1</button>");
+    expect(markup).not.toContain(">Liquid Hydrogen 2x2</button>");
+    expect(markup).not.toContain(">Liquid Hydrogen 3x3</button>");
+    expect(markup).not.toContain(">Liquid Hydrogen 4x4</button>");
+    expect(markup).not.toContain(">Interactive Human</button>");
+    expect(markup).not.toContain(">Deployment Zone 9x9</button>");
+    expect(markup).not.toContain("Crew deployment edges");
     expect(markup).not.toContain("<title>");
     expect(markup).toContain('aria-label="Gang Member 1 · facing North"');
+  });
+
+  it("constrains the expanded editor canvas to the available height", () => {
+    render(<TacticalScenarioEditorClient />);
+
+    const canvas = screen.getByLabelText("Editor canvas");
+    expect(canvas.className).toContain("h-full");
+    expect(canvas.className).toContain("min-h-0");
+    expect(canvas.className).toContain("min-w-0");
+    expect(canvas.className).toContain("flex-1");
+    expect(canvas.parentElement?.className).toContain("flex");
+    expect(canvas.parentElement?.className).toContain("min-h-0");
+  });
+
+  it("restores and updates the editor HUD position and pinned state", async () => {
+    window.localStorage.setItem(TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY, JSON.stringify({
+      tools: { pinned: true, position: { x: 123, y: 87 } },
+    }));
+
+    render(<TacticalScenarioEditorClient />);
+
+    const toolsHud = screen.getByText("Tools").closest(".absolute") as HTMLElement;
+    await waitFor(() => {
+      expect(toolsHud.style.left).toBe("123px");
+      expect(toolsHud.style.top).toBe("87px");
+      expect(within(toolsHud).getByRole("button", { name: "Unpin HUD" })).toBeTruthy();
+    });
+
+    fireEvent.click(within(toolsHud).getByRole("button", { name: "Unpin HUD" }));
+    expect(JSON.parse(window.localStorage.getItem(TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY)!)).toEqual({
+      tools: { pinned: false, position: { x: 123, y: 87 } },
+    });
   });
 
   it("zooms the editor map toward the pointer and restores the fitted view", () => {
@@ -120,7 +265,7 @@ describe("TacticalScenarioEditorClient", () => {
       x: 0, y: 0, left: 0, top: 0, right: 720, bottom: 480, width: 720, height: 480, toJSON: () => ({}),
     } as DOMRect);
     fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
-    fireEvent.click(screen.getByRole("button", { name: "Fire" }));
+    chooseHudTool("Nature & effects", "Fire");
     const before = preview.getAttribute("viewBox")!.split(" ").map(Number);
 
     fireEvent.keyDown(window, { code: "Space" });
@@ -132,6 +277,224 @@ describe("TacticalScenarioEditorClient", () => {
     const after = preview.getAttribute("viewBox")!.split(" ").map(Number);
     expect(after[0]).toBeGreaterThan(before[0]);
     expect(screen.queryByText("Selected fire")).toBeNull();
+  });
+
+  it("switches between CAD select and hand tools with conventional shortcuts", () => {
+    render(<TacticalScenarioEditorClient />);
+    const selectTool = screen.getByRole("button", { name: "Select tool" });
+    const handTool = screen.getByRole("button", { name: "Hand tool" });
+
+    expect(selectTool.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.keyDown(window, { key: "h" });
+    expect(handTool.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.keyDown(window, { key: "v" });
+    expect(selectTool.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("exposes the core drawing tools as labeled symbols in the horizontal HUD", () => {
+    render(<TacticalScenarioEditorClient />);
+    expect(screen.queryByRole("group", { name: "Drawing settings" })).toBeNull();
+    openDrawingSettings();
+    const drawingSettings = screen.getByRole("group", { name: "Drawing settings" });
+    expect(within(drawingSettings).getByLabelText("Drawing precision")).toBeTruthy();
+    expect(within(drawingSettings).getByLabelText("Map width")).toBeTruthy();
+    expect(within(drawingSettings).getByLabelText("Map height")).toBeTruthy();
+    expect(screen.queryByLabelText("Editor properties")).toBeNull();
+    expect(screen.queryByLabelText("Object catalog and options")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    expect(screen.queryByRole("group", { name: "Drawing settings" })).toBeNull();
+    const areaTool = screen.getByRole("button", { name: "Choose Pen tool" });
+
+    expect(areaTool.getAttribute("title")).toBe("Pen");
+    fireEvent.click(areaTool);
+    expect(areaTool.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Open Boundaries tools" }));
+    const wallTool = screen.getByRole("button", { name: "Choose Wall tool" });
+    expect(wallTool.getAttribute("title")).toBe("Wall");
+    fireEvent.click(wallTool);
+    expect(wallTool.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Choose Pen tool" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Interactions tools" }));
+    expect(screen.getByRole("button", { name: "Choose Control Room tool" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose Console 1x1 tool" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose Interactive Human tool" })).toBeTruthy();
+  });
+
+  it("resizes the map from Drawing Settings", () => {
+    render(<TacticalScenarioEditorClient />);
+    openDrawingSettings();
+    const drawingSettings = screen.getByRole("group", { name: "Drawing settings" });
+
+    fireEvent.change(within(drawingSettings).getByLabelText("Map width"), { target: { value: "80" } });
+    fireEvent.change(within(screen.getByRole("group", { name: "Drawing settings" })).getByLabelText("Map height"), { target: { value: "60" } });
+
+    expect(screen.getByText("Draft preview · 80×60")).toBeTruthy();
+  });
+
+  it.each([
+    ["Control Room", "control-room-1", "Console Editor", 2, 2],
+    ["Console 1x1", "console-1x1-1", "Console Editor", 12, 2],
+    ["Interactive Human", "interactive-human-1", "Human Interaction Editor", 14, 2],
+  ] as const)("places %s from the horizontal HUD and opens its editor", (tool, placementId, editorTitle, x, y) => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Interactions tools" }));
+    fireEvent.click(screen.getByRole("button", { name: `Choose ${tool} tool` }));
+
+    fireEvent.pointerDown(screen.getByLabelText("Scenario draft map preview"), {
+      clientX: x,
+      clientY: y,
+      pointerId: 150,
+    });
+
+    expect(screen.getByTestId(`editor-layer-terrain-placement:${placementId}`)).toBeTruthy();
+    expect(screen.getByText(editorTitle)).toBeTruthy();
+  });
+
+  it("configures an interactive human placed from the horizontal HUD", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Interactions tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Interactive Human tool" }));
+    fireEvent.pointerDown(screen.getByLabelText("Scenario draft map preview"), {
+      clientX: 14,
+      clientY: 2,
+      pointerId: 151,
+    });
+
+    expect(screen.getByText("Human Interaction Editor")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Human name"), { target: { value: "Mara Venn" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rotate interactive human 90 degrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add operation" }));
+    fireEvent.change(screen.getByLabelText("Success becomes"), { target: { value: "ally" } });
+    fireEvent.change(screen.getByLabelText("Failure becomes"), { target: { value: "enemy" } });
+
+    expect(screen.getByDisplayValue("Mara Venn")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rotate interactive human 90 degrees" }).textContent).toContain("Facing East");
+    expect(screen.getByDisplayValue("Interact with Mara Venn")).toBeTruthy();
+    expect((screen.getByLabelText("Success becomes") as HTMLSelectElement).value).toBe("ally");
+    expect((screen.getByLabelText("Failure becomes") as HTMLSelectElement).value).toBe("enemy");
+  });
+
+  it("drags a rectangle area, previews its dimensions, and opens its properties", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Rectangle area tool" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 140 });
+    fireEvent.pointerMove(preview, { clientX: 16, clientY: 14, pointerId: 140 });
+
+    const draftRectangle = screen.getByTestId("rectangle-area-draft-preview").querySelector("rect")!;
+    expect(draftRectangle.getAttribute("x")).toBe("10");
+    expect(draftRectangle.getAttribute("y")).toBe("10");
+    expect(draftRectangle.getAttribute("width")).toBe("6");
+    expect(draftRectangle.getAttribute("height")).toBe("4");
+
+    fireEvent.pointerUp(preview, { clientX: 16, clientY: 14, pointerId: 140 });
+
+    expect(screen.queryByTestId("rectangle-area-draft-preview")).toBeNull();
+    expect(screen.getByTestId("drawn-area-rectangle-area-1-segment-0")).toBeTruthy();
+    expect(screen.queryByTestId("drawn-area-rectangle-area-1-anchor-0")).toBeNull();
+    expect(screen.getByTestId("drawn-area-rectangle-area-1-rectangle-center-handle")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-rectangle-area-1-rectangle-bottom-right-handle")).toBeTruthy();
+    expect(screen.getByLabelText("Area surface fill")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "sand" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise area by half level" }));
+    fireEvent.change(screen.getByLabelText("Area boundary"), { target: { value: "wall" } });
+    fireEvent.change(screen.getByLabelText("Area use"), { target: { value: "crew-deployment" } });
+    expect(screen.getByTestId("drawn-area-rectangle-area-1").getAttribute("data-elevation-level")).toBe("0.5");
+    expect(screen.getByTestId("drawn-area-rectangle-area-1").getAttribute("data-boundary")).toBe("wall");
+    expect(screen.getByTestId("drawn-area-rectangle-area-1").getAttribute("data-deployment")).toBe("crew");
+    expect(screen.getByTestId("editor-layer-area:rectangle-area-1").textContent).toContain("Crew deployment");
+
+    fireEvent.pointerDown(screen.getByTestId("drawn-area-rectangle-area-1-rectangle-bottom-right-handle"), { clientX: 16, clientY: 14, pointerId: 141 });
+    fireEvent.pointerMove(preview, { clientX: 18, clientY: 15, pointerId: 141 });
+    fireEvent.pointerUp(preview, { clientX: 18, clientY: 15, pointerId: 141 });
+    const resizedRight = screen.getByTestId("drawn-area-rectangle-area-1-segment-1");
+    expect(resizedRight.getAttribute("x1")).toBe("18");
+    expect(resizedRight.getAttribute("x2")).toBe("18");
+  });
+
+  it("adds doors and iris valves from the HUD to Rectangle, Circle, and curved Pen boundary walls", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Rectangle area tool" }));
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 160 });
+    fireEvent.pointerMove(preview, { clientX: 16, clientY: 14, pointerId: 160 });
+    fireEvent.pointerUp(preview, { clientX: 16, clientY: 14, pointerId: 160 });
+    fireEvent.change(screen.getByLabelText("Area boundary"), { target: { value: "wall" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Boundaries tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Door tool" }));
+    fireEvent.pointerMove(preview, { clientX: 13, clientY: 10, pointerId: 161 });
+    expect(screen.getByTestId("wall-portal-preview")).toBeTruthy();
+    fireEvent.pointerDown(preview, { clientX: 13, clientY: 10, pointerId: 161 });
+    expect(screen.getByTestId("wall-portal-wall-door-1")).toBeTruthy();
+    expect(screen.getByTestId("editor-layer-portal:wall-door-1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Circle area tool" }));
+    fireEvent.pointerDown(preview, { clientX: 30, clientY: 10, pointerId: 162 });
+    fireEvent.pointerMove(preview, { clientX: 34, clientY: 10, pointerId: 162 });
+    fireEvent.pointerUp(preview, { clientX: 34, clientY: 10, pointerId: 162 });
+    fireEvent.change(screen.getByLabelText("Area boundary"), { target: { value: "wall" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Boundaries tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Wall iris valve tool" }));
+    fireEvent.pointerMove(preview, { clientX: 34, clientY: 10, pointerId: 163 });
+    fireEvent.pointerDown(preview, { clientX: 34, clientY: 10, pointerId: 163 });
+    expect(screen.getByTestId("wall-portal-wall-iris-valve-1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Pen tool" }));
+    penClick(preview, 40, 20, 164);
+    penDrag(preview, 46, 20, 46, 24, 165);
+    penClick(preview, 46, 26, 166);
+    penClick(preview, 40, 26, 167);
+    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.change(screen.getByLabelText("Area boundary"), { target: { value: "wall" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Boundaries tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Door tool" }));
+    fireEvent.pointerMove(preview, { clientX: 43, clientY: 19, pointerId: 168 });
+    fireEvent.pointerDown(preview, { clientX: 43, clientY: 19, pointerId: 168 });
+    expect(screen.getByTestId("wall-portal-wall-door-2")).toBeTruthy();
+  });
+
+  it("synchronizes layer selection, visibility, and locking with editor state", () => {
+    render(<TacticalScenarioEditorClient />);
+    expect(screen.queryByLabelText("Editor properties")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rotate selected placement 90 degrees" })).toBeNull();
+    const layer = screen.getByTestId("editor-layer-terrain-placement:control-room-alpha");
+
+    fireEvent.click(within(layer).getByRole("button", { name: "control-room-alpha" }));
+    expect(layer.className).toContain("bg-cyan-950/70");
+    const placementControl = screen.getByTestId("terrain-placement-control-control-room-alpha");
+    expect(placementControl.getAttribute("data-rotation")).toBe("0");
+    fireEvent.click(screen.getByRole("button", { name: "Rotate selected placement 90 degrees" }));
+    expect(placementControl.getAttribute("data-rotation")).toBe("90");
+    fireEvent.keyDown(window, { key: "r" });
+    expect(placementControl.getAttribute("data-rotation")).toBe("180");
+
+    fireEvent.click(within(layer).getByRole("button", { name: "Hide control-room-alpha" }));
+    expect(screen.getByRole("button", { name: "Show control-room-alpha" })).toBeTruthy();
+    expect(layer.className).not.toContain("bg-cyan-950/70");
+
+    fireEvent.click(within(layer).getByRole("button", { name: "Lock control-room-alpha" }));
+    expect(screen.getByRole("button", { name: "Unlock control-room-alpha" })).toBeTruthy();
+  });
+
+  it("collapses and restores the floating Layers HUD", () => {
+    render(<TacticalScenarioEditorClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Layers" }));
+    expect(screen.queryByLabelText("Editor layers")).toBeNull();
+
+    fireEvent.click(screen.getByText("HUDs"));
+    fireEvent.click(screen.getByRole("button", { name: "Show Layers" }));
+    expect(screen.getByLabelText("Editor layers")).toBeTruthy();
   });
 
   it.each(["stairs", "ladder"] as const)("places a %s across the selected edge between adjacent levels", (kind) => {
@@ -353,7 +716,7 @@ describe("TacticalScenarioEditorClient", () => {
 
   it("draws a diagonal wall between snapped grid vertices and selects it", () => {
     render(<TacticalScenarioEditorClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Wall" }));
+    chooseHudTool("Boundaries", "Wall");
     const preview = screen.getByLabelText("Scenario draft map preview");
 
     fireEvent.pointerDown(preview, { clientX: 10.2, clientY: 11.3, pointerId: 4 });
@@ -381,20 +744,18 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("x2")).toBe("20");
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("y2")).toBe("19");
 
-    fireEvent.click(screen.getByRole("button", { name: "Wall Iris Valve" }));
+    chooseHudTool("Boundaries", "Wall iris valve");
     fireEvent.pointerMove(preview, { clientX: 15, clientY: 15, pointerId: 7 });
     expect(screen.getByTestId("wall-portal-preview")).toBeTruthy();
     fireEvent.pointerDown(preview, { clientX: 15, clientY: 15, pointerId: 7 });
     expect(screen.getByTestId("wall-portal-wall-iris-valve-1")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Door" }));
+    chooseHudTool("Boundaries", "Door");
     fireEvent.pointerMove(preview, { clientX: 12, clientY: 12.5, pointerId: 8 });
     fireEvent.pointerDown(preview, { clientX: 12, clientY: 12.5, pointerId: 8 });
     expect(screen.getByTestId("wall-portal-wall-door-1")).toBeTruthy();
-    expect(screen.getByText("Selected portal")).toBeTruthy();
-    expect(screen.getByText("Door on drawn-wall-1")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
     const doorBeforeMove = screen.getByTestId("wall-portal-wall-door-1");
     const doorStartBeforeMove = Number(doorBeforeMove.getAttribute("x1"));
     fireEvent.pointerDown(doorBeforeMove, { clientX: 12, clientY: 12.5, pointerId: 9 });
@@ -407,14 +768,14 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.pointerMove(preview, { clientX: 18, clientY: 0, pointerId: 10 });
     fireEvent.pointerUp(preview, { clientX: 18, clientY: 0, pointerId: 10 });
     expect(Number(screen.getByTestId("wall-portal-wall-door-1").getAttribute("x1"))).toBeCloseTo(movedDoorStart);
-    expect(screen.getByText("Keep the portal on an open one-square position on its wall.")).toBeTruthy();
+    expect(within(openEditorIssues()).getByText("Keep the portal on an open one-square position on its wall.")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete portal" }));
+    fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.queryByTestId("wall-portal-wall-door-1")).toBeNull();
     expect(screen.getByTestId("drawn-wall-drawn-wall-1")).toBeTruthy();
     expect(screen.getByTestId("wall-portal-wall-iris-valve-1")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
     const irisBeforeMove = Number(screen.getByTestId("wall-portal-wall-iris-valve-1").querySelector("circle")?.getAttribute("cx"));
     fireEvent.pointerDown(screen.getByTestId("drawn-wall-drawn-wall-1"), { clientX: 15, clientY: 15, pointerId: 11 });
     fireEvent.pointerMove(preview, { clientX: 18, clientY: 17, pointerId: 11 });
@@ -428,8 +789,6 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.pointerUp(preview, { clientX: 0, clientY: 0, pointerId: 12 });
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("x1")).toBe("13");
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("y1")).toBe("13");
-    expect(screen.getByText("Deleting this wall also removes 1 attached portal.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Delete wall" })).toBeTruthy();
     fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.queryByTestId("drawn-wall-drawn-wall-1")).toBeNull();
     expect(screen.queryByTestId("wall-portal-wall-iris-valve-1")).toBeNull();
@@ -437,7 +796,7 @@ describe("TacticalScenarioEditorClient", () => {
 
   it("completes an enclosed wall outline with click-start and click-end", () => {
     render(<TacticalScenarioEditorClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Wall" }));
+    chooseHudTool("Boundaries", "Wall");
     const preview = screen.getByLabelText("Scenario draft map preview");
     const drawClickedWall = (
       from: { x: number; y: number },
@@ -465,7 +824,7 @@ describe("TacticalScenarioEditorClient", () => {
 
   it("draws, reshapes, moves, resizes, and deletes a curved wall", () => {
     render(<TacticalScenarioEditorClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Curved Wall" }));
+    chooseHudTool("Boundaries", "Curved wall");
     const preview = screen.getByLabelText("Scenario draft map preview");
 
     fireEvent.pointerDown(preview, { clientX: 5.2, clientY: 6.1, pointerId: 40 });
@@ -484,7 +843,7 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.pointerUp(preview, { clientX: 10.5, clientY: 12.25, pointerId: 41 });
     expect(screen.getByTestId("drawn-wall-drawn-wall-1").getAttribute("d")).toBe("M 5 6 Q 10.5 12.25 15 6");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
     fireEvent.pointerDown(screen.getByTestId("drawn-wall-drawn-wall-1"), { clientX: 10, clientY: 9, pointerId: 42 });
     fireEvent.pointerMove(preview, { clientX: 12, clientY: 10, pointerId: 42 });
     fireEvent.pointerUp(preview, { clientX: 12, clientY: 10, pointerId: 42 });
@@ -501,8 +860,9 @@ describe("TacticalScenarioEditorClient", () => {
 
   it("uses the selected drawing precision for wall vertices", () => {
     render(<TacticalScenarioEditorClient />);
+    openDrawingSettings();
     fireEvent.change(screen.getByLabelText("Drawing precision"), { target: { value: "half-grid" } });
-    fireEvent.click(screen.getByRole("button", { name: "Wall" }));
+    chooseHudTool("Boundaries", "Wall");
     const preview = screen.getByLabelText("Scenario draft map preview");
 
     fireEvent.pointerDown(preview, { clientX: 5.2, clientY: 6.3, pointerId: 45 });
@@ -516,13 +876,14 @@ describe("TacticalScenarioEditorClient", () => {
     expect(wall.getAttribute("y2")).toBe("9");
   });
 
-  it("draws, moves, resizes, retypes, and deletes a circle primitive", () => {
+  it("draws and edits a circle with the unified closed-area controls", () => {
     render(<TacticalScenarioEditorClient />);
+    openDrawingSettings();
     fireEvent.change(screen.getByLabelText("Drawing precision"), {
       target: { value: "quarter-grid" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Circle type Raised" }));
-    fireEvent.click(screen.getByRole("button", { name: "Draw Circle" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Circle area tool" }));
     const preview = screen.getByLabelText("Scenario draft map preview");
 
     fireEvent.pointerDown(preview, {
@@ -542,93 +903,109 @@ describe("TacticalScenarioEditorClient", () => {
       pointerId: 46,
     });
 
-    const circle = screen.getByTestId("terrain-circle-terrain-circle-1")
-      .querySelector("circle")!;
-    expect(circle.getAttribute("cx")).toBe("10.25");
-    expect(circle.getAttribute("cy")).toBe("10.25");
-    expect(circle.getAttribute("r")).toBe("4.25");
-    expect(screen.getByText("Circle · terrain-circle-1")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Circle type Raised" })
-      .getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.click(screen.getByRole("button", { name: "Circle type Wall" }));
-    expect(screen.getByRole("button", { name: "Circle type Wall" })
-      .getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("terrain-circle-terrain-circle-1")
-      .querySelector("circle")?.getAttribute("fill-opacity")).toBe("0");
-
-    fireEvent.click(screen.getByRole("button", { name: "Circle type Machinery" }));
-    expect(screen.getByRole("button", { name: "Circle type Machinery" })
-      .getAttribute("aria-pressed")).toBe("true");
+    const circle = screen.getByTestId("drawn-area-circle-area-1");
+    expect(circle.getAttribute("data-elevation-level")).toBe("0");
+    expect(screen.getByText("Area Properties")).toBeTruthy();
+    expect(screen.queryByTestId("drawn-area-circle-area-1-anchor-0")).toBeNull();
+    expect(screen.queryByTestId("drawn-area-circle-area-1-segment-0-control-handle")).toBeNull();
+    expect(screen.getByTestId("drawn-area-circle-area-1-circle-center-handle")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-circle-area-1-circle-radius-handle")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-circle-area-1-segment-0").getAttribute("d"))
+      .toContain("M 14.5 10.25 Q 14.5");
 
     fireEvent.pointerDown(
-      screen.getByTestId("terrain-circle-terrain-circle-1-center-handle"),
+      screen.getByTestId("drawn-area-circle-area-1-circle-center-handle"),
       { clientX: 10.25, clientY: 10.25, pointerId: 47 },
     );
     fireEvent.pointerMove(preview, {
-      clientX: 20.2,
-      clientY: 10.3,
+      clientX: 11.25,
+      clientY: 11.25,
       pointerId: 47,
     });
     fireEvent.pointerUp(preview, {
-      clientX: 20.2,
-      clientY: 10.3,
+      clientX: 11.25,
+      clientY: 11.25,
       pointerId: 47,
     });
-    expect(screen.getByTestId("terrain-circle-terrain-circle-1")
-      .querySelector("circle")?.getAttribute("cx")).toBe("20.25");
+    expect(screen.getByTestId("drawn-area-circle-area-1-circle-center-handle").getAttribute("cx")).toBe("11.25");
+    expect(screen.getByTestId("drawn-area-circle-area-1-circle-radius-handle").getAttribute("cx")).toBe("15.5");
 
     fireEvent.pointerDown(
-      screen.getByTestId("terrain-circle-terrain-circle-1-radius-handle"),
-      { clientX: 24.5, clientY: 10.25, pointerId: 48 },
+      screen.getByTestId("drawn-area-circle-area-1-circle-radius-handle"),
+      { clientX: 15.5, clientY: 11.25, pointerId: 48 },
     );
     fireEvent.pointerMove(preview, {
-      clientX: 25.2,
-      clientY: 10.3,
+      clientX: 15.25,
+      clientY: 11.25,
       pointerId: 48,
     });
     fireEvent.pointerUp(preview, {
-      clientX: 25.2,
-      clientY: 10.3,
+      clientX: 15.25,
+      clientY: 11.25,
       pointerId: 48,
     });
-    expect(screen.getByTestId("terrain-circle-terrain-circle-1")
-      .querySelector("circle")?.getAttribute("r")).toBe("5");
+    expect(screen.getByTestId("drawn-area-circle-area-1-circle-radius-handle").getAttribute("cx")).toBe("15.25");
+    expect(screen.getByTestId("drawn-area-circle-area-1-segment-0").getAttribute("d")).toContain("M 15.25 11.25 Q 15.25");
 
-    fireEvent.click(screen.getByRole("button", { name: "Circle type Liquid H₂" }));
-    expect(screen.getByLabelText("Circle liquid hydrogen filled")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Circle liquid hydrogen filled"));
-    expect((screen.getByLabelText("Circle liquid hydrogen filled") as HTMLInputElement).checked)
-      .toBe(false);
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "close-machinery" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise area by half level" }));
+    fireEvent.change(screen.getByLabelText("Area boundary"), { target: { value: "wall" } });
+    expect(circle.getAttribute("data-elevation-level")).toBe("0.5");
+    expect(circle.getAttribute("data-boundary")).toBe("wall");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete Circle" }));
-    expect(screen.queryByTestId("terrain-circle-terrain-circle-1")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Node edit tool" }));
+    fireEvent.doubleClick(screen.getByTestId("drawn-area-circle-area-1-segment-0"), { clientX: 15.25, clientY: 11.25 });
+    expect(screen.queryByTestId("drawn-area-circle-area-1-anchor-0")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete area" }));
+    expect(screen.queryByTestId("drawn-area-circle-area-1")).toBeNull();
+  });
+
+  it("draws a circle on top of a selected circle", () => {
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Areas tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Circle area tool" }));
+    const preview = screen.getByLabelText("Scenario draft map preview");
+
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 49 });
+    fireEvent.pointerMove(preview, { clientX: 14, clientY: 10, pointerId: 49 });
+    fireEvent.pointerUp(preview, { clientX: 14, clientY: 10, pointerId: 49 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose Circle area tool" }));
+    fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 50 });
+    fireEvent.pointerMove(preview, { clientX: 12, clientY: 10, pointerId: 50 });
+    fireEvent.pointerUp(preview, { clientX: 12, clientY: 10, pointerId: 50 });
+
+    expect(screen.getByTestId("drawn-area-circle-area-1")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-circle-area-2")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-circle-area-1-segment-0").getAttribute("d"))
+      .toContain("M 14 10 Q 14");
   });
 
   it("places, moves, and deletes doors and iris valves on a circle wall", () => {
     render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Boundaries tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Legacy circle wall tool" }));
+    expect(screen.getByText("Legacy Circle Properties")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Circle type Wall" }));
-    fireEvent.click(screen.getByRole("button", { name: "Draw Circle" }));
     const preview = screen.getByLabelText("Scenario draft map preview");
 
     fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 70 });
     fireEvent.pointerMove(preview, { clientX: 14, clientY: 10, pointerId: 70 });
     fireEvent.pointerUp(preview, { clientX: 14, clientY: 10, pointerId: 70 });
 
-    fireEvent.click(screen.getByRole("button", { name: "Door" }));
+    chooseHudTool("Boundaries", "Door");
     fireEvent.pointerMove(preview, { clientX: 14, clientY: 10, pointerId: 71 });
     expect(screen.getByTestId("wall-portal-preview")).toBeTruthy();
     fireEvent.pointerDown(preview, { clientX: 14, clientY: 10, pointerId: 71 });
     expect(screen.getByTestId("wall-portal-wall-door-1")).toBeTruthy();
-    expect(screen.getByText("Door on terrain-circle-1")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Wall Iris Valve" }));
+    chooseHudTool("Boundaries", "Wall iris valve");
     fireEvent.pointerMove(preview, { clientX: 6, clientY: 10, pointerId: 72 });
     fireEvent.pointerDown(preview, { clientX: 6, clientY: 10, pointerId: 72 });
     expect(screen.getByTestId("wall-portal-wall-iris-valve-1")).toBeTruthy();
-    expect(screen.getByText("Wall Iris Valve on terrain-circle-1")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
     const door = screen.getByTestId("wall-portal-wall-door-1");
     const originalCenterY = (
       Number(door.getAttribute("y1")) + Number(door.getAttribute("y2"))
@@ -642,178 +1019,319 @@ describe("TacticalScenarioEditorClient", () => {
     ) / 2;
     expect(movedCenterY).toBeLessThan(originalCenterY);
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete portal" }));
+    fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.queryByTestId("wall-portal-wall-door-1")).toBeNull();
     expect(screen.getByTestId("wall-portal-wall-iris-valve-1")).toBeTruthy();
     expect(screen.getByTestId("terrain-circle-terrain-circle-1")).toBeTruthy();
   });
 
-  it("draws and closes a raised area with a live enclosed-cell preview", () => {
+  it("draws and closes an area with a live enclosed-cell preview", () => {
     render(<TacticalScenarioEditorClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Raised Area" }));
-    const preview = screen.getByLabelText("Scenario draft map preview");
+    chooseHudTool("Areas", "Pen");
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
 
-    fireEvent.pointerDown(preview, { clientX: 20, clientY: 20, pointerId: 50 });
+    penClick(preview, 20, 20, 50);
     expect(screen.getByTestId("raised-area-draft-preview")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cancel outline" })).toBeTruthy();
-    fireEvent.pointerDown(preview, { clientX: 25, clientY: 20, pointerId: 51 });
-    fireEvent.pointerDown(preview, { clientX: 25, clientY: 25, pointerId: 52 });
+    penClick(preview, 25, 20, 51);
+    penClick(preview, 25, 25, 52);
     fireEvent.pointerMove(preview, { clientX: 20, clientY: 25, pointerId: 53 });
     expect(screen.getByTestId("raised-area-draft-preview").querySelectorAll("rect")).toHaveLength(25);
-    fireEvent.pointerDown(preview, { clientX: 20, clientY: 25, pointerId: 54 });
-    fireEvent.pointerMove(preview, { clientX: 20, clientY: 20, pointerId: 55 });
-    fireEvent.pointerDown(preview, { clientX: 20, clientY: 20, pointerId: 56 });
+    penClick(preview, 20, 25, 54);
+    fireEvent.click(screen.getByRole("button", { name: "Finish area" }));
 
     expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
-    expect(screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-0")).toBeTruthy();
-    expect(screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-3")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-0")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-3")).toBeTruthy();
+    expect(screen.getByText("Area Properties")).toBeTruthy();
+    expect((screen.getByLabelText("Area elevation level") as HTMLInputElement).value).toBe("0");
   });
 
-  it("cancels an unfinished raised-area outline with Escape", () => {
+  it("sets surface, half-level elevation, and boundary independently on one area", () => {
     render(<TacticalScenarioEditorClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Raised Curve" }));
-    const preview = screen.getByLabelText("Scenario draft map preview");
-    fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 60 });
+    chooseHudTool("Areas", "Pen");
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    penClick(preview, 20, 20, 57);
+    penClick(preview, 25, 20, 58);
+    penClick(preview, 25, 25, 59);
+    penClick(preview, 20, 25, 60);
+    penClick(preview, 20, 20, 61);
+
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "sand" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise area by half level" }));
+    fireEvent.change(screen.getByLabelText("Area boundary"), { target: { value: "wall" } });
+
+    expect((screen.getByLabelText("Area surface fill") as HTMLSelectElement).value).toBe("sand");
+    expect((screen.getByLabelText("Area elevation level") as HTMLInputElement).value).toBe("0.5");
+    expect((screen.getByLabelText("Area boundary") as HTMLSelectElement).value).toBe("wall");
+    expect(screen.getByTestId("drawn-area-drawn-area-1").getAttribute("data-elevation-level")).toBe("0.5");
+    expect(screen.getByTestId("drawn-area-drawn-area-1").getAttribute("data-boundary")).toBe("wall");
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Area Properties" }));
+    expect(screen.queryByLabelText("Area surface fill")).toBeNull();
+    const areaLayer = screen.getByTestId("editor-layer-area:drawn-area-1");
+    fireEvent.click(within(areaLayer).getByRole("button", { name: "drawn-area-1" }));
+    expect((screen.getByLabelText("Area surface fill") as HTMLSelectElement).value).toBe("sand");
+  });
+
+  it("cancels an unfinished closed-area outline with Escape", () => {
+    render(<TacticalScenarioEditorClient />);
+    chooseHudTool("Areas", "Pen");
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    penClick(preview, 30, 20, 60);
     fireEvent.pointerMove(preview, { clientX: 35, clientY: 20, pointerId: 61 });
-    expect(screen.getByTestId("raised-area-draft-preview").querySelector("path")).toBeTruthy();
+    expect(screen.getByTestId("raised-area-draft-preview").querySelector("line, path")).toBeTruthy();
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
   });
 
-  it("reshapes a raised-area curve after its second point is placed", () => {
+  it("creates a curved Pen segment by dragging its second point", () => {
     render(<TacticalScenarioEditorClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Raised Curve" }));
-    const preview = screen.getByLabelText("Scenario draft map preview");
-    fireEvent.pointerDown(preview, { clientX: 10, clientY: 10, pointerId: 62 });
-    fireEvent.pointerDown(preview, { clientX: 20, clientY: 10, pointerId: 63 });
+    chooseHudTool("Areas", "Pen");
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    penClick(preview, 10, 10, 62);
+    penDrag(preview, 20, 10, 20, 14, 63);
 
-    const handle = screen.getByTestId("raised-area-draft-segment-0-control-handle");
-    expect(handle.getAttribute("cx")).toBe("15");
-    expect(handle.getAttribute("cy")).toBe("12.5");
-    fireEvent.pointerDown(handle, { clientX: 15, clientY: 12.5, pointerId: 64 });
-    fireEvent.pointerMove(preview, { clientX: 15, clientY: 16, pointerId: 64 });
-    fireEvent.pointerUp(preview, { clientX: 15, clientY: 16, pointerId: 64 });
-
-    expect(screen.getByTestId("raised-area-draft-segment-0").getAttribute("d")).toBe("M 10 10 Q 15 16 20 10");
+    expect(screen.getByTestId("raised-area-draft-segment-0").getAttribute("d")).toBe("M 10 10 C 10 10 20 6 20 10");
   });
 
-  it("switches between straight and curved segments within one raised-area outline", () => {
+  it("mixes straight and curved Pen segments and closes with Enter", () => {
     render(<TacticalScenarioEditorClient />);
-    const preview = screen.getByLabelText("Scenario draft map preview");
-    fireEvent.click(screen.getByRole("button", { name: "Raised Area" }));
-    fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 70 });
-    fireEvent.pointerDown(preview, { clientX: 35, clientY: 20, pointerId: 71 });
-    fireEvent.click(screen.getByRole("button", { name: "Raised Curve" }));
-    fireEvent.pointerDown(preview, { clientX: 35, clientY: 25, pointerId: 72 });
-    fireEvent.click(screen.getByRole("button", { name: "Raised Area" }));
-    fireEvent.pointerDown(preview, { clientX: 30, clientY: 25, pointerId: 73 });
-    fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 74 });
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    chooseHudTool("Areas", "Pen");
+    penClick(preview, 30, 20, 70);
+    penClick(preview, 35, 20, 71);
+    penDrag(preview, 35, 25, 33, 25, 72);
+    penClick(preview, 30, 25, 73);
+    fireEvent.keyDown(window, { key: "Enter" });
 
-    const curvedSegment = screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-1");
+    const curvedSegment = screen.getByTestId("drawn-area-drawn-area-1-segment-1");
     expect(curvedSegment.tagName.toLowerCase()).toBe("path");
-    expect(curvedSegment.getAttribute("d")).toBe("M 35 20 Q 33.75 22.5 35 25");
-    expect(screen.getByRole("button", { name: "Raised Area" }).getAttribute("aria-pressed")).toBe("false");
+    expect(curvedSegment.getAttribute("d")).toBe("M 35 20 C 35 20 37 25 35 25");
+    expect(screen.getByRole("button", { name: "Choose Pen tool" }).getAttribute("aria-pressed")).toBe("false");
 
-    const completedHandle = screen.getByTestId("raised-area-drawn-raised-area-1-segment-1-control-handle");
-    fireEvent.pointerDown(completedHandle, { clientX: 33.75, clientY: 22.5, pointerId: 75 });
-    fireEvent.pointerMove(preview, { clientX: 32, clientY: 22.5, pointerId: 75 });
-    fireEvent.pointerUp(preview, { clientX: 32, clientY: 22.5, pointerId: 75 });
-    expect(screen.getByTestId("drawn-raised-area-drawn-raised-area-1-segment-1").getAttribute("d")).toBe("M 35 20 Q 32 22.5 35 25");
+    const firstAnchor = screen.getByTestId("drawn-area-drawn-area-1-anchor-0");
+    fireEvent.pointerDown(firstAnchor, { clientX: 30, clientY: 20, pointerId: 74 });
+    fireEvent.pointerMove(preview, { clientX: 29, clientY: 19, pointerId: 74 });
+    fireEvent.pointerUp(preview, { clientX: 29, clientY: 19, pointerId: 74 });
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-0").getAttribute("x1")).toBe("29");
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-3").getAttribute("x2")).toBe("29");
+
+    const incomingHandle = screen.getByTestId("drawn-area-drawn-area-1-segment-1-control2-handle");
+    fireEvent.pointerDown(incomingHandle, { clientX: 37, clientY: 25, pointerId: 75 });
+    fireEvent.pointerMove(preview, { clientX: 36, clientY: 24, pointerId: 75 });
+    fireEvent.pointerUp(preview, { clientX: 36, clientY: 24, pointerId: 75 });
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-1").getAttribute("d")).toBe("M 35 20 C 35 20 36 24 35 25");
+
+    const movedAnchor = screen.getByTestId("drawn-area-drawn-area-1-anchor-0");
+    fireEvent.pointerDown(movedAnchor, { clientX: 29, clientY: 19, pointerId: 76 });
+    fireEvent.pointerMove(preview, { clientX: 28, clientY: 18, pointerId: 76 });
+    fireEvent.pointerCancel(preview, { pointerId: 76 });
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-0").getAttribute("x1")).toBe("29");
+
+    fireEvent.click(screen.getByRole("button", { name: "Node edit tool" }));
+    fireEvent.doubleClick(screen.getByTestId("drawn-area-drawn-area-1-segment-0"), { clientX: 32, clientY: 20 });
+    expect(screen.getAllByTestId(/drawn-area-drawn-area-1-anchor-/)).toHaveLength(5);
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(screen.getAllByTestId(/drawn-area-drawn-area-1-anchor-/)).toHaveLength(4);
+
+    fireEvent.doubleClick(screen.getByTestId("drawn-area-drawn-area-1-segment-1"), { clientX: 36, clientY: 23 });
+    expect(screen.getAllByTestId(/drawn-area-drawn-area-1-anchor-/)).toHaveLength(5);
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-1").tagName.toLowerCase()).toBe("path");
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-2").tagName.toLowerCase()).toBe("path");
+    fireEvent.keyDown(window, { key: "Backspace" });
+    expect(screen.getAllByTestId(/drawn-area-drawn-area-1-anchor-/)).toHaveLength(4);
   });
 
-  it("draws, reshapes, selects, and deletes a closed-machinery region", () => {
+  it("persists a reshaped closed area through Save As and reload", async () => {
+    let savedDefinition: ReturnType<typeof cloneTacticalScenarioDefinition> | null = null;
+    let savedConsoleVictory: ReturnType<typeof cloneTacticalConsoleVictoryDefinition> | null = null;
+    const response = (body: unknown, status = 200) => ({
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => body,
+    }) as Response;
+    global.fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/tactical/templates") return response({ templates: [] });
+      if (url === "/api/tactical/scenarios" && init?.method === "POST") {
+        const request = JSON.parse(String(init.body)) as {
+          definition: ReturnType<typeof cloneTacticalScenarioDefinition>;
+          consoleVictory: ReturnType<typeof cloneTacticalConsoleVictoryDefinition>;
+        };
+        savedDefinition = cloneTacticalScenarioDefinition(request.definition);
+        savedDefinition.id = "closed-area-edit";
+        savedDefinition.title = "Closed Area Edit";
+        savedDefinition.consoleVictoryDefinitionId = "closed-area-edit";
+        savedConsoleVictory = cloneTacticalConsoleVictoryDefinition(request.consoleVictory);
+        savedConsoleVictory.id = "closed-area-edit";
+        savedConsoleVictory.scenarioId = "closed-area-edit";
+        return response({
+          scenario: { id: "closed-area-edit", title: "Closed Area Edit", isDefault: false },
+          definition: savedDefinition,
+          consoleVictory: savedConsoleVictory,
+        });
+      }
+      if (url === "/api/tactical/scenarios" && (!init?.method || init.method === "GET")) {
+        return response({ scenarios: [
+          { id: defaultTacticalScenarioDefinition.id, title: defaultTacticalScenarioDefinition.title, isDefault: true },
+          ...(savedDefinition ? [{ id: "closed-area-edit", title: "Closed Area Edit", isDefault: false }] : []),
+        ] });
+      }
+      if (url.endsWith("/closed-area-edit") && (!init?.method || init.method === "GET") && savedDefinition && savedConsoleVictory) {
+        return response({ definition: savedDefinition, consoleVictory: savedConsoleVictory });
+      }
+      return response({ error: `Unexpected request: ${url} (${init?.method ?? "GET"}).` }, 500);
+    }) as typeof fetch;
+
     render(<TacticalScenarioEditorClient />);
-    const preview = screen.getByLabelText("Scenario draft map preview");
-    fireEvent.click(screen.getByRole("button", { name: "Draw Machinery" }));
-    fireEvent.pointerDown(preview, { clientX: 40, clientY: 10, pointerId: 80 });
-    fireEvent.pointerDown(preview, { clientX: 45, clientY: 10, pointerId: 81 });
-    fireEvent.click(screen.getByRole("button", { name: "Machinery Curve" }));
-    fireEvent.pointerDown(preview, { clientX: 45, clientY: 15, pointerId: 82 });
-    fireEvent.click(screen.getByRole("button", { name: "Draw Machinery" }));
-    fireEvent.pointerDown(preview, { clientX: 40, clientY: 15, pointerId: 83 });
-    fireEvent.pointerDown(preview, { clientX: 40, clientY: 10, pointerId: 84 });
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    chooseHudTool("Areas", "Pen");
+    penClick(preview, 20, 20, 200);
+    penClick(preview, 25, 20, 201);
+    penClick(preview, 25, 25, 202);
+    penClick(preview, 20, 25, 203);
+    fireEvent.keyDown(window, { key: "Enter" });
 
-    const curve = screen.getByTestId("drawn-terrain-region-drawn-close-machinery-1-segment-1");
+    fireEvent.pointerDown(screen.getByTestId("drawn-area-drawn-area-1-anchor-0"), { clientX: 20, clientY: 20, pointerId: 204 });
+    fireEvent.pointerMove(preview, { clientX: 19, clientY: 19, pointerId: 204 });
+    fireEvent.pointerUp(preview, { clientX: 19, clientY: 19, pointerId: 204 });
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Save As…" }));
+    const saveAsDialog = screen.getByRole("dialog", { name: "Save Scenario As" });
+    fireEvent.change(within(saveAsDialog).getByLabelText("New scenario name"), { target: { value: "Closed Area Edit" } });
+    fireEvent.click(within(saveAsDialog).getByRole("button", { name: "Save As" }));
+
+    await screen.findByText("Saved closed-area-edit.json.");
+    const persistedDefinition = savedDefinition as ReturnType<typeof cloneTacticalScenarioDefinition> | null;
+    expect(persistedDefinition?.drawnAreas?.find((area) => area.id === "drawn-area-1")?.segments[0].from).toEqual({ x: 19, y: 19 });
+
+    fireEvent.pointerDown(screen.getByTestId("drawn-area-drawn-area-1-anchor-0"), { clientX: 19, clientY: 19, pointerId: 205 });
+    fireEvent.pointerMove(preview, { clientX: 18, clientY: 18, pointerId: 205 });
+    fireEvent.pointerUp(preview, { clientX: 18, clientY: 18, pointerId: 205 });
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-0").getAttribute("x1")).toBe("18");
+
+    const confirm = jest.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open Scenario…" }));
+    const openDialog = screen.getByRole("dialog", { name: "Open Scenario" });
+    fireEvent.click(within(openDialog).getByRole("option", { name: "Closed Area Edit · closed-area-edit" }));
+    fireEvent.click(within(openDialog).getByRole("button", { name: "Open" }));
+    await screen.findByText("Loaded Closed Area Edit.");
+    expect(confirm).toHaveBeenCalled();
+    const areaLayer = screen.getByTestId("editor-layer-area:drawn-area-1");
+    fireEvent.click(within(areaLayer).getByRole("button", { name: "drawn-area-1" }));
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-0").getAttribute("x1")).toBe("19");
+    expect(screen.getByTestId("drawn-area-drawn-area-1-anchor-0")).toBeTruthy();
+  });
+
+  it("removes the last Pen point with Backspace and closes on double-click", () => {
+    render(<TacticalScenarioEditorClient />);
+    chooseHudTool("Areas", "Pen");
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    penClick(preview, 10, 40, 76);
+    penClick(preview, 15, 40, 77);
+    penClick(preview, 15, 45, 78);
+    penClick(preview, 12, 47, 79);
+
+    fireEvent.keyDown(window, { key: "Backspace" });
+    fireEvent.doubleClick(preview);
+
+    expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
+    const closingSegment = screen.getByTestId("drawn-area-drawn-area-1-segment-2");
+    expect(closingSegment.getAttribute("x1")).toBe("15");
+    expect(closingSegment.getAttribute("y1")).toBe("45");
+    expect(closingSegment.getAttribute("x2")).toBe("10");
+    expect(closingSegment.getAttribute("y2")).toBe("40");
+    expect(screen.queryByTestId("drawn-area-drawn-area-1-segment-3")).toBeNull();
+  });
+
+  it("draws, selects, and deletes a curved closed-machinery region", () => {
+    render(<TacticalScenarioEditorClient />);
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    chooseHudTool("Areas", "Pen");
+    penClick(preview, 40, 10, 80);
+    penClick(preview, 45, 10, 81);
+    penDrag(preview, 45, 15, 43, 15, 82);
+    penClick(preview, 40, 15, 83);
+    penClick(preview, 40, 10, 84);
+
+    const curve = screen.getByTestId("drawn-area-drawn-area-1-segment-1");
     expect(curve.tagName.toLowerCase()).toBe("path");
-    expect(screen.getByText("Closed machinery · 4 boundary segments")).toBeTruthy();
-    const handle = screen.getByTestId("terrain-region-drawn-close-machinery-1-segment-1-control-handle");
-    fireEvent.pointerDown(handle, { clientX: 43.75, clientY: 12.5, pointerId: 85 });
-    fireEvent.pointerMove(preview, { clientX: 42, clientY: 12.5, pointerId: 85 });
-    fireEvent.pointerUp(preview, { clientX: 42, clientY: 12.5, pointerId: 85 });
-    expect(screen.getByTestId("drawn-terrain-region-drawn-close-machinery-1-segment-1").getAttribute("d")).toBe("M 45 10 Q 42 12.5 45 15");
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "close-machinery" } });
+    expect((screen.getByLabelText("Area surface fill") as HTMLSelectElement).value).toBe("close-machinery");
+    expect(curve.getAttribute("d")).toBe("M 45 10 C 45 10 47 15 45 15");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete terrain region" }));
-    expect(screen.queryByTestId("drawn-terrain-region-drawn-close-machinery-1")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Delete area" }));
+    expect(screen.queryByTestId("drawn-area-drawn-area-1")).toBeNull();
   });
 
   it("draws a liquid-hydrogen region and changes its filled state", () => {
     render(<TacticalScenarioEditorClient />);
-    const preview = screen.getByLabelText("Scenario draft map preview");
-    fireEvent.click(screen.getByRole("button", { name: "Draw Liquid H₂" }));
-    fireEvent.pointerDown(preview, { clientX: 50, clientY: 10, pointerId: 90 });
-    fireEvent.pointerDown(preview, { clientX: 55, clientY: 10, pointerId: 91 });
-    fireEvent.pointerDown(preview, { clientX: 55, clientY: 15, pointerId: 92 });
-    fireEvent.pointerDown(preview, { clientX: 50, clientY: 15, pointerId: 93 });
-    fireEvent.pointerDown(preview, { clientX: 50, clientY: 10, pointerId: 94 });
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    chooseHudTool("Areas", "Pen");
+    penClick(preview, 50, 10, 90);
+    penClick(preview, 55, 10, 91);
+    penClick(preview, 55, 15, 92);
+    penClick(preview, 50, 15, 93);
+    penClick(preview, 50, 10, 94);
 
-    const filled = screen.getByRole("checkbox", { name: "Liquid hydrogen region filled" }) as HTMLInputElement;
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "liquid-hydrogen" } });
+    const filled = screen.getByRole("checkbox", { name: "Area liquid hydrogen filled" }) as HTMLInputElement;
     expect(filled.checked).toBe(true);
     fireEvent.click(filled);
     expect(filled.checked).toBe(false);
-    expect(screen.getByText("Liquid hydrogen · empty")).toBeTruthy();
+    expect(filled.checked).toBe(false);
   });
 
   it("draws flat grass, sand, and water regions with straight and curved boundaries", () => {
     render(<TacticalScenarioEditorClient />);
-    const preview = screen.getByLabelText("Scenario draft map preview");
-    fireEvent.click(screen.getByRole("button", { name: "Draw Grass" }));
-    fireEvent.pointerDown(preview, { clientX: 10, clientY: 30, pointerId: 95 });
-    fireEvent.pointerDown(preview, { clientX: 15, clientY: 30, pointerId: 96 });
-    fireEvent.click(screen.getByRole("button", { name: "Grass Curve" }));
-    fireEvent.pointerDown(preview, { clientX: 15, clientY: 35, pointerId: 97 });
-    fireEvent.click(screen.getByRole("button", { name: "Draw Grass" }));
-    fireEvent.pointerDown(preview, { clientX: 10, clientY: 35, pointerId: 98 });
-    fireEvent.pointerDown(preview, { clientX: 10, clientY: 30, pointerId: 99 });
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    chooseHudTool("Areas", "Pen");
+    penClick(preview, 10, 30, 95);
+    penClick(preview, 15, 30, 96);
+    penDrag(preview, 15, 35, 13, 35, 97);
+    penClick(preview, 10, 35, 98);
+    penClick(preview, 10, 30, 99);
 
-    const grass = screen.getByTestId("drawn-terrain-region-drawn-grass-1");
-    expect(screen.getByText("Grass · 4 boundary segments")).toBeTruthy();
-    expect(screen.getByTestId("drawn-terrain-region-drawn-grass-1-segment-1").tagName.toLowerCase()).toBe("path");
-    expect(grass.querySelector("rect")?.getAttribute("stroke-width")).toBe("0");
+    const grass = screen.getByTestId("drawn-area-drawn-area-1");
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "grass" } });
+    expect((screen.getByLabelText("Area surface fill") as HTMLSelectElement).value).toBe("grass");
+    expect(screen.getByTestId("drawn-area-drawn-area-1-segment-1").tagName.toLowerCase()).toBe("path");
+    expect(grass.querySelector("rect")?.getAttribute("stroke-width")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Draw Water" }));
-    fireEvent.pointerDown(preview, { clientX: 12, clientY: 32, pointerId: 105 });
-    fireEvent.pointerDown(preview, { clientX: 17, clientY: 32, pointerId: 106 });
-    fireEvent.pointerDown(preview, { clientX: 17, clientY: 37, pointerId: 107 });
-    fireEvent.pointerDown(preview, { clientX: 12, clientY: 37, pointerId: 108 });
-    fireEvent.pointerDown(preview, { clientX: 12, clientY: 32, pointerId: 109 });
+    chooseHudTool("Areas", "Pen");
+    penClick(preview, 12, 32, 105);
+    penClick(preview, 17, 32, 106);
+    penClick(preview, 17, 37, 107);
+    penClick(preview, 12, 37, 108);
+    penClick(preview, 12, 32, 109);
 
-    expect(screen.getByTestId("drawn-terrain-region-drawn-water-1")).toBeTruthy();
-    expect(screen.getByText("Water · 4 boundary segments")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "water" } });
+    expect(screen.getByTestId("drawn-area-drawn-area-2")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Draw Sand" }));
-    fireEvent.pointerDown(preview, { clientX: 20, clientY: 30, pointerId: 115 });
-    fireEvent.pointerDown(preview, { clientX: 25, clientY: 30, pointerId: 116 });
-    fireEvent.click(screen.getByRole("button", { name: "Sand Curve" }));
-    fireEvent.pointerDown(preview, { clientX: 25, clientY: 35, pointerId: 117 });
-    fireEvent.click(screen.getByRole("button", { name: "Draw Sand" }));
-    fireEvent.pointerDown(preview, { clientX: 20, clientY: 35, pointerId: 118 });
-    fireEvent.pointerDown(preview, { clientX: 20, clientY: 30, pointerId: 119 });
+    chooseHudTool("Areas", "Pen");
+    penClick(preview, 20, 30, 115);
+    penClick(preview, 25, 30, 116);
+    penDrag(preview, 25, 35, 23, 35, 117);
+    penClick(preview, 20, 35, 118);
+    penClick(preview, 20, 30, 119);
 
-    expect(screen.getByTestId("drawn-terrain-region-drawn-sand-1")).toBeTruthy();
-    expect(screen.getByText("Sand · 4 boundary segments")).toBeTruthy();
-    expect(screen.getByTestId("drawn-terrain-region-drawn-sand-1-segment-1").tagName.toLowerCase()).toBe("path");
+    fireEvent.change(screen.getByLabelText("Area surface fill"), { target: { value: "sand" } });
+    expect(screen.getByTestId("drawn-area-drawn-area-3")).toBeTruthy();
+    expect(screen.getByTestId("drawn-area-drawn-area-3-segment-1").tagName.toLowerCase()).toBe("path");
   });
 
   it("places, moves, resizes, previews, and deletes trees, bushes, and rocks", () => {
     render(<TacticalScenarioEditorClient />);
     const preview = screen.getByLabelText("Scenario draft map preview");
 
-    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    chooseHudTool("Nature & effects", "Tree");
     fireEvent.pointerMove(preview, { clientX: 20, clientY: 20, pointerId: 110 });
     expect(screen.getByTestId("natural-terrain-placement-preview")).toBeTruthy();
     fireEvent.pointerDown(preview, { clientX: 20, clientY: 20, pointerId: 110 });
-    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
 
     const tree = screen.getByTestId("natural-terrain-tree-1");
     expect(screen.getAllByTestId(/natural-terrain-tree-1-footprint-/)).toHaveLength(1);
@@ -825,18 +1343,18 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.pointerUp(preview, { clientX: 25.5, clientY: 20.5, pointerId: 111 });
     expect(screen.getByTestId("natural-terrain-tree-1").querySelector("circle")?.getAttribute("cx")).toBe("25.5");
 
-    fireEvent.click(screen.getByRole("button", { name: "Bush" }));
+    chooseHudTool("Nature & effects", "Bush");
     fireEvent.pointerMove(preview, { clientX: 30, clientY: 20, pointerId: 112 });
     fireEvent.pointerDown(preview, { clientX: 30, clientY: 20, pointerId: 112 });
-    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
     fireEvent.change(screen.getByLabelText("Bush radius"), { target: { value: "1.5" } });
     expect(screen.getAllByTestId(/natural-terrain-bush-1-footprint-/)).toHaveLength(9);
 
-    fireEvent.click(screen.getByRole("button", { name: "Rock" }));
+    chooseHudTool("Nature & effects", "Rock");
     fireEvent.pointerMove(preview, { clientX: 36, clientY: 20, pointerId: 113 });
     expect(screen.getByTestId("natural-terrain-placement-preview")).toBeTruthy();
     fireEvent.pointerDown(preview, { clientX: 36, clientY: 20, pointerId: 113 });
-    fireEvent.click(screen.getAllByRole("button", { name: "Pointer" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
     fireEvent.change(screen.getByLabelText("Rock radius"), { target: { value: "1.5" } });
     expect(screen.getAllByTestId(/natural-terrain-rock-1-footprint-/)).toHaveLength(9);
     expect(screen.getByText("Center 36,20 · 9 cover squares · 3 AP")).toBeTruthy();
@@ -848,27 +1366,28 @@ describe("TacticalScenarioEditorClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete rock" }));
     expect(screen.queryByTestId("natural-terrain-rock-1")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /bush-1 bush · 30,20/ }));
+    fireEvent.click(within(screen.getByTestId("editor-layer-natural-terrain:bush-1")).getByRole("button", { name: "bush-1" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete bush" }));
     expect(screen.queryByTestId("natural-terrain-bush-1")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /tree-1 tree · 25,20/ }));
+    fireEvent.click(within(screen.getByTestId("editor-layer-natural-terrain:tree-1")).getByRole("button", { name: "tree-1" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete tree" }));
     expect(screen.queryByTestId("natural-terrain-tree-1")).toBeNull();
   });
 
   it("closes a freeform terrain outline when the pointer returns near its starting point", () => {
     render(<TacticalScenarioEditorClient />);
+    openDrawingSettings();
     fireEvent.change(screen.getByLabelText("Drawing precision"), { target: { value: "freeform" } });
-    fireEvent.click(screen.getByRole("button", { name: "Draw Machinery" }));
-    const preview = screen.getByLabelText("Scenario draft map preview");
-    fireEvent.pointerDown(preview, { clientX: 20.13, clientY: 20.17, pointerId: 100 });
-    fireEvent.pointerDown(preview, { clientX: 25.31, clientY: 20.22, pointerId: 101 });
-    fireEvent.pointerDown(preview, { clientX: 25.26, clientY: 25.44, pointerId: 102 });
-    fireEvent.pointerDown(preview, { clientX: 20.18, clientY: 25.39, pointerId: 103 });
-    fireEvent.pointerDown(preview, { clientX: 20.2, clientY: 20.21, pointerId: 104 });
+    chooseHudTool("Areas", "Pen");
+    const preview = screen.getByLabelText("Scenario draft map preview") as HTMLElement;
+    penClick(preview, 20.13, 20.17, 100);
+    penClick(preview, 25.31, 20.22, 101);
+    penClick(preview, 25.26, 25.44, 102);
+    penClick(preview, 20.18, 25.39, 103);
+    penClick(preview, 20.2, 20.21, 104);
 
     expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
-    const firstSegment = screen.getByTestId("drawn-terrain-region-drawn-close-machinery-1-segment-0");
+    const firstSegment = screen.getByTestId("drawn-area-drawn-area-1-segment-0");
     expect(firstSegment.getAttribute("x1")).toBe("20.13");
     expect(firstSegment.getAttribute("y1")).toBe("20.17");
     expect(firstSegment.getAttribute("x2")).toBe("25.31");
@@ -882,16 +1401,293 @@ describe("TacticalScenarioEditorClient", () => {
     expect(tacticalEditorMarkerInteractionEnabled(null, null)).toBe(true);
   });
 
-  it("offers file loading and non-overwriting Save As controls", () => {
-    const markup = renderToStaticMarkup(<TacticalScenarioEditorClient />);
+  it("owns all scenario-file actions in the File menu", () => {
+    render(<TacticalScenarioEditorClient />);
 
-    expect(markup).toContain("Scenario files");
-    expect(markup).toContain("Load scenario");
-    expect(markup).toContain("Save changes");
-    expect(markup).toContain("Save as new scenario");
-    expect(markup).toContain("Delete scenario");
-    expect(markup).toContain("never overwrites an existing scenario");
-    expect(markup).toContain("immutable source");
+    expect(screen.queryByText("Scenario files")).toBeNull();
+    expect(screen.queryByLabelText("Load scenario")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete scenario" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+    expect(screen.queryByLabelText("New scenario name")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    expect(screen.getByRole("menuitem", { name: "New Scenario…" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Open Scenario…" })).toBeTruthy();
+    expect((screen.getByRole("menuitem", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("menuitem", { name: "Save As…" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("menuitem", { name: "Delete Scenario…" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("owns Playtest and confirmed draft discard in the Scenario menu", () => {
+    const confirm = jest.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
+    render(<TacticalScenarioEditorClient />);
+
+    expect(screen.queryByRole("button", { name: "Playtest draft" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Discard draft" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Scenario menu" }));
+    expect((screen.getByRole("menuitem", { name: "Playtest Draft" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("menuitem", { name: "Discard Draft Changes…" }) as HTMLButtonElement).disabled).toBe(true);
+
+    applyScenarioTitle("Unsaved scenario title");
+    fireEvent.click(screen.getByRole("button", { name: "Scenario menu" }));
+    const firstDiscard = screen.getByRole("menuitem", { name: "Discard Draft Changes…" }) as HTMLButtonElement;
+    expect(firstDiscard.disabled).toBe(false);
+    fireEvent.click(firstDiscard);
+    let propertiesDialog = openScenarioProperties();
+    expect((within(propertiesDialog).getByLabelText("Scenario title") as HTMLInputElement).value).toBe("Unsaved scenario title");
+    fireEvent.click(within(propertiesDialog).getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Scenario menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Discard Draft Changes…" }));
+    expect(confirm).toHaveBeenLastCalledWith("Discard all unsaved changes and return to the last loaded or saved version?");
+    expect(screen.getByText("Discarded unsaved draft changes.")).toBeTruthy();
+    propertiesDialog = openScenarioProperties();
+    expect((within(propertiesDialog).getByLabelText("Scenario title") as HTMLInputElement).value).toBe(defaultTacticalScenarioDefinition.title);
+    fireEvent.click(within(propertiesDialog).getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Scenario menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Playtest Draft" }));
+    expect(screen.getByRole("button", { name: "Exit draft playtest" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "File menu" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Exit draft playtest" }));
+    expect(screen.getByRole("button", { name: "File menu" })).toBeTruthy();
+  });
+
+  it("stages Scenario Properties until Apply and validates deployment edges", () => {
+    render(<TacticalScenarioEditorClient />);
+
+    expect(screen.queryByLabelText("Scenario title")).toBeNull();
+    expect(screen.queryByText("Crew deployment edges")).toBeNull();
+    let dialog = openScenarioProperties();
+    fireEvent.change(within(dialog).getByLabelText("Scenario title"), { target: { value: "Cancelled title" } });
+    fireEvent.change(within(dialog).getByLabelText("Scenario briefing"), { target: { value: "Cancelled briefing" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    dialog = openScenarioProperties();
+    expect((within(dialog).getByLabelText("Scenario title") as HTMLInputElement).value).toBe(defaultTacticalScenarioDefinition.title);
+    expect((within(dialog).getByLabelText("Scenario briefing") as HTMLTextAreaElement).value).toBe(defaultTacticalScenarioDefinition.briefing);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Allow south deployment" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(within(dialog).getByRole("alert").textContent).toContain("Define a crew deployment edge");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Allow south deployment" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Allow north deployment" }));
+    fireEvent.change(within(dialog).getByLabelText("Scenario title"), { target: { value: "Applied title" } });
+    fireEvent.change(within(dialog).getByLabelText("Scenario objective"), { target: { value: "Applied objective" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(screen.getByText("Unsaved draft")).toBeTruthy();
+
+    dialog = openScenarioProperties();
+    expect((within(dialog).getByLabelText("Scenario title") as HTMLInputElement).value).toBe("Applied title");
+    expect((within(dialog).getByLabelText("Scenario objective") as HTMLTextAreaElement).value).toBe("Applied objective");
+    expect(within(dialog).getByRole("button", { name: "Allow north deployment" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("creates an empty scenario from File while retaining map settings and drawing precision", async () => {
+    const response = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    let createdDefinition: ReturnType<typeof emptyTacticalScenarioDraft> | null = null;
+    let createdConsoleVictory: ReturnType<typeof cloneTacticalConsoleVictoryDefinition> | null = null;
+    global.fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/tactical/templates") return response({ templates: [] });
+      if (url === "/api/tactical/scenarios" && init?.method === "POST") {
+        const request = JSON.parse(String(init.body)) as {
+          definition: ReturnType<typeof emptyTacticalScenarioDraft>;
+          consoleVictory: ReturnType<typeof cloneTacticalConsoleVictoryDefinition>;
+        };
+        createdDefinition = cloneTacticalScenarioDefinition(request.definition);
+        createdDefinition.id = "empty-boarding";
+        createdDefinition.consoleVictoryDefinitionId = "empty-boarding";
+        createdConsoleVictory = cloneTacticalConsoleVictoryDefinition(request.consoleVictory);
+        createdConsoleVictory.id = "empty-boarding";
+        createdConsoleVictory.scenarioId = "empty-boarding";
+        return response({
+          scenario: { id: "empty-boarding", title: "Empty Boarding", isDefault: false },
+          definition: createdDefinition,
+          consoleVictory: createdConsoleVictory,
+        });
+      }
+      if (url === "/api/tactical/scenarios") return response({ scenarios: [
+        { id: defaultTacticalScenarioDefinition.id, title: defaultTacticalScenarioDefinition.title, isDefault: true },
+        ...(createdDefinition ? [{ id: "empty-boarding", title: "Empty Boarding", isDefault: false }] : []),
+      ] });
+      return response({ error: `Unexpected request: ${url}` });
+    }) as typeof fetch;
+    const confirm = jest.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
+
+    render(<TacticalScenarioEditorClient />);
+    openDrawingSettings();
+    fireEvent.change(screen.getByLabelText("Map width"), { target: { value: "80" } });
+    fireEvent.change(screen.getByLabelText("Map height"), { target: { value: "55" } });
+    fireEvent.change(screen.getByLabelText("Drawing precision"), { target: { value: "quarter-grid" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "New Scenario…" }));
+    expect(confirm).toHaveBeenLastCalledWith("Create a new scenario and discard the unsaved changes in this draft?");
+    expect(screen.queryByRole("dialog", { name: "New Scenario" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "New Scenario…" }));
+    const dialog = screen.getByRole("dialog", { name: "New Scenario" });
+    fireEvent.change(within(dialog).getByLabelText("New scenario name"), { target: { value: "Empty Boarding" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+
+    await screen.findByText("Created empty-boarding.json.");
+    expect(createdDefinition).toMatchObject({
+      title: "Empty Boarding",
+      map: { width: 80, height: 55 },
+      deploymentEdges: ["south"],
+      terrainPlacements: [],
+      drawnWalls: [],
+      drawnAreas: [],
+      naturalTerrainPlacements: [],
+      elevationTransitions: [],
+      enemyPlacements: [],
+      fireCells: [],
+      smokeCells: [],
+    });
+    expect(createdConsoleVictory?.operations).toEqual([]);
+    expect((screen.getByLabelText("Drawing precision") as HTMLSelectElement).value).toBe("quarter-grid");
+    fireEvent.click(screen.getByRole("button", { name: "Scenario menu" }));
+    expect((screen.getByRole("menuitem", { name: "Playtest Draft" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(openEditorIssues()).getByText("This scenario has no victory task. It can be saved, but add a console or interactive human and a victory task before playtesting.")).toBeTruthy();
+  });
+
+  it("opens and loads an available scenario from the header File menu", async () => {
+    const customDefinition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    customDefinition.id = "header-open-scenario";
+    customDefinition.title = "Header Open Scenario";
+    const customConsoleVictory = cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
+    customConsoleVictory.id = "header-open-scenario";
+    customConsoleVictory.scenarioId = "header-open-scenario";
+    const response = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    global.fetch = jest.fn(async (input) => {
+      const url = String(input);
+      if (url === "/api/tactical/scenarios") return response({ scenarios: [
+        { id: defaultTacticalScenarioDefinition.id, title: defaultTacticalScenarioDefinition.title, isDefault: true },
+        { id: customDefinition.id, title: customDefinition.title, isDefault: false },
+      ] });
+      if (url.endsWith("/header-open-scenario")) return response({ definition: customDefinition, consoleVictory: customConsoleVictory });
+      if (url === "/api/tactical/templates") return response({ templates: [] });
+      return response({ error: `Unexpected request: ${url}` });
+    }) as typeof fetch;
+    const confirm = jest.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
+
+    render(<TacticalScenarioEditorClient />);
+    applyScenarioTitle("Unsaved title");
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open Scenario…" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Open Scenario" });
+    const search = within(dialog).getByLabelText("Search scenarios");
+    expect(document.activeElement).toBe(search);
+    await within(dialog).findByRole("option", { name: "Header Open Scenario · header-open-scenario" });
+    expect(within(dialog).getByText("Default")).toBeTruthy();
+    expect(within(dialog).getByText("Current")).toBeTruthy();
+    fireEvent.change(search, { target: { value: "HEADER OPEN" } });
+    expect(within(dialog).getByRole("option", { name: "Header Open Scenario · header-open-scenario" })).toBeTruthy();
+    expect(within(dialog).queryByRole("option", { name: /default-tactical-control-room/ })).toBeNull();
+    fireEvent.change(search, { target: { value: "header-open-scenario" } });
+    expect(within(dialog).getByRole("option", { name: "Header Open Scenario · header-open-scenario" })).toBeTruthy();
+    fireEvent.change(search, { target: { value: "missing scenario" } });
+    expect(within(dialog).getByText("No matching scenarios.")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear scenario search" }));
+    expect((search as HTMLInputElement).value).toBe("");
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(within(dialog).getByRole("option", { name: "Header Open Scenario · header-open-scenario" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(confirm).toHaveBeenCalledWith("Load another scenario and discard the unsaved changes in this draft?");
+    expect(screen.getByRole("dialog", { name: "Open Scenario" })).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Open" }));
+    await screen.findByText("Loaded Header Open Scenario.");
+    expect(screen.queryByRole("dialog", { name: "Open Scenario" })).toBeNull();
+  });
+
+  it("saves changes to the current saved scenario from the File menu", async () => {
+    const customDefinition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    customDefinition.id = "header-save-scenario";
+    customDefinition.title = "Header Save Scenario";
+    customDefinition.consoleVictoryDefinitionId = "header-save-scenario";
+    const customConsoleVictory = cloneTacticalConsoleVictoryDefinition(defaultTacticalConsoleVictoryDefinition);
+    customConsoleVictory.id = "header-save-scenario";
+    customConsoleVictory.scenarioId = "header-save-scenario";
+    const response = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    let savedTitle: string | null = null;
+    global.fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/tactical/templates") return response({ templates: [] });
+      if (url === "/api/tactical/scenarios") return response({ scenarios: [
+        { id: defaultTacticalScenarioDefinition.id, title: defaultTacticalScenarioDefinition.title, isDefault: true },
+        { id: customDefinition.id, title: customDefinition.title, isDefault: false },
+      ] });
+      if (url.endsWith("/header-save-scenario") && init?.method === "PUT") {
+        const request = JSON.parse(String(init.body)) as {
+          definition: ReturnType<typeof cloneTacticalScenarioDefinition>;
+          consoleVictory: ReturnType<typeof cloneTacticalConsoleVictoryDefinition>;
+        };
+        savedTitle = request.definition.title;
+        return response({
+          scenario: { id: customDefinition.id, title: request.definition.title, isDefault: false },
+          definition: request.definition,
+          consoleVictory: request.consoleVictory,
+        });
+      }
+      if (url.endsWith("/header-save-scenario")) return response({ definition: customDefinition, consoleVictory: customConsoleVictory });
+      return response({ error: `Unexpected request: ${url}` });
+    }) as typeof fetch;
+
+    render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open Scenario…" }));
+    const openDialog = screen.getByRole("dialog", { name: "Open Scenario" });
+    fireEvent.click(await within(openDialog).findByRole("option", { name: "Header Save Scenario · header-save-scenario" }));
+    fireEvent.click(within(openDialog).getByRole("button", { name: "Open" }));
+    await screen.findByText("Loaded Header Save Scenario.");
+
+    applyScenarioTitle("Header Save Updated");
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    const save = screen.getByRole("menuitem", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+
+    await screen.findByText("Saved changes to header-save-scenario.json.");
+    expect(savedTitle).toBe("Header Save Updated");
+  });
+
+  it("keeps cached scenarios visible while the Open dialog refreshes", async () => {
+    const response = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    const scenarios = [
+      {
+        id: defaultTacticalScenarioDefinition.id,
+        title: defaultTacticalScenarioDefinition.title,
+        isDefault: true,
+      },
+    ];
+    let scenarioListRequests = 0;
+    global.fetch = jest.fn(async (input) => {
+      const url = String(input);
+      if (url === "/api/tactical/scenarios") {
+        scenarioListRequests += 1;
+        if (scenarioListRequests === 1) return response({ scenarios });
+        return new Promise<Response>(() => {
+          // Keep the background refresh pending so the cached-list state can be asserted.
+        });
+      }
+      if (url === "/api/tactical/templates") return response({ templates: [] });
+      return response({ error: `Unexpected request: ${url}` });
+    }) as typeof fetch;
+
+    render(<TacticalScenarioEditorClient />);
+    await waitFor(() => expect(scenarioListRequests).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open Scenario…" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Open Scenario" });
+    expect(within(dialog).getByRole("option", {
+      name: `${defaultTacticalScenarioDefinition.title} · ${defaultTacticalScenarioDefinition.id}`,
+    })).toBeTruthy();
+    expect(within(dialog).queryByText("Loading scenarios…")).toBeNull();
   });
 
   it("confirms deletion, removes the saved scenario, and returns to the default", async () => {
@@ -911,6 +1707,8 @@ describe("TacticalScenarioEditorClient", () => {
       status,
       json: async () => body,
     }) as Response;
+    let deleted = false;
+    let scenarioListGets = 0;
     global.fetch = jest.fn(async (input, init) => {
       const url = String(input);
       if (url === "/api/tactical/templates") {
@@ -918,17 +1716,18 @@ describe("TacticalScenarioEditorClient", () => {
       }
       if (url === "/api/tactical/scenarios"
         && (!init?.method || init.method === "GET")) {
+        scenarioListGets += 1;
         return response({ scenarios: [
           {
             id: defaultTacticalScenarioDefinition.id,
             title: defaultTacticalScenarioDefinition.title,
             isDefault: true,
           },
-          {
+          ...(!deleted ? [{
             id: customDefinition.id,
             title: customDefinition.title,
             isDefault: false,
-          },
+          }] : []),
         ] });
       }
       if (url.endsWith("/disposable-scenario")
@@ -940,6 +1739,7 @@ describe("TacticalScenarioEditorClient", () => {
       }
       if (url.endsWith("/disposable-scenario")
         && init?.method === "DELETE") {
+        deleted = true;
         return response({
           deleted: {
             id: customDefinition.id,
@@ -949,27 +1749,32 @@ describe("TacticalScenarioEditorClient", () => {
       }
       return response({ error: "Unexpected request." }, 500);
     }) as typeof fetch;
-    const confirm = jest.spyOn(window, "confirm").mockReturnValue(true);
+    const confirm = jest.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
 
     render(<TacticalScenarioEditorClient />);
-    await screen.findByRole("option", { name: "Disposable Scenario" });
-    fireEvent.change(screen.getByLabelText("Load scenario"), {
-      target: { value: "disposable-scenario" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Load scenario" }));
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open Scenario…" }));
+    const openDialog = screen.getByRole("dialog", { name: "Open Scenario" });
+    fireEvent.click(await within(openDialog).findByRole("option", { name: "Disposable Scenario · disposable-scenario" }));
+    fireEvent.click(within(openDialog).getByRole("button", { name: "Open" }));
     await screen.findByText("Loaded Disposable Scenario.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete scenario" }));
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete Scenario…" }));
+    expect(deleted).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "File menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete Scenario…" }));
 
     await screen.findByText(
       "Deleted disposable-scenario.json and returned to the default scenario.",
     );
-    expect(confirm).toHaveBeenCalledWith(
+    expect(confirm).toHaveBeenLastCalledWith(
       'Permanently delete "Disposable Scenario"? This cannot be undone.',
     );
-    expect(screen.queryByRole("option", { name: "Disposable Scenario" }))
-      .toBeNull();
     expect(screen.getByText(/immutable source/)).toBeTruthy();
+    expect(deleted).toBe(true);
+    expect(scenarioListGets).toBeGreaterThanOrEqual(3);
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/tactical/scenarios/disposable-scenario",
       { method: "DELETE" },
@@ -986,14 +1791,15 @@ describe("TacticalScenarioEditorClient", () => {
 
   it("opens the console editor HUD and gives actionable guidance after its console is deleted", () => {
     render(<TacticalScenarioEditorClient />);
-    fireEvent.click(screen.getByText("control-room-alpha"));
+    const layer = screen.getByTestId("editor-layer-terrain-placement:control-room-alpha");
+    fireEvent.click(within(layer).getByRole("button", { name: "control-room-alpha" }));
 
     expect(screen.getByText("Console Editor")).toBeTruthy();
     expect(screen.getByText("Tasks at this console")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.keyDown(window, { key: "Delete" });
 
-    expect(screen.getByText("This draft has no victory task. Select a console and add a victory task before saving or playtesting.")).toBeTruthy();
+    expect(within(openEditorIssues()).getByText("This scenario has no victory task. It can be saved, but add a console or interactive human and a victory task before playtesting.")).toBeTruthy();
     expect(screen.queryByText(/At least one console operation is required/)).toBeNull();
   });
 
@@ -1010,5 +1816,18 @@ describe("TacticalScenarioEditorClient", () => {
 
     fireEvent.keyDown(window, { key: "Delete" });
     expect(screen.queryByTestId("enemy-marker-enemy-1")).toBeNull();
+  });
+
+  it("selects an existing locked enemy and explains how to unlock it", () => {
+    render(<TacticalScenarioEditorClient />);
+    const layer = screen.getByTestId("editor-layer-enemy:enemy-1");
+    fireEvent.click(within(layer).getByRole("button", { name: "Lock Gang Member 1" }));
+
+    fireEvent.pointerDown(screen.getByTestId("enemy-marker-enemy-1"), { clientX: 47.5, clientY: 41.5, pointerId: 2 });
+
+    expect(screen.getByText("This enemy is locked. It can be selected, but it cannot be moved or edited.")).toBeTruthy();
+    expect((screen.getByLabelText("Enemy name") as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Unlock enemy" }));
+    expect((screen.getByLabelText("Enemy name") as HTMLInputElement).disabled).toBe(false);
   });
 });

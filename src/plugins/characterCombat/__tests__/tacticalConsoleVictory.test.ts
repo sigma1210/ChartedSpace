@@ -54,6 +54,15 @@ const startedConsoleState = () => {
 };
 
 describe("tactical console victory", () => {
+  it("allows an empty operation list for scenarios that are not ready to playtest", () => {
+    expect(() => validateTacticalConsoleVictoryDefinition({
+      schemaVersion: 1,
+      id: "empty-scenario",
+      scenarioId: "empty-scenario",
+      operations: [],
+    }, [])).not.toThrow();
+  });
+
   it("supports ANY and ALL predecessor requirements", () => {
     const anyOperation = { ...chainedDefinition.operations[1], prerequisites: { mode: "any" as const, operationIds: ["a", "b"] } };
     const allOperation = { ...chainedDefinition.operations[1], prerequisites: { mode: "all" as const, operationIds: ["a", "b"] } };

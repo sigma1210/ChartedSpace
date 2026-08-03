@@ -50,7 +50,6 @@ export const validateTacticalConsoleVictoryDefinition = (definition: TacticalCon
   const interactiveHumans = new Set(interactiveHumanPlacementIds);
   const operationIds = new Set<string>();
   const checkIds = new Set<string>();
-  if (definition.operations.length === 0) errors.push("At least one console operation is required.");
   definition.operations.forEach((operation) => {
     if (!operation.id.trim()) errors.push("Console operations require an ID.");
     else if (operationIds.has(operation.id)) errors.push(`Duplicate console operation ID: ${operation.id}.`);

@@ -93,6 +93,27 @@ describe("drawn tactical raised areas", () => {
     });
   });
 
+  it("flattens cubic Bezier segments for filling and boundary calculations", () => {
+    const area: TacticalDrawnRaisedArea = {
+      id: "cubic-platform",
+      segments: [
+        {
+          kind: "cubic",
+          from: { x: 2, y: 2 },
+          control1: { x: 3, y: 0 },
+          control2: { x: 5, y: 0 },
+          to: { x: 6, y: 2 },
+        },
+        line({ x: 6, y: 2 }, { x: 6, y: 6 }),
+        line({ x: 6, y: 6 }, { x: 2, y: 6 }),
+        line({ x: 2, y: 6 }, { x: 2, y: 2 }),
+      ],
+    };
+
+    expect(tacticalRaisedAreaOutlineLines(area).length).toBeGreaterThan(4);
+    expect(tacticalDrawnRaisedAreaCells(area, 10, 10)).toContainEqual({ x: 3, y: 1 });
+  });
+
   it("rejects open and self-intersecting outlines", () => {
     const open: TacticalDrawnRaisedArea = {
       id: "open-platform",

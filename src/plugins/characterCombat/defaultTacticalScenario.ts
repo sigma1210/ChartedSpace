@@ -1,6 +1,6 @@
 import { characterCombatWeapons } from "./equipment";
 import { assertValidCombatScenario } from "./scenarioValidator";
-import { defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, type TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
+import { defaultTacticalScenarioDefinition, resolveTacticalScenarioTerrain, tacticalPlacementSupportsConsoleOperations, type TacticalAreaOutlineSegment, type TacticalDrawnTerrainRegion, type TacticalScenarioDefinitionFile } from "./tacticalScenarioDefinitions";
 import type { CombatScenario, TacticalLightingPreset } from "./types";
 import { defaultTacticalConsoleVictoryDefinition, validateTacticalConsoleVictoryDefinition, type TacticalConsoleVictoryDefinitionFile } from "./tacticalConsoleVictory";
 import { buildTacticalEnemyCombatant } from "./tacticalEnemyDefinitions";
@@ -10,6 +10,32 @@ export const defaultTacticalLighting = (preset: TacticalLightingPreset) => {
   return {
     exteriorLighting: preset === "exterior-lit" ? "illuminated" as const : "dark" as const,
   };
+};
+
+const cloneAreaSegments = (segments: TacticalAreaOutlineSegment[]) => segments.map((segment) => ({
+  ...segment,
+  from: { ...segment.from },
+  to: { ...segment.to },
+  ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
+  ...(segment.kind === "cubic" ? { control1: { ...segment.control1 }, control2: { ...segment.control2 } } : {}),
+}));
+
+const unifiedAreaTerrainRegions = (terrain: ReturnType<typeof resolveTacticalScenarioTerrain>): TacticalDrawnTerrainRegion[] => {
+  const regions: TacticalDrawnTerrainRegion[] = [];
+  terrain.drawnAreas.forEach((area) => {
+    if (area.surface === "none") return;
+    const base = { id: area.id, segments: cloneAreaSegments(area.segments) };
+    if (area.surface === "liquid-hydrogen") {
+      regions.push({
+        ...base,
+        kind: area.surface,
+        ...(area.settings ? { settings: { ...area.settings } } : {}),
+      });
+      return;
+    }
+    regions.push({ ...base, kind: area.surface });
+  });
+  return regions;
 };
 
 export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPreset, definition: TacticalScenarioDefinitionFile = defaultTacticalScenarioDefinition, consoleVictory?: TacticalConsoleVictoryDefinitionFile): CombatScenario => {
@@ -41,17 +67,31 @@ export const buildDefaultTacticalScenario = (lightingPreset?: TacticalLightingPr
     objects: terrain.objects,
     ...(resolvedConsoleVictory ? { consoleVictory: resolvedConsoleVictory } : {}),
     terrainObjects: terrain.terrainObjects,
-    drawnRaisedAreas: terrain.drawnRaisedAreas.map((area) => ({
-      id: area.id,
-      segments: area.segments.map((segment) => ({
-        ...segment,
-        from: { ...segment.from },
-        to: { ...segment.to },
-        ...(segment.kind === "quadratic" ? { control: { ...segment.control } } : {}),
-      })),
+    drawnAreas: terrain.drawnAreas.map((area) => ({
+      ...area,
+      segments: cloneAreaSegments(area.segments),
+      ...(area.settings ? { settings: { ...area.settings } } : {}),
     })),
-    drawnRaisedAreaLevels: { ...terrain.drawnRaisedAreaLevels },
-    drawnTerrainRegions: terrain.drawnTerrainRegions,
+    drawnRaisedAreas: [
+      ...terrain.drawnRaisedAreas.map((area) => ({
+        id: area.id,
+        segments: cloneAreaSegments(area.segments),
+      })),
+      ...terrain.drawnAreas.filter((area) => area.elevation > 0).map((area) => ({
+        id: area.id,
+        segments: cloneAreaSegments(area.segments),
+      })),
+    ],
+    drawnRaisedAreaLevels: {
+      ...terrain.drawnRaisedAreaLevels,
+      ...Object.fromEntries(terrain.drawnAreas
+        .filter((area) => area.elevation > 0)
+        .map((area) => [area.id, area.elevation])),
+    },
+    drawnTerrainRegions: [
+      ...terrain.drawnTerrainRegions,
+      ...unifiedAreaTerrainRegions(terrain),
+    ],
     naturalTerrainPlacements: terrain.naturalTerrainPlacements,
     treeTrunkCells: terrain.treeTrunkCells,
     bushCells: terrain.bushCells,

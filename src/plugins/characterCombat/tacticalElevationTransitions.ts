@@ -67,6 +67,28 @@ const segmentPointAndTangent = (
     };
   }
   const oneMinusT = 1 - t;
+  if (segment.kind === "cubic") {
+    return {
+      point: {
+        x: oneMinusT ** 3 * segment.from.x
+          + 3 * oneMinusT ** 2 * t * segment.control1.x
+          + 3 * oneMinusT * t ** 2 * segment.control2.x
+          + t ** 3 * segment.to.x,
+        y: oneMinusT ** 3 * segment.from.y
+          + 3 * oneMinusT ** 2 * t * segment.control1.y
+          + 3 * oneMinusT * t ** 2 * segment.control2.y
+          + t ** 3 * segment.to.y,
+      },
+      tangent: normalizeVector({
+        x: 3 * oneMinusT ** 2 * (segment.control1.x - segment.from.x)
+          + 6 * oneMinusT * t * (segment.control2.x - segment.control1.x)
+          + 3 * t ** 2 * (segment.to.x - segment.control2.x),
+        y: 3 * oneMinusT ** 2 * (segment.control1.y - segment.from.y)
+          + 6 * oneMinusT * t * (segment.control2.y - segment.control1.y)
+          + 3 * t ** 2 * (segment.to.y - segment.control2.y),
+      }),
+    };
+  }
   return {
     point: {
       x: oneMinusT * oneMinusT * segment.from.x

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "moon-walk",
+  "scenarioId": "moon-walk",
+  "operations": [
+    {
+      "id": "console-1x1-1-operation-1",
+      "consolePlacementId": "console-1x1-1",
+      "label": "Operate Console",
+      "prerequisites": {
+        "mode": "all",
+        "operationIds": []
+      },
+      "checks": [
+        {
+          "id": "console-1x1-1-operation-1-check-1",
+          "skill": "Security",
+          "difficulty": "average",
+          "apCost": 6
+        }
+      ],
+      "criticalSuccessNextCheckModifier": 2,
+      "criticalFailureNextCheckModifier": -2,
+      "result": {
+        "type": "victory"
+      }
+    }
+  ]
+}

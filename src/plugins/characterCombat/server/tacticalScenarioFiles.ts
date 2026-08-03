@@ -74,8 +74,29 @@ const areaOutlineSegmentSchema = z.discriminatedUnion("kind", [
     control: finitePointSchema,
     to: finitePointSchema,
   }).strict(),
+  z.object({
+    kind: z.literal("cubic"),
+    from: finitePointSchema,
+    control1: finitePointSchema,
+    control2: finitePointSchema,
+    to: finitePointSchema,
+  }).strict(),
 ]);
 const areaOutlineSchema = z.array(areaOutlineSegmentSchema).min(3);
+const closedAreaGeometrySchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("rectangle"),
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive(),
+  }).strict(),
+  z.object({
+    kind: z.literal("circle"),
+    center: finitePointSchema,
+    radius: z.number().finite().positive(),
+  }).strict(),
+]);
 const scenarioSchema = z.object({
   schemaVersion: z.literal(1),
   id: z.string().regex(scenarioIdPattern),
@@ -129,6 +150,23 @@ const scenarioSchema = z.object({
       segments: areaOutlineSchema,
     }).strict(),
   ])).optional(),
+  drawnAreas: z.array(z.object({
+    id: z.string().min(1),
+    segments: areaOutlineSchema,
+    geometry: closedAreaGeometrySchema.optional(),
+    surface: z.enum(["none", "grass", "sand", "water", "close-machinery", "liquid-hydrogen"]),
+    elevation: z.number().min(0).refine((value) => Number.isInteger(value * 2), "Elevation must use half-level increments."),
+    boundary: z.enum(["none", "wall"]),
+    deployment: z.boolean().optional(),
+    settings: z.object({
+      filled: z.boolean().optional(),
+    }).strict().optional(),
+    portals: z.array(z.object({
+      id: z.string().min(1),
+      kind: z.enum(["sliding-door", "iris-valve"]),
+      position: z.number().min(0).max(1),
+    }).strict()).optional(),
+  }).strict()).optional(),
   drawnTerrainPrimitives: z.array(z.discriminatedUnion("shape", [
     z.object({
       id: z.string().min(1),
@@ -249,7 +287,7 @@ export const parseTacticalScenarioFile = (value: unknown): TacticalScenarioDefin
   validateCells(scenario);
   try {
     const terrain = resolveTacticalScenarioTerrain(scenario);
-    if (terrain.deploymentCells.length < 2) throw new TacticalScenarioFileError("Define a crew deployment edge or place a Deployment Zone 9x9.", 400, "invalid-scenario");
+    if (terrain.deploymentCells.length < 2) throw new TacticalScenarioFileError("Define a crew deployment edge or designate a drawn area for crew deployment.", 400, "invalid-scenario");
     const deploymentCells = new Set(terrain.deploymentCells.map((cell) => `${cell.x}:${cell.y}`));
     (scenario.enemyPlacements ?? []).forEach((enemy) => {
       const position = `${enemy.position.x}:${enemy.position.y}`;

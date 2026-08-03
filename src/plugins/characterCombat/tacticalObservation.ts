@@ -1,4 +1,4 @@
-import { hasLineOfSight, pointKey, tacticalVisibilityAssessment } from "./geometry";
+import { hasLineOfSight, pointKey, prepareTacticalVisibilityContext, tacticalVisibilityAssessment } from "./geometry";
 import type { CombatScenario, GridPoint, TacticalMapState } from "./types";
 
 export const tacticalPathObservedByCrew = (map: TacticalMapState, points: GridPoint[]) => map.scenario.combatants
@@ -18,6 +18,11 @@ export const recordTacticalMovementAnimation = (map: TacticalMapState, unit: Com
   map.movementAnimationByCharacterId[unit.id] = { sequence: (map.movementAnimationByCharacterId[unit.id]?.sequence ?? 0) + 1, path: [origin, ...path.map((point) => ({ ...point }))], mode };
 };
 
-export const tacticalVisibilitySnapshot = (scenario: CombatScenario) => Object.fromEntries(scenario.combatants.map((observer) => [observer.id, scenario.combatants
-  .filter((target) => target.side !== observer.side && !target.defeated && tacticalVisibilityAssessment(scenario, observer, target).observable)
-  .map((target) => target.id)]));
+export const tacticalVisibilitySnapshot = (scenario: CombatScenario) => {
+  const visibility = prepareTacticalVisibilityContext(scenario);
+  return Object.fromEntries(scenario.combatants.map((observer) => [observer.id, scenario.combatants
+    .filter((target) => target.side !== observer.side
+      && !target.defeated
+      && tacticalVisibilityAssessment(scenario, observer, target, visibility).observable)
+    .map((target) => target.id)]));
+};

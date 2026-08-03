@@ -1,5 +1,6 @@
 import { tacticalQuadraticBezierPoint } from "./tacticalBezierWalls";
 import type {
+  TacticalDrawnArea,
   TacticalDrawnRaisedArea,
   TacticalRaisedAreaOutlineSegment,
 } from "./tacticalScenarioDefinitions";
@@ -46,36 +47,37 @@ const flattenedSegmentLines = (
   if (segment.kind === "line") {
     return [{ from: { ...segment.from }, to: { ...segment.to } }];
   }
-  const samplingLength = Math.max(
-    Math.hypot(
-      segment.control.x - segment.from.x,
-      segment.control.y - segment.from.y,
-    ) + Math.hypot(
-      segment.to.x - segment.control.x,
-      segment.to.y - segment.control.y,
-    ),
-    2 * Math.max(
-      Math.hypot(
-        segment.control.x - segment.from.x,
-        segment.control.y - segment.from.y,
-      ),
-      Math.hypot(
-        segment.to.x - segment.control.x,
-        segment.to.y - segment.control.y,
-      ),
-    ),
-  );
+  const controls = segment.kind === "quadratic"
+    ? [segment.from, segment.control, segment.to]
+    : [segment.from, segment.control1, segment.control2, segment.to];
+  const samplingLength = controls.slice(0, -1).reduce((length, point, index) =>
+    length + Math.hypot(controls[index + 1]!.x - point.x, controls[index + 1]!.y - point.y), 0);
   const segmentCount = Math.max(1, Math.ceil(samplingLength / 0.25));
   return Array.from({ length: segmentCount }, (_, index) => ({
-    from: tacticalQuadraticBezierPoint(
-      segment,
-      index / segmentCount,
-    ),
-    to: tacticalQuadraticBezierPoint(
-      segment,
-      (index + 1) / segmentCount,
-    ),
+    from: segment.kind === "quadratic"
+      ? tacticalQuadraticBezierPoint(segment, index / segmentCount)
+      : cubicBezierPoint(segment, index / segmentCount),
+    to: segment.kind === "quadratic"
+      ? tacticalQuadraticBezierPoint(segment, (index + 1) / segmentCount)
+      : cubicBezierPoint(segment, (index + 1) / segmentCount),
   }));
+};
+
+const cubicBezierPoint = (
+  segment: Extract<TacticalRaisedAreaOutlineSegment, { kind: "cubic" }>,
+  progress: number,
+): GridPoint => {
+  const inverse = 1 - progress;
+  return {
+    x: inverse ** 3 * segment.from.x
+      + 3 * inverse ** 2 * progress * segment.control1.x
+      + 3 * inverse * progress ** 2 * segment.control2.x
+      + progress ** 3 * segment.to.x,
+    y: inverse ** 3 * segment.from.y
+      + 3 * inverse ** 2 * progress * segment.control1.y
+      + 3 * inverse * progress ** 2 * segment.control2.y
+      + progress ** 3 * segment.to.y,
+  };
 };
 
 export const tacticalRaisedAreaOutlineLines = (
@@ -103,6 +105,7 @@ const validateOutline = (
       !validVertex(segment.from)
       || !validVertex(segment.to)
       || (segment.kind === "quadratic" && !validVertex(segment.control))
+      || (segment.kind === "cubic" && (!validVertex(segment.control1) || !validVertex(segment.control2)))
     ) {
       throw new Error(`Drawn raised area ${area.id} extends outside the map.`);
     }
@@ -162,4 +165,19 @@ export const tacticalDrawnRaisedAreaCells = (
     throw new Error(`Drawn raised area ${area.id} must contain at least one grid cell.`);
   }
   return cells;
+};
+
+/** Later entries are frontmost, matching the editor Layers ordering. */
+export const tacticalDrawnAreaOwnerByCell = (
+  areas: TacticalDrawnArea[],
+  mapWidth: number,
+  mapHeight: number,
+) => {
+  const owners = new Map<string, TacticalDrawnArea>();
+  areas.forEach((area) => {
+    tacticalDrawnRaisedAreaCells(area, mapWidth, mapHeight).forEach((point) => {
+      owners.set(`${point.x}:${point.y}`, area);
+    });
+  });
+  return owners;
 };

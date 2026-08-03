@@ -7,6 +7,7 @@ import {
   tacticalDrawnRaisedAreaLevelsByCell,
   tacticalDrawnRaisedAreaShape,
   tacticalDrawnRaisedAreaTopLevelByCell,
+  tacticalFrontmostContainedAreaHoles,
 } from "../tacticalDrawnRaisedAreaGeometry";
 import {
   TACTICAL_TERRAIN_GRID_LIFT,
@@ -35,6 +36,63 @@ describe("drawn raised-area play geometry", () => {
     expect(points.length).toBeGreaterThan(curvedArea.segments.length);
     expect(points.some((point) => !Number.isInteger(point.x) || !Number.isInteger(point.y))).toBe(true);
     expect(Math.max(...points.map((point) => point.x))).toBeGreaterThan(1);
+  });
+
+  it("preserves cubic curves as a smooth Three shape", () => {
+    const cubicArea: TacticalDrawnRaisedArea = {
+      ...curvedArea,
+      id: "cubic-platform",
+      segments: curvedArea.segments.map((segment) => segment.kind === "quadratic" ? {
+        kind: "cubic" as const,
+        from: segment.from,
+        control1: { x: 8, y: 3 },
+        control2: { x: 8, y: 5 },
+        to: segment.to,
+      } : segment),
+    };
+
+    const points = tacticalDrawnRaisedAreaShape(cubicArea, 10, 10).getPoints(32);
+    expect(points.length).toBeGreaterThan(cubicArea.segments.length);
+    expect(Math.max(...points.map((point) => point.x))).toBeGreaterThan(1);
+    expect(tacticalAreaOutlinePoints(cubicArea)[0]).toEqual(tacticalAreaOutlinePoints(cubicArea).at(-1));
+  });
+
+  it("cuts a frontmost nested area out of the containing terrain shape", () => {
+    const inner: TacticalDrawnRaisedArea = {
+      id: "depression",
+      segments: [
+        { kind: "line", from: { x: 3, y: 3 }, to: { x: 5, y: 3 } },
+        { kind: "line", from: { x: 5, y: 3 }, to: { x: 5, y: 5 } },
+        { kind: "line", from: { x: 5, y: 5 }, to: { x: 3, y: 5 } },
+        { kind: "line", from: { x: 3, y: 5 }, to: { x: 3, y: 3 } },
+      ],
+    };
+    const holes = tacticalFrontmostContainedAreaHoles([curvedArea, inner], 10, 10);
+    const outerShape = tacticalDrawnRaisedAreaShape(curvedArea, 10, 10, holes[0]);
+
+    expect(holes[0]).toEqual([inner]);
+    expect(holes[1]).toEqual([]);
+    expect(outerShape.holes).toHaveLength(1);
+    expect(outerShape.holes[0]?.getPoints()).toHaveLength(5);
+  });
+
+  it("creates direct holes at each level of a three-area nesting hierarchy", () => {
+    const rectangle = (id: string, from: number, to: number): TacticalDrawnRaisedArea => ({
+      id,
+      segments: [
+        { kind: "line", from: { x: from, y: from }, to: { x: to, y: from } },
+        { kind: "line", from: { x: to, y: from }, to: { x: to, y: to } },
+        { kind: "line", from: { x: to, y: to }, to: { x: from, y: to } },
+        { kind: "line", from: { x: from, y: to }, to: { x: from, y: from } },
+      ],
+    });
+    const outer = rectangle("outer", 1, 9);
+    const middle = rectangle("middle", 2, 8);
+    const inner = rectangle("inner", 3, 7);
+
+    const holes = tacticalFrontmostContainedAreaHoles([outer, middle, inner], 10, 10);
+
+    expect(holes).toEqual([[middle], [inner], []]);
   });
 
   it("samples a closed smooth boundary for shaped terrain-region rims", () => {

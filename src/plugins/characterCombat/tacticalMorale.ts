@@ -1,7 +1,8 @@
 import { resolveAhlMoraleCheck, type DicePair } from "./combatResolution";
-import { hasLineOfSight, pathWithinMovementAllowance, pointKey, shortestPathToAny } from "./geometry";
+import { filledLiquidHydrogenCellKeys, hasLineOfSight, pointKey, prepareTacticalVisibilityContext, reachableOpenMapMovement, tacticalOccupantCounts } from "./geometry";
 import { recordTacticalMovementAnimation, recordTacticalObservedEvent } from "./tacticalObservation";
 import { tacticalCombatant } from "./tacticalStateHelpers";
+import { activeTacticalTerrainObjects, tacticalTerrainBlockedCells, tacticalTerrainBlockedEdges } from "./tacticalTerrain";
 import type { CombatScenario, GridPoint, TacticalMapState } from "./types";
 
 export const queueTacticalCasualtyMoraleChecks = (map: TacticalMapState, casualty: CombatScenario["combatants"][number]) => {
@@ -93,31 +94,78 @@ export const resolveTacticalUnexpectedFireMoraleChecks = (map: TacticalMapState,
 
 export const resolveTacticalPanicFlight = (map: TacticalMapState, side: CombatScenario["combatants"][number]["side"]) => {
   const panickedIds = [...(map.panickedCombatantIds ?? [])];
+  const visibility = prepareTacticalVisibilityContext(map.scenario);
   for (const id of panickedIds) {
     const unit = tacticalCombatant(map, id);
     if (!unit || unit.side !== side || unit.defeated) continue;
     const hostiles = map.scenario.combatants.filter((candidate) => candidate.side !== unit.side && !candidate.defeated);
-    const inCompleteCover = (point: GridPoint) => hostiles.every((hostile) => !hasLineOfSight(map.scenario, hostile.position, point));
-    if (inCompleteCover(unit.position)) {
+    const visibleHostileCount = (point: GridPoint) => hostiles.filter((hostile) => visibility.lineOfSight(hostile.position, point)).length;
+    const nearestHostileDistance = (point: GridPoint) => hostiles.length === 0
+      ? Number.POSITIVE_INFINITY
+      : Math.min(...hostiles.map((hostile) => Math.hypot(hostile.position.x - point.x, hostile.position.y - point.y)));
+    const currentVisibleHostiles = visibleHostileCount(unit.position);
+    if (currentVisibleHostiles === 0) {
       map.panickedCombatantIds = (map.panickedCombatantIds ?? []).filter((combatantId) => combatantId !== unit.id);
       if (!(map.coweringCombatantIds ?? []).includes(unit.id)) map.coweringCombatantIds = [...(map.coweringCombatantIds ?? []), unit.id];
       recordTacticalObservedEvent(map, unit, `${unit.name} reached complete cover and is cowering`);
       continue;
     }
-    const goals = Array.from({ length: map.scenario.width }, (_, x) => Array.from({ length: map.scenario.height }, (_, y) => ({ x, y }))).flat().filter(inCompleteCover);
-    const route = shortestPathToAny(map.scenario, unit.id, goals);
-    const path = route ? pathWithinMovementAllowance(map.scenario, unit.position, route, 6, unit.facing, true) : [];
-    if (path.length === 0) {
+    const terrain = activeTacticalTerrainObjects(map.scenario, map.doorOpenById, map.destroyedTerrainObjectIds);
+    const blockedCells = tacticalTerrainBlockedCells(terrain, map.scenario.treeTrunkCells);
+    map.scenario.objects.filter((object) => object.kind === "cover").forEach((object) => blockedCells.add(pointKey(object.position)));
+    filledLiquidHydrogenCellKeys(map.scenario).forEach((key) => blockedCells.add(key));
+    const moves = reachableOpenMapMovement({
+      width: map.scenario.width,
+      height: map.scenario.height,
+      origin: unit.position,
+      originElevationLevel: unit.elevationLevel,
+      facing: unit.facing,
+      allowance: 6,
+      trotting: true,
+      blockedCells,
+      blockedEdges: tacticalTerrainBlockedEdges(terrain),
+      activeOccupantsByCell: tacticalOccupantCounts(map.scenario, unit.id),
+      terrainByCell: map.scenario.terrainByCell,
+      elevationLevelByCell: map.scenario.elevationLevelByCell,
+      bridges: map.scenario.bridges,
+      closeMachineryCells: map.scenario.closeMachineryCells,
+      elevationAccessCells: map.scenario.elevationAccessCells,
+      elevationTransitions: map.scenario.elevationTransitions,
+    });
+    const candidates = [...moves.values()].map((move) => ({
+      move,
+      visibleHostiles: visibleHostileCount(move.destination),
+      nearestHostileDistance: nearestHostileDistance(move.destination),
+    }));
+    const currentNearestHostileDistance = nearestHostileDistance(unit.position);
+    const completeCoverChoice = candidates
+      .filter((candidate) => candidate.visibleHostiles === 0)
+      .sort((first, second) => first.move.cost - second.move.cost
+        || first.move.destination.x - second.move.destination.x
+        || first.move.destination.y - second.move.destination.y)[0];
+    const saferChoice = candidates
+      .filter((candidate) => candidate.visibleHostiles < currentVisibleHostiles
+        || (candidate.visibleHostiles === currentVisibleHostiles
+          && candidate.nearestHostileDistance > currentNearestHostileDistance))
+      .sort((first, second) => first.visibleHostiles - second.visibleHostiles
+        || second.nearestHostileDistance - first.nearestHostileDistance
+        || first.move.cost - second.move.cost
+        || first.move.destination.x - second.move.destination.x
+        || first.move.destination.y - second.move.destination.y)[0];
+    const choice = completeCoverChoice ?? saferChoice;
+    if (!choice) {
       recordTacticalObservedEvent(map, unit, `${unit.name} panicked but could not reach complete cover`);
       continue;
     }
     const origin = { ...unit.position };
-    unit.position = { ...path[path.length - 1] };
-    recordTacticalMovementAnimation(map, unit, origin, path, "run");
-    if (inCompleteCover(unit.position)) {
+    unit.position = { ...choice.move.destination };
+    unit.elevationLevel = choice.move.finalElevationLevel;
+    unit.facing = choice.move.finalFacing ?? unit.facing;
+    recordTacticalMovementAnimation(map, unit, origin, choice.move.path, "run");
+    if (choice.visibleHostiles === 0) {
       map.panickedCombatantIds = (map.panickedCombatantIds ?? []).filter((combatantId) => combatantId !== unit.id);
       if (!(map.coweringCombatantIds ?? []).includes(unit.id)) map.coweringCombatantIds = [...(map.coweringCombatantIds ?? []), unit.id];
-      recordTacticalObservedEvent(map, unit, `${unit.name} fled to ${unit.position.x},${unit.position.y} and is cowering`, [origin, ...path]);
-    } else recordTacticalObservedEvent(map, unit, `${unit.name} fled toward complete cover at ${unit.position.x},${unit.position.y}`, [origin, ...path]);
+      recordTacticalObservedEvent(map, unit, `${unit.name} fled to ${unit.position.x},${unit.position.y} and is cowering`, [origin, ...choice.move.path]);
+    } else recordTacticalObservedEvent(map, unit, `${unit.name} fled to safer ground at ${unit.position.x},${unit.position.y}`, [origin, ...choice.move.path]);
   }
 };

@@ -1460,7 +1460,7 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("crew-1 retained snap fired at Security Guard")]));
   });
 
-  it("allows the covering-fire shooter to decline the retained snap shot", () => {
+  it("skips the retained covering-fire snap when the shooter has no legal target", () => {
     const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
     const ready: CharacterCombatState = {
       ...initialized,
@@ -1474,12 +1474,12 @@ describe("tactical terrain interactions", () => {
       },
     };
     const ammunition = ready.tacticalMap!.ammunitionByCharacterId["crew-1"];
-    let state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: {} }));
-    state = reducer(state, resolveTacticalCoveringFireSnap({ fire: false, hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 }, phaseRolls: { enemyRolls: {} } }));
+    const state = reducer(ready, runTacticalEnemyPhase({ enemyRolls: {} }));
 
     expect(state.tacticalMap?.turn).toBe(2);
+    expect(state.tacticalMap?.pendingCoveringFireSnapIds).toEqual([]);
     expect(state.tacticalMap?.ammunitionByCharacterId["crew-1"]).toBe(ammunition);
-    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining(["crew-1 declined the retained snap shot"]));
+    expect(state.tacticalMap?.events).not.toEqual(expect.arrayContaining([expect.stringContaining("may take the retained snap shot")]));
   });
 
   it("stops an enemy before a covering-fire danger space after a failed exposure check", () => {
@@ -2934,6 +2934,46 @@ describe("tactical terrain interactions", () => {
     expect(state.tacticalMap?.panickedCombatantIds).not.toContain("enemy-2");
     expect(state.tacticalMap?.coweringCombatantIds).toContain("enemy-2");
     expect(state.tacticalMap?.movementAnimationByCharacterId["enemy-2"]).toBeUndefined();
+  });
+
+  it("bounds panic flight to reachable squares and keeps fleeing when complete cover is unavailable", () => {
+    const initialized = reducer(undefined, initializeActiveTacticalTestMap(["crew-1", "crew-2"]));
+    const ready: CharacterCombatState = {
+      ...initialized,
+      tacticalMap: {
+        ...initialized.tacticalMap!,
+        scenario: {
+          ...initialized.tacticalMap!.scenario,
+          width: 200,
+          height: 200,
+          walls: [],
+          doors: [],
+          objects: [],
+          combatants: initialized.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1"
+            ? { ...unit, position: { x: 90, y: 100 } }
+            : unit.id === "enemy-2"
+              ? { ...unit, position: { x: 100, y: 100 }, facing: "east" as const }
+              : { ...unit, defeated: true, health: 0 }),
+        },
+        activeCharacterId: null,
+        actedCharacterIds: ["crew-1", "crew-2"],
+        actionPointsByCharacterId: { "crew-1": 0, "crew-2": 0, "enemy-2": 6 },
+        panickedCombatantIds: ["enemy-2"],
+      },
+    };
+
+    const startedAt = performance.now();
+    const state = reducer(ready, runTacticalEnemyPhase({
+      enemyRolls: { "enemy-2": { hitDice: { first: 1, second: 1 }, woundDice: { first: 1, second: 1 } } },
+    }));
+    const elapsed = performance.now() - startedAt;
+    const enemy = state.tacticalMap?.scenario.combatants.find((unit) => unit.id === "enemy-2");
+
+    expect(enemy?.position.x).toBeGreaterThan(100);
+    expect(state.tacticalMap?.panickedCombatantIds).toContain("enemy-2");
+    expect(state.tacticalMap?.coweringCombatantIds).not.toContain("enemy-2");
+    expect(state.tacticalMap?.events).toEqual(expect.arrayContaining([expect.stringContaining("fled to safer ground")]));
+    expect(elapsed).toBeLessThan(250);
   });
 
   it("keeps a failed cowering enemy from acting during its phase", () => {

@@ -1,4 +1,4 @@
-import { Shape } from "three";
+import { Path, Shape } from "three";
 import { tacticalDrawnRaisedAreaCells } from "@/plugins/characterCombat/tacticalDrawnRaisedAreas";
 import type { TacticalDrawnRaisedArea } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import {
@@ -25,13 +25,22 @@ export const tacticalAreaOutlinePoints = (
     for (let index = 1; index <= CURVE_SEGMENTS; index += 1) {
       const progress = index / CURVE_SEGMENTS;
       const inverse = 1 - progress;
-      points.push({
+      points.push(segment.kind === "quadratic" ? {
         x: inverse * inverse * segment.from.x
           + 2 * inverse * progress * segment.control.x
           + progress * progress * segment.to.x,
         y: inverse * inverse * segment.from.y
           + 2 * inverse * progress * segment.control.y
           + progress * progress * segment.to.y,
+      } : {
+        x: inverse ** 3 * segment.from.x
+          + 3 * inverse ** 2 * progress * segment.control1.x
+          + 3 * inverse * progress ** 2 * segment.control2.x
+          + progress ** 3 * segment.to.x,
+        y: inverse ** 3 * segment.from.y
+          + 3 * inverse ** 2 * progress * segment.control1.y
+          + 3 * inverse * progress ** 2 * segment.control2.y
+          + progress ** 3 * segment.to.y,
       });
     }
   });
@@ -102,32 +111,81 @@ const pairedIntervals = (intersections: number[]) => {
   return intervals;
 };
 
-export const tacticalDrawnRaisedAreaShape = (
+const appendTacticalAreaPath = (
+  path: Path,
   area: Pick<TacticalDrawnRaisedArea, "segments">,
   mapWidth: number,
   mapHeight: number,
 ) => {
-  const shape = new Shape();
   const first = area.segments[0]?.from;
-  if (!first) return shape;
-  shape.moveTo(first.x - mapWidth / 2, first.y - mapHeight / 2);
+  if (!first) return path;
+  path.moveTo(first.x - mapWidth / 2, first.y - mapHeight / 2);
   area.segments.forEach((segment) => {
     if (segment.kind === "quadratic") {
-      shape.quadraticCurveTo(
+      path.quadraticCurveTo(
         segment.control.x - mapWidth / 2,
         segment.control.y - mapHeight / 2,
         segment.to.x - mapWidth / 2,
         segment.to.y - mapHeight / 2,
       );
+    } else if (segment.kind === "cubic") {
+      path.bezierCurveTo(
+        segment.control1.x - mapWidth / 2,
+        segment.control1.y - mapHeight / 2,
+        segment.control2.x - mapWidth / 2,
+        segment.control2.y - mapHeight / 2,
+        segment.to.x - mapWidth / 2,
+        segment.to.y - mapHeight / 2,
+      );
     } else {
-      shape.lineTo(
+      path.lineTo(
         segment.to.x - mapWidth / 2,
         segment.to.y - mapHeight / 2,
       );
     }
   });
-  shape.closePath();
+  path.closePath();
+  return path;
+};
+
+export const tacticalDrawnRaisedAreaShape = (
+  area: Pick<TacticalDrawnRaisedArea, "segments">,
+  mapWidth: number,
+  mapHeight: number,
+  holes: Pick<TacticalDrawnRaisedArea, "segments">[] = [],
+) => {
+  const shape = appendTacticalAreaPath(new Shape(), area, mapWidth, mapHeight) as Shape;
+  holes.forEach((hole) => {
+    shape.holes.push(appendTacticalAreaPath(new Path(), hole, mapWidth, mapHeight));
+  });
   return shape;
+};
+
+export const tacticalFrontmostContainedAreaHoles = (
+  areas: TacticalDrawnRaisedArea[],
+  mapWidth: number,
+  mapHeight: number,
+) => {
+  const cellKeys = areas.map((area) => new Set(
+    tacticalDrawnRaisedAreaCells(area, mapWidth, mapHeight).map((point) => `${point.x}:${point.y}`),
+  ));
+  return areas.map((_area, areaIndex) => {
+    const containedIndexes = areas
+      .map((_candidate, candidateIndex) => candidateIndex)
+      .filter((candidateIndex) => candidateIndex > areaIndex)
+      .filter((candidateIndex) => {
+        const outer = cellKeys[areaIndex]!;
+        const inner = cellKeys[candidateIndex]!;
+        return inner.size < outer.size && [...inner].every((key) => outer.has(key));
+      });
+    return containedIndexes.filter((candidateIndex) => !containedIndexes.some((possibleParentIndex) => {
+      if (possibleParentIndex === candidateIndex) return false;
+      const possibleParent = cellKeys[possibleParentIndex]!;
+      const candidate = cellKeys[candidateIndex]!;
+      return candidate.size < possibleParent.size
+        && [...candidate].every((key) => possibleParent.has(key));
+    })).map((candidateIndex) => areas[candidateIndex]!);
+  });
 };
 
 export const tacticalDrawnRaisedAreaGridLinePositions = (
