@@ -19,6 +19,7 @@ import { tacticalCellsSeparatedBySegment, tacticalWallSegmentKey } from "./tacti
 import { tacticalCirclePrimitiveOutline, tacticalCircleWallBoundary } from "./tacticalTerrainPrimitives";
 import { tacticalNaturalTerrainFootprintCells } from "./tacticalNaturalTerrain";
 import { tacticalQuadraticBezierWallSegments } from "./tacticalBezierWalls";
+import { tacticalWallPath, tacticalWallPathEdgesBetween, tacticalWallPathPoint } from "./tacticalWallPath";
 import { tacticalDrawnAreaOwnerByCell, tacticalDrawnRaisedAreaCells, tacticalRaisedAreaOutlineLines } from "./tacticalDrawnRaisedAreas";
 import { tacticalAreaBoundaryPortalLayout } from "./tacticalAreaBoundaryPortals";
 import type { TacticalRotation, TacticalTerrainObject, TacticalTerminalKind } from "./tacticalTerrain";
@@ -518,14 +519,13 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
     drawnObjectIds.add(wall.id);
     if (!validVertex(wall.from) || !validVertex(wall.to) || (wall.control && !validVertex(wall.control))) throw new Error(`Drawn wall ${wall.id} extends outside the map.`);
     if (wall.from.x === wall.to.x && wall.from.y === wall.to.y) throw new Error(`Drawn wall ${wall.id} must have different endpoints.`);
-    if (wall.control && (wall.portals?.length ?? 0) > 0) throw new Error(`Curved drawn wall ${wall.id} cannot contain portals.`);
     if (wall.control) {
       tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).forEach((segment) => {
         if (drawnObjectIds.has(segment.id)) throw new Error(`Duplicate drawn terrain ID: ${segment.id}.`);
         drawnObjectIds.add(segment.id);
       });
     }
-    const length = Math.hypot(wall.to.x - wall.from.x, wall.to.y - wall.from.y);
+    const length = tacticalWallPath(wall).length;
     let previousPortalEnd = 0;
     [...(wall.portals ?? [])].sort((first, second) => first.position - second.position).forEach((portal) => {
       if (!portal.id.trim()) throw new Error(`A portal on drawn wall ${wall.id} requires an ID.`);
@@ -1164,7 +1164,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   });
   const drawnWallObjects = allDrawnWalls.flatMap((wall): TacticalTerrainObject[] => {
     const portals = [...(wall.portals ?? [])].sort((first, second) => first.position - second.position);
-    if (wall.control) {
+    if (wall.control && portals.length === 0) {
       const curvedObjects: TacticalTerrainObject[] = tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).map((segment) => ({
         id: segment.id,
         kind: "wall",
@@ -1194,30 +1194,31 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         elevationLevel,
       }];
     }
-    const dx = wall.to.x - wall.from.x;
-    const dy = wall.to.y - wall.from.y;
-    const length = Math.hypot(dx, dy);
-    const pointAt = (distance: number) => ({
-      x: wall.from.x + dx * distance / length,
-      y: wall.from.y + dy * distance / length,
-    });
+    const path = tacticalWallPath(wall);
+    const length = path.length;
+    const pointAt = (distance: number) => tacticalWallPathPoint(path, distance);
     const resolved: TacticalTerrainObject[] = [];
     let cursor = 0;
     let section = 1;
-    portals.forEach((portal) => {
-      const center = portal.position * length;
-      const portalStart = center - 0.5;
-      const portalEnd = center + 0.5;
-      if (portalStart > cursor + 1e-9) {
+    const pushWallRange = (fromDistance: number, toDistance: number) => {
+      tacticalWallPathEdgesBetween(path, fromDistance, toDistance).forEach((edge) => {
         resolved.push({
           id: `${wall.id}:section:${section}`,
           kind: "wall",
-          edge: { from: pointAt(cursor), to: pointAt(portalStart) },
+          edge,
           blocking: true,
           targetable: true,
           integrity: 3,
         });
         section += 1;
+      });
+    };
+    portals.forEach((portal) => {
+      const center = portal.position * length;
+      const portalStart = center - 0.5;
+      const portalEnd = center + 0.5;
+      if (portalStart > cursor + 1e-9) {
+        pushWallRange(cursor, portalStart);
       }
       const edge = { from: pointAt(portalStart), to: pointAt(portalEnd) };
       const separates = tacticalCellsSeparatedBySegment(edge);
@@ -1238,14 +1239,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
       cursor = portalEnd;
     });
     if (cursor < length - 1e-9) {
-      resolved.push({
-        id: `${wall.id}:section:${section}`,
-        kind: "wall",
-        edge: { from: pointAt(cursor), to: { ...wall.to } },
-        blocking: true,
-        targetable: true,
-        integrity: 3,
-      });
+      pushWallRange(cursor, length);
     }
     const elevationLevel = boundaryElevationLevel(
       wall.id,

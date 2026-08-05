@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "test-for-addam",
+  "consoleVictoryDefinitionId": "test-for-addam",
+  "title": "Test for Addam",
+  "briefing": "",
+  "objective": "",
+  "map": {
+    "width": 24,
+    "height": 24
+  },
+  "terrainPlacements": [],
+  "drawnWalls": [],
+  "drawnRaisedAreas": [],
+  "drawnTerrainRegions": [],
+  "drawnAreas": [],
+  "drawnTerrainPrimitives": [],
+  "naturalTerrainPlacements": [],
+  "elevationTransitions": [],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [],
+  "fireCells": [],
+  "smokeCells": []
+}

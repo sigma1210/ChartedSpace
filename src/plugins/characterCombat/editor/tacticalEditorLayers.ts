@@ -238,6 +238,68 @@ export const moveTacticalEditorLayerObject = <T,>(
   return next;
 };
 
+export const moveTacticalEditorLayerObjectInDefinition = (
+  definition: TacticalScenarioDefinitionFile,
+  object: Pick<TacticalEditorLayerObject, "kind" | "id">,
+  direction: -1 | 1,
+): TacticalScenarioDefinitionFile => {
+  if (object.kind === "terrain-placement") {
+    const items = definition.terrainPlacements;
+    return {
+      ...definition,
+      terrainPlacements: moveTacticalEditorLayerObject(
+        items,
+        items.findIndex((item) => item.id === object.id),
+        direction,
+      ),
+    };
+  }
+  if (object.kind === "area") {
+    const items = definition.drawnAreas ?? [];
+    return { ...definition, drawnAreas: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "enemy") {
+    const items = definition.enemyPlacements ?? [];
+    return { ...definition, enemyPlacements: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "wall") {
+    const items = definition.drawnWalls ?? [];
+    return { ...definition, drawnWalls: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "raised-area") {
+    const items = definition.drawnRaisedAreas ?? [];
+    return { ...definition, drawnRaisedAreas: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "terrain-region") {
+    const items = definition.drawnTerrainRegions ?? [];
+    return { ...definition, drawnTerrainRegions: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "primitive") {
+    const items = definition.drawnTerrainPrimitives ?? [];
+    return { ...definition, drawnTerrainPrimitives: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "natural-terrain") {
+    const items = definition.naturalTerrainPlacements ?? [];
+    return { ...definition, naturalTerrainPlacements: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "elevation-transition") {
+    const items = definition.elevationTransitions ?? [];
+    return { ...definition, elevationTransitions: moveTacticalEditorLayerObject(items, items.findIndex((item) => item.id === object.id), direction) };
+  }
+  if (object.kind === "fire") {
+    const items = definition.fireCells;
+    return {
+      ...definition,
+      fireCells: moveTacticalEditorLayerObject(
+        items,
+        items.findIndex((point) => `${point.x}:${point.y}` === object.id),
+        direction,
+      ),
+    };
+  }
+  return definition;
+};
+
 export const tacticalEditorVisibleDefinition = (
   definition: TacticalScenarioDefinitionFile,
   hiddenKeys: ReadonlySet<string>,

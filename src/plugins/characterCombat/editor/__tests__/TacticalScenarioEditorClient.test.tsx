@@ -105,6 +105,7 @@ describe("TacticalScenarioEditorClient", () => {
     expect(markup).toContain("contents invisible");
     expect(markup).toContain("Enemy Palette");
     expect(markup).toContain("Tracing Template");
+    expect(markup).toContain("Open tracing template");
     expect(markup).toContain(">Gang Member</span>");
     expect(markup).toContain(">Gang Leader</span>");
     expect(markup).not.toContain(">Fire</button>");
@@ -1558,6 +1559,8 @@ describe("TacticalScenarioEditorClient", () => {
     const confirm = jest.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
 
     render(<TacticalScenarioEditorClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Tracing Template" }));
+    expect(screen.queryByRole("button", { name: "Collapse Tracing Template" })).toBeNull();
     const defaultPlacementLayer = screen.getByTestId("editor-layer-terrain-placement:control-room-alpha");
     fireEvent.click(within(defaultPlacementLayer).getByRole("button", { name: "Lock control-room-alpha" }));
     expect(store.getState().tacticalEditor.layers.lockedByKey).toEqual({
@@ -1607,6 +1610,13 @@ describe("TacticalScenarioEditorClient", () => {
       .toEqual(store.getState().tacticalEditor.document.consoleVictoryBaseline);
     expect(selectTacticalEditorDocumentDirty(store.getState())).toBe(false);
     expect(store.getState().tacticalEditor.layers).toEqual({ hiddenByKey: {}, lockedByKey: {} });
+    fireEvent.click(screen.getByRole("button", { name: "Open tracing template" }));
+    expect(screen.getByRole("button", { name: "Collapse Tracing Template" })).toBeTruthy();
+    expect(store.getState().tacticalEditor.tools.mode).toEqual({ kind: "primary", tool: "select" });
+    expect(store.getState().tacticalEditor.hudLayouts["tracing-template"]).toMatchObject({
+      visible: true,
+      position: { x: 720, y: 180 },
+    });
   });
 
   it("saves changes to the current saved scenario from the File menu", async () => {
