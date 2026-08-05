@@ -1,5 +1,4 @@
 import { buildDefaultTacticalScenario } from "@/plugins/characterCombat/defaultTacticalScenario";
-import { defaultTacticalScenarioDefinition } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import {
   TACTICAL_STAIR_PLATFORM_HEIGHT,
   TACTICAL_RAMP_DECK_THICKNESS,
@@ -14,7 +13,6 @@ import {
   tacticalRampSurfaceHeightAt,
   tacticalRaisedGridLinePositions,
   tacticalRaisedSurfaceHeightAt,
-  tacticalStairPlatformPlacement,
   tacticalVisualHeightAt,
 } from "../tacticalSceneGeometry";
 

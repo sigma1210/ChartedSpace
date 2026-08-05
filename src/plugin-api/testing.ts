@@ -10,7 +10,7 @@ import { initialNavigationState } from "../plugins/navigation";
 import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLocationSlice";
 import { initialTradeState } from "../plugins/trade/tradeSlice";
 import { initialEquipmentCatalogState } from "../plugins/equipmentCatalog";
-import { initialTacticalEditorState } from "@/plugins/characterCombat/editor/state/tacticalEditorSlice";
+import { initialTacticalEditorState } from "@/plugins/characterCombat/editor/redux/tacticalEditorSlice";
 
 export interface PluginTestRootStateOptions {
   currentTurn?: number;

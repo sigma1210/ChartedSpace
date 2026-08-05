@@ -1,4 +1,4 @@
-import TacticalScenarioEditorRouteClient from "@/plugins/characterCombat/editor/TacticalScenarioEditorRouteClient";
+import TacticalScenarioEditorRouteClient from "@/plugins/characterCombat/editor/components/TacticalScenarioEditorRouteClient";
 
 const TacticalScenarioEditorPage = () => <TacticalScenarioEditorRouteClient />;
 

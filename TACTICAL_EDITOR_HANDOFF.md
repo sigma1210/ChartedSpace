@@ -79,26 +79,46 @@ The Enemy Palette remains separate because enemy types are not ordinary terrain/
 
 ## Main files
 
-- `src/plugins/characterCombat/editor/TacticalScenarioEditorClient.tsx`
-- `src/plugins/characterCombat/editor/__tests__/TacticalScenarioEditorClient.test.tsx`
-- `src/plugins/characterCombat/editor/state/tacticalEditorSlice.ts`
-- `src/plugins/characterCombat/editor/state/selectors.ts`
+- `src/plugins/characterCombat/editor/components/TacticalScenarioEditorClient.tsx`
+- `src/plugins/characterCombat/editor/components/__tests__/TacticalScenarioEditorClient.test.tsx`
+- `src/plugins/characterCombat/editor/redux/tacticalEditorSlice.ts`
+- `src/plugins/characterCombat/editor/redux/selectors.ts`
 - `src/app/system/tactical/editor/page.tsx` (thin Next.js route adapter)
 - `src/plugins/characterCombat/tacticalScenarioDefinitions.ts`
 - `src/plugins/characterCombat/geometry.ts`
 - `src/plugins/characterCombat/tacticalEnemyMovement.ts`
 - `src/plugins/characterCombat/tacticalEnemyPhaseReducers.ts`
 - `src/plugins/characterCombat/tacticalObservation.ts`
-- `src/plugins/characterCombat/editor/tacticalEditorLayers.ts`
-- `src/plugins/characterCombat/editor/TacticalEditorLayersPanel.tsx`
+- `src/plugins/characterCombat/editor/lib/tacticalEditorLayers.ts`
+- `src/plugins/characterCombat/editor/components/TacticalEditorLayersPanel.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorTerrainCellsLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorElevationLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorTracingTemplateLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorLegacyCircleLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorNaturalTerrainLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorWallsLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorWallPortalsLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorObjectsLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorPlacementPreviewLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorDrawingPreviewLayer.tsx`
+
+## Editor directory structure
+
+- `components/`: React components, HUDs, dialogs, viewport, and route client.
+- `hooks/`: editor hooks and interaction workflows.
+- `lib/`: API, document conversion, validation, layout, and other non-React helpers.
+- `redux/`: Redux slice and selectors.
+- `__tests__/editorOwnership.test.ts`: structural boundary checks.
+
+Production TypeScript files do not live directly in the editor root. The ownership test also prevents reintroducing imports from the retired `editor/state/` path.
 
 ## Verification status
 
 Latest completed checks:
 
-- 872 tests passed across 91 suites.
-- The focused editor component suite passed all 56 tests.
-- ESLint passed for the changed tactical files.
+- 1,327 tests passed across 166 suites.
+- The focused editor component suite passed all 176 tests across 31 suites.
+- ESLint passed repository-wide.
 - The production build passed.
 
 Visual browser automation is unavailable in the current session. Distinguish automated coverage from the user's visual testing.

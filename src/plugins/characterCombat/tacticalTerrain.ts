@@ -118,10 +118,6 @@ export const tacticalTerrainBlockedEdges = (objects: TacticalTerrainObject[]) =>
   return [];
 }));
 
-const cellsSeparatedBy = (from: GridPoint, to: GridPoint) => from.x === to.x
-  ? { first: { x: from.x - 1, y: Math.min(from.y, to.y) }, second: { x: from.x, y: Math.min(from.y, to.y) } }
-  : { first: { x: Math.min(from.x, to.x), y: from.y - 1 }, second: { x: Math.min(from.x, to.x), y: from.y } };
-
 export const tacticalTerrainObjectsForScenario = (scenario: CombatScenario): TacticalTerrainObject[] => scenario.terrainObjects ?? [
   ...scenario.walls.map((wall): TacticalWallSegment => ({
     id: wall.id,

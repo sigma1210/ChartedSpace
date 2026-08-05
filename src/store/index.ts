@@ -7,7 +7,7 @@ import availableCrewReducer from "./slices/availableCrewSlice";
 import systemReducer from "./slices/systemSlice";
 import systemSceneReducer from "./slices/systemSceneSlice";
 import hudReducer, { hydrateHudLayouts } from "./slices/hudSlice";
-import tacticalEditorReducer from "@/plugins/characterCombat/editor/state/tacticalEditorSlice";
+import tacticalEditorReducer from "@/plugins/characterCombat/editor/redux/tacticalEditorSlice";
 import { pluginsReducer } from "../plugins/registry";
 import { installPluginWorkflowHandlers } from "../plugins/workflowHandlerRegistration";
 import {
@@ -17,7 +17,7 @@ import {
 import {
   saveTacticalEditorHudLayout,
   tacticalEditorHudIds,
-} from "@/plugins/characterCombat/editor/state/hudLayouts";
+} from "@/plugins/characterCombat/editor/lib/hudLayouts";
 
 installPluginWorkflowHandlers();
 

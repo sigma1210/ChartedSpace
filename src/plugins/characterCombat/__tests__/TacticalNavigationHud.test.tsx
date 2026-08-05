@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { TacticalNavigationHud } from "../TacticalNavigationHud";
-import { TacticalEditorViewportProvider } from "../editor/TacticalEditorViewport";
+import { TacticalEditorViewportProvider } from "../editor/components/TacticalEditorViewport";
 
 jest.mock("@/components/hud/FloatingPluginHud", () => ({
   FloatingPluginHud: ({
