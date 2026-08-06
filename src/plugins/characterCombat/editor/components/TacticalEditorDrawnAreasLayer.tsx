@@ -75,6 +75,27 @@ const TacticalEditorDrawnAreasLayer = ({
         fillOpacity={area.surface === "liquid-hydrogen" && area.settings?.filled === false ? "0.08" : "0.3"}
         pointerEvents="none"
       />)}
+      {areaGeometry?.kind === "circle" && <circle
+        data-testid={`drawn-area-${area.id}-interior-hit-target`}
+        cx={areaGeometry.center.x}
+        cy={areaGeometry.center.y}
+        r={areaGeometry.radius}
+        fill="transparent"
+        pointerEvents={interactionDisabled ? "none" : "fill"}
+        className={interactionDisabled ? undefined : "cursor-pointer"}
+        onPointerDown={selectArea}
+      />}
+      {areaGeometry?.kind === "rectangle" && <rect
+        data-testid={`drawn-area-${area.id}-interior-hit-target`}
+        x={areaGeometry.x}
+        y={areaGeometry.y}
+        width={areaGeometry.width}
+        height={areaGeometry.height}
+        fill="transparent"
+        pointerEvents={interactionDisabled ? "none" : "fill"}
+        className={interactionDisabled ? undefined : "cursor-pointer"}
+        onPointerDown={selectArea}
+      />}
       {area.segments.map((segment, index) => segment.kind !== "line"
         ? <g key={index}>
           <path data-testid={`drawn-area-${area.id}-segment-${index}`} d={areaSegmentSvgPath(segment)} fill="none" stroke={outline} strokeWidth={selected ? "0.38" : area.boundary === "wall" ? "0.32" : "0.2"} className={interactionDisabled ? undefined : "cursor-pointer"} onPointerDown={selectArea} onDoubleClick={(event) => insertAnchor(event, index)} />

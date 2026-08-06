@@ -19,8 +19,8 @@ const keyboardOptions = (
   circleDraftActive: false,
   onCancelCircle: jest.fn(),
   onActivatePrimaryTool: jest.fn(),
-  canRotatePlacement: false,
-  onRotatePlacement: jest.fn(),
+  canRotateSelection: false,
+  onRotateSelection: jest.fn(),
   ...overrides,
 });
 
@@ -32,7 +32,7 @@ const pressKey = (key: string, target: Window | HTMLElement = window) => {
 
 describe("useTacticalEditorKeyboard", () => {
   it("maps the primary tool and rotation shortcuts", () => {
-    const options = keyboardOptions({ canRotatePlacement: true });
+    const options = keyboardOptions({ canRotateSelection: true });
     renderHook(() => useTacticalEditorKeyboard(options));
 
     expect(pressKey("v").defaultPrevented).toBe(true);
@@ -42,7 +42,7 @@ describe("useTacticalEditorKeyboard", () => {
     expect(options.onActivatePrimaryTool).toHaveBeenNthCalledWith(1, "select");
     expect(options.onActivatePrimaryTool).toHaveBeenNthCalledWith(2, "node");
     expect(options.onActivatePrimaryTool).toHaveBeenNthCalledWith(3, "hand");
-    expect(options.onRotatePlacement).toHaveBeenCalledTimes(1);
+    expect(options.onRotateSelection).toHaveBeenCalledTimes(1);
   });
 
   it("does not consume rotation when no placement can rotate", () => {
@@ -50,7 +50,7 @@ describe("useTacticalEditorKeyboard", () => {
     renderHook(() => useTacticalEditorKeyboard(options));
 
     expect(pressKey("r").defaultPrevented).toBe(false);
-    expect(options.onRotatePlacement).not.toHaveBeenCalled();
+    expect(options.onRotateSelection).not.toHaveBeenCalled();
   });
 
   it("delegates deletion and only consumes handled deletion keys", () => {

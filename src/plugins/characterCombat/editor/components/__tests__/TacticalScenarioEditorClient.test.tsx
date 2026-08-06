@@ -12,7 +12,7 @@ import { cloneTacticalConsoleVictoryDefinition, defaultTacticalConsoleVictoryDef
 import { cloneTacticalScenarioDefinition, defaultTacticalScenarioDefinition } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import { TACTICAL_EDITOR_HUD_LAYOUT_STORAGE_KEY } from "@/plugins/characterCombat/editor/lib/hudLayouts";
 import { store } from "@/store";
-import { editorHudLayoutsReset, editorSelectionChanged, editorSessionReset } from "@/plugins/characterCombat/editor/redux/tacticalEditorSlice";
+import { editorDraftChanged, editorHudLayoutChanged, editorHudLayoutsReset, editorSelectionChanged, editorSessionReset } from "@/plugins/characterCombat/editor/redux/tacticalEditorSlice";
 import { selectTacticalEditorDocumentDirty } from "@/plugins/characterCombat/editor/redux/selectors";
 
 const TestTacticalPlaytest = ({ draftPlaytest }: TacticalEditorPlaytestProps) => draftPlaytest
@@ -450,14 +450,14 @@ describe("TacticalScenarioEditorClient", () => {
   it("synchronizes layer selection, visibility, and locking with editor state", () => {
     render(<TacticalScenarioEditorClient />);
     expect(screen.queryByLabelText("Editor properties")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Rotate selected placement 90 degrees" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Rotate selected item 90 degrees" }) as HTMLButtonElement).disabled).toBe(true);
     const layer = screen.getByTestId("editor-layer-terrain-placement:control-room-alpha");
 
     fireEvent.click(within(layer).getByRole("button", { name: "control-room-alpha" }));
     expect(layer.className).toContain("bg-cyan-950/70");
     const placementControl = screen.getByTestId("terrain-placement-control-control-room-alpha");
     expect(placementControl.getAttribute("data-rotation")).toBe("0");
-    fireEvent.click(screen.getByRole("button", { name: "Rotate selected placement 90 degrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rotate selected item 90 degrees" }));
     expect(placementControl.getAttribute("data-rotation")).toBe("90");
     fireEvent.keyDown(window, { key: "r" });
     expect(placementControl.getAttribute("data-rotation")).toBe("180");
@@ -477,15 +477,115 @@ describe("TacticalScenarioEditorClient", () => {
     });
   });
 
-  it("collapses and restores the floating Layers HUD", () => {
+  it("controls Layers from Tools without rendering the separate HUDs launcher", () => {
     render(<TacticalScenarioEditorClient />);
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse Layers" }));
     expect(screen.queryByLabelText("Editor layers")).toBeNull();
+    expect(screen.queryByText("HUDs")).toBeNull();
 
-    fireEvent.click(screen.getByText("HUDs"));
-    fireEvent.click(screen.getByRole("button", { name: "Show Layers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open layers" }));
     expect(screen.getByLabelText("Editor layers")).toBeTruthy();
+  });
+
+  it("dismisses header menus on outside pointer-down and Escape", () => {
+    render(<TacticalScenarioEditorClient />);
+    const fileMenu = screen.getByRole("button", { name: "File menu" });
+    fireEvent.click(fileMenu);
+    expect(fileMenu.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.pointerDown(screen.getByLabelText("Scenario draft map preview"));
+    expect(fileMenu.getAttribute("aria-expanded")).toBe("false");
+
+    const scenarioMenu = screen.getByRole("button", { name: "Scenario menu" });
+    fireEvent.click(scenarioMenu);
+    expect(scenarioMenu.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(scenarioMenu.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps raised areas and placed objects above constrained-area interior hit targets", () => {
+    const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    definition.drawnAreas = [{
+      id: "selection-circle",
+      geometry: { kind: "circle", center: { x: 24.5, y: 34.5 }, radius: 3 },
+      segments: [{ kind: "line", from: { x: 27.5, y: 34.5 }, to: { x: 24.5, y: 37.5 } }],
+      surface: "none",
+      elevation: 0,
+      boundary: "none",
+    }];
+    definition.drawnRaisedAreas = [{
+      id: "selection-platform",
+      segments: [
+        { kind: "line", from: { x: 22, y: 32 }, to: { x: 27, y: 32 } },
+        { kind: "line", from: { x: 27, y: 32 }, to: { x: 27, y: 37 } },
+        { kind: "line", from: { x: 27, y: 37 }, to: { x: 22, y: 37 } },
+        { kind: "line", from: { x: 22, y: 37 }, to: { x: 22, y: 32 } },
+      ],
+    }];
+    definition.drawnRaisedAreaLevels = { "selection-platform": 1 };
+    render(<TacticalScenarioEditorClient />);
+    act(() => store.dispatch(editorDraftChanged(definition)));
+
+    const hitTarget = screen.getByTestId("drawn-area-selection-circle-interior-hit-target");
+    const raisedBoundary = screen.getByTestId("drawn-raised-area-selection-platform-segment-0");
+    const placedObject = screen.getByTestId("terrain-placement-control-control-room-alpha");
+    expect(hitTarget.compareDocumentPosition(raisedBoundary) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(hitTarget.compareDocumentPosition(placedObject) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    fireEvent.pointerDown(hitTarget);
+    expect(store.getState().tacticalEditor.selection.object).toEqual({ kind: "area", id: "selection-circle" });
+    fireEvent.pointerDown(raisedBoundary);
+    expect(store.getState().tacticalEditor.selection.object).toEqual({ kind: "legacy-raised-area", id: "selection-platform" });
+    fireEvent.pointerDown(placedObject);
+    expect(store.getState().tacticalEditor.selection.object).toEqual({ kind: "terrain-placement", id: "control-room-alpha" });
+  });
+
+  it("reopens the Enemy Palette from the Interactions submenu", () => {
+    render(<TacticalScenarioEditorClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Enemy Palette" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Interactions tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Enemy Palette" }));
+
+    expect(screen.getByRole("button", { name: "Collapse Enemy Palette" })).toBeTruthy();
+  });
+
+  it("controls the Tools HUD through View → Toolbar without changing its layout", () => {
+    store.dispatch(editorHudLayoutChanged({
+      id: "tools",
+      layout: { visible: true, pinned: true, position: { x: 280, y: 24 } },
+    }));
+    render(<TacticalScenarioEditorClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "View menu" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Toolbar" }));
+    expect(screen.queryByRole("button", { name: "Collapse Tools" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "View menu" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Toolbar" }));
+    expect(screen.getByRole("button", { name: "Collapse Tools" })).toBeTruthy();
+    expect(store.getState().tacticalEditor.hudLayouts.tools).toEqual({
+      visible: true,
+      pinned: true,
+      position: { x: 280, y: 24 },
+    });
+  });
+
+  it("reopens the tracing HUD from Tools without resetting its position or lock state", () => {
+    store.dispatch(editorHudLayoutChanged({
+      id: "tracing-template",
+      layout: { visible: true, pinned: true, position: { x: 321, y: 222 } },
+    }));
+    render(<TacticalScenarioEditorClient />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Tracing Template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open tracing template" }));
+
+    expect(store.getState().tacticalEditor.hudLayouts["tracing-template"]).toEqual({
+      visible: true,
+      pinned: true,
+      position: { x: 321, y: 222 },
+    });
   });
 
   it("selects, fits, hides, and removes a tracing template", async () => {
@@ -815,7 +915,7 @@ describe("TacticalScenarioEditorClient", () => {
 
     const circle = screen.getByTestId("drawn-area-circle-area-1");
     expect(circle.getAttribute("data-elevation-level")).toBe("0");
-    expect(screen.getByText("Area Properties")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse Area Properties" })).toBeTruthy();
     expect(screen.queryByTestId("drawn-area-circle-area-1-anchor-0")).toBeNull();
     expect(screen.queryByTestId("drawn-area-circle-area-1-segment-0-control-handle")).toBeNull();
     expect(screen.getByTestId("drawn-area-circle-area-1-circle-center-handle")).toBeTruthy();
@@ -896,7 +996,7 @@ describe("TacticalScenarioEditorClient", () => {
     render(<TacticalScenarioEditorClient />);
     fireEvent.click(screen.getByRole("button", { name: "Open Boundaries tools" }));
     fireEvent.click(screen.getByRole("button", { name: "Choose Legacy circle wall tool" }));
-    expect(screen.getByText("Legacy Circle Properties")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse Legacy Circle Properties" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Circle type Wall" }));
     const preview = screen.getByLabelText("Scenario draft map preview");
 
@@ -953,7 +1053,7 @@ describe("TacticalScenarioEditorClient", () => {
     expect(screen.queryByTestId("raised-area-draft-preview")).toBeNull();
     expect(screen.getByTestId("drawn-area-drawn-area-1-segment-0")).toBeTruthy();
     expect(screen.getByTestId("drawn-area-drawn-area-1-segment-3")).toBeTruthy();
-    expect(screen.getByText("Area Properties")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse Area Properties" })).toBeTruthy();
     expect((screen.getByLabelText("Area elevation level") as HTMLInputElement).value).toBe("0");
   });
 
@@ -1751,11 +1851,13 @@ describe("TacticalScenarioEditorClient", () => {
     render(<TacticalScenarioEditorClient />);
     fireEvent.pointerDown(screen.getByTestId("enemy-marker-enemy-1"), { clientX: 47.5, clientY: 41.5, pointerId: 1 });
 
-    expect(screen.getByText("Enemy Editor")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse Enemy Editor" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Enemy name"), { target: { value: "Razor" } });
     expect(screen.getByDisplayValue("Razor")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Rotate enemy 90 degrees" }).textContent).toContain("Facing North");
-    fireEvent.click(screen.getByRole("button", { name: "Rotate enemy 90 degrees" }));
+    const toolsRotate = screen.getByRole("button", { name: "Rotate selected item 90 degrees" }) as HTMLButtonElement;
+    expect(toolsRotate.disabled).toBe(false);
+    fireEvent.click(toolsRotate);
     expect(screen.getByRole("button", { name: "Rotate enemy 90 degrees" }).textContent).toContain("Facing East");
 
     fireEvent.keyDown(window, { key: "Delete" });
@@ -1772,8 +1874,10 @@ describe("TacticalScenarioEditorClient", () => {
 
     expect(screen.getByText("This enemy is locked. It can be selected, but it cannot be moved or edited.")).toBeTruthy();
     expect((screen.getByLabelText("Enemy name") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Rotate selected item 90 degrees" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Unlock enemy" }));
     expect((screen.getByLabelText("Enemy name") as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Rotate selected item 90 degrees" }) as HTMLButtonElement).disabled).toBe(false);
     expect(store.getState().tacticalEditor.layers.lockedByKey).toEqual({});
     expect(store.getState().tacticalEditor.selection.object).toEqual({ kind: "enemy", id: "enemy-1" });
   });

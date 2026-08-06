@@ -13,9 +13,10 @@ const renderHud = (overrides: Partial<ComponentProps<typeof TacticalEditorToolsH
     placementKind: null,
     enemyToolActive: false,
     openToolGroup: null,
-    selectedPlacementId: null,
+    canRotateSelection: false,
     tracingTemplateVisible: false,
     layersVisible: false,
+    enemyPaletteVisible: false,
     drawingPrecisionControl: <div>Precision control</div>,
     mapWidth: 72,
     mapHeight: 48,
@@ -25,9 +26,10 @@ const renderHud = (overrides: Partial<ComponentProps<typeof TacticalEditorToolsH
     onActivatePrimaryTool: jest.fn(),
     onToggleToolGroup: jest.fn(),
     onActivateDrawingTool: jest.fn(),
-    onRotateSelectedPlacement: jest.fn(),
+    onRotateSelection: jest.fn(),
     onOpenTracingTemplate: jest.fn(),
     onOpenLayers: jest.fn(),
+    onOpenEnemyPalette: jest.fn(),
     onUpdateMapDimension: jest.fn(),
     onUpdateLiquidHydrogenFilled: jest.fn(),
     onFinishPenArea: jest.fn(),
@@ -49,7 +51,15 @@ describe("TacticalEditorToolsHud", () => {
     };
   });
 
-  it("forwards primary tools, group tools, and HUD launchers", () => {
+  it("opens the Enemy Palette from the Interactions submenu", () => {
+    const props = renderHud({ openToolGroup: "interactions" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Enemy Palette" }));
+
+    expect(props.onOpenEnemyPalette).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards primary tools, group tools, and the existing HUD launchers", () => {
     const props = renderHud({ openToolGroup: "areas" });
 
     fireEvent.click(screen.getByRole("button", { name: "Select tool" }));
@@ -72,20 +82,27 @@ describe("TacticalEditorToolsHud", () => {
   it("forwards drawing settings and contextual placement controls", () => {
     const props = renderHud({
       openToolGroup: "drawing-settings",
-      selectedPlacementId: "hydrogen-1",
+      canRotateSelection: true,
       selectedLiquidHydrogenFilled: true,
     });
 
     expect(screen.getByText("Precision control")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Map width"), { target: { value: "80" } });
     fireEvent.change(screen.getByLabelText("Map height"), { target: { value: "60" } });
-    fireEvent.click(screen.getByRole("button", { name: "Rotate selected placement 90 degrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rotate selected item 90 degrees" }));
     fireEvent.click(screen.getByLabelText("Filled with liquid hydrogen"));
 
     expect(props.onUpdateMapDimension).toHaveBeenCalledWith("width", "80");
     expect(props.onUpdateMapDimension).toHaveBeenCalledWith("height", "60");
-    expect(props.onRotateSelectedPlacement).toHaveBeenCalledTimes(1);
+    expect(props.onRotateSelection).toHaveBeenCalledTimes(1);
     expect(props.onUpdateLiquidHydrogenFilled).toHaveBeenCalledWith(false);
+  });
+
+  it("always renders Rotate and disables it when the selection cannot rotate", () => {
+    renderHud();
+
+    const rotate = screen.getByRole("button", { name: "Rotate selected item 90 degrees" }) as HTMLButtonElement;
+    expect(rotate.disabled).toBe(true);
   });
 
   it("forwards Pen and ramp cancellation controls", () => {

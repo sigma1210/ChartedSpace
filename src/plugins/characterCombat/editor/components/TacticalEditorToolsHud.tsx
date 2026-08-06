@@ -1,4 +1,4 @@
-import { Hand, Image as ImageIcon, Layers3, MousePointer2, RotateCw, Settings2, Spline } from "lucide-react";
+import { Hand, Image as ImageIcon, Layers3, MousePointer2, RotateCw, Settings2, Spline, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { FloatingPluginHud } from "@/components/hud/FloatingPluginHud";
 import type { TacticalEditorHudLayout } from "@/plugins/characterCombat/editor/lib/hudLayouts";
@@ -20,9 +20,10 @@ type TacticalEditorToolsHudProps = {
   placementKind: string | null;
   enemyToolActive: boolean;
   openToolGroup: TacticalEditorToolGroup | null;
-  selectedPlacementId: string | null;
+  canRotateSelection: boolean;
   tracingTemplateVisible: boolean;
   layersVisible: boolean;
+  enemyPaletteVisible: boolean;
   drawingPrecisionControl: ReactNode;
   mapWidth: number;
   mapHeight: number;
@@ -32,9 +33,10 @@ type TacticalEditorToolsHudProps = {
   onActivatePrimaryTool: (tool: TacticalEditorPrimaryTool) => void;
   onToggleToolGroup: (group: TacticalEditorToolGroup) => void;
   onActivateDrawingTool: (toolId: string) => void;
-  onRotateSelectedPlacement: () => void;
+  onRotateSelection: () => void;
   onOpenTracingTemplate: () => void;
   onOpenLayers: () => void;
+  onOpenEnemyPalette: () => void;
   onUpdateMapDimension: (field: "width" | "height", value: string) => void;
   onUpdateLiquidHydrogenFilled: (filled: boolean) => void;
   onFinishPenArea: () => void;
@@ -51,9 +53,10 @@ const TacticalEditorToolsHud = ({
   placementKind,
   enemyToolActive,
   openToolGroup,
-  selectedPlacementId,
+  canRotateSelection,
   tracingTemplateVisible,
   layersVisible,
+  enemyPaletteVisible,
   drawingPrecisionControl,
   mapWidth,
   mapHeight,
@@ -63,9 +66,10 @@ const TacticalEditorToolsHud = ({
   onActivatePrimaryTool,
   onToggleToolGroup,
   onActivateDrawingTool,
-  onRotateSelectedPlacement,
+  onRotateSelection,
   onOpenTracingTemplate,
   onOpenLayers,
+  onOpenEnemyPalette,
   onUpdateMapDimension,
   onUpdateLiquidHydrogenFilled,
   onFinishPenArea,
@@ -112,10 +116,10 @@ const TacticalEditorToolsHud = ({
             <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">{group.label}</span>
           </button>;
         })}
-        {selectedPlacementId && <button type="button" title={`Rotate ${selectedPlacementId} 90° · R`} aria-label="Rotate selected placement 90 degrees" onClick={onRotateSelectedPlacement} className="group relative grid h-9 w-9 place-items-center border border-amber-500 text-amber-200 transition-colors hover:border-amber-200 hover:bg-amber-300/20 hover:text-amber-50">
+        <button type="button" title="Rotate selected item 90° · R" aria-label="Rotate selected item 90 degrees" disabled={!canRotateSelection} onClick={onRotateSelection} className="group relative grid h-9 w-9 place-items-center border border-amber-500 text-amber-200 transition-colors hover:border-amber-200 hover:bg-amber-300/20 hover:text-amber-50 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-700 disabled:hover:border-slate-800 disabled:hover:bg-transparent disabled:hover:text-slate-700">
           <RotateCw size={17} aria-hidden="true" />
           <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-amber-500 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-amber-50 shadow-xl group-hover:block group-focus-visible:block">Rotate selected · R</span>
-        </button>}
+        </button>
         <div className="mx-1 h-7 w-px bg-slate-700" aria-hidden="true" />
         <button type="button" aria-label="Open tracing template" aria-pressed={tracingTemplateVisible} onClick={onOpenTracingTemplate} className={primaryButtonClass(tracingTemplateVisible)}>
           <ImageIcon size={17} aria-hidden="true" />
@@ -151,6 +155,10 @@ const TacticalEditorToolsHud = ({
               <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">{tool.label}</span>
             </button>;
           })}
+          {expandedToolGroup.id === "interactions" && <button type="button" title="Enemy Palette" aria-label="Open Enemy Palette" aria-pressed={enemyPaletteVisible} onClick={onOpenEnemyPalette} className={primaryButtonClass(enemyPaletteVisible)}>
+            <Users size={18} aria-hidden="true" />
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-cyan-600 bg-slate-950 px-3 py-2 text-[11px] normal-case tracking-normal text-cyan-50 shadow-xl group-hover:block group-focus-visible:block">Enemy Palette</span>
+          </button>}
         </div>
       </div>}
       {penDraftSegmentCount !== null && <div className="max-w-[36rem] border-t border-cyan-800 px-1 py-2 normal-case leading-relaxed tracking-normal text-cyan-100">

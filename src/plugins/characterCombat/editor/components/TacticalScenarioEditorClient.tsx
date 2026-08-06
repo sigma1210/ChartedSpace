@@ -56,7 +56,6 @@ import { useTacticalEditorScenarioProperties } from "@/plugins/characterCombat/e
 import { useTacticalEditorValidation } from "@/plugins/characterCombat/editor/hooks/useTacticalEditorValidation";
 import { useTacticalEditorPlaytest } from "@/plugins/characterCombat/editor/hooks/useTacticalEditorPlaytest";
 import { useTacticalEditorLayerPresentation } from "@/plugins/characterCombat/editor/hooks/useTacticalEditorLayerPresentation";
-import { tacticalEditorHiddenHuds } from "@/plugins/characterCombat/editor/lib/tacticalEditorHiddenHuds";
 import TacticalEditorDraftPreview from "@/plugins/characterCombat/editor/components/TacticalEditorDraftPreview";
 import TacticalEditorAreaPropertiesHud from "@/plugins/characterCombat/editor/components/TacticalEditorAreaPropertiesHud";
 import TacticalEditorEnemyHud from "@/plugins/characterCombat/editor/components/TacticalEditorEnemyHud";
@@ -202,7 +201,6 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
   } = useTacticalEditorInteractionState();
   const {
     hudLayoutsReady,
-    hudLayouts,
     circlePropertiesLayout,
     enemyPaletteLayout,
     consoleEditorLayout,
@@ -228,9 +226,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     persistLayersLayout,
     persistAreaPropertiesLayout,
     persistObjectPropertiesLayout,
-    showTracingTemplateHud,
-    showLayersHud,
-    restoreHud,
+    toggleHudVisibility,
   } = useTacticalEditorHudLayoutState();
   const {
     selectedEnemy,
@@ -790,6 +786,11 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     clearPlacementDrag: () => setDragPlacement(null),
     clearEnemyDrag: () => setDragEnemy(null),
   });
+  const canRotateSelection = Boolean(selectedPlacement || (selectedEnemy && !selectedEnemyLocked));
+  const rotateSelection = () => {
+    if (selectedPlacement) rotateSelectedPlacement();
+    else if (selectedEnemy && !selectedEnemyLocked) rotateSelectedEnemy();
+  };
   useTacticalEditorKeyboard({
     onDeleteSelection: deleteSelectionForKeyboard,
     areaDraftActive: Boolean(raisedAreaDraft),
@@ -801,20 +802,9 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     circleDraftActive: Boolean(circleDraft),
     onCancelCircle: cancelCircleDrawing,
     onActivatePrimaryTool: activatePrimaryTool,
-    canRotatePlacement: Boolean(selectedPlacement),
-    onRotatePlacement: rotateSelectedPlacement,
+    canRotateSelection,
+    onRotateSelection: rotateSelection,
   });
-  const hiddenHuds = tacticalEditorHiddenHuds(hudLayouts, {
-    circlePropertiesAvailable: Boolean(selectedPrimitive || placementKind === CIRCLE_TOOL_ID),
-    consoleEditorAvailable: selectedHasTerminal,
-    consoleEditorTitle: selectedIsInteractiveHuman
-      ? "Human Interaction Editor"
-      : "Console Editor",
-    enemyEditorAvailable: Boolean(selectedEnemy),
-    areaPropertiesAvailable: Boolean(selectedArea),
-    objectPropertiesAvailable: editableObjectProperties,
-  });
-
   if (playtest) return <Provider store={playtest.sandbox}>
     <PlaytestComponent draftPlaytest={{ definition: playtest.definition, consoleVictory: playtest.consoleVictory, onExit: exitPlaytest }} />
   </Provider>;
@@ -856,6 +846,13 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
         onOpenProperties: openScenarioPropertiesDialog,
         onBeginPlaytest: beginPlaytest,
         onDiscardDraft: discardDraftChanges,
+      }}
+      viewMenu={{
+        open: openHeaderMenu === "view",
+        toolbarVisible: toolsLayout.visible,
+        onToggle: () => toggleHeaderMenu("view"),
+        onClose: closeHeaderMenu,
+        onToggleToolbar: () => toggleHudVisibility("tools"),
       }}
       openScenarioDialog={{
         open: openScenarioDialog,
@@ -903,7 +900,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     <div className="flex min-h-0 flex-1">
       <section aria-label="Editor canvas" className="relative h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         <TacticalEditorViewportProvider key={`${draft.map.width}:${draft.map.height}`} map={draft.map}>
-        <PluginHudLayer hiddenHuds={hiddenHuds} onRestoreHud={restoreHud} className="p-5">
+        <PluginHudLayer className="p-5">
           <div className="absolute left-7 top-7 z-10 border border-cyan-700 bg-slate-950/90 px-3 py-2 text-[9px] uppercase tracking-wider text-cyan-100">Draft preview · {draft.map.width}×{draft.map.height}</div>
           <div className="h-full w-full overflow-hidden border border-cyan-900 bg-black shadow-[0_0_30px_rgba(8,145,178,0.12)]">
           <TacticalEditorDraftPreview
@@ -1032,9 +1029,10 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
             placementKind={placementKind}
             enemyToolActive={enemyKind !== null}
             openToolGroup={openToolGroup}
-            selectedPlacementId={selectedPlacement?.id ?? null}
+            canRotateSelection={canRotateSelection}
             tracingTemplateVisible={tracingTemplateLayout.visible}
             layersVisible={layersLayout.visible}
+            enemyPaletteVisible={enemyPaletteLayout.visible}
             drawingPrecisionControl={<TacticalEditorDrawingPrecisionControl />}
             mapWidth={draft.map.width}
             mapHeight={draft.map.height}
@@ -1046,9 +1044,10 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
             onActivatePrimaryTool={activatePrimaryToolFromHud}
             onToggleToolGroup={toggleToolGroup}
             onActivateDrawingTool={activateDrawingTool}
-            onRotateSelectedPlacement={rotateSelectedPlacement}
-            onOpenTracingTemplate={showTracingTemplateHud}
-            onOpenLayers={showLayersHud}
+            onRotateSelection={rotateSelection}
+            onOpenTracingTemplate={() => toggleHudVisibility("tracing-template")}
+            onOpenLayers={() => toggleHudVisibility("layers")}
+            onOpenEnemyPalette={() => toggleHudVisibility("enemy-palette")}
             onUpdateMapDimension={updateDimension}
             onUpdateLiquidHydrogenFilled={updateSelectedLiquidHydrogen}
             onFinishPenArea={closePenArea}

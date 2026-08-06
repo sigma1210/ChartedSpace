@@ -22,6 +22,7 @@ Method Draw is the reference:
 - Pen supports straight and curved closed paths, post-close node editing, point insertion/deletion, and curve handles.
 - Rectangle uses constrained movement and corner resizing.
 - Circle uses constrained center and radius handles.
+- Constrained circles and rectangles have invisible exact-geometry interior hit targets, so filled and unfilled areas can be selected without finding the narrow boundary. Targets remain behind area boundaries and handles, and the existing raised-area and object layers retain pointer priority.
 - Node Edit affects Pen paths only.
 - Areas support surface, half-level elevation, boundary, and crew-deployment settings.
 - Rectangle, Circle, and Pen interiors can all supply crew deployment cells through the existing deployment resolver.
@@ -39,7 +40,7 @@ Method Draw is the reference:
 - Map dimensions have been removed from the left Properties sidebar.
 - Legacy-circle compatibility controls now appear in a dedicated conditional Legacy Circle Properties HUD.
 - The duplicate terrain and natural-terrain inventory has been removed from the left Properties sidebar; Layers is the single inventory and selection surface.
-- The left Selected Placement card has been removed. Selecting a terrain placement reveals a contextual Rotate action in the Tools HUD, with `R` as its shortcut; movement remains direct manipulation and deletion uses Delete/Backspace.
+- The left Selected Placement card has been removed. Rotate remains visible in the Tools HUD and is enabled for a selected terrain placement or unlocked enemy; `R` uses the same selection-aware operation and both are inactive otherwise. Movement remains direct manipulation and deletion uses Delete/Backspace.
 - Existing liquid-hydrogen placements retain a conditional Filled toggle in the Tools HUD rather than the left sidebar.
 - Header-menu migration phase 1 adds File → Open Scenario… with a modal scenario list, Default/Saved/Current badges, loading/empty/error states, keyboard dismissal, and the existing unsaved-change confirmation. The duplicate sidebar controls remain temporarily for review.
 - Open Scenario search filters the fetched list locally by title or file ID, case-insensitively, with clear/no-match states and Arrow/Enter keyboard operation.
@@ -48,6 +49,11 @@ Method Draw is the reference:
 - File → New Scenario… confirms before discarding an unsaved draft, then creates and saves a genuinely empty scenario using the current map dimensions while preserving the viewport's current drawing precision. Empty console-victory operation lists are now valid for persistence and loading; such scenarios remain blocked from playtesting until a victory task is added.
 - File → Delete Scenario… uses the existing permanent-deletion confirmation, returns to the immutable default, and refreshes the scenario list. All file lifecycle actions now live in the header File menu, and the duplicate Scenario files card has been removed from Properties.
 - The header Scenario menu now owns Playtest Draft and Discard Draft Changes…. Discard requires confirmation before reverting to the loaded/saved baseline, and the duplicate global-action buttons have been removed from Properties; validation guidance remains in Properties.
+- The header menu order is File, Scenario, View. View → Toolbar is the sole recovery path for a hidden Tools HUD and toggles visibility without changing its position or lock state.
+- File, Scenario, and View share header-menu dismissal: outside pointer-down and Escape close the active menu, interaction inside it does not, and opening another menu replaces the current one.
+- The existing Layers and Tracing Template controls remain in the Tools HUD's original single row; no additional HUD-control row is present. The editor no longer supplies the generic PluginHudLayer `HUDs` launcher.
+- The existing Interactions submenu contains an Enemy Palette control that toggles the separate palette HUD without adding another Tools row.
+- View → Toolbar and the existing Tools HUD visibility controls preserve position and lock state. In particular, reopening Tracing Template no longer resets it to its default position.
 - Scenario → Scenario Properties… now stages Title, Briefing, Objective, and crew deployment edges in an Apply/Cancel dialog. Apply validates deployment availability and enemy overlap before changing the draft; those global fields have been removed from Properties, leaving it for contextual selection details and validation guidance.
 - The left Properties sidebar has now been removed entirely and the map/editor surface uses the full available width. Natural-terrain radius and legacy liquid-hydrogen fill remain available in a contextual Object Properties HUD; placement, validation, and missing-victory feedback now appears through a compact header Issues indicator and detail panel. Other selected objects retain Layers selection, direct manipulation, contextual HUDs where applicable, and Delete/Backspace removal.
 - The full-width editor uses a constrained flex height chain (`flex`, `h-full`, and `min-h-0`) so Fit Map keeps the bottom edge inside the visible frame instead of allowing the canvas to grow beneath the clipped viewport.
@@ -89,7 +95,7 @@ Ordinary placement is owned by the horizontal HUD:
 - Elevation: Stairs, Ladder, Ramp.
 - Interactions: Control Room, Console 1x1, Interactive Human.
 
-The Enemy Palette remains separate because enemy types are not ordinary terrain/drawing tools.
+The Enemy Palette remains a separate HUD because enemy types are not ordinary terrain/drawing tools; its visibility control is in the Interactions submenu.
 
 ## Main files
 
@@ -120,6 +126,7 @@ The Enemy Palette remains separate because enemy types are not ordinary terrain/
 - `src/plugins/characterCombat/editor/components/TacticalEditorTerrainRegionsLayer.tsx`
 - `src/plugins/characterCombat/editor/components/TacticalEditorDrawnAreasLayer.tsx`
 - `src/plugins/characterCombat/editor/components/TacticalEditorScenarioMarkersLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorViewMenu.tsx`
 - `src/plugins/characterCombat/editor/hooks/useTacticalEditorToolPreviews.ts`
 - `src/plugins/characterCombat/editor/hooks/useTacticalEditorElevationPreviews.ts`
 - `src/plugins/characterCombat/editor/hooks/useTacticalEditorAreaDraftPreview.ts`
@@ -157,8 +164,12 @@ Production TypeScript files do not live directly in the editor root. The ownersh
 
 Latest completed checks:
 
-- 1,508 tests passed across 190 suites.
-- The focused editor component suite passed all 205 tests across 36 suites.
+- 1,517 tests passed across 189 suites.
+- The focused editor component suite passed all 221 tests across 36 suites.
+- The focused header-menu dismissal change passed all 65 tests across 3 affected suites.
+- The focused constrained-area selection change passed all 68 tests across 2 affected suites; the Drawn Areas layer suite passed all 15 tests.
+- The focused selection-aware rotation change passed all 63 tests across 3 affected suites.
+- The focused HUD-control change passed all 82 tests across 5 affected suites.
 - The focused tool-preview hook suite passed all 7 tests.
 - The focused elevation-preview hook suite passed all 7 tests.
 - The focused area-draft preview hook suite passed all 8 tests.

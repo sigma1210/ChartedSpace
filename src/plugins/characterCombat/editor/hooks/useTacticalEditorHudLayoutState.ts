@@ -6,7 +6,6 @@ import {
 } from "@/plugins/characterCombat/editor/redux/selectors";
 import { editorHudLayoutChanged } from "@/plugins/characterCombat/editor/redux/tacticalEditorSlice";
 import {
-  defaultTacticalEditorHudLayouts,
   tacticalEditorHudIds,
   type TacticalEditorHudId,
   type TacticalEditorHudLayout,
@@ -42,17 +41,9 @@ export const useTacticalEditorHudLayoutState = () => {
   const setAreaPropertiesLayout = (update: HudLayoutUpdate) => setHudLayout("area-properties", update);
   const setObjectPropertiesLayout = (update: HudLayoutUpdate) => setHudLayout("object-properties", update);
 
-  const showTracingTemplateHud = () => setTracingTemplateLayout((current) => ({
-    ...current,
-    visible: true,
-    position: { ...defaultTacticalEditorHudLayouts["tracing-template"].position },
-  }));
-  const showLayersHud = () => setLayersLayout((current) => ({ ...current, visible: true }));
-  const restoreHud = useCallback((id: string) => {
-    const resolvedId = id === "legacy-circle-properties" ? "circle-properties" : id;
-    if (!tacticalEditorHudIds.includes(resolvedId as TacticalEditorHudId)) return;
-    const hudId = resolvedId as TacticalEditorHudId;
-    changeHudLayout(hudId, { ...hudLayouts[hudId], visible: true });
+  const toggleHudVisibility = useCallback((id: TacticalEditorHudId) => {
+    const current = hudLayouts[id];
+    changeHudLayout(id, { ...current, visible: !current.visible });
   }, [changeHudLayout, hudLayouts]);
 
   return {
@@ -88,8 +79,6 @@ export const useTacticalEditorHudLayoutState = () => {
     persistLayersLayout: persistHudLayout.layers,
     persistAreaPropertiesLayout: persistHudLayout["area-properties"],
     persistObjectPropertiesLayout: persistHudLayout["object-properties"],
-    showTracingTemplateHud,
-    showLayersHud,
-    restoreHud,
+    toggleHudVisibility,
   };
 };

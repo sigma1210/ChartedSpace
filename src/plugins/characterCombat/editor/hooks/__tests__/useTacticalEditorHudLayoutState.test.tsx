@@ -80,7 +80,7 @@ describe("useTacticalEditorHudLayoutState", () => {
       .toEqual(defaultTacticalEditorHudLayouts["console-editor"]);
   });
 
-  it("shows the tracing-template HUD at its default position", () => {
+  it("toggles the tracing-template HUD without changing its pin or position", () => {
     const { result } = renderHudLayouts();
 
     act(() => result.current.setTracingTemplateLayout({
@@ -88,60 +88,41 @@ describe("useTacticalEditorHudLayoutState", () => {
       pinned: true,
       position: { x: 1, y: 2 },
     }));
-    act(() => result.current.showTracingTemplateHud());
+    act(() => result.current.toggleHudVisibility("tracing-template"));
 
     expect(result.current.tracingTemplateLayout).toEqual({
       visible: true,
       pinned: true,
-      position: defaultTacticalEditorHudLayouts["tracing-template"].position,
+      position: { x: 1, y: 2 },
     });
   });
 
-  it("shows Layers without changing its pin or position", () => {
-    const { result } = renderHudLayouts();
+  it.each([
+    "tools",
+    "layers",
+    "enemy-palette",
+    "area-properties",
+    "object-properties",
+    "circle-properties",
+    "console-editor",
+    "enemy-editor",
+    "tracing-template",
+    "navigation",
+  ] as const)("toggles the %s HUD without changing its pin or position", (hudId) => {
+    const { result, store } = renderHudLayouts();
     const hidden = { visible: false, pinned: true, position: { x: 17, y: 29 } };
 
-    act(() => result.current.setLayersLayout(hidden));
-    act(() => result.current.showLayersHud());
-
-    expect(result.current.layersLayout).toEqual({ ...hidden, visible: true });
-  });
-
-  it.each([
-    ["tools", "tools"],
-    ["layers", "layers"],
-    ["enemy-palette", "enemy-palette"],
-    ["area-properties", "area-properties"],
-    ["object-properties", "object-properties"],
-    ["circle-properties", "circle-properties"],
-    ["legacy-circle-properties", "circle-properties"],
-    ["console-editor", "console-editor"],
-    ["enemy-editor", "enemy-editor"],
-    ["tracing-template", "tracing-template"],
-    ["navigation", "navigation"],
-  ] as const)("restores the %s HUD without changing its pin or position", (restoreId, hudId) => {
-    const { result, store } = renderHudLayouts();
-    const hidden = { visible: false, pinned: true, position: { x: 31, y: 47 } };
     act(() => store.dispatch(editorHudLayoutChanged({
       id: hudId as TacticalEditorHudId,
       layout: hidden,
     })));
-
-    act(() => result.current.restoreHud(restoreId));
-
+    act(() => result.current.toggleHudVisibility(hudId));
     expect(store.getState().tacticalEditor.hudLayouts[hudId]).toEqual({
       ...hidden,
       visible: true,
     });
-  });
-
-  it("ignores an unknown HUD restoration ID", () => {
-    const { result, store } = renderHudLayouts();
-    const before = store.getState().tacticalEditor.hudLayouts;
-
-    act(() => result.current.restoreHud("unknown-hud"));
-
-    expect(store.getState().tacticalEditor.hudLayouts).toBe(before);
+    act(() => result.current.toggleHudVisibility(hudId));
+    expect(store.getState().tacticalEditor.hudLayouts[hudId]).toEqual(hidden);
   });
 
   it("reflects HUD layout hydration readiness", () => {

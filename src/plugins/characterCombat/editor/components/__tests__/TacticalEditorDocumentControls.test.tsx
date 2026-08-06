@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { defaultTacticalScenarioDefinition } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import TacticalEditorDocumentControls, {
   type TacticalEditorDocumentControlsProps,
@@ -15,6 +15,8 @@ const documentControls = () => {
   const callbacks = {
     toggleFileMenu: jest.fn(),
     toggleScenarioMenu: jest.fn(),
+    toggleViewMenu: jest.fn(),
+    toggleToolbar: jest.fn(),
     closeHeaderMenu: jest.fn(),
     openNewScenario: jest.fn(),
     openScenario: jest.fn(),
@@ -72,6 +74,13 @@ const documentControls = () => {
       onBeginPlaytest: callbacks.beginPlaytest,
       onDiscardDraft: callbacks.discardDraft,
     },
+    viewMenu: {
+      open: false,
+      toolbarVisible: true,
+      onToggle: callbacks.toggleViewMenu,
+      onClose: callbacks.closeHeaderMenu,
+      onToggleToolbar: callbacks.toggleToolbar,
+    },
     openScenarioDialog: {
       open: false,
       fileBusy: false,
@@ -119,16 +128,53 @@ const documentControls = () => {
 };
 
 describe("TacticalEditorDocumentControls", () => {
-  it("places the File and Scenario menus in the editor header", () => {
+  it("places File, Scenario, and View in that order in the editor header", () => {
     const { callbacks, props } = documentControls();
     render(<TacticalEditorDocumentControls {...props} />);
 
-    expect(screen.getByRole("navigation", { name: "Scenario editor menu bar" })).toBeTruthy();
+    const menuBar = screen.getByRole("navigation", { name: "Scenario editor menu bar" });
+    expect(within(menuBar).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "File",
+      "Scenario",
+      "View",
+    ]);
     fireEvent.click(screen.getByRole("menuitem", { name: "Open Scenario…" }));
     fireEvent.click(screen.getByRole("button", { name: "Scenario menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "View menu" }));
 
     expect(callbacks.openScenario).toHaveBeenCalledTimes(1);
     expect(callbacks.toggleScenarioMenu).toHaveBeenCalledTimes(1);
+    expect(callbacks.toggleViewMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts Toolbar first in View and forwards its visibility toggle", () => {
+    const { callbacks, props } = documentControls();
+    props.fileMenu.open = false;
+    props.viewMenu.open = true;
+    render(<TacticalEditorDocumentControls {...props} />);
+
+    const viewMenu = screen.getByRole("menu", { name: "View" });
+    const items = within(viewMenu).getAllByRole("menuitemcheckbox");
+    expect(items[0].textContent).toContain("Toolbar");
+    expect(items[0].getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(items[0]);
+
+    expect(callbacks.closeHeaderMenu).toHaveBeenCalledTimes(1);
+    expect(callbacks.toggleToolbar).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses an open header menu on outside pointer-down or Escape but not inside pointer-down", () => {
+    const { callbacks, props } = documentControls();
+    render(<TacticalEditorDocumentControls {...props} />);
+
+    fireEvent.pointerDown(screen.getByRole("menu", { name: "File" }));
+    expect(callbacks.closeHeaderMenu).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(document.body);
+    expect(callbacks.closeHeaderMenu).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(callbacks.closeHeaderMenu).toHaveBeenCalledTimes(2);
   });
 
   it("forwards open-scenario dialog interactions", () => {

@@ -121,7 +121,7 @@ export interface TacticalEditorFileState {
   };
   operation: TacticalEditorFileOperation;
   message: TacticalEditorFileMessage;
-  openHeaderMenu: "file" | "scenario" | null;
+  openHeaderMenu: "file" | "scenario" | "view" | null;
   dialog: TacticalEditorFileDialog;
 }
 
@@ -397,7 +397,7 @@ const tacticalEditorSlice = createSlice({
       state.templates.operation = "idle";
       state.templates.message = { kind: "error", text: action.payload };
     },
-    editorHeaderMenuToggled(state, action: PayloadAction<"file" | "scenario">) {
+    editorHeaderMenuToggled(state, action: PayloadAction<"file" | "scenario" | "view">) {
       state.file.openHeaderMenu = state.file.openHeaderMenu === action.payload ? null : action.payload;
     },
     editorHeaderMenuClosed(state) {

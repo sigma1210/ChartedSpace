@@ -53,6 +53,8 @@ describe("useTacticalEditorFileState", () => {
     expect(result.current.openHeaderMenu).toBe("file");
     act(() => result.current.toggleHeaderMenu("scenario"));
     expect(result.current.openHeaderMenu).toBe("scenario");
+    act(() => result.current.toggleHeaderMenu("view"));
+    expect(result.current.openHeaderMenu).toBe("view");
     act(() => result.current.closeHeaderMenu());
     expect(result.current.openHeaderMenu).toBeNull();
   });

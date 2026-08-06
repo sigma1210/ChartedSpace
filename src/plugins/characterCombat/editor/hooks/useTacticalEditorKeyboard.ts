@@ -14,8 +14,8 @@ export interface TacticalEditorKeyboardOptions {
   circleDraftActive: boolean;
   onCancelCircle: () => void;
   onActivatePrimaryTool: (tool: TacticalEditorPrimaryTool) => void;
-  canRotatePlacement: boolean;
-  onRotatePlacement: () => void;
+  canRotateSelection: boolean;
+  onRotateSelection: () => void;
 }
 
 const isTacticalEditorTextInput = (target: EventTarget | null) => target instanceof HTMLElement
@@ -32,8 +32,8 @@ export const useTacticalEditorKeyboard = ({
   circleDraftActive,
   onCancelCircle,
   onActivatePrimaryTool,
-  canRotatePlacement,
-  onRotatePlacement,
+  canRotateSelection,
+  onRotateSelection,
 }: TacticalEditorKeyboardOptions) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -71,7 +71,7 @@ export const useTacticalEditorKeyboard = ({
       if (key === "v") onActivatePrimaryTool("select");
       else if (key === "n") onActivatePrimaryTool("node");
       else if (key === "h") onActivatePrimaryTool("hand");
-      else if (key === "r" && canRotatePlacement) onRotatePlacement();
+      else if (key === "r" && canRotateSelection) onRotateSelection();
       else return;
       event.preventDefault();
     };
@@ -80,7 +80,7 @@ export const useTacticalEditorKeyboard = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     areaDraftActive,
-    canRotatePlacement,
+    canRotateSelection,
     circleDraftActive,
     onActivatePrimaryTool,
     onCancelArea,
@@ -88,7 +88,7 @@ export const useTacticalEditorKeyboard = ({
     onCancelRamp,
     onCloseArea,
     onDeleteSelection,
-    onRotatePlacement,
+    onRotateSelection,
     onUndoAreaNode,
     rampDraftActive,
   ]);

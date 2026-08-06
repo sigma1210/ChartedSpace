@@ -66,6 +66,7 @@ const props = (): TacticalEditorDrawnAreasLayerProps => ({
 });
 
 const segment = (areaId: string, index = 0) => screen.getByTestId(`drawn-area-${areaId}-segment-${index}`);
+const interior = (areaId: string) => screen.getByTestId(`drawn-area-${areaId}-interior-hit-target`);
 
 describe("TacticalEditorDrawnAreasLayer", () => {
   it("renders surface cells, boundary styling, and area metadata", () => {
@@ -102,6 +103,64 @@ describe("TacticalEditorDrawnAreasLayer", () => {
     fireEvent.pointerDown(segment("freeform"));
     expect(layerProps.onSelect).toHaveBeenCalledTimes(1);
     expect(segment("freeform").getAttribute("class")).toBeNull();
+  });
+
+  it.each([circle, rectangle])("selects the $id interior without bubbling", (area) => {
+    const layerProps = { ...props(), areas: [area], cellsByArea: new Map([[area, []]]) };
+    const onParentPointerDown = jest.fn();
+    render(<svg onPointerDown={onParentPointerDown}><TacticalEditorDrawnAreasLayer {...layerProps} /></svg>);
+
+    fireEvent.pointerDown(interior(area.id));
+
+    expect(layerProps.onSelect).toHaveBeenCalledWith(area.id);
+    expect(onParentPointerDown).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { ...circle, id: "circle-no-surface", surface: "none" as const },
+    { ...rectangle, id: "rectangle-no-surface", surface: "none" as const },
+  ])("selects the $id interior when the area has no visible surface", (area) => {
+    const layerProps = { ...props(), areas: [area], cellsByArea: new Map([[area, []]]) };
+    render(<svg><TacticalEditorDrawnAreasLayer {...layerProps} /></svg>);
+
+    fireEvent.pointerDown(interior(area.id));
+
+    expect(layerProps.onSelect).toHaveBeenCalledWith(area.id);
+  });
+
+  it("disables constrained-area interior hit targets when interaction is disabled", () => {
+    const layerProps = { ...props(), areas: [circle], cellsByArea: new Map([[circle, []]]), interactionDisabled: true };
+    const onParentPointerDown = jest.fn();
+    render(<svg onPointerDown={onParentPointerDown}><TacticalEditorDrawnAreasLayer {...layerProps} /></svg>);
+
+    const hitTarget = interior("circle");
+    expect(hitTarget.getAttribute("pointer-events")).toBe("none");
+    fireEvent.pointerDown(hitTarget);
+
+    expect(layerProps.onSelect).not.toHaveBeenCalled();
+    expect(onParentPointerDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps constrained-area interior targets behind their boundaries and edit handles", () => {
+    render(<svg><TacticalEditorDrawnAreasLayer {...props()} selectedAreaId="circle" /></svg>);
+
+    const hitTarget = interior("circle");
+    expect(hitTarget.compareDocumentPosition(segment("circle")) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(hitTarget.compareDocumentPosition(screen.getByTestId("drawn-area-circle-circle-center-handle")) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  });
+
+  it("selects the visually upper constrained area when ordinary areas overlap", () => {
+    const upper: TacticalDrawnArea = { ...circle, id: "upper-circle" };
+    const layerProps = {
+      ...props(),
+      areas: [circle, upper],
+      cellsByArea: new Map<TacticalDrawnArea, { x: number; y: number }[]>([[circle, []], [upper, []]]),
+    };
+    render(<svg><TacticalEditorDrawnAreasLayer {...layerProps} /></svg>);
+
+    expect(interior("circle").compareDocumentPosition(interior("upper-circle")) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    fireEvent.pointerDown(interior("upper-circle"));
+    expect(layerProps.onSelect).toHaveBeenCalledWith("upper-circle");
   });
 
   it("requests anchor insertion only for selected freeform areas in node-edit mode", () => {

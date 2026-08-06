@@ -62,7 +62,7 @@ export const useTacticalEditorFileState = () => {
     scenarioSearchQuery,
     scenarioToLoad,
     filteredScenarios,
-    toggleHeaderMenu: (menu: "file" | "scenario") => dispatch(editorHeaderMenuToggled(menu)),
+    toggleHeaderMenu: (menu: "file" | "scenario" | "view") => dispatch(editorHeaderMenuToggled(menu)),
     closeHeaderMenu: () => dispatch(editorHeaderMenuClosed()),
     openNewScenarioDialog: () => dispatch(editorNewScenarioDialogOpened()),
     openScenarioFileDialog: () => dispatch(editorOpenScenarioDialogOpened()),
