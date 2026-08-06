@@ -56,6 +56,20 @@ Method Draw is the reference:
 - Prepared visibility checks reuse terrain, lighting, and spatial wall data. In local synthetic measurements, a 1,032-wall enemy route dropped from about 262 ms to 4 ms, and a 14-combatant visibility snapshot dropped from about 110 ms to 13 ms.
 - Panic flight is bounded to legal destinations within the unit's current 6 AP allowance. It chooses the cheapest reachable complete-cover square, otherwise moves to the reachable square exposed to the fewest hostiles and farthest from the nearest hostile; the unit remains panicked when complete cover was not reached. This replaces the former full-map cover scan.
 - Retained covering-fire snap prompts are now queued only when the shooter has a legal ranged target; an all-grey/no-target state advances directly to the next turn instead of presenting an unusable reaction HUD.
+- The draft-preview component's complete input contract now lives in `editor/lib/tacticalEditorDraftPreviewProps.ts`; the component consumes that shared type without changing runtime behavior.
+- Root canvas pointer-down routing now lives in `useTacticalEditorCanvasPointerDown`, preserving the existing precedence for panning, portal placement, drawing tools, enemy/terrain placement, and empty-canvas selection clearing.
+- Root canvas pointer-move handling now lives in `useTacticalEditorCanvasPointerMove`, preserving the existing precedence for panning, active drags, drawing drafts, and placement hover updates.
+- Root canvas pointer-up handling now lives in `useTacticalEditorCanvasPointerUp`, preserving final-coordinate updates, completion order, finish/cancel behavior, and ordinary drag completion.
+- Root canvas pointer-cancel cleanup now lives in `useTacticalEditorCanvasPointerCancel`, preserving the exact existing cleanup sequence.
+- The remaining canvas pointer-leave and Pen double-click callbacks now live in `useTacticalEditorCanvasAuxiliaryEvents`, preserving hover clearing and Pen-area closure behavior.
+- Elevation, legacy-circle, drawn-area, raised-area, and terrain-region selection callbacks now live in `useTacticalEditorLayerSelectionHandlers`, preserving each existing selection-clearing sequence.
+- Natural-terrain position/radius, wall, and wall-portal drag-start callbacks now live in `useTacticalEditorObjectDragStartHandlers`, preserving coordinate resolution, pointer capture, selection clearing, argument mapping, and callback order.
+- Terrain-placement drag, fire selection, and enemy-drag callbacks now live in `useTacticalEditorMarkerInteractionHandlers`, preserving coordinate resolution, selection timing, pointer capture, offsets, and callback order.
+- Tracing-template drag-start and area-anchor insertion callbacks now live in `useTacticalEditorLayerPointerHandlers`, preserving coordinate resolution, capture, event prevention, propagation, and callback order.
+- Drawn-area, raised-area, terrain-region, and active-draft curve-control adapters now live in `useTacticalEditorAreaControlHandlers`, preserving owner descriptors and segment indices.
+- Canvas map-point and map-vertex conversion now lives in `useTacticalEditorMapCoordinates`, preserving SVG conversion, mapped-cell metadata, snap modes, map bounds, and Pen-area closure snapping.
+- Canvas navigation, coordinate, pointer lifecycle, and auxiliary-event hooks and tests are grouped under `editor/hooks/canvas/`; this was a path-only move with no logic changes.
+- Layer selection, layer pointer, area-control, object drag-start, and marker-interaction hooks and tests are grouped under `editor/hooks/layers/`; this was a path-only move with no logic changes.
 
 ## Circle compatibility
 
@@ -101,11 +115,38 @@ The Enemy Palette remains separate because enemy types are not ordinary terrain/
 - `src/plugins/characterCombat/editor/components/TacticalEditorObjectsLayer.tsx`
 - `src/plugins/characterCombat/editor/components/TacticalEditorPlacementPreviewLayer.tsx`
 - `src/plugins/characterCombat/editor/components/TacticalEditorDrawingPreviewLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorAreaDraftLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorRaisedAreasLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorTerrainRegionsLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorDrawnAreasLayer.tsx`
+- `src/plugins/characterCombat/editor/components/TacticalEditorScenarioMarkersLayer.tsx`
+- `src/plugins/characterCombat/editor/hooks/useTacticalEditorToolPreviews.ts`
+- `src/plugins/characterCombat/editor/hooks/useTacticalEditorElevationPreviews.ts`
+- `src/plugins/characterCombat/editor/hooks/useTacticalEditorAreaDraftPreview.ts`
+- `src/plugins/characterCombat/editor/hooks/canvas/useTacticalEditorCanvasNavigation.ts`
+- `src/plugins/characterCombat/editor/hooks/useTacticalEditorPlacementControls.ts`
+- `src/plugins/characterCombat/editor/hooks/useTacticalEditorResolvedTerrain.ts`
+- `src/plugins/characterCombat/editor/lib/tacticalEditorPointerCoordinates.ts`
+- `src/plugins/characterCombat/editor/lib/tacticalEditorDraftPreviewProps.ts`
+- `src/plugins/characterCombat/editor/hooks/useTacticalEditorDrawingDraftState.ts`
+- `src/plugins/characterCombat/editor/hooks/canvas/useTacticalEditorCanvasPointerDown.ts`
+- `src/plugins/characterCombat/editor/hooks/canvas/useTacticalEditorCanvasPointerMove.ts`
+- `src/plugins/characterCombat/editor/hooks/canvas/useTacticalEditorCanvasPointerUp.ts`
+- `src/plugins/characterCombat/editor/hooks/canvas/useTacticalEditorCanvasPointerCancel.ts`
+- `src/plugins/characterCombat/editor/hooks/canvas/useTacticalEditorCanvasAuxiliaryEvents.ts`
+- `src/plugins/characterCombat/editor/hooks/layers/useTacticalEditorLayerSelectionHandlers.ts`
+- `src/plugins/characterCombat/editor/hooks/layers/useTacticalEditorObjectDragStartHandlers.ts`
+- `src/plugins/characterCombat/editor/hooks/layers/useTacticalEditorMarkerInteractionHandlers.ts`
+- `src/plugins/characterCombat/editor/hooks/layers/useTacticalEditorLayerPointerHandlers.ts`
+- `src/plugins/characterCombat/editor/hooks/layers/useTacticalEditorAreaControlHandlers.ts`
+- `src/plugins/characterCombat/editor/hooks/canvas/useTacticalEditorMapCoordinates.ts`
 
 ## Editor directory structure
 
 - `components/`: React components, HUDs, dialogs, viewport, and route client.
 - `hooks/`: editor hooks and interaction workflows.
+- `hooks/canvas/`: canvas navigation, coordinate conversion, and pointer-event hooks, with colocated tests in `hooks/canvas/__tests__/`.
+- `hooks/layers/`: layer selection and interaction adapter hooks, with colocated tests in `hooks/layers/__tests__/`.
 - `lib/`: API, document conversion, validation, layout, and other non-React helpers.
 - `redux/`: Redux slice and selectors.
 - `__tests__/editorOwnership.test.ts`: structural boundary checks.
@@ -116,8 +157,28 @@ Production TypeScript files do not live directly in the editor root. The ownersh
 
 Latest completed checks:
 
-- 1,327 tests passed across 166 suites.
-- The focused editor component suite passed all 176 tests across 31 suites.
+- 1,508 tests passed across 190 suites.
+- The focused editor component suite passed all 205 tests across 36 suites.
+- The focused tool-preview hook suite passed all 7 tests.
+- The focused elevation-preview hook suite passed all 7 tests.
+- The focused area-draft preview hook suite passed all 8 tests.
+- The focused canvas-navigation hook suite passed all 7 tests.
+- The focused placement-control hook suite passed all 7 tests.
+- The focused resolved-terrain hook suite passed all 4 tests.
+- The focused pointer-coordinate suite passed all 11 tests.
+- The focused drawing-draft state hook suite passed all 8 tests.
+- The focused canvas pointer-down hook suite passed all 15 tests.
+- The focused canvas pointer-move hook suite passed all 22 tests.
+- The focused canvas pointer-up hook suite passed all 20 tests.
+- The focused canvas pointer-cancel hook suite passed its cleanup-order test.
+- The focused canvas auxiliary-event hook suite passed all 4 tests.
+- The focused layer-selection handler hook suite passed all 4 tests.
+- The focused object drag-start handler hook suite passed all 6 tests.
+- The focused marker-interaction handler hook suite passed all 5 tests.
+- The focused layer-pointer handler hook suite passed all 4 tests.
+- The focused area-control handler hook suite passed all 4 tests.
+- The grouped layer-interaction hook folder passed all 23 tests across 5 suites.
+- The focused map-coordinate hook suite passed all 6 tests.
 - ESLint passed repository-wide.
 - The production build passed.
 
