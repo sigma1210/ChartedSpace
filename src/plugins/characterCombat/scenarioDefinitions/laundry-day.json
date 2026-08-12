@@ -509,7 +509,14 @@
       "to": {
         "x": 26,
         "y": 27
-      }
+      },
+      "portals": [
+        {
+          "id": "wall-door-49",
+          "kind": "sliding-door",
+          "position": 0.75
+        }
+      ]
     },
     {
       "id": "drawn-wall-29",
@@ -532,7 +539,14 @@
       "to": {
         "x": 26,
         "y": 30
-      }
+      },
+      "portals": [
+        {
+          "id": "wall-door-50",
+          "kind": "sliding-door",
+          "position": 0.25
+        }
+      ]
     },
     {
       "id": "drawn-wall-31",

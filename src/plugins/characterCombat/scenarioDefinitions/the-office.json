@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "the-office",
+  "consoleVictoryDefinitionId": "the-office",
+  "title": "The Office",
+  "briefing": "",
+  "objective": "",
+  "map": {
+    "width": 72,
+    "height": 48
+  },
+  "terrainPlacements": [],
+  "drawnWalls": [],
+  "drawnRaisedAreas": [],
+  "drawnTerrainRegions": [],
+  "drawnAreas": [],
+  "drawnTerrainPrimitives": [],
+  "naturalTerrainPlacements": [],
+  "elevationTransitions": [],
+  "deploymentEdges": [
+    "south"
+  ],
+  "enemyPlacements": [],
+  "fireCells": [],
+  "smokeCells": []
+}

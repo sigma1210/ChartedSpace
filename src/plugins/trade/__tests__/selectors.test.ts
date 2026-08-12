@@ -13,6 +13,7 @@ import { initialStayInLocationState } from "@/plugins/stayInLocation/stayInLocat
 import type { SectorDetail, World } from "@/types";
 import { selectCurrentMarketData } from "../selectors";
 import { initialTradeState } from "../tradeSlice";
+import { initialQuestState } from "@/plugins/quest";
 
 const world = (commodity?: string): World => ({
   hex: "1910",
@@ -109,6 +110,7 @@ const makeRoot = (mainWorld: World): RootState => ({
   systemScene: {} as RootState["systemScene"],
   hud: initialHudState,
   plugins: {
+    quest: initialQuestState,
     characterCombat: initialCharacterCombatState,
     characters: initialCharactersState,
     demographics: initialDemographicsState,

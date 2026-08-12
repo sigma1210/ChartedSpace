@@ -45,6 +45,7 @@ import { initialShipPluginState } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 import { initialTradeState } from "../../plugins/trade/tradeSlice";
+import { initialQuestState } from "../../plugins/quest";
 
 const initialState: UIState = {
   activeModal: null,
@@ -64,7 +65,7 @@ const initialState: UIState = {
 };
 
 const makeRoot = (ui: UIState): RootState => {
-  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} }, systemScene: { sceneMode: "system", showWarpLayer: false, warpLayerOpacity: 0, warpLayerActive: false, warpExitBlankActive: false, renderableLocation: null, transitionPhase: "idle", transitionReason: null, transitionSceneKey: null, sceneReady: true }, hud: initialHudState, plugins: { characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, equipmentCatalog: initialEquipmentCatalogState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } };
+  return { ui, notifications: { items: [] }, galaxy: { sectors: [], sectorData: {}, loadingStatus: {}, activeSectorAbbr: "Spin", activeSubsectorKey: "A", activeWorldHex: null, activeWorldSectorAbbr: null, targetWorldHex: null, targetWorldSectorAbbr: null }, turn: { currentTurn: 1, status: "idle", error: null }, availableCrew: { poolSize: 20, crew: [] }, system: { records: {}, statusByKey: {}, errorByKey: {}, generatedTurnByKey: {} }, systemScene: { sceneMode: "system", showWarpLayer: false, warpLayerOpacity: 0, warpLayerActive: false, warpExitBlankActive: false, renderableLocation: null, transitionPhase: "idle", transitionReason: null, transitionSceneKey: null, sceneReady: true }, hud: initialHudState, plugins: { quest: initialQuestState, characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, equipmentCatalog: initialEquipmentCatalogState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState } };
 }
 
 describe("uiSlice reducers", () => {

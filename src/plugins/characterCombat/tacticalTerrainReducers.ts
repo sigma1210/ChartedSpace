@@ -175,26 +175,48 @@ export const tacticalTerrainReducers = {
     const progress = map.consoleOperationProgressById[operation.id]
       ?? { completedCheckIds: [], nextCheckModifier: null };
     const check = operation.checks.find((candidate) => !progress.completedCheckIds.includes(candidate.id));
-    if (!adjacent || !check || (map.actionPointsByCharacterId[characterId] ?? 0) < check.apCost) return;
+    if (!adjacent || !check || (map.actionPointsByCharacterId[characterId] ?? 0) < check.apCost
+      || (operation.quest && progress.attemptCharacterId && progress.attemptCharacterId !== characterId)) return;
     const skillLevel = character.skills?.find(
       (skill) => skill.name.toLowerCase() === check.skill.toLowerCase(),
     )?.level ?? 0;
     const raw = action.payload.dice.first + action.payload.dice.second;
     const carriedModifier = progress.nextCheckModifier ?? 0;
-    const total = raw + skillLevel + carriedModifier;
+    const itemModifier = action.payload.modifier ?? 0;
+    const total = raw + skillLevel + carriedModifier + itemModifier;
     const target = travellerTaskTarget(check.difficulty);
     const passed = total >= target;
+    const questCriticalFailure = Boolean(operation.quest && raw === 2);
     const nextProgress = {
-      completedCheckIds: passed ? [...progress.completedCheckIds, check.id] : [...progress.completedCheckIds],
+      completedCheckIds: passed || questCriticalFailure ? [...progress.completedCheckIds, check.id] : [...progress.completedCheckIds],
       nextCheckModifier: raw === 12
         ? operation.criticalSuccessNextCheckModifier ?? 0
         : raw === 2
           ? operation.criticalFailureNextCheckModifier ?? 0
           : null,
+      ...(operation.quest ? { attemptCharacterId: progress.attemptCharacterId ?? characterId, successImpossible: Boolean(progress.successImpossible || questCriticalFailure) } : {}),
     };
     map.consoleOperationProgressById[operation.id] = nextProgress;
     map.actionPointsByCharacterId[characterId] -= check.apCost;
-    map.events.unshift(`${character.name} attempted ${operation.label} — ${check.skill} ${check.difficulty} ${target}+ · raw 2d6 ${raw} · skill ${skillLevel >= 0 ? "+" : ""}${skillLevel}${carriedModifier ? ` · carried ${carriedModifier >= 0 ? "+" : ""}${carriedModifier}` : ""} · total ${total}/${target}: ${passed ? "passed" : "failed"}`);
+    map.events.unshift(`${character.name} attempted ${operation.label} — ${check.skill} ${check.difficulty} ${target}+ · raw 2d6 ${raw} · skill ${skillLevel >= 0 ? "+" : ""}${skillLevel}${carriedModifier ? ` · carried ${carriedModifier >= 0 ? "+" : ""}${carriedModifier}` : ""}${itemModifier ? ` · item ${itemModifier >= 0 ? "+" : ""}${itemModifier}` : ""} · total ${total}/${target}: ${passed ? "passed" : "failed"}`);
+    if (operation.quest && !passed && !questCriticalFailure) {
+      delete map.consoleOperationProgressById[operation.id];
+      map.events.unshift(`${operation.label} failed; the chain may be attempted again later`);
+      if ((map.actionPointsByCharacterId[characterId] ?? 0) <= 0) {
+        if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
+        advanceTacticalPlayerActivation(map);
+      }
+      return;
+    }
+    if (operation.quest && nextProgress.completedCheckIds.length === operation.checks.length && nextProgress.successImpossible) {
+      delete map.consoleOperationProgressById[operation.id];
+      map.events.unshift(`${operation.label} ended in ${questCriticalFailure ? "critical failure" : "failure"}; the chain may be attempted again later`);
+      if ((map.actionPointsByCharacterId[characterId] ?? 0) <= 0) {
+        if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
+        advanceTacticalPlayerActivation(map);
+      }
+      return;
+    }
     if (!passed && operation.failureTransformation) {
       if (!map.resolvedConsoleOperationIds.includes(operation.id)) {
         map.resolvedConsoleOperationIds.push(operation.id);
@@ -235,6 +257,7 @@ export const tacticalTerrainReducers = {
       ) ?? false;
       map.terminalActiveById[terminal.id] = !anotherAvailable;
     }
+    if (operation.quest && nextProgress.completedCheckIds.length < operation.checks.length) return;
     if ((map.actionPointsByCharacterId[characterId] ?? 0) > 0) return;
     if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
     advanceTacticalPlayerActivation(map);

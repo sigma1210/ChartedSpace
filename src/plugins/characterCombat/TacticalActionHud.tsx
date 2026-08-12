@@ -11,6 +11,7 @@ import { TacticalCombatControls } from "./TacticalCombatControls";
 import { TacticalMovementControls } from "./TacticalMovementControls";
 import { hasTacticalReactionControls, TacticalReactionControls } from "./TacticalReactionControls";
 import { TacticalSupportControls } from "./TacticalSupportControls";
+import type { QuestPlaytestRuntime } from "@/plugins/quest/playtest/questPlaytest";
 
 type TacticalActionHudProps = {
   tacticalMap: TacticalMapState;
@@ -21,6 +22,7 @@ type TacticalActionHudProps = {
     definition: TacticalScenarioDefinitionFile;
     consoleVictory: TacticalConsoleVictoryDefinitionFile;
   };
+  questPlaytest?: QuestPlaytestRuntime;
 };
 
 export const TacticalActionHud = ({
@@ -29,6 +31,7 @@ export const TacticalActionHud = ({
   enemies,
   movementPreview,
   draftPlaytest,
+  questPlaytest,
 }: TacticalActionHudProps) => {
   const dispatch = useAppDispatch();
   const tacticalScenarioStatus = tacticalMap.scenarioStatus ?? "active";
@@ -51,10 +54,10 @@ export const TacticalActionHud = ({
             <div className="font-bold uppercase tracking-wider text-cyan-100">{activeCombatant.name}</div>
             <div className="text-(--hud-text-dim)">Grid position <span className="text-(--hud-text)">{selectedPosition.x}, {selectedPosition.y}</span> · <span className="text-emerald-200">{selectedActionPoints} AP</span> · <span className={selectedProne ? "text-amber-200" : "text-(--hud-text-dim)"}>{selectedProne ? "Prone" : "Standing"}</span></div>
             <TacticalCombatControls tacticalMap={tacticalMap} activeCombatant={activeCombatant} draggedCombatant={draggedCombatant} rangedTargets={rangedTargets} meleeTargets={meleeTargets}>
-            <TacticalSupportControls section="recovery" tacticalMap={tacticalMap} activeCombatant={activeCombatant} draggedCombatant={draggedCombatant} />
+            <TacticalSupportControls section="recovery" tacticalMap={tacticalMap} activeCombatant={activeCombatant} draggedCombatant={draggedCombatant} questPlaytest={questPlaytest} />
             </TacticalCombatControls>
             <TacticalMovementControls tacticalMap={tacticalMap} activeCombatant={activeCombatant} draggedCombatant={draggedCombatant} enemies={enemies} movementPreview={movementPreview}>
-            <TacticalSupportControls section="terrain" tacticalMap={tacticalMap} activeCombatant={activeCombatant} draggedCombatant={draggedCombatant} />
+            <TacticalSupportControls section="terrain" tacticalMap={tacticalMap} activeCombatant={activeCombatant} draggedCombatant={draggedCombatant} questPlaytest={questPlaytest} />
             </TacticalMovementControls>
           </> : playerPhaseComplete ? <>
             <div className="text-amber-100">Crew activations complete. End the turn to run enemy actions.</div>

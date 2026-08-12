@@ -1,0 +1,692 @@
+{
+  "schemaVersion": 1,
+  "id": "a-clean-bureaucracy",
+  "title": "A clean bureaucracy",
+  "description": "",
+  "itemDefinitions": [
+    {
+      "id": "quest-item-mdpdtsinu14hdquaitctf",
+      "name": "Approved and Stamped Cargo Manifest",
+      "description": "",
+      "icon": "key",
+      "requiredSkill": null,
+      "unskilledDm": -2
+    },
+    {
+      "id": "quest-item-hssctr8n6koytay4baxvy",
+      "name": "Fred's filthy smelly laundry",
+      "description": "Fred's dirty socks and underwear",
+      "icon": "key",
+      "requiredSkill": null,
+      "unskilledDm": -2
+    },
+    {
+      "id": "quest-item-uqw6rngblwlaq0s65q",
+      "name": "Fred's Washed Wet Laundry",
+      "description": "",
+      "icon": "key",
+      "requiredSkill": null,
+      "unskilledDm": -2
+    },
+    {
+      "id": "quest-item-xhzvujlat9vd8ii5myw5",
+      "name": "Fred's Dry clean Laundry",
+      "description": "Fred's Dry and Folded ",
+      "icon": "key",
+      "requiredSkill": null,
+      "unskilledDm": -2
+    }
+  ],
+  "scenarioInstances": [
+    {
+      "id": "C_cD5utWy7Jtoiu8-51bl",
+      "sourceScenarioId": "bwampson-and-son",
+      "title": "Bwapson and Son",
+      "nodes": [
+        {
+          "id": "m3o_kczt3yqJZa3BSHC--",
+          "kind": "start",
+          "title": "Scenario start",
+          "position": {
+            "x": 48,
+            "y": 240
+          }
+        },
+        {
+          "id": "LmwXUX7-1lfbYkdheKHB7",
+          "kind": "entity",
+          "entityType": "interactive-human",
+          "sourcePlacementId": "interactive-human-1",
+          "title": "Fred",
+          "description": "",
+          "position": {
+            "x": 340,
+            "y": 80
+          },
+          "chains": [
+            {
+              "id": "X9pKsK6BJIHc0R09oOWC_",
+              "name": "Bribe Fred",
+              "description": "",
+              "tasks": [
+                {
+                  "id": "KPQ-YiemfXVa9KKjUaI2Q",
+                  "skill": "Bribery",
+                  "difficulty": "easy"
+                }
+              ],
+              "itemRequirements": [],
+              "successRewards": [
+                {
+                  "id": "8NeTUwjX5YmQNULsWdtqw",
+                  "itemDefinitionId": "quest-item-hssctr8n6koytay4baxvy",
+                  "quantity": 1,
+                  "repeatable": false,
+                  "recipient": {
+                    "mode": "performer"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "kZk4DqgMZ_Ub0mkRjH-VN",
+          "kind": "entity",
+          "entityType": "interactive-human",
+          "sourcePlacementId": "interactive-human-2",
+          "title": "Lamont",
+          "description": "",
+          "position": {
+            "x": 338.6405944824219,
+            "y": 329.99554443359375
+          },
+          "chains": [
+            {
+              "id": "xvcF9ARr6-gXaneunexT5",
+              "name": "Have Lamont inspect Manifest ",
+              "description": "",
+              "tasks": [
+                {
+                  "id": "gQysb3rftadh72N0mwrOI",
+                  "skill": "Admin",
+                  "difficulty": "difficult"
+                }
+              ],
+              "itemRequirements": [],
+              "successRewards": [
+                {
+                  "id": "_s5hZJGpVqAun4kZmKI5l",
+                  "itemDefinitionId": "quest-item-mdpdtsinu14hdquaitctf",
+                  "quantity": 1,
+                  "repeatable": false,
+                  "recipient": {
+                    "mode": "performer"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "7JkeLv5BmZsrSXFwqm2Cj",
+          "kind": "victory",
+          "title": "Wash Fred Laundry",
+          "description": "",
+          "position": {
+            "x": 946.0914916992188,
+            "y": 219.96429443359375
+          }
+        },
+        {
+          "id": "7o_-MUq7sh5PH9aZGgwpw",
+          "kind": "victory",
+          "title": "Signed manifest",
+          "description": "",
+          "position": {
+            "x": 914.7142944335938,
+            "y": 375.2678527832031
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "AYJe59ni7XTCRvWd3QwPB",
+          "sourceNodeId": "kZk4DqgMZ_Ub0mkRjH-VN",
+          "sourceChainId": "xvcF9ARr6-gXaneunexT5",
+          "targetNodeId": "7o_-MUq7sh5PH9aZGgwpw"
+        },
+        {
+          "id": "R-4vp_WbTzu0RdxbcmEWp",
+          "sourceNodeId": "LmwXUX7-1lfbYkdheKHB7",
+          "sourceChainId": "X9pKsK6BJIHc0R09oOWC_",
+          "targetNodeId": "7JkeLv5BmZsrSXFwqm2Cj"
+        },
+        {
+          "id": "CJpGG9dgEH2n3FLch0TML",
+          "sourceNodeId": "m3o_kczt3yqJZa3BSHC--",
+          "sourceChainId": null,
+          "targetNodeId": "LmwXUX7-1lfbYkdheKHB7"
+        },
+        {
+          "id": "qB_BNnck4mZS2g48CeHHL",
+          "sourceNodeId": "m3o_kczt3yqJZa3BSHC--",
+          "sourceChainId": null,
+          "targetNodeId": "kZk4DqgMZ_Ub0mkRjH-VN"
+        }
+      ]
+    },
+    {
+      "id": "-x_4KK6S5vygVoASKWszZ",
+      "sourceScenarioId": "laundry-day",
+      "title": "Laundry Day",
+      "nodes": [
+        {
+          "id": "sRFB1dQVd61TspNyT-s6v",
+          "kind": "start",
+          "title": "Scenario start",
+          "position": {
+            "x": 48,
+            "y": 240
+          }
+        },
+        {
+          "id": "IQOyltPTbiHucgVnQ0z1F",
+          "kind": "entity",
+          "entityType": "console",
+          "sourcePlacementId": "console-1x1-1",
+          "title": "Washer",
+          "description": "",
+          "position": {
+            "x": 340,
+            "y": 80
+          },
+          "chains": [
+            {
+              "id": "0TG9lLL7ulBAp9pwDiEbi",
+              "name": "Remove Fred's Laundry",
+              "description": "",
+              "tasks": [
+                {
+                  "id": "r5qZQvQhYVtXYrNcavhzt",
+                  "skill": "Steward",
+                  "difficulty": "easy"
+                }
+              ],
+              "itemRequirements": [],
+              "successRewards": [
+                {
+                  "id": "jN2d1msixw0K9rLVrBlXx",
+                  "itemDefinitionId": "quest-item-uqw6rngblwlaq0s65q",
+                  "quantity": 1,
+                  "repeatable": false,
+                  "recipient": {
+                    "mode": "performer"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "XtVUIcTskeJjSJowEpq_C",
+          "kind": "entity",
+          "entityType": "console",
+          "sourcePlacementId": "console-1x1-2",
+          "title": "Dryer",
+          "description": "",
+          "position": {
+            "x": 610,
+            "y": 80
+          },
+          "chains": [
+            {
+              "id": "liO533lhN0QUaVZMZIOSa",
+              "name": "Dry Fred's Landry",
+              "description": "",
+              "tasks": [
+                {
+                  "id": "gpzhQK6Wme7Ov5VK6ZmJ5",
+                  "skill": "Steward",
+                  "difficulty": "easy"
+                }
+              ],
+              "itemRequirements": [
+                {
+                  "id": "pFHo0J4JNIv0IHzU9v9RM",
+                  "itemDefinitionId": "quest-item-uqw6rngblwlaq0s65q",
+                  "quantity": 1,
+                  "consumeOn": []
+                }
+              ],
+              "successRewards": []
+            }
+          ]
+        },
+        {
+          "id": "TwgIRGsuwPrWEH5xVRTRN",
+          "kind": "victory",
+          "title": "Victory",
+          "description": "",
+          "position": {
+            "x": 880,
+            "y": 240
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "Ki3pa6Vbyhnh-kmScZ2e4",
+          "sourceNodeId": "sRFB1dQVd61TspNyT-s6v",
+          "sourceChainId": null,
+          "targetNodeId": "IQOyltPTbiHucgVnQ0z1F"
+        },
+        {
+          "id": "HA5q_sMy_YnhMU_DON8dI",
+          "sourceNodeId": "IQOyltPTbiHucgVnQ0z1F",
+          "sourceChainId": "0TG9lLL7ulBAp9pwDiEbi",
+          "targetNodeId": "XtVUIcTskeJjSJowEpq_C"
+        },
+        {
+          "id": "q2ziBk1E0mIJ7Z2Ngctfl",
+          "sourceNodeId": "XtVUIcTskeJjSJowEpq_C",
+          "sourceChainId": "liO533lhN0QUaVZMZIOSa",
+          "targetNodeId": "TwgIRGsuwPrWEH5xVRTRN"
+        }
+      ]
+    },
+    {
+      "id": "quD4B1ucdQCFIwYRzH1i0",
+      "sourceScenarioId": "laundry-day",
+      "title": "Laundry Day",
+      "nodes": [
+        {
+          "id": "6J6Bpq7bzWCVQc_3bjh96",
+          "kind": "start",
+          "title": "Scenario start",
+          "position": {
+            "x": 48,
+            "y": 240
+          }
+        },
+        {
+          "id": "lLnpFcYy2yhGnqxsr0_Co",
+          "kind": "entity",
+          "entityType": "console",
+          "sourcePlacementId": "console-1x1-1",
+          "title": "Washer",
+          "description": "",
+          "position": {
+            "x": 340,
+            "y": 80
+          },
+          "chains": [
+            {
+              "id": "Wy0yER2wb08i1PrmjN_c5",
+              "name": "Wash Dirty Laundry",
+              "description": "",
+              "tasks": [
+                {
+                  "id": "O8upZzl2i0ssVh2-OLfzt",
+                  "skill": "Steward",
+                  "difficulty": "easy"
+                }
+              ],
+              "itemRequirements": [
+                {
+                  "id": "I6d9Z40ZrEHwDgtB-Bevx",
+                  "itemDefinitionId": "quest-item-hssctr8n6koytay4baxvy",
+                  "quantity": 1,
+                  "consumeOn": [
+                    "success"
+                  ]
+                }
+              ],
+              "successRewards": []
+            }
+          ]
+        },
+        {
+          "id": "74Rcln28-0tNVSbwxizVD",
+          "kind": "entity",
+          "entityType": "console",
+          "sourcePlacementId": "console-1x1-2",
+          "title": "Dryer",
+          "description": "",
+          "position": {
+            "x": 610,
+            "y": 80
+          },
+          "chains": []
+        },
+        {
+          "id": "iz_VDgdnf0IiMDy8ds3-o",
+          "kind": "victory",
+          "title": "Victory",
+          "description": "",
+          "position": {
+            "x": 880,
+            "y": 240
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "_4aIkmRrT6wwOvK56GKsc",
+          "sourceNodeId": "6J6Bpq7bzWCVQc_3bjh96",
+          "sourceChainId": null,
+          "targetNodeId": "lLnpFcYy2yhGnqxsr0_Co"
+        },
+        {
+          "id": "MsKCChSG0aaH7V22iDtND",
+          "sourceNodeId": "lLnpFcYy2yhGnqxsr0_Co",
+          "sourceChainId": "Wy0yER2wb08i1PrmjN_c5",
+          "targetNodeId": "iz_VDgdnf0IiMDy8ds3-o"
+        }
+      ]
+    },
+    {
+      "id": "j27BMKlHe4gTBxcZMBHWX",
+      "sourceScenarioId": "laundry-day",
+      "title": "Laundry Day",
+      "nodes": [
+        {
+          "id": "GfRxqpubxzquxu5RBqfjD",
+          "kind": "start",
+          "title": "Scenario start",
+          "position": {
+            "x": 48,
+            "y": 240
+          }
+        },
+        {
+          "id": "v0L8yQ15M7pKVLPO1biNy",
+          "kind": "entity",
+          "entityType": "console",
+          "sourcePlacementId": "console-1x1-1",
+          "title": "Washer",
+          "description": "",
+          "position": {
+            "x": 340,
+            "y": 80
+          },
+          "chains": []
+        },
+        {
+          "id": "nTTJXcKU5Ou2RWP8wx845",
+          "kind": "entity",
+          "entityType": "console",
+          "sourcePlacementId": "console-1x1-2",
+          "title": "Dryer",
+          "description": "",
+          "position": {
+            "x": 610,
+            "y": 80
+          },
+          "chains": [
+            {
+              "id": "o5G6VedXb-WXWCthAGMqc",
+              "name": "Remove and Fold Laundry",
+              "description": "",
+              "tasks": [
+                {
+                  "id": "7OdkBU88JruhBVbjSSHAP",
+                  "skill": "steward",
+                  "difficulty": "average"
+                }
+              ],
+              "itemRequirements": [],
+              "successRewards": [
+                {
+                  "id": "rkd9HF1lrvbH9fWLD5Dyr",
+                  "itemDefinitionId": "quest-item-xhzvujlat9vd8ii5myw5",
+                  "quantity": 1,
+                  "repeatable": false,
+                  "recipient": {
+                    "mode": "performer"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "rsZNh1mDGwgh6LY2RcL80",
+          "kind": "victory",
+          "title": "Victory",
+          "description": "",
+          "position": {
+            "x": 880,
+            "y": 240
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "DvMlq8OaH6Fjuw7_z6tbd",
+          "sourceNodeId": "GfRxqpubxzquxu5RBqfjD",
+          "sourceChainId": null,
+          "targetNodeId": "nTTJXcKU5Ou2RWP8wx845"
+        },
+        {
+          "id": "Rm_6sgbO6jksMIQrhycZ2",
+          "sourceNodeId": "nTTJXcKU5Ou2RWP8wx845",
+          "sourceChainId": "o5G6VedXb-WXWCthAGMqc",
+          "targetNodeId": "rsZNh1mDGwgh6LY2RcL80"
+        }
+      ]
+    },
+    {
+      "id": "q7VgJE670kFS-Cd2MXtG1",
+      "sourceScenarioId": "bwampson-and-son",
+      "title": "Bwapson and Son",
+      "nodes": [
+        {
+          "id": "TCIcN7VU3N_amF94JGWn6",
+          "kind": "start",
+          "title": "Scenario start",
+          "position": {
+            "x": 48,
+            "y": 240
+          }
+        },
+        {
+          "id": "g9TRFhXRjPkvfFF7kipl2",
+          "kind": "entity",
+          "entityType": "interactive-human",
+          "sourcePlacementId": "interactive-human-1",
+          "title": "Fred",
+          "description": "",
+          "position": {
+            "x": 340,
+            "y": 80
+          },
+          "chains": [
+            {
+              "id": "HuRKmtQYScmihh29Lqy99",
+              "name": "Give Fred Laundry",
+              "description": "",
+              "tasks": [
+                {
+                  "id": "kJmnyZtjSWibAhxjMlv5P",
+                  "skill": "Bribery",
+                  "difficulty": "simple"
+                }
+              ],
+              "itemRequirements": [
+                {
+                  "id": "4ZNgGhyS8CvqnJ6oJgSh3",
+                  "itemDefinitionId": "quest-item-xhzvujlat9vd8ii5myw5",
+                  "quantity": 1,
+                  "consumeOn": [
+                    "success"
+                  ]
+                }
+              ],
+              "successRewards": [
+                {
+                  "id": "rfBZxuVmhKk1WJ_zWPE7L",
+                  "itemDefinitionId": "quest-item-mdpdtsinu14hdquaitctf",
+                  "quantity": 1,
+                  "repeatable": false,
+                  "recipient": {
+                    "mode": "performer"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "kAFPyzgQRUp0H8w7Y7D8W",
+          "kind": "entity",
+          "entityType": "interactive-human",
+          "sourcePlacementId": "interactive-human-2",
+          "title": "Lamont",
+          "description": "",
+          "position": {
+            "x": 610,
+            "y": 80
+          },
+          "chains": []
+        },
+        {
+          "id": "hdiBNdyCdbcw7HSIzfNiv",
+          "kind": "victory",
+          "title": "Victory",
+          "description": "",
+          "position": {
+            "x": 880,
+            "y": 240
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "dKMNbvHz6I3WScy27Dw5j",
+          "sourceNodeId": "TCIcN7VU3N_amF94JGWn6",
+          "sourceChainId": null,
+          "targetNodeId": "g9TRFhXRjPkvfFF7kipl2"
+        },
+        {
+          "id": "VJklMUJAJEgO1EqghLRwp",
+          "sourceNodeId": "g9TRFhXRjPkvfFF7kipl2",
+          "sourceChainId": "HuRKmtQYScmihh29Lqy99",
+          "targetNodeId": "hdiBNdyCdbcw7HSIzfNiv"
+        }
+      ]
+    }
+  ],
+  "questFlow": {
+    "nodes": [
+      {
+        "id": "quest-start",
+        "kind": "quest-start",
+        "title": "Quest start",
+        "position": {
+          "x": 0,
+          "y": 66.54685974121094
+        }
+      },
+      {
+        "id": "j43pheJ6uBBa6Q3gpayeL",
+        "kind": "scenario",
+        "scenarioInstanceId": "C_cD5utWy7Jtoiu8-51bl",
+        "position": {
+          "x": 249.91513061523438,
+          "y": 170.8370361328125
+        }
+      },
+      {
+        "id": "_1pAx0orcXJNt7QWu4cx1",
+        "kind": "scenario",
+        "scenarioInstanceId": "-x_4KK6S5vygVoASKWszZ",
+        "position": {
+          "x": 809.044677734375,
+          "y": 9.100433349609375
+        }
+      },
+      {
+        "id": "UDVxbHPacDsQnSLnnVn0C",
+        "kind": "scenario",
+        "scenarioInstanceId": "quD4B1ucdQCFIwYRzH1i0",
+        "position": {
+          "x": 507.7187805175781,
+          "y": 8.475433349609375
+        }
+      },
+      {
+        "id": "WS9CRmPQ95L9tHG73lmpl",
+        "kind": "scenario",
+        "scenarioInstanceId": "j27BMKlHe4gTBxcZMBHWX",
+        "position": {
+          "x": 855.4307250976562,
+          "y": 189.34820556640625
+        }
+      },
+      {
+        "id": "wAREERDPvpO8fF4SuKLmv",
+        "kind": "quest-victory",
+        "title": "Quest victory 1",
+        "description": "",
+        "position": {
+          "x": 882.3214111328125,
+          "y": 590.9017791748047
+        }
+      },
+      {
+        "id": "Oe7JLJfE_TQr9KUhJSQcY",
+        "kind": "scenario",
+        "scenarioInstanceId": "q7VgJE670kFS-Cd2MXtG1",
+        "position": {
+          "x": 864.4666137695312,
+          "y": 383.6116027832031
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "XieTW2ivnxf4vVD9IIZY8",
+        "sourceNodeId": "UDVxbHPacDsQnSLnnVn0C",
+        "sourceScenarioVictoryId": "iz_VDgdnf0IiMDy8ds3-o",
+        "targetNodeId": "_1pAx0orcXJNt7QWu4cx1"
+      },
+      {
+        "id": "abdxzq-SMH-LaCS9jKUa8",
+        "sourceNodeId": "_1pAx0orcXJNt7QWu4cx1",
+        "sourceScenarioVictoryId": "TwgIRGsuwPrWEH5xVRTRN",
+        "targetNodeId": "WS9CRmPQ95L9tHG73lmpl"
+      },
+      {
+        "id": "dzLveiJ9cFkwsP4bnrxCg",
+        "sourceNodeId": "quest-start",
+        "sourceScenarioVictoryId": null,
+        "targetNodeId": "j43pheJ6uBBa6Q3gpayeL"
+      },
+      {
+        "id": "iRHGKwCA66dDBbc3vxHRh",
+        "sourceNodeId": "j43pheJ6uBBa6Q3gpayeL",
+        "sourceScenarioVictoryId": "7JkeLv5BmZsrSXFwqm2Cj",
+        "targetNodeId": "UDVxbHPacDsQnSLnnVn0C"
+      },
+      {
+        "id": "CIfSs1tZO97OdzTrepQQ7",
+        "sourceNodeId": "j43pheJ6uBBa6Q3gpayeL",
+        "sourceScenarioVictoryId": "7o_-MUq7sh5PH9aZGgwpw",
+        "targetNodeId": "wAREERDPvpO8fF4SuKLmv"
+      },
+      {
+        "id": "Igy8cdAWQ0-EDkmCR4v6f",
+        "sourceNodeId": "WS9CRmPQ95L9tHG73lmpl",
+        "sourceScenarioVictoryId": "rsZNh1mDGwgh6LY2RcL80",
+        "targetNodeId": "Oe7JLJfE_TQr9KUhJSQcY"
+      },
+      {
+        "id": "4TosFD4Uz3EH04bmy-Cwj",
+        "sourceNodeId": "Oe7JLJfE_TQr9KUhJSQcY",
+        "sourceScenarioVictoryId": "hdiBNdyCdbcw7HSIzfNiv",
+        "targetNodeId": "wAREERDPvpO8fF4SuKLmv"
+      }
+    ]
+  }
+}

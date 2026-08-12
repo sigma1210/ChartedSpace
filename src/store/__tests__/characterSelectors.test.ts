@@ -22,6 +22,7 @@ import { initialShipPluginState, type ShipSummary } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 import { initialTradeState } from "../../plugins/trade/tradeSlice";
+import { initialQuestState } from "../../plugins/quest";
 
 const makeCharacter = (
   id: string,
@@ -89,7 +90,7 @@ const makeRoot = (overrides: Partial<RootState> = {}): RootState => ({
     sceneReady: true,
   },
   hud: initialHudState,
-  plugins: { characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, equipmentCatalog: initialEquipmentCatalogState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
+  plugins: { quest: initialQuestState, characterCombat: initialCharacterCombatState, characters: initialCharactersState, demographics: initialDemographicsState, economy: initialEconomyState, equipmentCatalog: initialEquipmentCatalogState, expenseScenario: initialExpenseScenarioState, mayday: initialMaydayState, shipPlugin: initialShipPluginState, navigation: initialNavigationState, stayInLocation: initialStayInLocationState, trade: initialTradeState },
   ...overrides,
 });
 

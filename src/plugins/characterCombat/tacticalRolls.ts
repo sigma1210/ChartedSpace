@@ -45,6 +45,7 @@ export const buildTacticalAdjacencyReactionRolls = (
 export type TacticalConsoleCheckRolls = {
   operationId: string;
   dice: DicePair;
+  modifier?: number;
 };
 
 export const buildTacticalConsoleCheckRolls = (

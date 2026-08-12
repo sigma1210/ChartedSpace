@@ -53,6 +53,12 @@ export const TacticalNavigationHud = ({
           >
             Return to tactical map
           </Link>
+          <Link
+            href="/system/quest/editor"
+            className="border border-violet-400/70 px-3 py-2 text-center font-bold text-violet-100 hover:bg-violet-950"
+          >
+            Quest editor
+          </Link>
         </>
       )}
       {mode === "tactical" && (
@@ -68,6 +74,12 @@ export const TacticalNavigationHud = ({
             className="border border-amber-300/70 px-3 py-2 text-center font-bold text-amber-100 hover:bg-amber-950"
           >
             Scenario editor
+          </Link>
+          <Link
+            href="/system/quest/editor"
+            className="border border-violet-400/70 px-3 py-2 text-center font-bold text-violet-100 hover:bg-violet-950"
+          >
+            Quest editor
           </Link>
         </>
       )}

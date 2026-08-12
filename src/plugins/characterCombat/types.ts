@@ -66,7 +66,7 @@ export interface TacticalMapState { visibleHostileIdsAtPhaseStartByCombatantId?:
 export interface TacticalMapState { movedCombatantIds: string[]; processedEnemyPhaseCombatantIds: string[]; pendingAdjacencyReaction: { moverId: string; defenderIds: string[] } | null }
 export interface TacticalMapState { movingAdjacentMoraleResultByLeaderId: Record<string, boolean> }
 export interface TacticalMapState { actionPhaseStartPositionByCombatantId: Record<string, GridPoint>; pendingDoorCommandsById: Record<string, { open: boolean; resolvesAtTurn: number; characterId: string }> }
-export interface TacticalMapState { completedConsoleOperationIds?: string[]; consoleOperationProgressById?: Record<string, { completedCheckIds: string[]; nextCheckModifier: number | null }> }
+export interface TacticalMapState { completedConsoleOperationIds?: string[]; consoleOperationProgressById?: Record<string, { completedCheckIds: string[]; nextCheckModifier: number | null; attemptCharacterId?: string; successImpossible?: boolean }> }
 export interface TacticalMapState { resolvedConsoleOperationIds?: string[] }
 export interface TacticalMapState { coveringFireCommittedCombatantIds: string[]; pendingCoveringFireSnapIds: string[] }
 export interface TacticalMapState { grenadeKind: "fragmentation" | "smoke" | null; smokeClearsAtTurnByCell: Record<string, number> }

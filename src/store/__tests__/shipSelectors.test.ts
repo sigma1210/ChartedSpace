@@ -28,6 +28,7 @@ import { initialShipPluginState } from "../../plugins/ship";
 import { initialNavigationState } from "../../plugins/navigation";
 import { initialStayInLocationState } from "../../plugins/stayInLocation/stayInLocationSlice";
 import { initialTradeState } from "../../plugins/trade/tradeSlice";
+import { initialQuestState } from "../../plugins/quest";
 
 const makeRoot = (ship: ShipSummary | null): RootState => ({
   ui: {
@@ -75,6 +76,7 @@ const makeRoot = (ship: ShipSummary | null): RootState => ({
   },
   hud: initialHudState,
   plugins: {
+    quest: initialQuestState,
     characterCombat: initialCharacterCombatState,
     characters: initialCharactersState,
     demographics: initialDemographicsState,

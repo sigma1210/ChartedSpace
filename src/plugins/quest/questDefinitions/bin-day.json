@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "bin-day",
+  "title": "Bin Day",
+  "description": "",
+  "itemDefinitions": [],
+  "scenarioInstances": [],
+  "questFlow": {
+    "nodes": [
+      {
+        "id": "quest-start",
+        "kind": "quest-start",
+        "title": "Quest start",
+        "position": {
+          "x": 56,
+          "y": 270
+        }
+      }
+    ],
+    "connections": []
+  }
+}

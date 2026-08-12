@@ -11,6 +11,7 @@ import { initialStayInLocationState } from "../plugins/stayInLocation/stayInLoca
 import { initialTradeState } from "../plugins/trade/tradeSlice";
 import { initialEquipmentCatalogState } from "../plugins/equipmentCatalog";
 import { initialTacticalEditorState } from "@/plugins/characterCombat/editor/redux/tacticalEditorSlice";
+import { initialQuestState } from "@/plugins/quest";
 
 export interface PluginTestRootStateOptions {
   currentTurn?: number;
@@ -31,6 +32,7 @@ export const createPluginTestRootState = ({
   hud: {} as RootState["hud"],
   tacticalEditor: initialTacticalEditorState,
   plugins: {
+    quest: initialQuestState,
     characterCombat: initialCharacterCombatState,
     characters: {
       ...initialCharactersState,

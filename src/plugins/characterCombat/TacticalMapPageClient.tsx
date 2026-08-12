@@ -52,6 +52,7 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
   }, [allCharacters, ship?.crew]);
   const selected = useAppSelector(selectSelectedProfileCharacter);
   const combat = useAppSelector((state) => state.plugins.characterCombat);
+  const questPlaytest = useAppSelector((state) => state.plugins.quest.editor.playtest);
   const tacticalMap = combat.tacticalMap ?? DEFAULT_TACTICAL_MAP;
   const tacticalScenarioStatus = tacticalMap.scenarioStatus ?? "active";
   const scenarioHudLayout = tacticalMap.scenarioHudLayout ?? DEFAULT_TACTICAL_SCENARIO_HUD_LAYOUT;
@@ -130,8 +131,8 @@ const TacticalMapPageClient = ({ draftPlaytest }: { draftPlaytest?: { definition
       />
       <TacticalCharacterInformationHud tacticalMap={tacticalMap} activeCombatant={activeCombatant} />
       <TacticalEventsHud tacticalMap={tacticalMap} />
-      {tacticalScenarioStatus === "setup" && <TacticalDeploymentHud tacticalMap={tacticalMap} activeCombatant={activeCombatant} lockerItems={lockerItems} layout={deploymentHudLayout} />}
-      <TacticalActionHud tacticalMap={tacticalMap} activeCombatant={activeCombatant} enemies={enemies} movementPreview={movementPreview} draftPlaytest={draftPlaytest} />
+      {tacticalScenarioStatus === "setup" && <TacticalDeploymentHud tacticalMap={tacticalMap} activeCombatant={activeCombatant} lockerItems={lockerItems} layout={deploymentHudLayout} questPlaytest={questPlaytest} />}
+      <TacticalActionHud tacticalMap={tacticalMap} activeCombatant={activeCombatant} enemies={enemies} movementPreview={movementPreview} draftPlaytest={draftPlaytest} questPlaytest={questPlaytest} />
       {(status === "loading" || shipStatus === "loading") && <div className="absolute inset-x-0 bottom-8 text-center font-mono text-xs uppercase tracking-widest text-cyan-200">Loading crew…</div>}
       {(status === "error" || shipStatus === "error") && <div className="absolute inset-x-0 bottom-8 text-center font-mono text-xs uppercase tracking-widest text-rose-300">Crew could not be loaded</div>}
     </TacticalHudLayer>

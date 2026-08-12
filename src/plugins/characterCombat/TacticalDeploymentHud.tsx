@@ -16,6 +16,10 @@ import type {
 } from "@/plugins/characterCombat/types";
 import type { ShipLockerItem } from "@/plugins/ship";
 import { useAppDispatch } from "@/store/hooks";
+import { questPlaytestItemAssigned, questPlaytestItemRemoved } from "@/plugins/quest/questSlice";
+import { inactiveQuestPlaytestRuntime, type QuestPlaytestRuntime } from "@/plugins/quest/playtest/questPlaytest";
+
+const INACTIVE_QUEST_PLAYTEST = inactiveQuestPlaytestRuntime();
 
 export const TacticalDeploymentControls = ({
   tacticalMap,
@@ -94,11 +98,13 @@ export const TacticalDeploymentHud = ({
   activeCombatant,
   lockerItems,
   layout,
+  questPlaytest = INACTIVE_QUEST_PLAYTEST,
 }: {
   tacticalMap: TacticalMapState;
   activeCombatant: Combatant | null;
   lockerItems: ShipLockerItem[];
   layout: CharacterCombatHudLayout;
+  questPlaytest?: QuestPlaytestRuntime;
 }) => {
   const dispatch = useAppDispatch();
   const selectedProne = activeCombatant?.posture === "prone";
@@ -167,6 +173,17 @@ export const TacticalDeploymentHud = ({
                 </div>
               </div>
             </div>
+            {questPlaytest.status !== "inactive" && <div className="border-t border-amber-700/50 pt-2">
+              <div className="mb-1 font-bold uppercase tracking-wider text-amber-100">Quest items</div>
+              <div className="mb-2 text-[7px] text-(--hud-text-dim)">Assign any defined quest-item copies for this playtest.</div>
+              <div className="flex max-h-28 flex-col gap-1 overflow-y-auto pr-1">
+                {(questPlaytest.definition?.itemDefinitions ?? []).map((item) => {
+                  const copies = questPlaytest.itemInstances.filter((instance) => instance.characterId === activeCombatant.id && instance.itemDefinitionId === item.id).length;
+                  return <div key={item.id} className="grid grid-cols-[1fr_20px_24px_20px] items-center gap-1 border border-amber-900/60 px-2 py-1"><span className="truncate text-amber-100">{item.name}</span><button type="button" aria-label={`Remove ${item.name} from ${activeCombatant.name}`} disabled={copies === 0} onClick={() => dispatch(questPlaytestItemRemoved({ itemDefinitionId: item.id, characterId: activeCombatant.id }))} className="border border-slate-700 text-center disabled:opacity-30">−</button><span className="text-center font-bold text-amber-100">{copies}</span><button type="button" aria-label={`Assign ${item.name} to ${activeCombatant.name}`} onClick={() => dispatch(questPlaytestItemAssigned({ itemDefinitionId: item.id, characterId: activeCombatant.id }))} className="border border-amber-500 text-center text-amber-100">+</button></div>;
+                })}
+                {(questPlaytest.definition?.itemDefinitions.length ?? 0) === 0 && <span className="text-[7px] text-(--hud-text-dim)">This quest defines no items.</span>}
+              </div>
+            </div>}
             {!selectedCrewDeployed ? (
               <div className="border border-amber-300/60 p-2 text-amber-100">Place this crew member on a green deployment square before setting facing or stance.</div>
             ) : (

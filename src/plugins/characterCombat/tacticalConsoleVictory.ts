@@ -30,6 +30,13 @@ export interface TacticalConsoleOperation {
   result: { type: "unlock"; operationIds: string[] } | { type: "victory" };
   successTransformation?: "ally" | "enemy";
   failureTransformation?: "ally" | "enemy";
+  quest?: {
+    questId: string;
+    scenarioInstanceId: string;
+    nodeId: string;
+    chainId: string;
+    scenarioVictoryNodeId: string | null;
+  };
 }
 
 export interface TacticalConsoleVictoryDefinitionFile {
@@ -64,8 +71,10 @@ export const validateTacticalConsoleVictoryDefinition = (definition: TacticalCon
       checkIds.add(check.id);
       if (!check.skill.trim()) errors.push(`Task check ${check.id} requires a skill.`);
       if (!TRAVELLER_TASK_DIFFICULTIES.some((entry) => entry.id === check.difficulty)) errors.push(`Task check ${check.id} has an invalid difficulty.`);
-      if (!Number.isInteger(check.apCost) || check.apCost < 1 || check.apCost > 6) errors.push(`Task check ${check.id} must cost 1–6 AP.`);
+      const minimumApCost = operation.quest ? 0 : 1;
+      if (!Number.isInteger(check.apCost) || check.apCost < minimumApCost || check.apCost > 6) errors.push(`Task check ${check.id} must cost ${minimumApCost}–6 AP.`);
     });
+    if (operation.quest && operation.checks.reduce((total, check) => total + check.apCost, 0) !== 6) errors.push(`Quest operation ${operation.id} must cost exactly 6 AP.`);
   });
   definition.operations.forEach((operation) => {
     operation.prerequisites.operationIds.forEach((id) => {

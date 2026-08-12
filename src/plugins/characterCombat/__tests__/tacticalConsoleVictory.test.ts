@@ -106,6 +106,43 @@ describe("tactical console victory", () => {
     expect(state.tacticalMap?.consoleOperationProgressById).toEqual({});
   });
 
+  it("keeps a six-AP quest chain with one character and carries critical failure to final failure", () => {
+    const questDefinition: TacticalConsoleVictoryDefinitionFile = {
+      schemaVersion: 1,
+      id: "quest:test",
+      scenarioId: defaultTacticalScenarioDefinition.id,
+      operations: [{
+        id: "quest:node:chain",
+        consolePlacementId: "control-room-alpha",
+        label: "Quest chain",
+        prerequisites: { mode: "all", operationIds: [] },
+        checks: [
+          { id: "first", skill: "Security", difficulty: "routine", apCost: 6 },
+          { id: "final", skill: "Engineering", difficulty: "average", apCost: 0 },
+        ],
+        criticalSuccessNextCheckModifier: 2,
+        criticalFailureNextCheckModifier: -2,
+        result: { type: "victory" },
+        quest: { questId: "quest", scenarioInstanceId: "scene", nodeId: "node", chainId: "chain", scenarioVictoryNodeId: "victory" },
+      }],
+    };
+    const scenario = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
+    let state = reducer(undefined, initializeTacticalDraftPlaytest({ crew: [{ id: "crew-1", name: "Operator", weaponSkill: 0, skills: [{ name: "Security", level: 1 }, { name: "Engineering", level: 1 }] }], definition: scenario, consoleVictory: questDefinition }));
+    state = reducer(state, selectTacticalDeploymentCharacter("crew-1"));
+    state = reducer(state, deployTacticalCharacter({ x: 0, y: 42 }));
+    state = reducer(state, startTacticalScenario());
+    state = { ...state, tacticalMap: { ...state.tacticalMap!, activeCharacterId: "crew-1", scenario: { ...state.tacticalMap!.scenario, combatants: state.tacticalMap!.scenario.combatants.map((unit) => unit.id === "crew-1" ? { ...unit, position: { x: 48, y: 41 } } : unit) } } };
+    state = reducer(state, selectTacticalTerrainObject("control-room-alpha:terminal"));
+    state = reducer(state, attemptTacticalConsoleCheck({ operationId: "quest:node:chain", dice: { first: 1, second: 1 } }));
+    expect(state.tacticalMap?.activeCharacterId).toBe("crew-1");
+    expect(state.tacticalMap?.actionPointsByCharacterId["crew-1"]).toBe(0);
+    expect(state.tacticalMap?.consoleOperationProgressById?.["quest:node:chain"]).toMatchObject({ completedCheckIds: ["first"], nextCheckModifier: -2, attemptCharacterId: "crew-1", successImpossible: true });
+    state = reducer(state, attemptTacticalConsoleCheck({ operationId: "quest:node:chain", dice: { first: 5, second: 5 } }));
+    expect(state.tacticalMap?.scenarioStatus).toBe("active");
+    expect(state.tacticalMap?.completedConsoleOperationIds).toEqual([]);
+    expect(state.tacticalMap?.consoleOperationProgressById?.["quest:node:chain"]).toBeUndefined();
+  });
+
   it("uses an interactive human placement for a skill-check victory task", () => {
     const scenario = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     scenario.terrainPlacements = [{
