@@ -1,4 +1,4 @@
-import { attemptTacticalConsoleCheck, beginTacticalDragging, cancelTacticalExtinguishFire, cancelTacticalTreatment, confirmTacticalExtinguishFire, confirmTacticalTreatment, fireAtTacticalTerrain, interactWithTacticalTerrain, previewTacticalExtinguishFire, previewTacticalTreatment, releaseTacticalDraggedCombatant } from "@/plugins/characterCombat/slice";
+import { attemptTacticalConsoleCheck, beginTacticalConversation, beginTacticalDragging, cancelTacticalExtinguishFire, cancelTacticalTreatment, confirmTacticalExtinguishFire, confirmTacticalTreatment, fireAtTacticalTerrain, interactWithTacticalTerrain, previewTacticalExtinguishFire, previewTacticalTreatment, releaseTacticalDraggedCombatant } from "@/plugins/characterCombat/slice";
 import { depressurizedCells, pointKey, treatableAllies } from "@/plugins/characterCombat/geometry";
 import { consoleOperationAvailable, travellerTaskTarget, type TacticalConsoleOperation, type TacticalConsoleTaskCheck } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import { buildTacticalConsoleCheckRolls, buildTacticalStructuralFireRolls } from "@/plugins/characterCombat/tacticalRolls";
@@ -6,7 +6,7 @@ import { activeTacticalTerrainObjects } from "@/plugins/characterCombat/tactical
 import type { Combatant, TacticalMapState } from "@/plugins/characterCombat/types";
 import { useAppDispatch } from "@/store/hooks";
 import { characterHasQuestRequirement, inactiveQuestPlaytestRuntime, questChainForOperation, type QuestPlaytestRuntime } from "@/plugins/quest/playtest/questPlaytest";
-import { questPlaytestChainAttempted, questPlaytestChainResolved } from "@/plugins/quest/questSlice";
+import { questPlaytestChainAttempted, questPlaytestChainResolved, questPlaytestConversationStarted } from "@/plugins/quest/questSlice";
 
 type TacticalSupportControlsProps = {
   section: "recovery" | "terrain";
@@ -140,6 +140,12 @@ export const TacticalSupportControls = ({
     )
     : [];
   const questScenario = questPlaytest.definition?.scenarioInstances.find((scenario) => scenario.id === questPlaytest.currentScenarioInstanceId) ?? null;
+  const questDialogueEntity = selectedTerrain?.kind === "terminal" && selectedTerrain.visualKind === "human"
+    ? questScenario?.nodes.find((node) => node.kind === "entity" && node.sourcePlacementId === selectedTerrain.id.slice(0, -":terminal".length) && node.dialogue) ?? null
+    : null;
+  const dialogueReady = questDialogueEntity?.kind === "entity" && questDialogueEntity.dialogue
+    ? Boolean(questPlaytest.dialogueDefinitions[questDialogueEntity.dialogue.definitionId])
+    : false;
   const questOperationAvailable = (operationId: string) => {
     if (tacticalMap.consoleOperationProgressById?.[operationId]) return true;
     if (!questScenario) return true;
@@ -198,7 +204,7 @@ export const TacticalSupportControls = ({
               <div className="font-bold text-amber-100">{selectedTerrain.kind === "wall" ? "Wall segment" : selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Open" : "Closed"} ${selectedTerrain.portalType === "iris-valve" ? "iris valve" : "door"}` : selectedTerrain.kind === "hatch" ? `${selectedTerrain.open ? "Open" : "Closed"} hatch` : selectedTerrain.label}</div>
               {selectedTerrain.kind !== "wall" && <><div className={`mt-1 ${terrainAdjacent ? "text-emerald-200" : "text-rose-200"}`}>{terrainAdjacent ? selectedTerrain.kind === "door" ? "Adjacent at phase start" : "Adjacent" : selectedTerrain.kind === "door" ? "Must begin the phase adjacent" : "Move adjacent to interact"}</div>
                 {selectedDoorCommand ? <div className="text-amber-200">{selectedTerrain.kind === "hatch" ? "Hatch" : selectedTerrain.kind === "door" && selectedTerrain.portalType === "iris-valve" ? "Iris valve" : "Door"} will {selectedDoorCommand.open ? "open" : "close"} at the start of Turn {selectedDoorCommand.resolvesAtTurn}</div> : selectedPortalPressureBlocked ? <div className="text-rose-200">Cannot open across a pressure differential</div> : selectedTerrain.kind === "terminal" ? <div className="flex flex-col gap-1">
-                  {unresolvedConsoleOperations.map((operation) => {
+                  {questDialogueEntity?.kind === "entity" ? <>{(() => { const closed = questPlaytest.closedConversationScenarioNodeIds.includes(questDialogueEntity.id); const disabledReason = closed ? "This conversation has ended permanently" : questPlaytest.conversation ? "Finish the current conversation first" : !dialogueReady ? "Dialogue definition is loading" : !terrainAdjacent ? "Move adjacent to converse" : selectedActionPoints < 6 ? "Requires 6 AP" : null; return <div className="grid gap-1"><button type="button" disabled={Boolean(disabledReason)} onClick={() => { dispatch(beginTacticalConversation({ terminalId: selectedTerrain.id })); dispatch(questPlaytestConversationStarted({ scenarioNodeId: questDialogueEntity.id, characterId: activeCombatant.id, terminalId: selectedTerrain.id })); }} className="min-h-8 w-full border border-violet-400 px-2 py-1 text-left text-[8px] font-bold uppercase tracking-wider text-violet-100 disabled:border-slate-700 disabled:text-slate-500"><span className="block">Begin conversation · 6 AP</span><span className="block text-[7px] font-normal text-violet-200">One character · one turn</span></button>{disabledReason && <div className="border-l-2 border-violet-700 pl-2 text-[7px] text-violet-200">{disabledReason}</div>}</div>; })()}</> : <>{unresolvedConsoleOperations.map((operation) => {
                     const progress = tacticalMap.consoleOperationProgressById?.[operation.id];
                     const check = operation.checks.find((candidate) => !progress?.completedCheckIds.includes(candidate.id));
                     if (!check) return null;
@@ -219,7 +225,7 @@ export const TacticalSupportControls = ({
                       <span className="block text-[7px] font-normal text-amber-200">{check.skill} · {check.difficulty.replace("-", " ")} {({ simple: 2, easy: 4, routine: 6, average: 8, difficult: 10, "very-difficult": 12, formidable: 14 } as const)[check.difficulty]}+ · check {completed + 1}/{operation.checks.length}</span>
                     </button>{disabledReason && <div className="border-l-2 border-amber-700 pl-2 text-[7px] text-amber-200">{disabledReason}</div>}</div>;
                   })}
-                  {unresolvedConsoleOperations.length === 0 && <div className={terminalAlreadyActive ? "text-emerald-200" : "text-slate-400"}>{terminalAlreadyActive ? selectedTerrain.visualKind === "human" ? "Interaction completed" : "Console operation completed" : selectedTerrain.visualKind === "human" ? "No quest interaction defined" : "No quest console operation defined"}</div>}
+                  {unresolvedConsoleOperations.length === 0 && <div className={terminalAlreadyActive ? "text-emerald-200" : "text-slate-400"}>{terminalAlreadyActive ? selectedTerrain.visualKind === "human" ? "Interaction completed" : "Console operation completed" : selectedTerrain.visualKind === "human" ? "No quest interaction defined" : "No quest console operation defined"}</div>}</>}
                 </div> : <button type="button" disabled={!terrainAdjacent || selectedActionPoints < terrainInteractionCost || selectedPortalPressureBlocked} onClick={() => dispatch(interactWithTacticalTerrain())} className="h-7 w-full border border-amber-300 px-2 text-[8px] font-bold uppercase tracking-wider text-amber-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
                   {selectedTerrain.kind === "door" ? `${selectedTerrain.open ? "Close" : "Open"} ${selectedTerrain.portalType === "iris-valve" ? "iris valve" : "door"} next phase · 2 AP` : `${selectedTerrain.open ? "Close" : "Open"} hatch next phase · 6 AP`}
                 </button>}</>}

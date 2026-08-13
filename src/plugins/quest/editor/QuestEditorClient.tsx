@@ -12,6 +12,8 @@ import type { RootState } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   activeScenarioChanged, chainAdded, chainSelected, chainUpdated, connectionCancelled, connectionRemoved, connectionSelected,
+  dialogueDefinitionCached, dialogueLibraryFailed, dialogueLibraryReceived, dialogueLibraryRequested,
+  entityDialogueAssigned, entityDialogueEndingMapped, entityDialogueVariableChanged,
   graphViewChanged, questDescriptionChanged, questDialogNameChanged, questDocumentActivated, questDocumentSaved,
   questDraftDiscarded, questFileDialogClosed, questFileIndexFailed, questFileIndexReceived, questFileIndexRequested,
   questFileOperationFailed, questFileOperationStarted, questFlowConnectionCancelled, questFlowConnectionRemoved, questFlowConnectionSelected,
@@ -33,6 +35,7 @@ import QuestItemEditorHudContent from "./QuestItemEditorHudContent";
 import ScenarioInteractionGraph from "./ScenarioInteractionGraph";
 import { questEntitiesFromScenario } from "./scenarioEntities";
 import { createEmptyQuestDefinition } from "./types";
+import { listDialogues, loadDialogue } from "../dialogue/dialogueApi";
 
 const selectEditor = (state: RootState) => state.plugins.quest.editor;
 const inputClass = "mt-1 w-full border border-slate-700 bg-slate-950 px-2 py-2 text-[10px] normal-case text-slate-100 outline-none focus:border-cyan-500";
@@ -47,6 +50,7 @@ const QuestEditorClient = () => {
   const activeScenario = editor.document.scenarioInstances.find((item) => item.id === editor.activeScenarioInstanceId) ?? null;
   const selectedNode = activeScenario?.nodes.find((node) => node.id === editor.selection.nodeId) ?? null;
   const selectedEntity = selectedNode?.kind === "entity" ? selectedNode : null;
+  const assignedDialogue = selectedEntity?.dialogue ? editor.dialogueLibrary.definitions[selectedEntity.dialogue.definitionId] ?? null : null;
   const selectedChain = selectedEntity?.chains.find((chain) => chain.id === editor.selection.chainId) ?? null;
   const selectedFlowNode = editor.document.questFlow.nodes.find((node) => node.id === editor.questFlowSelection.nodeId) ?? null;
   const selectedFlowScenario = selectedFlowNode?.kind === "scenario" ? editor.document.scenarioInstances.find((scenario) => scenario.id === selectedFlowNode.scenarioInstanceId) ?? null : null;
@@ -64,6 +68,16 @@ const QuestEditorClient = () => {
     void listQuestSourceScenarios().then((items) => dispatch(scenarioIndexReceived(items))).catch((error: unknown) => dispatch(scenarioIndexFailed(error instanceof Error ? error.message : "Could not list scenarios.")));
   }, [dispatch, editor.scenarioIndex.status]);
   useEffect(() => { if (editor.file.questIndex.status === "idle") void refreshQuestIndex(); }, [editor.file.questIndex.status, refreshQuestIndex]);
+  useEffect(() => {
+    if (editor.dialogueLibrary.status !== "idle") return;
+    dispatch(dialogueLibraryRequested());
+    void listDialogues().then((items) => dispatch(dialogueLibraryReceived(items))).catch((error: unknown) => dispatch(dialogueLibraryFailed(error instanceof Error ? error.message : "Could not list dialogues.")));
+  }, [dispatch, editor.dialogueLibrary.status]);
+  useEffect(() => {
+    const id = selectedEntity?.dialogue?.definitionId;
+    if (!id || editor.dialogueLibrary.definitions[id]) return;
+    void loadDialogue(id).then((definition) => dispatch(dialogueDefinitionCached(definition))).catch((error: unknown) => dispatch(dialogueLibraryFailed(error instanceof Error ? error.message : "Could not load dialogue.")));
+  }, [dispatch, editor.dialogueLibrary.definitions, selectedEntity?.dialogue?.definitionId]);
   useEffect(() => { dispatch(questHudLayoutsHydrated(loadStoredQuestEditorHudLayouts())); }, [dispatch]);
   useEffect(() => { if (editor.hudLayoutsReady) saveQuestEditorHudLayouts(editor.hudLayouts); }, [editor.hudLayouts, editor.hudLayoutsReady]);
   useEffect(() => {
@@ -128,6 +142,12 @@ const QuestEditorClient = () => {
   const beginQuestPlaytest = (mode: "entire-quest" | "selected-scenario") => {
     dispatch(questPlaytestStarted({ mode, scenarioInstanceId: mode === "selected-scenario" ? activeScenario?.id : undefined }));
     router.push("/system/quest/playtest");
+  };
+  const assignDialogue = async (nodeId: string, definitionId: string) => {
+    dispatch(entityDialogueAssigned({ nodeId, definitionId: definitionId || null }));
+    if (!definitionId || editor.dialogueLibrary.definitions[definitionId]) return;
+    try { dispatch(dialogueDefinitionCached(await loadDialogue(definitionId))); }
+    catch (error) { dispatch(dialogueLibraryFailed(error instanceof Error ? error.message : "Could not load dialogue.")); }
   };
 
   useEffect(() => {
@@ -195,6 +215,7 @@ const QuestEditorClient = () => {
             </> : <>
               {!selectedNode && <div className="text-slate-600">Select a scenario interaction node.</div>}
               {selectedNode && <div><div className="font-bold text-slate-100">{selectedNode.title}</div><div className="text-slate-500">{selectedNode.kind === "entity" ? selectedNode.entityType : selectedNode.kind}</div></div>}
+              {selectedEntity?.entityType === "interactive-human" && <div className="mt-3 border border-violet-900/70 bg-violet-950/20 p-2"><div className="font-bold uppercase text-violet-200">Reusable dialogue</div><select aria-label="Assigned dialogue" value={selectedEntity.dialogue?.definitionId ?? ""} onChange={(event) => void assignDialogue(selectedEntity.id, event.target.value)} className={inputClass}><option value="">No dialogue</option>{editor.dialogueLibrary.items.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select>{editor.dialogueLibrary.error && <div className="mt-1 text-red-300">{editor.dialogueLibrary.error}</div>}{selectedEntity.dialogue && !assignedDialogue && <div className="mt-2 text-slate-500">Loading dialogue definition…</div>}{selectedEntity.dialogue && assignedDialogue && <><div className="mt-2 uppercase text-slate-500">Template context</div>{assignedDialogue.variableKeys.map((key) => <label key={key} className="mt-1 block text-slate-500">{key}<input value={selectedEntity.dialogue?.variables[key] ?? ""} onChange={(event) => dispatch(entityDialogueVariableChanged({ nodeId: selectedEntity.id, key, value: event.target.value }))} className={inputClass} /></label>)}{assignedDialogue.variableKeys.length === 0 && <div className="mt-1 text-slate-600">Uses built-in npcName and characterName only.</div>}<div className="mt-2 uppercase text-slate-500">Success ending → quest chain</div>{assignedDialogue.nodes.filter((node) => node.kind === "ending" && node.endingKind === "success").map((ending) => <label key={ending.id} className="mt-1 block text-slate-500">{ending.kind === "ending" ? ending.title : ending.id}<select value={selectedEntity.dialogue?.successEndingChainIdByEndingId[ending.id] ?? ""} onChange={(event) => dispatch(entityDialogueEndingMapped({ nodeId: selectedEntity.id, endingId: ending.id, chainId: event.target.value || null }))} className={inputClass}><option value="">No quest success</option>{selectedEntity.chains.map((chain) => <option key={chain.id} value={chain.id}>{chain.name}</option>)}</select></label>)}</>}</div>}
               {selectedEntity && <div className="mt-3"><div className="flex items-center justify-between"><span className="font-bold uppercase">Quest skill chains</span><button type="button" onClick={() => dispatch(chainAdded(selectedEntity.id))} className="border border-cyan-600 px-2 py-1 uppercase text-cyan-100"><Plus size={9} className="inline" /> Add</button></div><div className="mt-2 grid gap-1">{selectedEntity.chains.map((chain) => <button key={chain.id} type="button" onClick={() => dispatch(chainSelected(chain.id))} className={`border px-2 py-2 text-left ${chain.id === editor.selection.chainId ? "border-cyan-400 bg-cyan-950/40" : "border-slate-800"}`}>{chain.name}</button>)}</div></div>}
               {selectedNode?.kind === "victory" && <><label className="mt-3 block uppercase text-slate-500">Victory name<input value={selectedNode.title} onChange={(event) => dispatch(victoryNodeUpdated({ nodeId: selectedNode.id, title: event.target.value }))} className={inputClass} /></label><label className="mt-2 block uppercase text-slate-500">Scenario ending<textarea rows={3} value={selectedNode.description} onChange={(event) => dispatch(victoryNodeUpdated({ nodeId: selectedNode.id, description: event.target.value }))} className={`${inputClass} resize-none`} /></label></>}
               {selectedChain && <div className="mt-3 border-t border-slate-800 pt-3"><label className="block uppercase text-slate-500">Chain name<input value={selectedChain.name} onChange={(event) => dispatch(chainUpdated({ chainId: selectedChain.id, name: event.target.value }))} className={inputClass} /></label><label className="mt-2 block uppercase text-slate-500">Chain description<textarea rows={2} value={selectedChain.description} onChange={(event) => dispatch(chainUpdated({ chainId: selectedChain.id, description: event.target.value }))} className={`${inputClass} resize-none`} /></label><div className="mt-2 flex items-center justify-between"><span className="uppercase">Ordered tasks · 6 AP</span><button type="button" onClick={() => dispatch(taskAdded(selectedChain.id))} className="border border-emerald-700 px-2 py-1 uppercase text-emerald-200">Add task</button></div><div className="mt-2 grid gap-2">{selectedChain.tasks.map((task, index) => <div key={task.id} className="grid grid-cols-[18px_1fr_100px_20px] gap-1 border border-slate-800 p-1"><span>{index + 1}</span><input value={task.skill} aria-label={`Skill ${index + 1}`} onChange={(event) => dispatch(taskUpdated({ chainId: selectedChain.id, taskId: task.id, skill: event.target.value }))} className="min-w-0 bg-slate-950 px-1" /><select value={task.difficulty} aria-label={`Difficulty ${index + 1}`} onChange={(event) => dispatch(taskUpdated({ chainId: selectedChain.id, taskId: task.id, difficulty: event.target.value as typeof task.difficulty }))} className="bg-slate-950">{TRAVELLER_TASK_DIFFICULTIES.map((difficulty) => <option key={difficulty.id} value={difficulty.id}>{difficulty.label}</option>)}</select><button type="button" aria-label={`Remove task ${index + 1}`} disabled={selectedChain.tasks.length === 1} onClick={() => dispatch(taskRemoved({ chainId: selectedChain.id, taskId: task.id }))}><Trash2 size={10} /></button></div>)}</div></div>}
@@ -207,7 +228,7 @@ const QuestEditorClient = () => {
           <div className={hudBody}>{(editor.activeGraphView === "quest-flow" ? editor.document.questFlow.connections : activeScenario?.connections ?? []).length === 0 && <div className="text-slate-600">No links in this graph.</div>}{editor.activeGraphView === "quest-flow" ? editor.document.questFlow.connections.map((connection) => <div key={connection.id} className={`mb-1 flex items-center gap-2 border p-2 ${editor.questFlowSelection.connectionId === connection.id ? "border-white bg-violet-950/50" : "border-slate-800"}`}><button type="button" onClick={() => dispatch(questFlowConnectionSelected(connection.id))} className="min-w-0 flex-1 truncate text-left">{connection.sourceNodeId} → {connection.targetNodeId}</button><button type="button" aria-label="Remove quest link" onClick={() => dispatch(questFlowConnectionRemoved(connection.id))}><Trash2 size={11} /></button></div>) : activeScenario?.connections.map((connection) => <div key={connection.id} className={`mb-1 flex items-center gap-2 border p-2 ${editor.selection.connectionId === connection.id ? "border-white bg-cyan-950/50" : "border-slate-800"}`}><button type="button" onClick={() => dispatch(connectionSelected(connection.id))} className="min-w-0 flex-1 truncate text-left">{activeScenario.nodes.find((node) => node.id === connection.sourceNodeId)?.title} → {activeScenario.nodes.find((node) => node.id === connection.targetNodeId)?.title}</button><button type="button" aria-label="Remove interaction link" onClick={() => dispatch(connectionRemoved(connection.id))}><Trash2 size={11} /></button></div>)}</div>
         </FloatingPluginHud>
 
-        <FloatingPluginHud title="Navigation" layout={editor.hudLayouts.navigation} onLayoutChange={layoutChange("navigation")} className="w-[200px]"><div className={`${hudBody} flex gap-1 overflow-visible`}><Link href="/system/tactical/editor" className="border border-cyan-700 px-2 py-2 uppercase text-cyan-100">Scenario Editor</Link><Link href="/system/tactical" className="border border-slate-700 px-2 py-2 uppercase text-slate-300">Tactical</Link></div></FloatingPluginHud>
+        <FloatingPluginHud title="Navigation" layout={editor.hudLayouts.navigation} onLayoutChange={layoutChange("navigation")} className="w-[310px]"><div className={`${hudBody} flex gap-1 overflow-visible`}><Link href="/system/quest/dialogue/editor" className="border border-violet-700 px-2 py-2 uppercase text-violet-100">Dialogues</Link><Link href="/system/tactical/editor" className="border border-cyan-700 px-2 py-2 uppercase text-cyan-100">Scenario Editor</Link><Link href="/system/tactical" className="border border-slate-700 px-2 py-2 uppercase text-slate-300">Tactical</Link></div></FloatingPluginHud>
       </PluginHudLayer>
     </section>
 

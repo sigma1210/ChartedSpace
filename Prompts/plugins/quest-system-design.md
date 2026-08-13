@@ -248,7 +248,7 @@ The next editor question has not yet been selected.
 Areas not yet fully defined include:
 
 - the precise expression format for configurable node prerequisites
-- advanced conversation workflows
+- patron-specific conversation assignment
 - detailed editor interactions and validation
 - whether custom outcome text accompanies or replaces the explicit effect summary
 - the complete set of scenario activation triggers
@@ -287,3 +287,15 @@ The first editor prototype is owned by the quest plugin and is available on the 
 - A quest task chain costs six AP in total, remains with one character, and must finish in that activation. Critical-success and critical-failure carry modifiers only to the next task, and a critical failure makes success impossible for that attempt.
 - Runtime item consumption and success rewards update Redux custody. Player-choice rewards remain pending until the tester assigns them to a participating character.
 - A scenario victory follows its specific Quest Flow connector, loads the next scenario, or records Quest Victory. The playtest remains active until the tester explicitly returns to the Quest Editor.
+
+## Reusable Dialogue System
+
+- Dialogue definitions are separate reusable quest-plugin assets edited at `/system/quest/dialogue/editor` and persisted as versioned JSON through `/api/quest-dialogues`.
+- Redux owns the dialogue draft, baseline, graph selection, link and drag interactions, file status, and loaded dialogue library.
+- Dialogue graphs contain NPC text, player choice, ordered skill-chain, and ending nodes. NPC text may expose multiple player choices; skill chains have distinct success and failure exits.
+- NPC text and player choices support `{{npcName}}`, `{{characterName}}`, and designer-defined template variables. Each interactive humanoid assignment supplies its own values for designer variables.
+- Each ending independently configures success, neutral, or failure; unchanged, ally, or enemy transformation; whether the conversation can be attempted again; and an optional resume node with automatic fallback to the dialogue start.
+- Interactive humanoids select a reusable dialogue in the Quest Editor. Every success ending may map to one of that humanoid's quest task chains, so the ending completes that specific quest path and applies its item rewards.
+- A full conversation always costs exactly 6 AP, is performed by one active adjacent character, and occupies that character's turn. Embedded ordered skill chains add no AP cost.
+- Dialogue skill chains use the established quest rules: normal failure follows the failure branch immediately, critical failure continues with a -2 DM on only the next task while making success impossible, and critical success grants +2 DM on only the next task.
+- In playtest, conversation text is rendered from assignment context, player choices advance the graph, skill outcomes choose success or failure links, and endings apply their quest completion and permanent interactive-humanoid transformation.

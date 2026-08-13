@@ -1,0 +1,8 @@
+import type { DialogueDefinitionFile, DialogueSummary } from "./types";
+type ErrorBody = { error?: string };
+const body = async <T>(response: Response, fallback: string) => { const result = await response.json() as ErrorBody & T; if (!response.ok) throw new Error(result.error ?? fallback); return result; };
+export const listDialogues = async () => (await body<{ dialogues: DialogueSummary[] }>(await fetch("/api/quest-dialogues", { cache: "no-store" }), "Could not list dialogues.")).dialogues;
+export const loadDialogue = async (id: string) => (await body<{ definition: DialogueDefinitionFile }>(await fetch(`/api/quest-dialogues/${encodeURIComponent(id)}`, { cache: "no-store" }), "Could not load dialogue.")).definition;
+export const createDialogue = async (name: string, definition: DialogueDefinitionFile) => body<{ dialogue: DialogueSummary; definition: DialogueDefinitionFile }>(await fetch("/api/quest-dialogues", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, definition }) }), "Could not create dialogue.");
+export const updateDialogue = async (id: string, definition: DialogueDefinitionFile) => body<{ dialogue: DialogueSummary; definition: DialogueDefinitionFile }>(await fetch(`/api/quest-dialogues/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ definition }) }), "Could not save dialogue.");
+export const deleteDialogue = async (id: string) => body<{ deleted: DialogueSummary }>(await fetch(`/api/quest-dialogues/${encodeURIComponent(id)}`, { method: "DELETE" }), "Could not delete dialogue.");

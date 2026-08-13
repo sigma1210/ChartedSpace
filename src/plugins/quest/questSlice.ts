@@ -12,6 +12,8 @@ import type {
   QuestItemRewardRecipient,
 } from "./editor/types";
 import { cloneQuestDefinition, createEmptyQuestDefinition } from "./editor/types";
+import type { DialogueConnectionOutcome, DialogueDefinitionFile, DialogueNode, DialogueSummary } from "./dialogue/types";
+import { cloneDialogueDefinition, createEmptyDialogueDefinition } from "./dialogue/types";
 import {
   defaultQuestEditorHudLayouts,
   freshDefaultQuestEditorHudLayouts,
@@ -69,6 +71,22 @@ export type QuestEditorState = {
   hudLayouts: QuestEditorHudLayouts;
   hudLayoutsReady: boolean;
   playtest: QuestPlaytestRuntime;
+  dialogueLibrary: {
+    items: DialogueSummary[];
+    definitions: Record<string, DialogueDefinitionFile>;
+    status: "idle" | "loading" | "ready" | "failed";
+    error: string | null;
+  };
+  dialogueEditor: {
+    document: DialogueDefinitionFile;
+    baseline: DialogueDefinitionFile;
+    current: DialogueSummary | null;
+    selection: { nodeId: string | null; connectionId: string | null };
+    pendingConnection: { sourceNodeId: string; outcome: DialogueConnectionOutcome } | null;
+    draggingNode: { nodeId: string; offset: { x: number; y: number } } | null;
+    operation: "idle" | "opening" | "creating" | "saving" | "deleting";
+    message: QuestFileMessage;
+  };
 };
 
 export type QuestState = { editor: QuestEditorState };
@@ -98,6 +116,12 @@ export const initialQuestState: QuestState = {
     hudLayouts: defaultQuestEditorHudLayouts,
     hudLayoutsReady: false,
     playtest: inactiveQuestPlaytestRuntime(),
+    dialogueLibrary: { items: [], definitions: {}, status: "idle", error: null },
+    dialogueEditor: {
+      document: createEmptyDialogueDefinition(), baseline: createEmptyDialogueDefinition(), current: null,
+      selection: { nodeId: "dialogue-start", connectionId: null }, pendingConnection: null, draggingNode: null,
+      operation: "idle", message: null,
+    },
   },
 };
 
@@ -117,6 +141,143 @@ const questSlice = createSlice({
   name: "quest",
   initialState: initialQuestState,
   reducers: {
+    dialogueLibraryRequested(state) {
+      state.editor.dialogueLibrary.status = "loading";
+      state.editor.dialogueLibrary.error = null;
+    },
+    dialogueLibraryReceived(state, action: PayloadAction<DialogueSummary[]>) {
+      state.editor.dialogueLibrary.items = action.payload;
+      state.editor.dialogueLibrary.status = "ready";
+      state.editor.dialogueLibrary.error = null;
+    },
+    dialogueLibraryFailed(state, action: PayloadAction<string>) {
+      state.editor.dialogueLibrary.status = "failed";
+      state.editor.dialogueLibrary.error = action.payload;
+    },
+    dialogueDefinitionCached(state, action: PayloadAction<DialogueDefinitionFile>) {
+      state.editor.dialogueLibrary.definitions[action.payload.id] = cloneDialogueDefinition(action.payload);
+    },
+    dialogueEditorNew(state) {
+      const definition = createEmptyDialogueDefinition();
+      state.editor.dialogueEditor = {
+        document: definition, baseline: cloneDialogueDefinition(definition), current: null,
+        selection: { nodeId: definition.startNodeId, connectionId: null }, pendingConnection: null, draggingNode: null,
+        operation: "idle", message: { kind: "success", text: "Created a new dialogue draft." },
+      };
+    },
+    dialogueEditorOperationStarted(state, action: PayloadAction<QuestEditorState["dialogueEditor"]["operation"]>) {
+      state.editor.dialogueEditor.operation = action.payload;
+      state.editor.dialogueEditor.message = null;
+    },
+    dialogueEditorOperationFailed(state, action: PayloadAction<string>) {
+      state.editor.dialogueEditor.operation = "idle";
+      state.editor.dialogueEditor.message = { kind: "error", text: action.payload };
+    },
+    dialogueEditorDocumentActivated(state, action: PayloadAction<{ definition: DialogueDefinitionFile; message: string }>) {
+      const definition = cloneDialogueDefinition(action.payload.definition);
+      state.editor.dialogueEditor.document = definition;
+      state.editor.dialogueEditor.baseline = cloneDialogueDefinition(definition);
+      state.editor.dialogueEditor.current = { id: definition.id, title: definition.title };
+      state.editor.dialogueEditor.selection = { nodeId: definition.startNodeId, connectionId: null };
+      state.editor.dialogueEditor.pendingConnection = null;
+      state.editor.dialogueEditor.draggingNode = null;
+      state.editor.dialogueEditor.operation = "idle";
+      state.editor.dialogueEditor.message = { kind: "success", text: action.payload.message };
+      state.editor.dialogueLibrary.definitions[definition.id] = cloneDialogueDefinition(definition);
+    },
+    dialogueEditorDocumentSaved(state, action: PayloadAction<{ definition: DialogueDefinitionFile; message: string }>) {
+      const definition = cloneDialogueDefinition(action.payload.definition);
+      state.editor.dialogueEditor.document = definition;
+      state.editor.dialogueEditor.baseline = cloneDialogueDefinition(definition);
+      state.editor.dialogueEditor.current = { id: definition.id, title: definition.title };
+      state.editor.dialogueEditor.operation = "idle";
+      state.editor.dialogueEditor.message = { kind: "success", text: action.payload.message };
+      state.editor.dialogueLibrary.definitions[definition.id] = cloneDialogueDefinition(definition);
+    },
+    dialogueEditorTitleChanged(state, action: PayloadAction<string>) { state.editor.dialogueEditor.document.title = action.payload; },
+    dialogueEditorDescriptionChanged(state, action: PayloadAction<string>) { state.editor.dialogueEditor.document.description = action.payload; },
+    dialogueEditorVariablesChanged(state, action: PayloadAction<string[]>) {
+      state.editor.dialogueEditor.document.variableKeys = [...new Set(action.payload.map((key) => key.trim()).filter(Boolean))];
+    },
+    dialogueEditorNodeAdded: {
+      prepare(kind: DialogueNode["kind"]) { return { payload: { kind, id: nanoid() } }; },
+      reducer(state, action: PayloadAction<{ kind: DialogueNode["kind"]; id: string }>) {
+        const count = state.editor.dialogueEditor.document.nodes.length;
+        const position = { x: 330 + (count % 3) * 260, y: 80 + Math.floor(count / 3) * 170 };
+        const node: DialogueNode = action.payload.kind === "npc-text" ? { id: action.payload.id, kind: "npc-text", text: "{{npcName}} says…", position }
+          : action.payload.kind === "choice" ? { id: action.payload.id, kind: "choice", text: "{{characterName}} replies…", position }
+          : action.payload.kind === "skill-chain" ? { id: action.payload.id, kind: "skill-chain", label: "Skill check", tasks: [{ id: nanoid(), skill: "Persuade", difficulty: "average" }], position }
+          : { id: action.payload.id, kind: "ending", endingKind: "neutral", title: "Conversation ends", text: "", transformation: "unchanged", restartable: false, resumeNodeId: null, position };
+        state.editor.dialogueEditor.document.nodes.push(node);
+        state.editor.dialogueEditor.selection = { nodeId: node.id, connectionId: null };
+      },
+    },
+    dialogueEditorNodeSelected(state, action: PayloadAction<string | null>) {
+      state.editor.dialogueEditor.selection = { nodeId: action.payload, connectionId: null };
+    },
+    dialogueEditorNodeMoved(state, action: PayloadAction<{ nodeId: string; position: { x: number; y: number } }>) {
+      const node = state.editor.dialogueEditor.document.nodes.find((candidate) => candidate.id === action.payload.nodeId);
+      if (node) node.position = action.payload.position;
+    },
+    dialogueEditorNodeDragStarted(state, action: PayloadAction<{ nodeId: string; offset: { x: number; y: number } }>) {
+      state.editor.dialogueEditor.draggingNode = action.payload;
+      state.editor.dialogueEditor.selection = { nodeId: action.payload.nodeId, connectionId: null };
+    },
+    dialogueEditorNodeDragEnded(state) { state.editor.dialogueEditor.draggingNode = null; },
+    dialogueEditorNodeRemoved(state, action: PayloadAction<string>) {
+      if (action.payload === state.editor.dialogueEditor.document.startNodeId) return;
+      state.editor.dialogueEditor.document.nodes = state.editor.dialogueEditor.document.nodes.filter((node) => node.id !== action.payload);
+      state.editor.dialogueEditor.document.connections = state.editor.dialogueEditor.document.connections.filter((link) => link.sourceNodeId !== action.payload && link.targetNodeId !== action.payload);
+      for (const node of state.editor.dialogueEditor.document.nodes) if (node.kind === "ending" && node.resumeNodeId === action.payload) node.resumeNodeId = null;
+      state.editor.dialogueEditor.selection = { nodeId: null, connectionId: null };
+    },
+    dialogueEditorNodeUpdated(state, action: PayloadAction<{ nodeId: string; text?: string; label?: string; title?: string; endingKind?: "success" | "neutral" | "failure"; transformation?: "unchanged" | "ally" | "enemy"; restartable?: boolean; resumeNodeId?: string | null }>) {
+      const node = state.editor.dialogueEditor.document.nodes.find((candidate) => candidate.id === action.payload.nodeId);
+      if (!node) return;
+      if (action.payload.text !== undefined && (node.kind === "npc-text" || node.kind === "choice" || node.kind === "ending")) node.text = action.payload.text;
+      if (action.payload.label !== undefined && node.kind === "skill-chain") node.label = action.payload.label;
+      if (node.kind === "ending") {
+        if (action.payload.title !== undefined) node.title = action.payload.title;
+        if (action.payload.endingKind !== undefined) node.endingKind = action.payload.endingKind;
+        if (action.payload.transformation !== undefined) node.transformation = action.payload.transformation;
+        if (action.payload.restartable !== undefined) node.restartable = action.payload.restartable;
+        if (action.payload.resumeNodeId !== undefined) node.resumeNodeId = action.payload.resumeNodeId;
+      }
+    },
+    dialogueEditorTaskAdded: {
+      prepare(nodeId: string) { return { payload: { nodeId, taskId: nanoid() } }; },
+      reducer(state, action: PayloadAction<{ nodeId: string; taskId: string }>) { const node = state.editor.dialogueEditor.document.nodes.find((candidate) => candidate.id === action.payload.nodeId); if (node?.kind === "skill-chain") node.tasks.push({ id: action.payload.taskId, skill: "Skill", difficulty: "average" }); },
+    },
+    dialogueEditorTaskUpdated(state, action: PayloadAction<{ nodeId: string; taskId: string; skill?: string; difficulty?: TravellerTaskDifficulty }>) {
+      const node = state.editor.dialogueEditor.document.nodes.find((candidate) => candidate.id === action.payload.nodeId);
+      const task = node?.kind === "skill-chain" ? node.tasks.find((candidate) => candidate.id === action.payload.taskId) : null;
+      if (!task) return;
+      if (action.payload.skill !== undefined) task.skill = action.payload.skill;
+      if (action.payload.difficulty !== undefined) task.difficulty = action.payload.difficulty;
+    },
+    dialogueEditorTaskRemoved(state, action: PayloadAction<{ nodeId: string; taskId: string }>) { const node = state.editor.dialogueEditor.document.nodes.find((candidate) => candidate.id === action.payload.nodeId); if (node?.kind === "skill-chain" && node.tasks.length > 1) node.tasks = node.tasks.filter((task) => task.id !== action.payload.taskId); },
+    dialogueEditorConnectionStarted(state, action: PayloadAction<{ sourceNodeId: string; outcome: DialogueConnectionOutcome }>) { state.editor.dialogueEditor.pendingConnection = action.payload; },
+    dialogueEditorConnectionCancelled(state) { state.editor.dialogueEditor.pendingConnection = null; },
+    dialogueEditorConnectionTargetSelected: {
+      prepare(targetNodeId: string) { return { payload: { targetNodeId, id: nanoid() } }; },
+      reducer(state, action: PayloadAction<{ targetNodeId: string; id: string }>) {
+        const pending = state.editor.dialogueEditor.pendingConnection;
+        if (!pending || pending.sourceNodeId === action.payload.targetNodeId) return;
+        const source = state.editor.dialogueEditor.document.nodes.find((node) => node.id === pending.sourceNodeId);
+        if (!(source?.kind === "npc-text" && pending.outcome === "next")) state.editor.dialogueEditor.document.connections = state.editor.dialogueEditor.document.connections.filter((link) => link.sourceNodeId !== pending.sourceNodeId || link.outcome !== pending.outcome);
+        state.editor.dialogueEditor.document.connections.push({ id: action.payload.id, ...pending, targetNodeId: action.payload.targetNodeId });
+        state.editor.dialogueEditor.pendingConnection = null;
+      },
+    },
+    dialogueEditorConnectionSelected(state, action: PayloadAction<string | null>) { state.editor.dialogueEditor.selection = { nodeId: null, connectionId: action.payload }; },
+    dialogueEditorConnectionRemoved(state, action: PayloadAction<string>) { state.editor.dialogueEditor.document.connections = state.editor.dialogueEditor.document.connections.filter((link) => link.id !== action.payload); if (state.editor.dialogueEditor.selection.connectionId === action.payload) state.editor.dialogueEditor.selection.connectionId = null; },
+    entityDialogueAssigned(state, action: PayloadAction<{ nodeId: string; definitionId: string | null }>) {
+      const node = activeScenario(state)?.nodes.find((candidate) => candidate.id === action.payload.nodeId);
+      if (node?.kind !== "entity" || node.entityType !== "interactive-human") return;
+      node.dialogue = action.payload.definitionId ? { definitionId: action.payload.definitionId, variables: {}, successEndingChainIdByEndingId: {} } : null;
+    },
+    entityDialogueVariableChanged(state, action: PayloadAction<{ nodeId: string; key: string; value: string }>) { const node = activeScenario(state)?.nodes.find((candidate) => candidate.id === action.payload.nodeId); if (node?.kind === "entity" && node.dialogue) node.dialogue.variables[action.payload.key] = action.payload.value; },
+    entityDialogueEndingMapped(state, action: PayloadAction<{ nodeId: string; endingId: string; chainId: string | null }>) { const node = activeScenario(state)?.nodes.find((candidate) => candidate.id === action.payload.nodeId); if (node?.kind !== "entity" || !node.dialogue) return; if (action.payload.chainId) node.dialogue.successEndingChainIdByEndingId[action.payload.endingId] = action.payload.chainId; else delete node.dialogue.successEndingChainIdByEndingId[action.payload.endingId]; },
     questTitleChanged(state, action: PayloadAction<string>) {
       state.editor.document.title = action.payload;
     },
@@ -156,6 +317,67 @@ const questSlice = createSlice({
     questPlaytestScenarioLoadFailed(state, action: PayloadAction<string>) {
       state.editor.playtest.status = "error";
       state.editor.playtest.message = action.payload;
+    },
+    questPlaytestDialogueLoaded(state, action: PayloadAction<DialogueDefinitionFile>) {
+      state.editor.playtest.dialogueDefinitions[action.payload.id] = cloneDialogueDefinition(action.payload);
+    },
+    questPlaytestDialogueLoadFailed(state, action: PayloadAction<string>) {
+      state.editor.playtest.message = action.payload;
+    },
+    questPlaytestConversationStarted(state, action: PayloadAction<{ scenarioNodeId: string; characterId: string; terminalId: string }>) {
+      const runtime = state.editor.playtest;
+      const scenario = runtime.definition?.scenarioInstances.find((candidate) => candidate.id === runtime.currentScenarioInstanceId);
+      const entity = scenario?.nodes.find((candidate) => candidate.id === action.payload.scenarioNodeId);
+      if (entity?.kind !== "entity" || !entity.dialogue || runtime.conversation || runtime.closedConversationScenarioNodeIds.includes(entity.id)) return;
+      const definition = runtime.dialogueDefinitions[entity.dialogue.definitionId];
+      if (!definition) return;
+      runtime.conversation = {
+        scenarioNodeId: entity.id, definitionId: definition.id,
+        currentNodeId: runtime.conversationResumeNodeIdByScenarioNodeId[entity.id] ?? definition.startNodeId,
+        characterId: action.payload.characterId, terminalId: action.payload.terminalId,
+      };
+      runtime.message = null;
+    },
+    questPlaytestConversationAdvanced(state, action: PayloadAction<string>) {
+      const runtime = state.editor.playtest;
+      const definition = runtime.conversation ? runtime.dialogueDefinitions[runtime.conversation.definitionId] : null;
+      if (runtime.conversation && definition?.nodes.some((node) => node.id === action.payload)) runtime.conversation.currentNodeId = action.payload;
+    },
+    questPlaytestConversationSkillResolved(state, action: PayloadAction<{ targetNodeId: string; message: string }>) {
+      const runtime = state.editor.playtest;
+      const definition = runtime.conversation ? runtime.dialogueDefinitions[runtime.conversation.definitionId] : null;
+      if (runtime.conversation && definition?.nodes.some((node) => node.id === action.payload.targetNodeId)) {
+        runtime.conversation.currentNodeId = action.payload.targetNodeId;
+        runtime.message = action.payload.message;
+      }
+    },
+    questPlaytestConversationEnded(state, action: PayloadAction<{ endingId: string }>) {
+      const runtime = state.editor.playtest;
+      const conversation = runtime.conversation;
+      const definition = conversation ? runtime.dialogueDefinitions[conversation.definitionId] : null;
+      const ending = definition?.nodes.find((node) => node.id === action.payload.endingId);
+      const scenario = runtime.definition?.scenarioInstances.find((candidate) => candidate.id === runtime.currentScenarioInstanceId);
+      const entity = scenario?.nodes.find((candidate) => candidate.id === conversation?.scenarioNodeId);
+      if (!conversation || ending?.kind !== "ending" || entity?.kind !== "entity") return;
+      if (ending.restartable) runtime.conversationResumeNodeIdByScenarioNodeId[entity.id] = ending.resumeNodeId ?? definition!.startNodeId;
+      else if (!runtime.closedConversationScenarioNodeIds.includes(entity.id)) runtime.closedConversationScenarioNodeIds.push(entity.id);
+      if (ending.endingKind === "success" && entity.dialogue) {
+        const chainId = entity.dialogue.successEndingChainIdByEndingId[ending.id];
+        const chain = entity.chains.find((candidate) => candidate.id === chainId);
+        if (chain) {
+          const firstCompletion = !runtime.completedChainIds.includes(chain.id);
+          if (firstCompletion) runtime.completedChainIds.push(chain.id);
+          if (!runtime.completedNodeIds.includes(entity.id)) runtime.completedNodeIds.push(entity.id);
+          for (const reward of chain.successRewards.filter((candidate) => firstCompletion || candidate.repeatable)) {
+            if (reward.recipient.mode === "player-choice") runtime.pendingRewardSelections.push({ id: nanoid(), itemDefinitionId: reward.itemDefinitionId, quantity: reward.quantity });
+            else {
+              const characterId = reward.recipient.mode === "character" ? reward.recipient.characterId : conversation.characterId;
+              for (let count = 0; count < reward.quantity; count += 1) runtime.itemInstances.push({ id: nanoid(), itemDefinitionId: reward.itemDefinitionId, characterId });
+            }
+          }
+        }
+      }
+      runtime.conversation = null;
     },
     questPlaytestItemAssigned: {
       prepare(payload: { itemDefinitionId: string; characterId: string }) {
@@ -783,6 +1005,36 @@ const questSlice = createSlice({
 
 export const {
   activeScenarioChanged,
+  dialogueDefinitionCached,
+  dialogueEditorConnectionCancelled,
+  dialogueEditorConnectionRemoved,
+  dialogueEditorConnectionSelected,
+  dialogueEditorConnectionStarted,
+  dialogueEditorConnectionTargetSelected,
+  dialogueEditorDescriptionChanged,
+  dialogueEditorDocumentActivated,
+  dialogueEditorDocumentSaved,
+  dialogueEditorNew,
+  dialogueEditorNodeAdded,
+  dialogueEditorNodeDragEnded,
+  dialogueEditorNodeDragStarted,
+  dialogueEditorNodeMoved,
+  dialogueEditorNodeRemoved,
+  dialogueEditorNodeSelected,
+  dialogueEditorNodeUpdated,
+  dialogueEditorOperationFailed,
+  dialogueEditorOperationStarted,
+  dialogueEditorTaskAdded,
+  dialogueEditorTaskRemoved,
+  dialogueEditorTaskUpdated,
+  dialogueEditorTitleChanged,
+  dialogueEditorVariablesChanged,
+  dialogueLibraryFailed,
+  dialogueLibraryReceived,
+  dialogueLibraryRequested,
+  entityDialogueAssigned,
+  entityDialogueEndingMapped,
+  entityDialogueVariableChanged,
   chainAdded,
   chainItemRequirementAdded,
   chainItemRequirementRemoved,
@@ -804,6 +1056,12 @@ export const {
   nodeSelected,
   questDescriptionChanged,
   questPlaytestEnded,
+  questPlaytestConversationAdvanced,
+  questPlaytestConversationEnded,
+  questPlaytestConversationStarted,
+  questPlaytestConversationSkillResolved,
+  questPlaytestDialogueLoaded,
+  questPlaytestDialogueLoadFailed,
   questPlaytestChainAttempted,
   questPlaytestChainResolved,
   questPlaytestItemAssigned,

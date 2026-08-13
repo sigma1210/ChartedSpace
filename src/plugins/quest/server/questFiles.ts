@@ -50,6 +50,11 @@ const scenarioNodeSchema = z.discriminatedUnion("kind", [
     description: z.string(),
     position: pointSchema,
     chains: z.array(chainSchema),
+    dialogue: z.object({
+      definitionId: z.string().regex(idPattern),
+      variables: z.record(z.string(), z.string()),
+      successEndingChainIdByEndingId: z.record(z.string(), z.string()),
+    }).strict().nullable().optional(),
   }).strict(),
   z.object({ id: z.string().min(1), kind: z.literal("victory"), title: z.string(), description: z.string(), position: pointSchema }).strict(),
 ]);

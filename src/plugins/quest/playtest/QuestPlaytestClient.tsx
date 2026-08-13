@@ -3,17 +3,27 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import TacticalMapPageClient from "@/plugins/characterCombat/TacticalMapPageClient";
+import { finishTacticalConversation } from "@/plugins/characterCombat/slice";
+import { travellerTaskTarget } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import type { RootState } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loadQuestSourceScenario } from "../editor/api";
 import {
   questPlaytestEnded,
+  questPlaytestConversationAdvanced,
+  questPlaytestConversationEnded,
+  questPlaytestConversationSkillResolved,
+  questPlaytestDialogueLoaded,
+  questPlaytestDialogueLoadFailed,
   questPlaytestPendingRewardAssigned,
   questPlaytestScenarioLoadFailed,
   questPlaytestScenarioLoaded,
   questPlaytestScenarioLoadRequested,
   questPlaytestScenarioVictoryReached,
 } from "../questSlice";
+import { loadDialogue } from "../dialogue/dialogueApi";
+import { renderDialogueTemplate, type DialogueSkillNode } from "../dialogue/types";
+import { questChainOperationId } from "./questPlaytest";
 
 const selectRuntime = (state: RootState) => state.plugins.quest.editor.playtest;
 
@@ -31,6 +41,13 @@ const QuestPlaytestClient = () => {
       .then((definition) => dispatch(questPlaytestScenarioLoaded({ scenarioInstanceId: currentScenario.id, definition })))
       .catch((error: unknown) => dispatch(questPlaytestScenarioLoadFailed(error instanceof Error ? error.message : "Could not load the quest scenario.")));
   }, [currentScenario, dispatch, runtime.loadedScenarioInstanceId, runtime.status]);
+
+  useEffect(() => {
+    if (!currentScenario) return;
+    const ids = [...new Set(currentScenario.nodes.flatMap((node) => node.kind === "entity" && node.dialogue ? [node.dialogue.definitionId] : []))]
+      .filter((id) => !runtime.dialogueDefinitions[id]);
+    ids.forEach((id) => void loadDialogue(id).then((definition) => dispatch(questPlaytestDialogueLoaded(definition))).catch((error: unknown) => dispatch(questPlaytestDialogueLoadFailed(error instanceof Error ? error.message : `Could not load dialogue ${id}.`))));
+  }, [currentScenario, dispatch, runtime.dialogueDefinitions]);
 
   useEffect(() => {
     if (tacticalMap?.scenarioStatus !== "victory" || !runtime.consoleVictory || !currentScenario) return;
@@ -57,8 +74,39 @@ const QuestPlaytestClient = () => {
   if (runtime.status === "error") return <main className="grid h-screen place-items-center bg-[#050a12] font-mono text-slate-100"><div className="border border-red-700 bg-slate-950 p-6"><div className="text-red-200">{runtime.message}</div><button type="button" onClick={exit} className="mt-4 border border-cyan-600 px-4 py-2 text-[10px] uppercase text-cyan-100">Return to Quest Editor</button></div></main>;
   if (!draftPlaytest) return <main className="grid h-screen place-items-center bg-[#050a12] font-mono text-[11px] uppercase tracking-wider text-cyan-100">Loading quest scenario…</main>;
   const playerCharacters = tacticalMap?.scenario.combatants.filter((combatant) => combatant.side === "player") ?? [];
+  const conversation = runtime.conversation;
+  const dialogue = conversation ? runtime.dialogueDefinitions[conversation.definitionId] : null;
+  const dialogueNode = dialogue?.nodes.find((node) => node.id === conversation?.currentNodeId) ?? null;
+  const dialogueEntity = currentScenario?.nodes.find((node) => node.id === conversation?.scenarioNodeId);
+  const speaker = playerCharacters.find((character) => character.id === conversation?.characterId);
+  const templateContext = dialogueEntity?.kind === "entity" ? { npcName: dialogueEntity.title, characterName: speaker?.name ?? "Character", ...(dialogueEntity.dialogue?.variables ?? {}) } : {};
+  const nextLinks = dialogueNode ? dialogue?.connections.filter((link) => link.sourceNodeId === dialogueNode.id) ?? [] : [];
+  const resolveSkillNode = (node: DialogueSkillNode) => {
+    let carried = 0, successImpossible = false;
+    const details: string[] = [];
+    for (let index = 0; index < node.tasks.length; index += 1) {
+      const task = node.tasks[index];
+      const first = 1 + Math.floor(Math.random() * 6), second = 1 + Math.floor(Math.random() * 6), raw = first + second;
+      const skill = speaker?.skills?.find((candidate) => candidate.name.toLowerCase() === task.skill.toLowerCase())?.level ?? 0;
+      const total = raw + skill + carried, passed = total >= travellerTaskTarget(task.difficulty), criticalFailure = raw === 2;
+      details.push(`${task.skill} ${total}/${travellerTaskTarget(task.difficulty)}${criticalFailure ? " critical failure" : passed ? " success" : " failure"}`);
+      if (!passed && !criticalFailure) { const target = nextLinks.find((link) => link.outcome === "failure")?.targetNodeId; if (target) dispatch(questPlaytestConversationSkillResolved({ targetNodeId: target, message: details.join(" · ") })); return; }
+      if (criticalFailure) successImpossible = true;
+      carried = raw === 12 ? 2 : raw === 2 ? -2 : 0;
+    }
+    const outcome = successImpossible ? "failure" : "success";
+    const target = nextLinks.find((link) => link.outcome === outcome)?.targetNodeId;
+    if (target) dispatch(questPlaytestConversationSkillResolved({ targetNodeId: target, message: details.join(" · ") }));
+  };
+  const finishConversation = () => {
+    if (!conversation || dialogueNode?.kind !== "ending" || dialogueEntity?.kind !== "entity") return;
+    const chainId = dialogueNode.endingKind === "success" ? dialogueEntity.dialogue?.successEndingChainIdByEndingId[dialogueNode.id] ?? null : null;
+    dispatch(questPlaytestConversationEnded({ endingId: dialogueNode.id }));
+    dispatch(finishTacticalConversation({ terminalId: conversation.terminalId, operationId: chainId ? questChainOperationId(dialogueEntity.id, chainId) : null, transformation: dialogueNode.transformation, restartable: dialogueNode.restartable }));
+  };
   return <>
     <TacticalMapPageClient draftPlaytest={draftPlaytest} />
+    {conversation && dialogue && dialogueNode && <div className="pointer-events-auto fixed inset-0 z-[70] grid place-items-center bg-slate-950/70 p-8 font-mono"><section role="dialog" aria-modal="true" aria-label="Conversation" className="w-full max-w-2xl border border-violet-400 bg-slate-950 p-5 text-slate-100 shadow-2xl"><div className="text-[10px] font-bold uppercase tracking-[.2em] text-violet-200">Conversation · {dialogueEntity?.kind === "entity" ? dialogueEntity.title : dialogue.title} · 6 AP</div>{runtime.message && <div className="mt-3 border border-cyan-900 p-2 text-[10px] text-cyan-100">{runtime.message}</div>}{dialogueNode.kind === "npc-text" && <><p className="mt-5 text-sm leading-6 text-slate-100">{renderDialogueTemplate(dialogueNode.text, templateContext)}</p><div className="mt-5 grid gap-2">{nextLinks.map((link) => { const target = dialogue.nodes.find((node) => node.id === link.targetNodeId); if (!target) return null; const choiceText = target.kind === "choice" ? renderDialogueTemplate(target.text, templateContext) : "Continue"; const destination = target.kind === "choice" ? dialogue.connections.find((candidate) => candidate.sourceNodeId === target.id && candidate.outcome === "next")?.targetNodeId : target.id; return <button type="button" key={link.id} disabled={!destination} onClick={() => destination && dispatch(questPlaytestConversationAdvanced(destination))} className="border border-violet-600 px-4 py-3 text-left text-[11px] text-violet-100 disabled:opacity-40">{choiceText}</button>; })}</div></>}{dialogueNode.kind === "choice" && <><p className="mt-5 text-sm">{renderDialogueTemplate(dialogueNode.text, templateContext)}</p><button type="button" disabled={!nextLinks[0]} onClick={() => nextLinks[0] && dispatch(questPlaytestConversationAdvanced(nextLinks[0].targetNodeId))} className="mt-5 border border-violet-600 px-4 py-2 text-[10px] uppercase text-violet-100">Continue</button></>}{dialogueNode.kind === "skill-chain" && <><div className="mt-5 text-sm font-bold text-cyan-100">{dialogueNode.label}</div><div className="mt-2 text-[10px] text-slate-400">{dialogueNode.tasks.map((task) => `${task.skill} · ${task.difficulty.replace("-", " ")}`).join(" → ")}</div><button type="button" onClick={() => resolveSkillNode(dialogueNode)} className="mt-5 border border-cyan-500 px-4 py-2 text-[10px] font-bold uppercase text-cyan-100">Resolve ordered skill chain</button></>}{dialogueNode.kind === "ending" && <><div className={`mt-5 text-xs font-bold uppercase ${dialogueNode.endingKind === "success" ? "text-emerald-200" : dialogueNode.endingKind === "failure" ? "text-red-200" : "text-amber-200"}`}>{dialogueNode.title} · {dialogueNode.endingKind}</div><p className="mt-3 text-sm leading-6">{renderDialogueTemplate(dialogueNode.text, templateContext)}</p><div className="mt-2 text-[9px] uppercase text-slate-500">NPC: {dialogueNode.transformation} · {dialogueNode.restartable ? `may resume at ${dialogueNode.resumeNodeId ?? "start"}` : "conversation closes"}</div><button type="button" onClick={finishConversation} className="mt-5 w-full border border-amber-500 px-4 py-3 text-[10px] font-bold uppercase text-amber-100">End conversation</button></>}</section></div>}
     <aside className="pointer-events-auto fixed bottom-3 right-3 z-50 w-72 border border-violet-500/70 bg-slate-950/95 p-3 font-mono text-[9px] text-slate-200 shadow-2xl">
       <div className="font-bold uppercase tracking-wider text-violet-100">Quest Playtest</div>
       <div className="mt-1 text-slate-500">{runtime.mode === "entire-quest" ? "Entire quest" : "Selected scenario"} · {currentScenario?.title}</div>

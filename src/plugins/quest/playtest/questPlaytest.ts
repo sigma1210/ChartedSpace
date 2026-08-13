@@ -1,5 +1,6 @@
 import type { TacticalConsoleOperation, TacticalConsoleVictoryDefinitionFile } from "@/plugins/characterCombat/tacticalConsoleVictory";
 import type { QuestDefinitionFile, QuestScenarioInstance, QuestTaskChain } from "../editor/types";
+import type { DialogueDefinitionFile } from "../dialogue/types";
 
 export type QuestPlaytestMode = "entire-quest" | "selected-scenario";
 
@@ -24,6 +25,16 @@ export type QuestPlaytestRuntime = {
   completedScenarioVictoryKeys: string[];
   pendingRewardSelections: { id: string; itemDefinitionId: string; quantity: number }[];
   message: string | null;
+  dialogueDefinitions: Record<string, DialogueDefinitionFile>;
+  conversation: null | {
+    scenarioNodeId: string;
+    definitionId: string;
+    currentNodeId: string;
+    characterId: string;
+    terminalId: string;
+  };
+  conversationResumeNodeIdByScenarioNodeId: Record<string, string>;
+  closedConversationScenarioNodeIds: string[];
 };
 
 export const inactiveQuestPlaytestRuntime = (): QuestPlaytestRuntime => ({
@@ -41,6 +52,10 @@ export const inactiveQuestPlaytestRuntime = (): QuestPlaytestRuntime => ({
   completedScenarioVictoryKeys: [],
   pendingRewardSelections: [],
   message: null,
+  dialogueDefinitions: {},
+  conversation: null,
+  conversationResumeNodeIdByScenarioNodeId: {},
+  closedConversationScenarioNodeIds: [],
 });
 
 export const firstQuestScenarioInstanceId = (definition: QuestDefinitionFile) => {

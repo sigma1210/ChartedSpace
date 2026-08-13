@@ -65,6 +65,38 @@ const transformTacticalInteractiveHuman = (
 };
 
 export const tacticalTerrainReducers = {
+  beginTacticalConversation: (state: Draft<CharacterCombatState>, action: PayloadAction<{ terminalId: string }>) => {
+    const map = state.tacticalMap;
+    const characterId = map?.activeCharacterId;
+    const character = map && characterId ? tacticalCombatant(map, characterId) : null;
+    const terminal = map ? tacticalTerrainObject(map, action.payload.terminalId) : null;
+    if (!map || map.scenarioStatus !== "active" || !characterId || !character || terminal?.kind !== "terminal" || terminal.visualKind !== "human") return;
+    if (distanceBetween(terminal.position, character.position) !== 1 || (map.actionPointsByCharacterId[characterId] ?? 0) < 6) return;
+    map.actionPointsByCharacterId[characterId] -= 6;
+    map.events.unshift(`${character.name} began a conversation with ${terminal.label} (6 AP)`);
+  },
+  finishTacticalConversation: (state: Draft<CharacterCombatState>, action: PayloadAction<{ terminalId: string; operationId: string | null; transformation: "unchanged" | "ally" | "enemy"; restartable: boolean }>) => {
+    const map = state.tacticalMap;
+    const characterId = map?.activeCharacterId;
+    const character = map && characterId ? tacticalCombatant(map, characterId) : null;
+    const terminal = map ? tacticalTerrainObject(map, action.payload.terminalId) : null;
+    if (!map || !characterId || !character || terminal?.kind !== "terminal") return;
+    const definition = map.scenario.consoleVictory;
+    const operation = action.payload.operationId ? definition?.operations.find((candidate) => candidate.id === action.payload.operationId) : null;
+    if (operation) {
+      map.completedConsoleOperationIds ??= [];
+      map.resolvedConsoleOperationIds ??= [];
+      if (!map.completedConsoleOperationIds.includes(operation.id)) map.completedConsoleOperationIds.push(operation.id);
+      if (!map.resolvedConsoleOperationIds.includes(operation.id)) map.resolvedConsoleOperationIds.push(operation.id);
+      if (operation.result.type === "unlock") operation.result.operationIds.forEach((id) => { const next = definition?.operations.find((candidate) => candidate.id === id); if (next && consoleOperationAvailable(next, map.completedConsoleOperationIds ?? [])) map.terminalActiveById[`${next.consolePlacementId}:terminal`] = false; });
+    }
+    map.events.unshift(`${character.name} completed the conversation with ${terminal.label}`);
+    if (action.payload.transformation !== "unchanged") transformTacticalInteractiveHuman(map, terminal, action.payload.transformation);
+    else map.terminalActiveById[terminal.id] = !action.payload.restartable;
+    if (operation?.result.type === "victory") { concludeTacticalScenario(map, "victory", `Victory — ${character.name} completed ${operation.label}`); return; }
+    if (!map.actedCharacterIds.includes(characterId)) map.actedCharacterIds.push(characterId);
+    advanceTacticalPlayerActivation(map);
+  },
   selectTacticalTerrainObject: (
     state: Draft<CharacterCombatState>,
     action: PayloadAction<string | null>,

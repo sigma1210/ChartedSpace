@@ -72,6 +72,11 @@ export type QuestEntityNode = {
   description: string;
   position: QuestGraphPoint;
   chains: QuestTaskChain[];
+  dialogue?: {
+    definitionId: string;
+    variables: Record<string, string>;
+    successEndingChainIdByEndingId: Record<string, string>;
+  } | null;
 };
 
 export type QuestVictoryNode = {
