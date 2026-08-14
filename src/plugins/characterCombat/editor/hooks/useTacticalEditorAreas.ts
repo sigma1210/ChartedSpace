@@ -357,6 +357,37 @@ export const useTacticalEditorAreas = ({
       setDraft(candidate);
       setPlacementError(null);
     } catch (error) {
+      if (updates.elevation !== undefined && Number.isFinite(updates.elevation)) {
+        const withoutTransitions = { ...candidate, elevationTransitions: [] };
+        try {
+          resolveTacticalScenarioTerrain(withoutTransitions);
+          const keptTransitions: NonNullable<TacticalScenarioDefinitionFile["elevationTransitions"]> = [];
+          const removedTransitionIds: string[] = [];
+          (draft.elevationTransitions ?? []).forEach((transition) => {
+            const withTransition = {
+              ...withoutTransitions,
+              elevationTransitions: [...keptTransitions, transition],
+            };
+            try {
+              resolveTacticalScenarioTerrain(withTransition);
+              keptTransitions.push(transition);
+            } catch {
+              removedTransitionIds.push(transition.id);
+            }
+          });
+          setDraft({ ...withoutTransitions, elevationTransitions: keptTransitions });
+          setPlacementError(removedTransitionIds.length > 0
+            ? `Changed ${selectedArea.id} to level ${updates.elevation} and removed ${removedTransitionIds.length} incompatible elevation ${removedTransitionIds.length === 1 ? "transition" : "transitions"}: ${removedTransitionIds.join(", ")}.`
+            : null);
+          return;
+        } catch {
+          setDraft(candidate);
+          setPlacementError(error instanceof Error
+            ? `Changed ${selectedArea.id} to level ${updates.elevation}. The scenario still has a validation issue: ${error.message}`
+            : `Changed ${selectedArea.id} to level ${updates.elevation}, but the scenario still has a validation issue.`);
+          return;
+        }
+      }
       setPlacementError(error instanceof Error ? error.message : "That area configuration is invalid.");
     }
   };

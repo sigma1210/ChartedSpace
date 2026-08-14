@@ -10,6 +10,7 @@ const renderHeader = (overrides: Partial<React.ComponentProps<
   fileMessage={null}
   fileDialogOpen={false}
   issues={[]}
+  saveBlockedReason={null}
   dirty={false}
   {...overrides}
 >
@@ -69,5 +70,12 @@ describe("TacticalEditorHeader", () => {
 
     renderHeader({ dirty: true });
     expect(screen.getByText("Unsaved draft")).toBeTruthy();
+  });
+
+  it("shows the exact validation reason when saving is blocked", () => {
+    renderHeader({ saveBlockedReason: "Enemy Corsair is outside the map at 20:8." });
+
+    expect(screen.getByRole("alert").textContent).toContain("Cannot save this scenario");
+    expect(screen.getByRole("alert").textContent).toContain("Enemy Corsair is outside the map at 20:8.");
   });
 });

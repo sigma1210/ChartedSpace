@@ -7,6 +7,7 @@ type TacticalEditorFileMenuProps = {
   currentScenarioIsDefault: boolean;
   dirty: boolean;
   draftBlocked: boolean;
+  draftBlockedReason: string | null;
   onToggle: () => void;
   onClose: () => void;
   onNewScenario: () => void;
@@ -23,6 +24,7 @@ const TacticalEditorFileMenu = ({
   currentScenarioIsDefault,
   dirty,
   draftBlocked,
+  draftBlockedReason,
   onToggle,
   onClose,
   onNewScenario,
@@ -45,6 +47,10 @@ const TacticalEditorFileMenu = ({
       void onSave();
     }} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-emerald-100 hover:bg-emerald-950/50 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">Save</button>
     <button type="button" role="menuitem" disabled={fileBusy || draftBlocked} onClick={onSaveAs} className="h-9 w-full px-3 text-left text-[10px] font-bold uppercase tracking-wider text-emerald-100 hover:bg-emerald-950/50 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent">Save As…</button>
+    {draftBlocked && <div role="alert" className="mx-2 mb-1 border border-red-700/80 bg-red-950/60 p-2 text-[9px] normal-case leading-4 text-red-100">
+      <div className="font-bold uppercase tracking-wider">Save unavailable</div>
+      <div className="mt-1">{draftBlockedReason ?? "Resolve the scenario validation error shown in the editor."}</div>
+    </div>}
     <div className="my-1 border-t border-slate-700" />
     <button type="button" role="menuitem" disabled={fileBusy || currentScenarioIsDefault} onClick={() => {
       onClose();

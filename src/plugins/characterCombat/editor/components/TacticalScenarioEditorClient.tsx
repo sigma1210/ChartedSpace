@@ -58,6 +58,7 @@ import { useTacticalEditorPlaytest } from "@/plugins/characterCombat/editor/hook
 import { useTacticalEditorLayerPresentation } from "@/plugins/characterCombat/editor/hooks/useTacticalEditorLayerPresentation";
 import TacticalEditorDraftPreview from "@/plugins/characterCombat/editor/components/TacticalEditorDraftPreview";
 import TacticalEditorAreaPropertiesHud from "@/plugins/characterCombat/editor/components/TacticalEditorAreaPropertiesHud";
+import TacticalEditorWallPropertiesHud from "@/plugins/characterCombat/editor/components/TacticalEditorWallPropertiesHud";
 import TacticalEditorEnemyHud from "@/plugins/characterCombat/editor/components/TacticalEditorEnemyHud";
 import TacticalEditorEnemyPaletteHud from "@/plugins/characterCombat/editor/components/TacticalEditorEnemyPaletteHud";
 import TacticalEditorInteractionHud from "@/plugins/characterCombat/editor/components/TacticalEditorInteractionHud";
@@ -210,11 +211,13 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     toolsLayout,
     layersLayout,
     areaPropertiesLayout,
+    wallPropertiesLayout,
     objectPropertiesLayout,
     setCirclePropertiesLayout,
     setConsoleEditorLayout,
     setEnemyEditorLayout,
     setAreaPropertiesLayout,
+    setWallPropertiesLayout,
     setObjectPropertiesLayout,
     persistCirclePropertiesLayout,
     persistEnemyPaletteLayout,
@@ -225,6 +228,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     persistToolsLayout,
     persistLayersLayout,
     persistAreaPropertiesLayout,
+    persistWallPropertiesLayout,
     persistObjectPropertiesLayout,
     toggleHudVisibility,
   } = useTacticalEditorHudLayoutState();
@@ -341,6 +345,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     clearEnemyHover: () => setEnemyHover(null),
   });
   const {
+    resolutionError,
     victoryTaskRequired,
     draftBlocked,
     playtestBlocked,
@@ -378,6 +383,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
       setSelectedEnemyId(null);
       setSelectedFire(null);
     },
+    showWallProperties: () => setWallPropertiesLayout((current) => ({ ...current, visible: true })),
     setPlacementError,
   });
   const {
@@ -511,6 +517,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
   });
   const {
     selectedWall,
+    updateSelectedWall,
     beginWallEndpointDrag,
     resizeWallEndpoint,
     finishWallEndpointDrag,
@@ -716,6 +723,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     selectPortal: setSelectedPortalId,
     selectFire,
     showAreaProperties: () => setAreaPropertiesLayout((current) => ({ ...current, visible: true })),
+    showWallProperties: () => setWallPropertiesLayout((current) => ({ ...current, visible: true })),
     showObjectProperties: () => setObjectPropertiesLayout((current) => ({ ...current, visible: true })),
   });
   const {
@@ -748,6 +756,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
     selectElevationTransition,
     selectFire,
     showAreaProperties: () => setAreaPropertiesLayout((current) => ({ ...current, visible: true })),
+    showWallProperties: () => setWallPropertiesLayout((current) => ({ ...current, visible: true })),
     showObjectProperties: () => setObjectPropertiesLayout((current) => ({ ...current, visible: true })),
   });
   const {
@@ -816,6 +825,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
         fileMessage,
         fileDialogOpen: Boolean(openScenarioDialog || scenarioPropertiesDraft || newScenarioDialogOpen || saveAsDialogOpen),
         issues: editorIssues,
+        saveBlockedReason: resolutionError,
         dirty,
       }}
       fileMenu={{
@@ -825,6 +835,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
         currentScenarioIsDefault: currentScenario.isDefault,
         dirty,
         draftBlocked,
+        draftBlockedReason: resolutionError,
         onToggle: () => toggleHeaderMenu("file"),
         onClose: closeHeaderMenu,
         onNewScenario: openNewScenarioDialog,
@@ -891,6 +902,7 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
         name: saveAsName,
         fileBusy,
         draftBlocked,
+        draftBlockedReason: resolutionError,
         fileMessage,
         onNameChange: changeScenarioName,
         onSave: saveScenarioAs,
@@ -1061,6 +1073,13 @@ const TacticalScenarioEditorClient = ({ PlaytestComponent }: {
             nodeEditing={primaryTool === "node"}
             onUpdate={updateSelectedArea}
             onDelete={deleteSelectedArea}
+          />}
+          {selectedWall && <TacticalEditorWallPropertiesHud
+            layout={wallPropertiesLayout}
+            onLayoutChange={persistWallPropertiesLayout}
+            wall={selectedWall}
+            onUpdate={updateSelectedWall}
+            onDelete={deleteSelectedWall}
           />}
           {editableObjectProperties && <TacticalEditorObjectPropertiesHud
             layout={objectPropertiesLayout}

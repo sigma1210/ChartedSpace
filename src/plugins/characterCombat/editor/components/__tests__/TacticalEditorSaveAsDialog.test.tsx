@@ -11,6 +11,7 @@ const renderDialog = (overrides: Partial<React.ComponentProps<
     name: "Boarding Action Copy",
     fileBusy: false,
     draftBlocked: false,
+    draftBlockedReason: null,
     fileMessage: null,
     onNameChange: jest.fn(),
     onSave: jest.fn(),
@@ -62,6 +63,13 @@ describe("TacticalEditorSaveAsDialog", () => {
 
     renderDialog({ fileMessage: { kind: "error", text: "Scenario already exists." } });
     expect(screen.getByRole("alert").textContent).toContain("Scenario already exists.");
+  });
+
+  it("explains why a blocked draft cannot be saved", () => {
+    renderDialog({ draftBlocked: true, draftBlockedReason: "Two enemies occupy 4:6." });
+
+    expect(screen.getByRole("alert").textContent).toContain("Cannot save");
+    expect(screen.getByRole("alert").textContent).toContain("Two enemies occupy 4:6.");
   });
 
   it("closes with Escape or a backdrop press", () => {

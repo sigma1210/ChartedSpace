@@ -102,6 +102,7 @@ describe("useTacticalEditorHudLayoutState", () => {
     "layers",
     "enemy-palette",
     "area-properties",
+    "wall-properties",
     "object-properties",
     "circle-properties",
     "console-editor",

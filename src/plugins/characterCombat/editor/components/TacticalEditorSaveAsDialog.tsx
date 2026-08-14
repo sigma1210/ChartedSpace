@@ -7,6 +7,7 @@ type TacticalEditorSaveAsDialogProps = {
   name: string;
   fileBusy: boolean;
   draftBlocked: boolean;
+  draftBlockedReason: string | null;
   fileMessage: TacticalEditorFileMessage;
   onNameChange: (name: string) => void;
   onSave: () => void | Promise<void>;
@@ -18,6 +19,7 @@ const TacticalEditorSaveAsDialog = ({
   name,
   fileBusy,
   draftBlocked,
+  draftBlockedReason,
   fileMessage,
   onNameChange,
   onSave,
@@ -48,6 +50,7 @@ const TacticalEditorSaveAsDialog = ({
         }} placeholder="Boarding action" className="mt-1 h-9 w-full border border-emerald-800 bg-[#071019] px-3 text-xs normal-case tracking-normal text-slate-100 outline-none placeholder:text-slate-600 focus:border-emerald-400" />
       </label>
       {fileMessage && <div role={fileMessage.kind === "error" ? "alert" : "status"} className={`mt-3 border p-2 text-[10px] ${fileMessage.kind === "error" ? "border-red-500/70 bg-red-950/60 text-red-100" : "border-emerald-500/70 bg-emerald-950/50 text-emerald-100"}`}>{fileMessage.text}</div>}
+      {draftBlocked && <div role="alert" className="mt-3 border border-red-500/70 bg-red-950/60 p-2 text-[10px] text-red-100"><span className="font-bold uppercase tracking-wider">Cannot save:</span>{" "}{draftBlockedReason ?? "Resolve the scenario validation error shown in the editor."}</div>}
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" disabled={fileBusy} onClick={onClose} className="h-9 border border-slate-600 px-4 text-[9px] font-bold uppercase tracking-wider text-slate-200 disabled:opacity-40">Cancel</button>
         <button type="button" disabled={!canSave} onClick={() => void onSave()} className="h-9 border border-emerald-400 px-4 text-[9px] font-bold uppercase tracking-wider text-emerald-100 disabled:opacity-40">{fileBusy ? "Saving…" : "Save As"}</button>

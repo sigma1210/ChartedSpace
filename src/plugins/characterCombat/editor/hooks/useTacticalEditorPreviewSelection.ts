@@ -24,6 +24,7 @@ type TacticalEditorPreviewSelectionOptions = {
   selectElevationTransition: (id: string | null) => void;
   selectFire: (point: { x: number; y: number } | null) => void;
   showAreaProperties: () => void;
+  showWallProperties: () => void;
   showObjectProperties: () => void;
 };
 
@@ -46,6 +47,7 @@ export const useTacticalEditorPreviewSelection = ({
   selectElevationTransition,
   selectFire,
   showAreaProperties,
+  showWallProperties,
   showObjectProperties,
 }: TacticalEditorPreviewSelectionOptions) => {
   const previewSelectPlacement = (id: string | null) => {
@@ -57,6 +59,7 @@ export const useTacticalEditorPreviewSelection = ({
     if (id && lockedLayerKeys.has(tacticalEditorLayerKey("wall", id))) return;
     setSelectedWallId(id);
     if (!id) return;
+    showWallProperties();
     setSelectedRaisedAreaId(null);
     setSelectedPrimitiveId(null);
     setSelectedNaturalTerrainId(null);

@@ -119,6 +119,14 @@ describe("useTacticalEditorWallEditing", () => {
     expect(result.current.dragWallControl).toBeNull();
   });
 
+  it("updates the selected wall elevation independently of overlapping terrain", () => {
+    const { result } = renderWallEditing();
+
+    act(() => result.current.updateSelectedWall({ elevation: 1.5 }));
+
+    expect(result.current.selectedWall?.elevation).toBe(1.5);
+  });
+
   it("restores the original curve control when cancelled", () => {
     const { result } = renderWallEditing();
 

@@ -15,6 +15,7 @@ type UseTacticalEditorLayerSelectionOptions = {
   selectPortal: (id: string) => void;
   selectFire: (position: { x: number; y: number }) => void;
   showAreaProperties: () => void;
+  showWallProperties: () => void;
   showObjectProperties: () => void;
 };
 
@@ -33,6 +34,7 @@ export const useTacticalEditorLayerSelection = ({
   selectPortal,
   selectFire,
   showAreaProperties,
+  showWallProperties,
   showObjectProperties,
 }: UseTacticalEditorLayerSelectionOptions) => {
   const selectEditorLayerObject = (object: TacticalEditorLayerObject) => {
@@ -45,6 +47,7 @@ export const useTacticalEditorLayerSelection = ({
       selectEnemy(object.id);
     } else if (object.kind === "wall") {
       selectWall(object.id);
+      showWallProperties();
     } else if (object.kind === "area" || object.kind === "raised-area") {
       selectArea(object.id);
       if (object.kind === "area") showAreaProperties();

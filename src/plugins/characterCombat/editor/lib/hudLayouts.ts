@@ -5,6 +5,7 @@ export const tacticalEditorHudIds = [
   "layers",
   "enemy-palette",
   "area-properties",
+  "wall-properties",
   "object-properties",
   "circle-properties",
   "console-editor",
@@ -32,6 +33,7 @@ export const defaultTacticalEditorHudLayouts: TacticalEditorHudLayouts = {
   tools: { visible: true, pinned: false, position: { x: 300, y: 12 } },
   layers: { visible: true, pinned: false, position: { x: 760, y: 64 } },
   "area-properties": { visible: false, pinned: false, position: { x: 420, y: 160 } },
+  "wall-properties": { visible: true, pinned: false, position: { x: 420, y: 160 } },
   "object-properties": { visible: true, pinned: false, position: { x: 420, y: 310 } },
 };
 

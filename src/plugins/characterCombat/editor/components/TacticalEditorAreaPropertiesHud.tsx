@@ -1,4 +1,5 @@
 import { LandPlot } from "lucide-react";
+import { useEffect, useState } from "react";
 import { FloatingPluginHud } from "@/components/hud/FloatingPluginHud";
 import type { TacticalDrawnArea } from "@/plugins/characterCombat/tacticalScenarioDefinitions";
 import type { TacticalEditorHudLayout } from "@/plugins/characterCombat/editor/lib/hudLayouts";
@@ -31,7 +32,11 @@ const TacticalEditorAreaPropertiesHud = ({
   nodeEditing,
   onUpdate,
   onDelete,
-}: TacticalEditorAreaPropertiesHudProps) => (
+}: TacticalEditorAreaPropertiesHudProps) => {
+  const [levelValue, setLevelValue] = useState(String(area.elevation));
+  useEffect(() => setLevelValue(String(area.elevation)), [area.elevation, area.id]);
+
+  return (
   <FloatingPluginHud
     title="Area Properties"
     layout={layout}
@@ -73,8 +78,17 @@ const TacticalEditorAreaPropertiesHud = ({
             type="number"
             min="0"
             step="0.5"
-            value={area.elevation}
-            onChange={(event) => onUpdate({ elevation: Number.parseFloat(event.target.value) })}
+            value={levelValue}
+            onChange={(event) => {
+              const value = event.target.value;
+              setLevelValue(value);
+              const elevation = Number.parseFloat(value);
+              if (value.trim() && Number.isFinite(elevation) && elevation >= 0) onUpdate({ elevation });
+            }}
+            onBlur={() => {
+              const elevation = Number.parseFloat(levelValue);
+              if (!Number.isFinite(elevation) || elevation < 0) setLevelValue(String(area.elevation));
+            }}
             className="mt-1 h-9 w-full border border-slate-600 bg-slate-950 px-2 text-[11px] text-slate-100"
           />
         </label>
@@ -132,6 +146,7 @@ const TacticalEditorAreaPropertiesHud = ({
       </button>
     </div>
   </FloatingPluginHud>
-);
+  );
+};
 
 export default TacticalEditorAreaPropertiesHud;

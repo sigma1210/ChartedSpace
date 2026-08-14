@@ -39,6 +39,7 @@ export const useTacticalEditorHudLayoutState = () => {
   const setToolsLayout = (update: HudLayoutUpdate) => setHudLayout("tools", update);
   const setLayersLayout = (update: HudLayoutUpdate) => setHudLayout("layers", update);
   const setAreaPropertiesLayout = (update: HudLayoutUpdate) => setHudLayout("area-properties", update);
+  const setWallPropertiesLayout = (update: HudLayoutUpdate) => setHudLayout("wall-properties", update);
   const setObjectPropertiesLayout = (update: HudLayoutUpdate) => setHudLayout("object-properties", update);
 
   const toggleHudVisibility = useCallback((id: TacticalEditorHudId) => {
@@ -58,6 +59,7 @@ export const useTacticalEditorHudLayoutState = () => {
     toolsLayout: hudLayouts.tools,
     layersLayout: hudLayouts.layers,
     areaPropertiesLayout: hudLayouts["area-properties"],
+    wallPropertiesLayout: hudLayouts["wall-properties"],
     objectPropertiesLayout: hudLayouts["object-properties"],
     setCirclePropertiesLayout,
     setEnemyPaletteLayout,
@@ -68,6 +70,7 @@ export const useTacticalEditorHudLayoutState = () => {
     setToolsLayout,
     setLayersLayout,
     setAreaPropertiesLayout,
+    setWallPropertiesLayout,
     setObjectPropertiesLayout,
     persistCirclePropertiesLayout: persistHudLayout["circle-properties"],
     persistEnemyPaletteLayout: persistHudLayout["enemy-palette"],
@@ -78,6 +81,7 @@ export const useTacticalEditorHudLayoutState = () => {
     persistToolsLayout: persistHudLayout.tools,
     persistLayersLayout: persistHudLayout.layers,
     persistAreaPropertiesLayout: persistHudLayout["area-properties"],
+    persistWallPropertiesLayout: persistHudLayout["wall-properties"],
     persistObjectPropertiesLayout: persistHudLayout["object-properties"],
     toggleHudVisibility,
   };

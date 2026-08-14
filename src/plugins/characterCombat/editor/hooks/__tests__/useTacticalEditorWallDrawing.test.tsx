@@ -33,6 +33,7 @@ const renderWallDrawing = ({
   activeDrawingTool?: string | null;
 } = {}) => {
   const clearOtherSelections = jest.fn();
+  const showWallProperties = jest.fn();
   const hook = renderHook(() => {
     const [draft, setDraft] = useState(initialDraft);
     const [wallDraft, setWallDraft] = useState<EditorWallDraft | null>(null);
@@ -47,6 +48,7 @@ const renderWallDrawing = ({
         setWallDraft,
         setSelectedWallId,
         clearOtherSelections,
+        showWallProperties,
         setPlacementError,
       }),
       draft,
@@ -55,7 +57,7 @@ const renderWallDrawing = ({
       placementError,
     };
   });
-  return { ...hook, clearOtherSelections };
+  return { ...hook, clearOtherSelections, showWallProperties };
 };
 
 describe("useTacticalEditorWallDrawing", () => {
@@ -92,7 +94,7 @@ describe("useTacticalEditorWallDrawing", () => {
         to: { x: 24, y: 20 },
       }],
     };
-    const { result } = renderWallDrawing({ initialDraft: draft });
+    const { result, showWallProperties } = renderWallDrawing({ initialDraft: draft });
 
     act(() => result.current.beginWall({ x: 4, y: 5 }));
     act(() => result.current.finishWall({ x: 9, y: 8 }));
@@ -104,6 +106,7 @@ describe("useTacticalEditorWallDrawing", () => {
     });
     expect(result.current.wallDraft).toBeNull();
     expect(result.current.selectedWallId).toBe("drawn-wall-2");
+    expect(showWallProperties).toHaveBeenCalledTimes(1);
   });
 
   it("creates a curved wall with a midpoint control", () => {

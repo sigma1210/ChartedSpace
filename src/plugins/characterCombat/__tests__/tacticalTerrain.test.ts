@@ -1474,6 +1474,7 @@ describe("tactical Control Room", () => {
       id: "fractional-elevated-bulkhead",
       from: { x: 12.25, y: 14.25 },
       to: { x: 18.75, y: 14.25 },
+      elevation: 1,
     }];
 
     const terrain = resolveTacticalScenarioTerrain(definition);
@@ -1486,7 +1487,7 @@ describe("tactical Control Room", () => {
     expect(terrain.elevationLevelByCell["20:20"]).toBe(1);
   });
 
-  it("places drawn walls and wall portals on their supporting raised level", () => {
+  it("places explicitly elevated drawn walls and wall portals on their authored level", () => {
     const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     definition.drawnRaisedAreas = [{
       id: "wall-platform",
@@ -1501,6 +1502,7 @@ describe("tactical Control Room", () => {
       id: "elevated-bulkhead",
       from: { x: 12, y: 14 },
       to: { x: 18, y: 14 },
+      elevation: 1,
       portals: [
         { id: "elevated-door", kind: "sliding-door", position: 0.3 },
         { id: "elevated-iris", kind: "iris-valve", position: 0.7 },
@@ -1521,7 +1523,7 @@ describe("tactical Control Room", () => {
     expect(run?.elevationLevel).toBe(1);
   });
 
-  it("rejects a drawn wall that crosses multiple elevation levels", () => {
+  it("keeps a base-level drawn wall at level zero when a raised area covers it", () => {
     const definition = cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition);
     definition.drawnRaisedAreas = [{
       id: "wall-platform",
@@ -1538,8 +1540,15 @@ describe("tactical Control Room", () => {
       to: { x: 25, y: 15 },
     }];
 
-    expect(() => resolveTacticalScenarioTerrain(definition))
-      .toThrow("crosses multiple elevation levels");
+    const terrain = resolveTacticalScenarioTerrain(definition);
+    const sections = terrain.terrainObjects.filter((object) =>
+      object.kind === "wall" && object.id.startsWith("unsupported-bulkhead"));
+
+    expect(sections).toEqual([expect.objectContaining({
+      id: "unsupported-bulkhead",
+      edge: { from: { x: 5, y: 15 }, to: { x: 25, y: 15 } },
+      elevationLevel: 0,
+    })]);
   });
 
   it("resolves a quadratic Bezier wall into stable blocking segments", () => {

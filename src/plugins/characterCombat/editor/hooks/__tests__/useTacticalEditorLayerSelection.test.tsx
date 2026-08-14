@@ -36,6 +36,7 @@ const renderSelection = (overrides: Partial<LayerSelectionOptions> = {}) => {
     selectPortal: jest.fn(),
     selectFire: jest.fn(),
     showAreaProperties: jest.fn(),
+    showWallProperties: jest.fn(),
     showObjectProperties: jest.fn(),
   };
   const options: LayerSelectionOptions = {
@@ -80,6 +81,15 @@ describe("useTacticalEditorLayerSelection", () => {
 
     expect(commands.selectArea).toHaveBeenCalledWith("room-1");
     expect(commands.showAreaProperties).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects walls and opens their properties HUD", () => {
+    const { result, commands } = renderSelection();
+
+    act(() => result.current.selectEditorLayerObject(layerObject("wall", "wall-1")));
+
+    expect(commands.selectWall).toHaveBeenCalledWith("wall-1");
+    expect(commands.showWallProperties).toHaveBeenCalledTimes(1);
   });
 
   it("selects legacy raised areas without opening the modern area HUD", () => {

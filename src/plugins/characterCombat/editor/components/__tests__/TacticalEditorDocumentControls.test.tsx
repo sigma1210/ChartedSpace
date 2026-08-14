@@ -46,6 +46,7 @@ const documentControls = () => {
       fileMessage: null,
       fileDialogOpen: false,
       issues: [],
+      saveBlockedReason: null,
       dirty: true,
     },
     fileMenu: {
@@ -55,6 +56,7 @@ const documentControls = () => {
       currentScenarioIsDefault: false,
       dirty: true,
       draftBlocked: false,
+      draftBlockedReason: null,
       onToggle: callbacks.toggleFileMenu,
       onClose: callbacks.closeHeaderMenu,
       onNewScenario: callbacks.openNewScenario,
@@ -118,6 +120,7 @@ const documentControls = () => {
       name: "Saved Scenario",
       fileBusy: false,
       draftBlocked: false,
+      draftBlockedReason: null,
       fileMessage: null,
       onNameChange: callbacks.changeSaveAsName,
       onSave: callbacks.saveScenarioAs,

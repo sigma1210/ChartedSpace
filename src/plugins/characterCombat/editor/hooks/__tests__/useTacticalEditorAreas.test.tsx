@@ -44,10 +44,12 @@ const draftWith = ({
   areas = [],
   raisedAreas = [],
   regions = [],
+  transitions = [],
 }: {
   areas?: TacticalDrawnArea[];
   raisedAreas?: TacticalDrawnRaisedArea[];
   regions?: TacticalDrawnTerrainRegion[];
+  transitions?: NonNullable<TacticalScenarioDefinitionFile["elevationTransitions"]>;
 } = {}): TacticalScenarioDefinitionFile => ({
   ...cloneTacticalScenarioDefinition(defaultTacticalScenarioDefinition),
   terrainPlacements: [],
@@ -57,7 +59,7 @@ const draftWith = ({
   drawnTerrainRegions: regions,
   drawnTerrainPrimitives: [],
   naturalTerrainPlacements: [],
-  elevationTransitions: [],
+  elevationTransitions: transitions,
   fireCells: [],
   enemyPlacements: [],
 });
@@ -131,6 +133,29 @@ describe("useTacticalEditorAreas", () => {
     expect(result.current.selectedArea).toMatchObject({ boundary: "none" });
     expect(result.current.selectedArea?.portals).toBeUndefined();
     expect(result.current.placementError).toBeNull();
+  });
+
+  it("changes an existing area level and removes only incompatible elevation transitions", () => {
+    const selected = area({ elevation: 1 });
+    const { result } = renderAreas({
+      initialDraft: draftWith({
+        areas: [selected],
+        transitions: [{
+          id: "stairs-1",
+          kind: "stairs",
+          lower: { x: 9, y: 11 },
+          upper: { x: 10, y: 11 },
+        }],
+      }),
+      initialAreaId: "area-1",
+    });
+
+    act(() => result.current.updateSelectedArea({ elevation: 2 }));
+
+    expect(result.current.selectedArea?.elevation).toBe(2);
+    expect(result.current.draft.elevationTransitions).toEqual([]);
+    expect(result.current.placementError).toContain("Changed area-1 to level 2");
+    expect(result.current.placementError).toContain("stairs-1");
   });
 
   it("inserts and selects a new area anchor", () => {

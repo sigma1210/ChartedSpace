@@ -45,6 +45,25 @@ export const useTacticalEditorWallEditing = ({
   const selectedWall = (draft.drawnWalls ?? [])
     .find((wall) => wall.id === selectedWallId) ?? null;
 
+  const updateSelectedWall = (update: { elevation?: number }) => {
+    if (!selectedWall) return false;
+    const candidate: TacticalScenarioDefinitionFile = {
+      ...draft,
+      drawnWalls: (draft.drawnWalls ?? []).map((wall) => wall.id === selectedWall.id
+        ? { ...wall, ...update }
+        : wall),
+    };
+    try {
+      resolveTacticalScenarioTerrain(candidate);
+      setDraft(candidate);
+      setPlacementError(null);
+      return true;
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : "That wall level is not valid.");
+      return false;
+    }
+  };
+
   const beginWallEndpointDrag = (id: string, endpoint: WallEndpoint) => {
     const wall = (draft.drawnWalls ?? []).find((candidate) => candidate.id === id);
     if (!wall) return;
@@ -246,6 +265,7 @@ export const useTacticalEditorWallEditing = ({
 
   return {
     selectedWall,
+    updateSelectedWall,
     beginWallEndpointDrag,
     resizeWallEndpoint,
     finishWallEndpointDrag,

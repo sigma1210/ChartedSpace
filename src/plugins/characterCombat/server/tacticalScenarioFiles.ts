@@ -115,6 +115,7 @@ const scenarioSchema = z.object({
     id: z.string().min(1),
     from: finitePointSchema,
     to: finitePointSchema,
+    elevation: z.number().min(0).refine((value) => Number.isInteger(value * 2), "Elevation must use half-level increments.").optional(),
     control: finitePointSchema.optional(),
     portals: z.array(z.object({
       id: z.string().min(1),

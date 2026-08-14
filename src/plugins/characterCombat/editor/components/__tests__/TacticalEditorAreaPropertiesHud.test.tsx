@@ -78,4 +78,17 @@ describe("TacticalEditorAreaPropertiesHud", () => {
 
     expect(props.onUpdate).toHaveBeenCalledWith({ settings: { filled: false } });
   });
+
+  it("allows replacing an existing zero level by clearing and typing", () => {
+    const props = renderHud({ area: { ...circleArea, elevation: 0 } });
+    const level = screen.getByLabelText("Area elevation level") as HTMLInputElement;
+
+    fireEvent.change(level, { target: { value: "" } });
+    expect(level.value).toBe("");
+    expect(props.onUpdate).not.toHaveBeenCalled();
+
+    fireEvent.change(level, { target: { value: "2" } });
+    expect(level.value).toBe("2");
+    expect(props.onUpdate).toHaveBeenLastCalledWith({ elevation: 2 });
+  });
 });

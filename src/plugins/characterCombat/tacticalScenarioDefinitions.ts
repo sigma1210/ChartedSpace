@@ -86,6 +86,7 @@ export interface TacticalEnemyPlacement {
 }
 
 export interface TacticalDrawnWall extends WallSegment {
+  elevation?: number;
   control?: GridPoint;
   portals?: {
     id: string;
@@ -514,6 +515,13 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   });
   allDrawnWalls.forEach((wall) => {
     if (!wall.id.trim()) throw new Error("A drawn wall requires an ID.");
+    if (wall.elevation !== undefined && (
+      !Number.isFinite(wall.elevation)
+      || wall.elevation < 0
+      || !Number.isInteger(wall.elevation * 2)
+    )) {
+      throw new Error(`Drawn wall ${wall.id} elevation must be a non-negative half level.`);
+    }
     if (drawnWallIds.has(wall.id)) throw new Error(`Duplicate drawn wall ID: ${wall.id}.`);
     if (drawnObjectIds.has(wall.id)) throw new Error(`Duplicate drawn terrain ID: ${wall.id}.`);
     drawnObjectIds.add(wall.id);
@@ -1164,6 +1172,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
   });
   const drawnWallObjects = allDrawnWalls.flatMap((wall): TacticalTerrainObject[] => {
     const portals = [...(wall.portals ?? [])].sort((first, second) => first.position - second.position);
+    const elevationLevel = areaBoundaryElevationByWallId.get(wall.id) ?? wall.elevation ?? 0;
     if (wall.control && portals.length === 0) {
       const curvedObjects: TacticalTerrainObject[] = tacticalQuadraticBezierWallSegments({ ...wall, control: wall.control }).map((segment) => ({
         id: segment.id,
@@ -1173,20 +1182,14 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         targetable: true,
         integrity: 3,
       }));
-      const elevationLevel = areaBoundaryElevationByWallId.get(wall.id) ?? boundaryElevationLevel(
-        wall.id,
-        curvedObjects.flatMap((object) => object.kind === "wall" ? [object.edge] : []),
-      );
       return curvedObjects.map((object) => object.kind === "wall"
         ? { ...object, elevationLevel }
         : object);
     }
     if (portals.length === 0) {
-      const elevationLevel = areaBoundaryElevationByWallId.get(wall.id)
-        ?? boundaryElevationLevel(wall.id, [{ from: wall.from, to: wall.to }]);
       return [{
         id: wall.id,
-        kind: "wall",
+        kind: "wall" as const,
         edge: { from: { ...wall.from }, to: { ...wall.to } },
         blocking: true,
         targetable: true,
@@ -1209,6 +1212,7 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
           blocking: true,
           targetable: true,
           integrity: 3,
+          elevationLevel,
         });
         section += 1;
       });
@@ -1235,19 +1239,14 @@ export const resolveTacticalScenarioTerrain = (scenario: TacticalScenarioDefinit
         integrity: 2,
         open: false,
         portalType: portal.kind,
+        elevationLevel,
       });
       cursor = portalEnd;
     });
     if (cursor < length - 1e-9) {
       pushWallRange(cursor, length);
     }
-    const elevationLevel = boundaryElevationLevel(
-      wall.id,
-      resolved.flatMap((object) => object.kind === "wall" || object.kind === "door" ? [object.edge] : []),
-    );
-    return resolved.map((object) => object.kind === "wall" || object.kind === "door"
-      ? { ...object, elevationLevel }
-      : object);
+    return resolved;
   });
   const circleWallObjects = primitiveAreas.flatMap((resolved): TacticalTerrainObject[] => {
     if (resolved.target !== "wall") return [];

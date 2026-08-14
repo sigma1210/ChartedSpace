@@ -23,6 +23,7 @@ type UseTacticalEditorWallDrawingOptions = {
   setWallDraft: (update: WallDraftUpdate) => void;
   setSelectedWallId: (id: string | null) => void;
   clearOtherSelections: () => void;
+  showWallProperties: () => void;
   setPlacementError: (error: string | null) => void;
 };
 
@@ -34,6 +35,7 @@ export const useTacticalEditorWallDrawing = ({
   setWallDraft,
   setSelectedWallId,
   clearOtherSelections,
+  showWallProperties,
   setPlacementError,
 }: UseTacticalEditorWallDrawingOptions) => {
   const beginWall = (from: { x: number; y: number }) => {
@@ -81,6 +83,7 @@ export const useTacticalEditorWallDrawing = ({
       resolveTacticalScenarioTerrain(candidate);
       setDraft(candidate);
       setSelectedWallId(id);
+      showWallProperties();
       setPlacementError(null);
       return true;
     } catch (error) {

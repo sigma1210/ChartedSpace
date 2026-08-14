@@ -13,6 +13,7 @@ const renderMenu = (overrides: Partial<React.ComponentProps<
     currentScenarioIsDefault: false,
     dirty: true,
     draftBlocked: false,
+    draftBlockedReason: null,
     onToggle: jest.fn(),
     onClose: jest.fn(),
     onNewScenario: jest.fn(),
@@ -83,5 +84,12 @@ describe("TacticalEditorFileMenu", () => {
     renderMenu(overrides);
 
     expect((screen.getByRole("menuitem", { name }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("explains why Save and Save As are disabled", () => {
+    renderMenu({ draftBlocked: true, draftBlockedReason: "Define a crew deployment zone." });
+
+    expect(screen.getByRole("alert").textContent).toContain("Save unavailable");
+    expect(screen.getByRole("alert").textContent).toContain("Define a crew deployment zone.");
   });
 });
